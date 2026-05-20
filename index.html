@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -5,13 +6,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>M;Y 安 · 오늘의 오행 기운 리딩</title>
 
-<!-- SEO 메타 -->
 <meta name="description" content="명리학 기반 AI 사주 풀이. 오늘의 일진과 오행 기운, 나만의 리딩, 궁합 풀이를 제공하는 M;Y 安. 한·영·중·일 4개 언어 지원.">
 <meta name="keywords" content="사주, 운세, 명리학, 오행, 일진, 궁합, AI 사주">
 <meta name="author" content="M;Y 安">
 <link rel="canonical" href="https://myan-an.pages.dev/">
 
-<!-- Open Graph (카톡·페북·X 공유 썸네일) -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="M;Y 安 · 오늘의 오행 기운 리딩">
 <meta property="og:description" content="내 사주와 오늘 일진이 만나는 방식 — 명리학으로 풀어보는 오늘 하루의 흐름">
@@ -23,13 +22,11 @@
 <meta property="og:locale:alternate" content="zh_CN">
 <meta property="og:locale:alternate" content="ja_JP">
 
-<!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="M;Y 安 · 오늘의 오행 기운 리딩">
 <meta name="twitter:description" content="명리학으로 풀어보는 오늘 하루의 흐름">
 <meta name="twitter:image" content="https://myan-an.pages.dev/icon-og-512-512.png">
 
-<!-- PWA 메타 -->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#c9a96e" id="metaThemeColor">
 <meta name="mobile-web-app-capable" content="yes">
@@ -38,12 +35,10 @@
 <meta name="apple-mobile-web-app-title" content="M;Y 安">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-<!-- favicon -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/icon-favicon-32-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/icon-favicon-16-16.png">
 
-<!-- 스플래시 배경색 -->
 <meta name="msapplication-TileColor" content="#060608">
 <meta name="msapplication-TileImage" content="/icon-pwa-192-192.png">
 
@@ -1635,7 +1630,7 @@ body {
     grid-template-rows: 1fr 1fr auto !important;
     gap: 20px !important;
   }
-  /* 카드가 grid 셀을 꽉 채우도록 */
+  /* カ드가 grid 셀을 꽉 채우도록 */
   .mode-right .card {
     height: 100%;
     align-items: center;
@@ -2216,14 +2211,12 @@ body {
 </style>
 </head>
 <body>
-<!-- 배경 오브 -->
 <div class="orb orb-1"></div>
 <div class="orb orb-2"></div>
 <div class="orb orb-3"></div>
 <div class="orb orb-4"></div>
 <div class="orb orb-5"></div>
 
-<!-- 스플래시 화면 -->
 <div id="splash">
   <div class="sp-logo">M ; Y &nbsp;安</div>
   <div class="sp-sub">木 火 土 金 水</div>
@@ -2236,7 +2229,6 @@ body {
 
 <div class="app">
 
-  <!-- 헤더 -->
   <div class="hd">
     <span class="back" id="backBtn">← <span id="backLabel"></span></span>
     <div class="hd-right">
@@ -2266,23 +2258,19 @@ body {
     </div>
   </div>
 
-  <!-- 모드 선택 -->
   <div id="screen-mode" style="display:none">
 
-    <!-- ── 베타 기간 배너 ── -->
     <div class="beta-banner">
       <span>🎁</span>
       <span><strong>베타 기간</strong> — 신규 가입 시 3토큰 무료 · 정식 결제는 곧 오픈됩니다</span>
     </div>
 
-    <!-- ── 무료 토큰 배너 (비로그인 상태에서만 표시) ── -->
     <div class="free-token-banner" id="freeBanner" onclick="goSignup()" style="display:none">
       <span class="ftb-icon">✦</span>
       <span>가입만 해도 <strong>3토큰 무료</strong> 지급 — 지금 바로 시작해보세요</span>
       <span>›</span>
     </div>
 
-    <!-- 왼쪽: 타이틀 영역 -->
     <div class="mode-left">
       <div>
         <div class="section-label" id="eyebrow" style="margin-bottom:10px"></div>
@@ -2299,7 +2287,6 @@ body {
       <div class="disclaimer" id="disclaimer"></div>
     </div>
 
-    <!-- 오른쪽: 카드 영역 -->
     <div class="mode-right">
       <div class="card" onclick="startMode('solo')">
         <div class="card-icon">☯</div>
@@ -2320,7 +2307,6 @@ body {
       <div class="signup-link" id="signupLinkBtn" onclick="goSignup()"><span id="signupLinkText"></span></div>
     </div>
 
-    <!-- ── 하단 퀵액세스 (토큰충전 · 1대1 상담) ── -->
     <div class="quick-access-row">
 
       <div class="quick-box token-box" onclick="openTokenModal()">
@@ -2341,7 +2327,6 @@ body {
       </div>
     </div>
 
-    <!-- 법적 푸터 -->
     <div class="legal-footer">
       <a href="#" onclick="openLegal('privacy');return false;">개인정보처리방침</a>
       <a href="#" onclick="openLegal('refund');return false;">환불정책</a>
@@ -2351,11 +2336,9 @@ body {
 
   </div>
 
-  <!-- 채팅 -->
   <div id="screen-chat">
     <div id="chat-window"></div>
 
-    <!-- Change 4: 추천 질문 칩 (첫 메시지 전에만 표시) -->
     <div class="suggest-chips" id="suggestChips">
       <span class="suggest-chip" onclick="useSuggest(this)">오늘 재물운</span>
       <span class="suggest-chip" onclick="useSuggest(this)">이직해도 될까요?</span>
@@ -2364,7 +2347,6 @@ body {
       <span class="suggest-chip" onclick="useSuggest(this)">오늘 하루 총운</span>
     </div>
 
-    <!-- Change 2: 구조화 첫 입력 폼 -->
     <div id="firstInputForm" style="display:none">
       <div class="fif-row">
         <div class="fif-field">
@@ -2400,7 +2382,6 @@ body {
       <button class="fif-submit" onclick="submitFirstForm()">기운 리딩 시작하기 ›</button>
     </div>
 
-    <!-- 일반 텍스트 입력창 -->
     <div class="input-row" id="normalInputRow">
       <div class="token-chip" id="tokenChip" onclick="openMyPage()" title="토큰 잔액 · 클릭하여 충전">✦ <span id="chatTokenCount">-</span></div>
       <input id="inp" type="text" autocomplete="off">
@@ -2408,14 +2389,12 @@ body {
     </div>
   </div>
 
-  <!-- 로그인 -->
   <div id="screen-login">
     <div class="login-wrap">
       <div class="login-title" id="loginTitle"></div>
       <div class="google-btn-wrap" id="loginGoogleBtnWrap">
         <div id="loginGoogleBtnEl"></div>
       </div>
-      <!-- 비밀번호 로그인 비활성화: Google 로그인만 사용 -->
       <div class="or-divider" id="loginOrDivider" style="display:none"><span id="loginOrText"></span></div>
       <div class="field full" style="display:none">
         <label id="lblLoginId"></label>
@@ -2431,7 +2410,6 @@ body {
     </div>
   </div>
 
-  <!-- 회원가입 -->
   <div id="screen-signup">
     <div id="signup-form-wrap">
       <div class="signup-header">
@@ -2464,7 +2442,6 @@ body {
           <label id="lblDay"></label>
           <input type="number" id="fDay" placeholder="15" min="1" max="31">
         </div>
-        <!-- 비밀번호 로그인 비활성화: username/password 필드 숨김 -->
         <div class="field full" style="display:none">
           <label id="lblUsername"></label>
           <input type="text" id="fUsername" autocomplete="username">
@@ -2491,7 +2468,6 @@ body {
     </div>
   </div>
 
-  <!-- 마이페이지 -->
   <div id="screen-mypage">
     <div id="mypage-wrap">
       <div class="mypage-profile">
@@ -2503,7 +2479,6 @@ body {
       </div>
       <div class="mypage-divider"></div>
 
-      <!-- ① 사주 기본 정보 (생년월일 수정) -->
       <div class="mypage-section-label" id="mypageSectionLabel"></div>
       <div class="form-grid">
         <div class="field third">
@@ -2520,7 +2495,6 @@ body {
         </div>
       </div>
 
-      <!-- ② 상세 선택 정보 (이사주 정밀도↑) -->
       <div class="mypage-divider" style="margin:24px 0 20px"></div>
       <div class="mypage-section-label" id="mypageDetailLabel"></div>
       <div class="signup-notice" id="mypageDetailNotice" style="margin-bottom:14px;text-align:left;line-height:1.7"></div>
@@ -2555,17 +2529,14 @@ body {
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
       </div>
 
-      <!-- ── 토큰 충전 섹션 ── -->
       <div class="mypage-divider" style="margin:32px 0 24px"></div>
       <div class="mypage-section-label" id="tkSectionLbl"></div>
 
-      <!-- 잔액 -->
       <div class="token-balance-display">
         <div class="token-balance-num" id="mypageTokenNum">0</div>
         <div class="token-balance-unit" id="mypageTokenUnitLbl"></div>
       </div>
 
-      <!-- 일회성 패키지 -->
       <div class="pkg-grid">
         <div class="pkg-card" onclick="openTossPay('small')">
           <div class="pkg-badge" id="pkgBadge0"></div>
@@ -2596,7 +2567,6 @@ body {
 
 </div>
 
-<!-- ── 이용 안내 모달 ── -->
 <div id="guide-modal" style="display:none">
   <div class="guide-box">
     <div class="guide-title" id="guideTitle"></div>
@@ -2610,7 +2580,6 @@ body {
   </div>
 </div>
 
-<!-- ── 토큰충전 모달 ── -->
 <div id="token-modal" style="display:none" onclick="if(event.target===this)closeTokenModal()">
   <div class="token-modal-box">
     <div class="token-modal-header">
@@ -2649,13 +2618,11 @@ body {
   </div>
 </div>
 
-<!-- ── 결제 모달 ── -->
 <div id="pay-modal" style="display:none">
   <div class="pay-overlay" onclick="closePayModal()"></div>
   <div class="pay-box">
     <button class="pay-close" onclick="closePayModal()">✕</button>
 
-    <!-- 상태 1: QR 코드 -->
     <div id="payStateQr">
       <div class="pay-title" id="payModalTitle"></div>
       <div class="pay-price" id="payModalPrice"></div>
@@ -2671,7 +2638,6 @@ body {
       </button>
     </div>
 
-    <!-- 상태 2: 확인 중 -->
     <div id="payStateWaiting" style="display:none">
       <div class="pay-state-waiting">
         <div class="pay-spinner"></div>
@@ -2680,7 +2646,6 @@ body {
       </div>
     </div>
 
-    <!-- 상태 3: 충전 완료 -->
     <div id="payStateSuccess" style="display:none">
       <div class="pay-state-success">
         <div class="pay-success-icon">✓</div>
@@ -2694,7 +2659,6 @@ body {
   </div>
 </div>
 
-<!-- ── 법적 모달 ── -->
 <div id="legal-modal" class="legal-modal-overlay" style="display:none" onclick="if(event.target===this)closeLegal()">
   <div class="legal-modal-box">
     <div class="legal-modal-header">
@@ -2705,7 +2669,6 @@ body {
   </div>
 </div>
 
-<!-- ── 관리자 패널 ── -->
 <div id="admin-panel" style="display:none" onclick="if(event.target===this)closeAdminPanel()">
   <div class="admin-box">
       <div class="admin-header">
@@ -2723,7 +2686,6 @@ body {
       </div>
       <div id="adminPaymentList"><div class="admin-empty">불러오는 중...</div></div>
 
-      <!-- 직접 충전 패널 -->
       <div id="adminGrantPanel" style="display:none;padding:16px 0 4px">
         <div style="display:flex;flex-direction:column;gap:10px">
           <input id="adminGrantEmail" class="fif-input" type="email" placeholder="충전할 사용자 이메일" style="background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.2);border-radius:8px;padding:10px 12px;color:#e8dcc8;font-size:0.85rem;outline:none">
@@ -3061,21 +3023,6 @@ const DK = {
   },
 };
 
-function sysPrompt() {
-  const il = ilchin();
-  const on = ON[lang];
-  const t  = TX[lang];
-  const base = `
-Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]} · Secondary: ${on[il.jo]}
-${t.sys}
-Rules: Use "energy reading / flow / prescription" — never "fortune-telling / fate / divination".
-No definitive predictions. Frame negatives as areas for balance. No markdown bold. End with ONE tag: #木 #火 #土 #金 or #水`.trim();
-
-  return mode === 'solo'
-    ? `You are the Ohaeng Energy Master of M;Y 安.\n${base}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm poetic long-form reading. (5) Give one specific advice for today.`
-    : `You are the Ohaeng Harmony Master of M;Y 安.\n${base}\n\nMethod: (1) Each person's Saju Ohaeng. (2) Sangsaeng/Sangguk dynamics. (3) Today's Ilchin impact on the relationship. (4) How they complement each other. (5) Suggest shared activity or topic. Long-form, warm tone. NEVER say "compatibility is bad".`;
-}
-
 /* UI 렌더 */
 function render() {
   const t   = TX[lang];
@@ -3333,40 +3280,24 @@ function trimmedHist() {
   return [first, ...rest];
 }
 
-// Gemini 요청 공통 바디 생성
-function buildGeminiBody(contents) {
-  return {
-    systemInstruction: { parts: [{ text: sysPrompt() }] },
-    contents,
-    // 안전 필터 완화 — 사주/오행 콘텐츠가 오탐(점술 등)으로 차단되는 것 방지
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-    ],
-    generationConfig: {
-      temperature:     0.75,
-      maxOutputTokens: 3000,
-      topP:            0.95,
-    },
-  };
-}
-
 async function callGemini(contents) {
   if (!getGoogleIdToken()) throw { refund: false, noLogin: true };
 
   const doFetch = () => fetch(EP + 'chat', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify(buildGeminiBody(contents)),
+    body: JSON.stringify({
+      mode: mode,
+      lang: lang,
+      contents: contents
+    }),
   });
 
   let res  = await doFetch();
   let data = await res.json();
 
   // 토큰 부족 (서버에서 차감 실패)
-  if (res.status === 402) throw { refund: false, noToken: true };
+  if (res.status === 402 || res.status === 403) throw { refund: false, noToken: true };
 
   // 인증 실패 → 토큰 폐기
   if (res.status === 401) {
@@ -3520,7 +3451,10 @@ async function send() {
     addBubble(clean, 'ai');
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#'+k));
     if (tag) addRxCard(tag);
-  } catch(e) {
+ } catch(e) {
+    // ✨ 에러 발생 시 사용자가 썼던 텍스트를 입력창에 복구
+    inp.value = txt; 
+
     if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
     if (e?.refund) { addTokens(1); updateAllTokenDisplays(); }
     const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
@@ -5067,3 +5001,5 @@ window.addEventListener('appinstalled', () => {
 </script>
 </body>
 </html>
+
+```
