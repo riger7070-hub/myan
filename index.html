@@ -4952,8 +4952,9 @@ async function saveMyPage() {
 }
 
 function _signOut() {
-  // 로그아웃: 세션 삭제 + Google 자동 재로그인 차단
+  // 로그아웃: 모든 세션 및 유저 정보 삭제 + Google 자동 재로그인 차단
   localStorage.removeItem('myan_logged_in');
+  localStorage.removeItem('myan_user');      // 유저 정보도 함께 삭제하여 오작동 방지
   localStorage.removeItem('myan_id_token');
   localStorage.setItem('myan_signed_out', 'true'); // 자동 재로그인 방지 플래그
   _googleIdToken = ''; _googleIdTokenExp = 0;
@@ -4963,19 +4964,24 @@ function _signOut() {
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnSO = document.getElementById('userBtn');
   if (_userBtnSO) _userBtnSO.style.display = 'none';
-  document.getElementById('signupLinkBtn').style.display = 'none';
+  document.getElementById('signupLinkBtn').style.display = ''; // 로그아웃 후 가입/로그인 링크 표시
   closeMyPage();
 }
 
 function _withdrawAccount() {
-  // 탈퇴: 세션 + 계정 모두 삭제
+  // 탈퇴: 세션, 유저 정보, 구글 토큰까지 완전히 청소 + 자동 재로그인 확실히 차단
   localStorage.removeItem('myan_logged_in');
   localStorage.removeItem('myan_user');
+  localStorage.removeItem('myan_id_token');         // 탈퇴 시 구글 ID 토큰도 반드시 함께 제거
+  localStorage.setItem('myan_signed_out', 'true');  // 구글 원탭 자동 로그인 방지
+  _googleIdToken = ''; _googleIdTokenExp = 0;
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+  try { google.accounts.id.cancel(); } catch(e) {}
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnWD = document.getElementById('userBtn');
   if (_userBtnWD) _userBtnWD.style.display = 'none';
-  document.getElementById('signupLinkBtn').style.display = ''; // 계정 없으므로 가입 링크 표시
+  document.getElementById('signupLinkBtn').style.display = ''; // 가입 링크 표시
   closeMyPage();
 }
 
