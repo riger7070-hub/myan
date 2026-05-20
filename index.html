@@ -3512,27 +3512,29 @@ let pendingMode = null; // 가입 후 진입할 모드 저장
 function startMode(m) {
   const user = getUser();
 
-  // 미가입자 → 회원가입 게이트
+  // 1. 미가입자 → 회원가입 게이트
   if (!user) {
     pendingMode = m;
     goSignup();
     return;
   }
 
-  // 비밀번호 계정인데 로그인 안 된 상태 → 로그인 게이트
+  // 2. 이메일/비밀번호 가입자인데 로그아웃 상태 → 로그인 게이트
   if (user.passwordHash && !isLoggedIn()) {
     pendingMode = m;
     showLogin();
     return;
   }
 
-  // 레거시 계정(비밀번호 없음) → 자동 로그인
-  if (!isLoggedIn()) {
-    localStorage.setItem('myan_logged_in', 'true');
+  // 3. 구글 가입자인데 로그아웃 상태 또는 토큰 유실 → 즉시 로그인 게이트
+  if (!user.passwordHash && (!isLoggedIn() || !getGoogleIdToken())) {
+    pendingMode = m;
+    showLogin();
+    return;
   }
 
   // 이용 안내 모달 — 하루 스킵이 아니면 매번 표시
-  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const today = new Date().toISOString().slice(0, 10);
   if (localStorage.getItem('myan_guide_skip_date') !== today) {
     pendingMode = m;
     openGuideModal();
