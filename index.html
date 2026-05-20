@@ -4776,6 +4776,7 @@ async function submitSignup() {
 /* ── 마이페이지 ── */
 function updateUserBtn(user) {
   const btn = document.getElementById('userBtn');
+  if (!btn) return; // 엘리먼트가 없으면 안전하게 리턴 (크래시 방지)
   if (!user) { btn.style.display = 'none'; return; }
   btn.textContent = TX[lang].mpLink || '마이페이지';
   btn.style.display = 'flex';
