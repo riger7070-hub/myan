@@ -3868,14 +3868,15 @@ function goBack() {
   mode = null; hist = [];
   // 모드 화면 복귀 시 userBtn / signupLinkBtn 복원
   const u = getUser();
+  const _userBtn = document.getElementById('userBtn');
   if (u && isLoggedIn()) {
     updateUserBtn(u);
     document.getElementById('signupLinkBtn').style.display = 'none';
   } else if (u && !isLoggedIn()) {
-    document.getElementById('userBtn').style.display = 'none';
+    if (_userBtn) _userBtn.style.display = 'none';
     document.getElementById('signupLinkBtn').style.display = 'none';
   } else {
-    document.getElementById('userBtn').style.display = 'none';
+    if (_userBtn) _userBtn.style.display = 'none';
     document.getElementById('signupLinkBtn').style.display = '';
   }
   // Change 1: 무료 배너 상태 업데이트
@@ -4958,7 +4959,8 @@ function _signOut() {
   try { google.accounts.id.cancel(); } catch(e) {}
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('userBtn').style.display = 'none';
+  const _userBtnSO = document.getElementById('userBtn');
+  if (_userBtnSO) _userBtnSO.style.display = 'none';
   document.getElementById('signupLinkBtn').style.display = 'none';
   closeMyPage();
 }
@@ -4969,7 +4971,8 @@ function _withdrawAccount() {
   localStorage.removeItem('myan_user');
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('userBtn').style.display = 'none';
+  const _userBtnWD = document.getElementById('userBtn');
+  if (_userBtnWD) _userBtnWD.style.display = 'none';
   document.getElementById('signupLinkBtn').style.display = ''; // 계정 없으므로 가입 링크 표시
   closeMyPage();
 }
@@ -5255,17 +5258,18 @@ function checkAuth() {
   const user = getUser();
   const loggedIn = isLoggedIn();
 
+  const _userBtnCA = document.getElementById('userBtn');
   if (user && loggedIn) {
     document.getElementById('signupLinkBtn').style.display = 'none';
     updateUserBtn(user);
   }
   else if (user && !loggedIn) {
     document.getElementById('signupLinkBtn').style.display = 'none';
-    document.getElementById('userBtn').style.display = 'none';
+    if (_userBtnCA) _userBtnCA.style.display = 'none';
   }
   else {
     document.getElementById('signupLinkBtn').style.display = '';
-    document.getElementById('userBtn').style.display = 'none';
+    if (_userBtnCA) _userBtnCA.style.display = 'none';
   }
 
   if (user && loggedIn) _checkAdminBadge();
