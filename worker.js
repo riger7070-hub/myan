@@ -47,6 +47,22 @@ export default {
       return cors(null, 204);
     }
 
+    // ── D1 테이블 자동 생성 (없으면 만들기) ──
+    if (env.DB) {
+      await env.DB.exec(`
+        CREATE TABLE IF NOT EXISTS payment_requests (
+          id          TEXT    PRIMARY KEY,
+          user_email  TEXT    NOT NULL,
+          pkg         TEXT    NOT NULL,
+          amount      INTEGER NOT NULL DEFAULT 0,
+          tokens      INTEGER NOT NULL DEFAULT 0,
+          status      TEXT    NOT NULL DEFAULT 'pending',
+          created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+          approved_at INTEGER
+        )
+      `).catch(() => {});
+    }
+
     // ════════════════════════════
     //  토큰 라우트
     // ════════════════════════════
@@ -203,6 +219,15 @@ async function handleGeminiChat(request, env) {
     }
 
     const data = await res.json();
+
+    // 성공 시 최신 잔액을 응답에 포함 → 클라이언트 토큰 UI 즉시 동기화
+    if (data.candidates) {
+      const balRow = await env.DB.prepare(
+        `SELECT COALESCE(SUM(tokens), 0) as total FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+      ).bind(email).first();
+      data._tokens = balRow?.total || 0;
+    }
+
     return cors(JSON.stringify(data), 200);
 
   } catch (e) {
@@ -318,12 +343,27 @@ async function handleSignupGrant(request, env) {
 // ════════════════════════════
 
 async function handlePaymentRequest(request, env) {
+  // 이메일은 반드시 서버에서 ID토큰으로 추출 (클라이언트 body 신뢰 금지)
+  const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+  if (!idToken) return cors('{"error":"unauthorized"}', 401);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) return cors('{"error":"unauthorized"}', 401);
+
   let body;
   try { body = await request.json(); } catch { return cors('{"error":"invalid json"}', 400); }
 
-  const { id, email, pkg, amount, tokens, status } = body;
-  if (!id || !email || !pkg) return cors('{"error":"missing fields"}', 400);
+  const { id, pkg } = body;
+  if (!id || !pkg) return cors('{"error":"missing fields"}', 400);
   if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+
+  // PKG별 금액/토큰 서버에서 결정 (클라이언트 위조 방지)
+  const PKG_TABLE = {
+    small:  { amount: 4900,  tokens: 30  },
+    medium: { amount: 12900, tokens: 100 },
+    large:  { amount: 29900, tokens: 300 },
+  };
+  const pkgInfo = PKG_TABLE[pkg];
+  if (!pkgInfo) return cors('{"error":"invalid package"}', 400);
 
   const existing = await env.DB.prepare(
     'SELECT id FROM payment_requests WHERE id = ?'
@@ -332,11 +372,11 @@ async function handlePaymentRequest(request, env) {
 
   await env.DB.prepare(
     'INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(id, email, pkg, amount || 0, tokens || 0, status || 'pending').run();
+  ).bind(id, email, pkg, pkgInfo.amount, pkgInfo.tokens, 'pending').run();
 
-  if ((!status || status === 'pending') && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
     const workerBase = new URL(request.url).origin;
-    await sendTelegramNotification(env, workerBase, { id, email, pkg, amount, tokens });
+    await sendTelegramNotification(env, workerBase, { id, email, pkg, ...pkgInfo });
   }
 
   return cors(JSON.stringify({ ok: true, id }));

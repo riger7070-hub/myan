@@ -1,5 +1,5 @@
 // M;Y 安 — Service Worker v1.0
-const CACHE_NAME = 'myan-v1';
+const CACHE_NAME = 'myan-v2';
 const OFFLINE_URL = '/index.html';
 
 // 캐시할 파일 목록
@@ -7,8 +7,8 @@ const CACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/icon-pwa-192-192.png',
+  '/icon-pwa-512-512.png',
 ];
 
 // ── 설치: 앱 셸 캐싱 ──

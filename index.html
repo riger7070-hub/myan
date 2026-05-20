@@ -63,17 +63,42 @@
 /* ── 라이트 모드 ── */
 [data-theme="light"] {
   --bg: #f5f0e8;
-  --gold: #a07840;
-  --gold-light: #7a5c2a;
-  --gold-dim: rgba(160,120,64,0.35);
-  --text: #2a2420;
-  --text-dim: #6b5e52;
-  --border: rgba(160,120,64,0.25);
-  --card: rgba(160,120,64,0.07);
-  --input-bg: rgba(160,120,64,0.08);
-  --bubble-ai-bg: rgba(160,120,64,0.06);
+  --gold: #8c6420;
+  --gold-light: #6a4a14;
+  --gold-dim: rgba(140,100,32,0.4);
+  --text: #1e1a16;
+  --text-dim: #4a3c30;
+  --border: rgba(140,100,32,0.28);
+  --card: rgba(140,100,32,0.08);
+  --input-bg: rgba(140,100,32,0.07);
+  --bubble-ai-bg: rgba(140,100,32,0.07);
   --hd-bg: rgba(245,240,232,0.97);
 }
+/* 라이트 모드 — 추가 가시성 강화 */
+[data-theme="light"] .section-label    { color: #4a3c30; }
+[data-theme="light"] .section-title    { color: #1e1a16; }
+[data-theme="light"] .section-desc     { color: #3a2e24; }
+[data-theme="light"] .disclaimer       { color: #5a4e42; }
+[data-theme="light"] .card-desc        { color: #3a2e24; }
+[data-theme="light"] .fif-label        { color: #4a3c30; }
+[data-theme="light"] .fif-optional-note { color: #5a4e42; }
+[data-theme="light"] .suggest-chip     { color: #3a2e24; border-color: rgba(140,100,32,0.35); }
+[data-theme="light"] .bubble-user      { background: rgba(140,100,32,0.14); color: #1e1a16; }
+[data-theme="light"] .bubble-ai        { color: #2a2016; }
+[data-theme="light"] .ilchin           { color: #4a3c30; }
+[data-theme="light"] .hd-sub           { color: #4a3c30; }
+[data-theme="light"] .mypage-name-disp { color: #1e1a16; }
+[data-theme="light"] .mypage-email-disp { color: #4a3c30; }
+[data-theme="light"] .mypage-section-label { color: #3a2e24; }
+[data-theme="light"] .signup-notice    { color: #4a3c30; }
+[data-theme="light"] .signup-sub       { color: #3a2e24; }
+[data-theme="light"] .free-token-banner { color: #3a2e24; border-color: rgba(140,100,32,0.3); }
+[data-theme="light"] .beta-banner      { color: #4a6840; border-color: rgba(60,140,80,0.35); }
+[data-theme="light"] .beta-banner strong { color: #2e5a30; }
+[data-theme="light"] .token-chip       { color: #4a3c30; border-color: rgba(140,100,32,0.35); }
+[data-theme="light"] .token-balance-unit { color: #4a3c30; }
+[data-theme="light"] label             { color: #3a2e24; }
+[data-theme="light"] ::placeholder     { color: #8a7868; }
 
 * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
 
@@ -1490,12 +1515,6 @@ body {
   width: 100%;
 }
 .fif-input:focus { border-color: var(--gold-dim); }
-.fif-input[type="date"]::-webkit-calendar-picker-indicator,
-.fif-input[type="time"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.6) sepia(1) saturate(2) hue-rotate(5deg);
-  opacity: 0.6;
-  cursor: pointer;
-}
 .fif-submit {
   width: 100%;
   padding: 11px;
@@ -2349,13 +2368,29 @@ body {
 
     <div id="firstInputForm" style="display:none">
       <div class="fif-row">
-        <div class="fif-field">
+        <div class="fif-field" style="flex:1.2">
           <label class="fif-label">성함</label>
           <input class="fif-input" id="fifName" type="text" placeholder="홍길동" autocomplete="name">
         </div>
+      </div>
+      <div class="fif-row">
         <div class="fif-field">
-          <label class="fif-label">생년월일</label>
-          <input class="fif-input" id="fifDate" type="date" max="2026-12-31">
+          <label class="fif-label">태어난 해</label>
+          <select class="fif-input" id="fifYear"></select>
+        </div>
+        <div class="fif-field">
+          <label class="fif-label">월</label>
+          <select class="fif-input" id="fifMonth">
+            <option value="">월</option>
+            <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+            <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+            <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+            <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+          </select>
+        </div>
+        <div class="fif-field">
+          <label class="fif-label">일</label>
+          <select class="fif-input" id="fifDay"></select>
         </div>
       </div>
       <div class="fif-row">
@@ -2363,18 +2398,18 @@ body {
           <label class="fif-label">태어난 시간 <span style="opacity:.5">(선택)</span></label>
           <select class="fif-input" id="fifTime">
             <option value="">모름 / 선택 안 함</option>
-            <option value="자시 (밤 11시~새벽 1시)">子時 자시 — 밤 11시~새벽 1시</option>
-            <option value="축시 (새벽 1시~3시)">丑時 축시 — 새벽 1시~3시</option>
-            <option value="인시 (새벽 3시~5시)">寅時 인시 — 새벽 3시~5시</option>
-            <option value="묘시 (새벽 5시~7시)">卯時 묘시 — 새벽 5시~7시</option>
-            <option value="진시 (오전 7시~9시)">辰時 진시 — 오전 7시~9시</option>
-            <option value="사시 (오전 9시~11시)">巳時 사시 — 오전 9시~11시</option>
-            <option value="오시 (오전 11시~오후 1시)">午時 오시 — 오전 11시~오후 1시</option>
-            <option value="미시 (오후 1시~3시)">未時 미시 — 오후 1시~3시</option>
-            <option value="신시 (오후 3시~5시)">申時 신시 — 오후 3시~5시</option>
-            <option value="유시 (오후 5시~7시)">酉時 유시 — 오후 5시~7시</option>
-            <option value="술시 (오후 7시~9시)">戌時 술시 — 오후 7시~9시</option>
-            <option value="해시 (오후 9시~11시)">亥時 해시 — 오후 9시~11시</option>
+            <option value="자시">🌑 자시 (밤 11시 ~ 새벽 1시)</option>
+            <option value="축시">🌒 축시 (새벽 1시 ~ 3시)</option>
+            <option value="인시">🌓 인시 (새벽 3시 ~ 5시)</option>
+            <option value="묘시">🌅 묘시 (새벽 5시 ~ 7시)</option>
+            <option value="진시">🌤 진시 (오전 7시 ~ 9시)</option>
+            <option value="사시">☀️ 사시 (오전 9시 ~ 11시)</option>
+            <option value="오시">🌞 오시 (오전 11시 ~ 오후 1시)</option>
+            <option value="미시">🌇 미시 (오후 1시 ~ 3시)</option>
+            <option value="신시">🌆 신시 (오후 3시 ~ 5시)</option>
+            <option value="유시">🌇 유시 (오후 5시 ~ 7시)</option>
+            <option value="술시">🌃 술시 (오후 7시 ~ 9시)</option>
+            <option value="해시">🌙 해시 (오후 9시 ~ 11시)</option>
           </select>
         </div>
       </div>
@@ -3194,7 +3229,7 @@ function _enterMode(m, user) {
       hist = JSON.parse(savedHist);
       document.getElementById('chat-window').innerHTML = savedHtml;
       document.getElementById('newChatBtn').style.display = 'inline-block';
-      showNormalInput(); hideSuggestChips();
+      showNormalInput(); showSuggestChips();
       document.getElementById('chat-window').scrollTop = 99999;
       return; // 복원 완료 → 새 인사 메시지 생략
     }
@@ -3225,7 +3260,29 @@ function _enterMode(m, user) {
 }
 
 // ── Change 2: 첫 입력 폼 토글 ──
+function _buildFifYearOptions() {
+  const sel = document.getElementById('fifYear');
+  if (!sel || sel.options.length > 1) return;
+  sel.innerHTML = '<option value="">년</option>';
+  const cur = new Date().getFullYear();
+  for (let y = cur; y >= 1920; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y + '년'; sel.appendChild(o);
+  }
+}
+function _buildFifDayOptions() {
+  const sel = document.getElementById('fifDay');
+  if (!sel || sel.options.length > 1) return;
+  sel.innerHTML = '<option value="">일</option>';
+  for (let d = 1; d <= 31; d++) {
+    const o = document.createElement('option');
+    o.value = d; o.textContent = d + '일'; sel.appendChild(o);
+  }
+}
+
 function showFirstInputForm() {
+  _buildFifYearOptions();
+  _buildFifDayOptions();
   document.getElementById('firstInputForm').style.display = 'flex';
   document.getElementById('normalInputRow').style.display = 'none';
   document.getElementById('fifName').focus();
@@ -3236,15 +3293,17 @@ function showNormalInput() {
 }
 function submitFirstForm() {
   const name = document.getElementById('fifName').value.trim();
-  const date = document.getElementById('fifDate').value;
-  const time = document.getElementById('fifTime').value;
-  if (!name) { document.getElementById('fifName').focus(); return; }
-  if (!date)  { document.getElementById('fifDate').focus(); return; }
-  const [y, mo, d] = date.split('-');
-  let msg = `${name}, ${y}년 ${parseInt(mo)}월 ${parseInt(d)}일생`;
+  const year  = document.getElementById('fifYear').value;
+  const month = document.getElementById('fifMonth').value;
+  const day   = document.getElementById('fifDay').value;
+  const time  = document.getElementById('fifTime').value;
+  if (!name)  { document.getElementById('fifName').focus(); return; }
+  if (!year)  { document.getElementById('fifYear').focus(); return; }
+  if (!month) { document.getElementById('fifMonth').focus(); return; }
+  if (!day)   { document.getElementById('fifDay').focus(); return; }
+  let msg = `${name}, ${year}년 ${month}월 ${day}일생`;
   if (time) msg += `, ${time}`;
   showNormalInput();
-  hideSuggestChips();
   document.getElementById('inp').value = msg;
   send();
 }
@@ -3261,7 +3320,6 @@ function hideSuggestChips() {
 function useSuggest(el) {
   const txt = el.textContent;
   showNormalInput();
-  hideSuggestChips();
   document.getElementById('inp').value = txt;
   send();
 }
@@ -3371,6 +3429,7 @@ async function autoAnalyze() {
     
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#' + k));
     if (tag) addRxCard(tag);
+    showSuggestChips(); // 응답 후 추천 칩 다시 표시
 
   } catch(e) {
     // 2. 에러 발생 시 토큰 복구 및 즉시 화면 동기화
@@ -3394,6 +3453,7 @@ async function autoAnalyze() {
     // 3. 에러 메시지 세분화 (Safety 관련인지 여부)
     const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
     addBubble(msg, 'ai');
+    showSuggestChips();
 
     if (hist.length > 0 && hist[hist.length-1].role === 'model') hist.pop();
     
@@ -3511,7 +3571,6 @@ async function send() {
   }
 
   btn.disabled = true; inp.disabled = true;
-  hideSuggestChips();
   addBubble(txt, 'user'); inp.value = '';
   hist.push({role:'user', parts:[{text:txt}]});
   const loader = addLoader();
@@ -3526,9 +3585,10 @@ async function send() {
     addBubble(clean, 'ai');
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#'+k));
     if (tag) addRxCard(tag);
+    showSuggestChips(); // 응답 후 추천 칩 다시 표시
  } catch(e) {
     // ✨ 에러 발생 시 사용자가 썼던 텍스트를 입력창에 복구
-    inp.value = txt; 
+    inp.value = txt;
 
     if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
     if (e?.noToken) { await refreshTokens(); updateAllTokenDisplays(); addBubble(TX[lang].noToken, 'ai'); return; }
@@ -3536,6 +3596,7 @@ async function send() {
     const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
     addBubble(msg, 'ai');
     hist.pop();
+    showSuggestChips();
   } finally {
     loader.remove(); btn.disabled = false; inp.disabled = false;
     inp.focus(); cw().scrollTop = 99999;
@@ -4433,6 +4494,13 @@ function renderMyPage() {
   document.getElementById('mypageSupportBtn').textContent = t.mpSupport || '✉ 고객센터';
   document.getElementById('mypageLogoutBtn').textContent  = t.mpLogout;
   document.getElementById('mypageWithdrawBtn').textContent = t.mpWithdraw;
+  // 알림 버튼 현재 상태 반영
+  const notifBtn = document.getElementById('notifToggleBtn');
+  if (notifBtn) {
+    const notifOn = localStorage.getItem('myan_notif_enabled') === 'true';
+    notifBtn.textContent = notifOn ? '알림 끄기 🔕' : '알림 켜기 🔔';
+    notifBtn.classList.toggle('notif-on', notifOn);
+  }
 
   // 저장된 값 채우기
   document.getElementById('mpYear').value  = user.birthYear  || '';
@@ -4862,11 +4930,68 @@ function goToApp() {
 render();
 schedMidnightRefresh();
 checkAuth();
-refreshTokens();  // ⭐ 추가: 페이지 로드 시 서버 토큰 잔액 동기화
+refreshTokens();
+
+// ── PWA 뒤로가기 처리 — 앱이 꺼지는 대신 이전 화면으로 이동 ──
+(function initAppHistory() {
+  history.replaceState({ screen: 'home' }, '');
+
+  // 각 화면 진입 함수에 직접 pushState 연결 (startMode는 제외 — 내부에서 goSignup/showLogin으로 분기됨)
+  const _origGoSignup = goSignup;
+  goSignup = function() {
+    history.pushState({ screen: 'signup' }, '');
+    _origGoSignup();
+  };
+
+  const _origShowLogin = showLogin;
+  showLogin = function() {
+    history.pushState({ screen: 'login' }, '');
+    _origShowLogin();
+  };
+
+  const _origOpenMyPage = openMyPage;
+  openMyPage = function() {
+    history.pushState({ screen: 'mypage' }, '');
+    _origOpenMyPage();
+  };
+
+  // _enterMode (채팅 화면 진입) 에서만 chat pushState
+  const _origEnterMode = _enterMode;
+  _enterMode = function(m, user) {
+    if (m !== '_token') history.pushState({ screen: 'chat', mode: m }, '');
+    _origEnterMode(m, user);
+  };
+
+  // 브라우저/OS 뒤로가기 버튼 가로채기
+  window.addEventListener('popstate', () => {
+    // 모달 우선 닫기
+    if (document.getElementById('admin-panel')?.style.display !== 'none') {
+      closeAdminPanel(); history.pushState({ screen: 'mypage' }, ''); return;
+    }
+    if (document.getElementById('pay-modal')?.style.display !== 'none') {
+      closePayModal(); return;
+    }
+    if (document.getElementById('guide-modal')?.style.display !== 'none') {
+      closeGuideModal(); return;
+    }
+    // 화면별 뒤로가기
+    if (document.getElementById('screen-mypage').style.display === 'flex') {
+      closeMyPage(); return;
+    }
+    if (document.getElementById('screen-chat').style.display === 'flex') {
+      goBack(); return;
+    }
+    if (document.getElementById('screen-signup').style.display === 'flex') {
+      goBackFromSignup(); return;
+    }
+    if (document.getElementById('screen-login').style.display === 'flex') {
+      goBackFromLogin(); return;
+    }
+    // 홈에서 뒤로가기 → OS 기본 동작 (앱 종료) 허용
+  });
+})();
 
 // 페이지 로드 시 미완료 결제 자동 복구 (창 닫아도 승인 시 지급)
-// ✅ 기존 함수 전체를 아래 코드로 덮어쓰세요.
-
 (async function resumePendingPayment() {
   const pendingId = localStorage.getItem('myan_pending_pay_id');
   if (!pendingId || !EP) return;
@@ -5056,7 +5181,7 @@ function showInstallBanner() {
     animation:pop .35s ease;
   `;
   banner.innerHTML = `
-    <img src="/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0">
+    <img src="/icon-pwa-192-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0">
     <div style="flex:1">
       <div style="color:#c9a96e;font-size:0.9rem;font-weight:600">M;Y 安 앱 설치</div>
       <div style="color:#999;font-size:0.75rem;margin-top:2px">홈 화면에 추가하면 더 편리해요</div>
