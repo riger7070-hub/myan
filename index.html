@@ -2081,6 +2081,279 @@ body {
   50%      { box-shadow: 0 0 0 4px rgba(224,90,74,0); }
 }
 
+/* ══════════════════════════════════════
+   ── 사이드 드로어 메뉴 ──
+══════════════════════════════════════ */
+#menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0,0,0,0);
+  pointer-events: none;
+  transition: background .3s ease;
+}
+#menu-overlay.open {
+  background: rgba(0,0,0,0.55);
+  pointer-events: all;
+}
+
+#side-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(320px, 88vw);
+  z-index: 9001;
+  background: var(--hd-bg);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .32s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: -8px 0 40px rgba(0,0,0,0.4);
+}
+#side-drawer.open {
+  transform: translateX(0);
+}
+
+/* 드로어 헤더 */
+.drawer-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-brand {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.1rem;
+  font-weight: 200;
+  letter-spacing: 6px;
+  color: var(--gold);
+}
+.drawer-close {
+  width: 32px; height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.drawer-close:hover { color: var(--text); border-color: var(--gold-dim); }
+
+/* 프로필 섹션 */
+.drawer-profile {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.drawer-profile:hover { background: var(--card); }
+.drawer-avatar {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: rgba(201,169,110,0.15);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.drawer-user-info { flex: 1; min-width: 0; }
+.drawer-user-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-user-email {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-token-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(201,169,110,0.12);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 비로그인 프로필 */
+.drawer-login-prompt {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.drawer-login-btn {
+  width: 100%;
+  padding: 11px;
+  background: rgba(201,169,110,0.12);
+  border: 1px solid var(--gold-dim);
+  border-radius: 10px;
+  color: var(--gold);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+}
+.drawer-login-btn:hover { background: rgba(201,169,110,0.22); }
+
+/* 메뉴 섹션 */
+.drawer-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.drawer-section-label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 8px 8px;
+}
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s;
+  color: var(--text);
+  font-size: 0.88rem;
+  border: none;
+  background: none;
+  width: 100%;
+  font-family: 'Pretendard', sans-serif;
+  text-align: left;
+}
+.drawer-item:hover { background: var(--card); }
+.drawer-item.active { background: rgba(201,169,110,0.1); color: var(--gold); }
+.drawer-item-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--card);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.drawer-item-text { flex: 1; }
+.drawer-item-sub {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.drawer-item-arrow { color: var(--text-dim); font-size: 0.8rem; }
+
+/* 언어 선택 (드로어 내) */
+.drawer-langs {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px 8px;
+}
+.drawer-lb {
+  flex: 1;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+}
+.drawer-lb:hover { border-color: var(--gold-dim); color: var(--gold); }
+.drawer-lb.on { background: rgba(201,169,110,0.12); border-color: var(--gold-dim); color: var(--gold); }
+
+/* 테마 토글 (드로어 내) */
+.drawer-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px;
+  border-radius: 10px;
+}
+.drawer-theme-label { font-size: 0.88rem; color: var(--text); }
+.drawer-theme-toggle {
+  display: flex;
+  gap: 6px;
+}
+.drawer-theme-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: 'Pretendard', sans-serif;
+  transition: all .2s;
+}
+.drawer-theme-btn.on { background: rgba(201,169,110,0.12); border-color: var(--gold-dim); color: var(--gold); }
+
+/* 드로어 푸터 */
+.drawer-footer {
+  padding: 16px 20px;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+.drawer-version {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+/* 햄버거 버튼 */
+.menu-btn {
+  width: 32px; height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 7px;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.menu-btn:hover { border-color: var(--gold-dim); background: var(--card); }
+.menu-btn span {
+  display: block;
+  width: 100%;
+  height: 1.5px;
+  background: var(--text-dim);
+  border-radius: 2px;
+  transition: all .2s;
+}
+.menu-btn:hover span { background: var(--gold); }
+
 /* ── 관리자 패널 ── */
 #admin-panel {
   position: fixed;
@@ -2251,17 +2524,12 @@ body {
     <span class="back" id="backBtn">← <span id="backLabel"></span></span>
     <button id="newChatBtn" onclick="clearAndRestartChat()" style="display:none;background:none;border:1px solid rgba(201,169,110,0.25);border-radius:6px;color:rgba(201,169,110,0.6);font-size:0.7rem;padding:4px 8px;cursor:pointer;letter-spacing:0.5px">✦ 새 대화</button>
     <div class="hd-right">
-      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="다크/라이트 모드">🌙</button>
       <button class="admin-hd-btn" id="adminHdBtn" onclick="openAdminPanel()" style="display:none" title="관리자">
         ⚙<span class="admin-hd-dot" id="adminHdDot"></span>
       </button>
-      <button class="user-btn" id="userBtn" onclick="openMyPage()"></button>
-      <div class="langs">
-        <button class="lb on" onclick="setLang('ko')">한</button>
-        <button class="lb" onclick="setLang('en')">EN</button>
-        <button class="lb" onclick="setLang('zh')">中</button>
-        <button class="lb" onclick="setLang('ja')">日</button>
-      </div>
+      <button class="menu-btn" id="menuBtn" onclick="openDrawer()" aria-label="메뉴">
+        <span></span><span></span><span></span>
+      </button>
     </div>
     <div class="hd-logo">M ; Y &nbsp;安</div>
     <div class="hd-deco">
@@ -2601,6 +2869,106 @@ body {
     </div>
   </div>
 
+</div>
+
+<!-- ── 사이드 드로어 메뉴 ── -->
+<div id="menu-overlay" onclick="closeDrawer()"></div>
+<div id="side-drawer">
+
+  <!-- 드로어 헤더 -->
+  <div class="drawer-hd">
+    <div class="drawer-brand">M ; Y &nbsp;安</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+
+  <!-- 프로필 (로그인 상태에 따라 JS로 표시) -->
+  <div id="drawerProfile" class="drawer-profile" onclick="closeDrawer();openMyPage();" style="display:none">
+    <div class="drawer-avatar" id="drawerAvatar">?</div>
+    <div class="drawer-user-info">
+      <div class="drawer-user-name" id="drawerName">—</div>
+      <div class="drawer-user-email" id="drawerEmail">—</div>
+    </div>
+    <div class="drawer-token-badge">✦ <span id="drawerTokens">0</span></div>
+  </div>
+  <div id="drawerLoginPrompt" class="drawer-login-prompt" style="display:none">
+    <button class="drawer-login-btn" onclick="closeDrawer();goSignup()">✦ 로그인 / 회원가입</button>
+  </div>
+
+  <!-- 바로가기 -->
+  <div class="drawer-section">
+    <div class="drawer-section-label">바로가기</div>
+    <button class="drawer-item" onclick="closeDrawer();_goHome()">
+      <div class="drawer-item-icon">🏠</div>
+      <div class="drawer-item-text">
+        <div>처음으로</div>
+        <div class="drawer-item-sub">메인 화면으로 돌아가기</div>
+      </div>
+    </button>
+    <button class="drawer-item" onclick="closeDrawer();startMode('solo')">
+      <div class="drawer-item-icon">☯</div>
+      <div class="drawer-item-text">
+        <div>나만의 리딩</div>
+        <div class="drawer-item-sub">오늘 나의 오행 기운 풀이</div>
+      </div>
+      <div class="drawer-item-arrow">›</div>
+    </button>
+    <button class="drawer-item" onclick="closeDrawer();startMode('couple')">
+      <div class="drawer-item-icon">∞</div>
+      <div class="drawer-item-text">
+        <div>우리의 조화</div>
+        <div class="drawer-item-sub">두 사람의 오행 궁합 풀이</div>
+      </div>
+      <div class="drawer-item-arrow">›</div>
+    </button>
+    <button class="drawer-item" id="drawerMypageBtn" onclick="closeDrawer();openMyPage()" style="display:none">
+      <div class="drawer-item-icon">👤</div>
+      <div class="drawer-item-text">
+        <div>마이페이지</div>
+        <div class="drawer-item-sub">토큰 · 생년월일 · 설정</div>
+      </div>
+      <div class="drawer-item-arrow">›</div>
+    </button>
+  </div>
+
+  <!-- 언어 설정 -->
+  <div class="drawer-section">
+    <div class="drawer-section-label">언어</div>
+    <div class="drawer-langs">
+      <button class="drawer-lb on" id="dlb-ko" onclick="setLang('ko');_syncDrawerLangs()">한국어</button>
+      <button class="drawer-lb" id="dlb-en" onclick="setLang('en');_syncDrawerLangs()">English</button>
+      <button class="drawer-lb" id="dlb-zh" onclick="setLang('zh');_syncDrawerLangs()">中文</button>
+      <button class="drawer-lb" id="dlb-ja" onclick="setLang('ja');_syncDrawerLangs()">日本語</button>
+    </div>
+  </div>
+
+  <!-- 화면 설정 -->
+  <div class="drawer-section">
+    <div class="drawer-section-label">화면</div>
+    <div class="drawer-theme-row">
+      <div class="drawer-theme-label">테마</div>
+      <div class="drawer-theme-toggle">
+        <button class="drawer-theme-btn" id="drawerThemeDark" onclick="applyTheme('dark');localStorage.setItem('myan_theme','dark');_syncDrawerTheme()">🌙 다크</button>
+        <button class="drawer-theme-btn" id="drawerThemeLight" onclick="applyTheme('light');localStorage.setItem('myan_theme','light');_syncDrawerTheme()">☀️ 라이트</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 계정 -->
+  <div class="drawer-section" id="drawerAccountSection" style="display:none">
+    <div class="drawer-section-label">계정</div>
+    <button class="drawer-item" onclick="openSupport();closeDrawer()">
+      <div class="drawer-item-icon">✉️</div>
+      <div class="drawer-item-text">1:1 고객센터</div>
+    </button>
+    <button class="drawer-item" onclick="closeDrawer();setTimeout(()=>{openMyPage();setTimeout(()=>logout(),100)},100)" style="color:var(--text-dim)">
+      <div class="drawer-item-icon">🚪</div>
+      <div class="drawer-item-text">로그아웃</div>
+    </button>
+  </div>
+
+  <div class="drawer-footer">
+    <div class="drawer-version">M ; Y 安 · 베타</div>
+  </div>
 </div>
 
 <div id="guide-modal" style="display:none">
@@ -3108,8 +3476,8 @@ function schedMidnightRefresh() {
 
 function setLang(l) {
   lang = l;
-  document.querySelectorAll('.lb').forEach(b => b.classList.remove('on'));
-  document.querySelector(`.lb[onclick="setLang('${l}')"]`).classList.add('on');
+  // 드로어 언어 버튼 동기화
+  if (typeof _syncDrawerLangs === 'function') _syncDrawerLangs();
   render();
 }
 
@@ -3124,14 +3492,12 @@ function toggleTheme() {
 function applyTheme(theme) {
   if (theme === 'light') {
     document.documentElement.setAttribute('data-theme', 'light');
-    document.getElementById('themeToggleBtn').textContent = '☀️';
   } else {
     document.documentElement.removeAttribute('data-theme');
-    document.getElementById('themeToggleBtn').textContent = '🌙';
   }
-  
-  // 테마 변경 시 모바일 상단 바 색상 동기화 (방금 지운 로직을 여기로 가져옴)
+  // 테마 관련 UI 동기화
   if (typeof syncThemeColorMeta === 'function') syncThemeColorMeta();
+  if (typeof _syncDrawerTheme === 'function') _syncDrawerTheme();
 }
 
 // 저장된 테마 적용
@@ -5010,9 +5376,79 @@ refreshTokens();
   } catch {}
 })();
 
-// ESC 키로 모달 닫기
+// ══════════════════════════════════════
+// ── 사이드 드로어 메뉴 ──
+// ══════════════════════════════════════
+function openDrawer() {
+  _syncDrawerState();
+  document.getElementById('menu-overlay').classList.add('open');
+  document.getElementById('side-drawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer() {
+  document.getElementById('menu-overlay').classList.remove('open');
+  document.getElementById('side-drawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// 드로어 열릴 때 현재 상태 동기화
+function _syncDrawerState() {
+  const user = getUser();
+  const loggedIn = isLoggedIn();
+
+  // 프로필
+  if (user && loggedIn) {
+    document.getElementById('drawerProfile').style.display = 'flex';
+    document.getElementById('drawerLoginPrompt').style.display = 'none';
+    document.getElementById('drawerAvatar').textContent = (user.name || '?').charAt(0);
+    document.getElementById('drawerName').textContent   = user.name  || '—';
+    document.getElementById('drawerEmail').textContent  = user.email || '—';
+    document.getElementById('drawerTokens').textContent = _tokenCache;
+    document.getElementById('drawerMypageBtn').style.display = 'flex';
+    document.getElementById('drawerAccountSection').style.display = 'block';
+  } else {
+    document.getElementById('drawerProfile').style.display = 'none';
+    document.getElementById('drawerLoginPrompt').style.display = 'block';
+    document.getElementById('drawerMypageBtn').style.display = 'none';
+    document.getElementById('drawerAccountSection').style.display = 'none';
+  }
+
+  _syncDrawerLangs();
+  _syncDrawerTheme();
+}
+
+function _syncDrawerLangs() {
+  ['ko','en','zh','ja'].forEach(l => {
+    document.getElementById('dlb-' + l)?.classList.toggle('on', lang === l);
+  });
+  // 기존 헤더 lang 버튼도 동기화
+  document.querySelectorAll('.lb').forEach(b => b.classList.remove('on'));
+  const hBtn = document.querySelector(`.lb[onclick="setLang('${lang}')"]`);
+  if (hBtn) hBtn.classList.add('on');
+}
+
+function _syncDrawerTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  document.getElementById('drawerThemeDark')?.classList.toggle('on', !isLight);
+  document.getElementById('drawerThemeLight')?.classList.toggle('on', isLight);
+  // 기존 테마 버튼 아이콘 동기화
+  const themeBtn = document.getElementById('themeToggleBtn');
+  if (themeBtn) themeBtn.textContent = isLight ? '☀️' : '🌙';
+}
+
+// 홈으로 이동 (채팅/마이페이지에서도 동작)
+function _goHome() {
+  if (document.getElementById('screen-chat').style.display === 'flex') goBack();
+  else if (document.getElementById('screen-mypage').style.display === 'flex') closeMyPage();
+  else if (document.getElementById('screen-signup').style.display === 'flex') goBackFromSignup();
+  else if (document.getElementById('screen-login').style.display === 'flex') goBackFromLogin();
+}
+
+// ESC 키로 드로어도 닫기
+// ESC 키로 모달/드로어 닫기
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (document.getElementById('side-drawer').classList.contains('open')) { closeDrawer(); return; }
     const payModal    = document.getElementById('pay-modal');
     const tokenModal  = document.getElementById('token-modal');
     const adminPanel  = document.getElementById('admin-panel');
