@@ -3093,6 +3093,9 @@ function applyTheme(theme) {
     document.documentElement.removeAttribute('data-theme');
     document.getElementById('themeToggleBtn').textContent = '🌙';
   }
+  
+  // 테마 변경 시 모바일 상단 바 색상 동기화 (방금 지운 로직을 여기로 가져옴)
+  if (typeof syncThemeColorMeta === 'function') syncThemeColorMeta();
 }
 
 // 저장된 테마 적용
@@ -3326,35 +3329,64 @@ async function callGemini(contents) {
 }
 
 async function autoAnalyze() {
-  // 토큰 차감
+  // 1. 토큰 차감 전 잔액 확인
   if (!checkAndDeductToken()) {
     addBubble(TX[lang].noToken, 'ai');
     return;
   }
+  
   const inp = document.getElementById('inp');
   const btn = document.getElementById('send');
   btn.disabled = true; inp.disabled = true;
   const loader = addLoader();
+
   try {
     const data = await callGemini(trimmedHist());
     const cand = data?.candidates?.[0];
     const raw  = cand?.content?.parts?.[0]?.text;
-    // 안전 필터 / 빈 응답 → 토큰 환불
+    
+    // 안전 필터 / 빈 응답 → 에러로 간주하여 throw
     if (!raw) throw { refund: true, reason: cand?.finishReason };
+    
     hist.push({ role: 'model', parts: [{ text: raw }] });
     const clean = raw.replace(/#[木火土金水]\s*/g, '').replace(/\*\*/g, '').trim();
     addBubble(clean, 'ai');
+    
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#' + k));
     if (tag) addRxCard(tag);
+
   } catch(e) {
-    if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
-    if (e?.refund) { addTokens(1); updateAllTokenDisplays(); }
+    // 2. 에러 발생 시 토큰 복구 및 즉시 화면 동기화
+    if (e?.noLogin) {
+        addTokens(1);
+        updateAllTokenDisplays();
+        showLogin();
+        return;
+    }
+    if (e?.noToken) {
+        await refreshTokens();
+        updateAllTokenDisplays();
+        addBubble(TX[lang].noToken, 'ai');
+        return;
+    }
+    if (e?.refund) {
+        addTokens(1);
+        updateAllTokenDisplays();
+    }
+
+    // 3. 에러 메시지 세분화 (Safety 관련인지 여부)
     const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
     addBubble(msg, 'ai');
-    hist.pop();
+
+    if (hist.length > 0 && hist[hist.length-1].role === 'model') hist.pop();
+    
   } finally {
-    loader.remove(); btn.disabled = false; inp.disabled = false;
-    inp.focus(); cw().scrollTop = 99999;
+    // 4. 로딩 제거 및 입력창 상태 복구
+    loader.remove(); 
+    btn.disabled = false; 
+    inp.disabled = false;
+    inp.focus(); 
+    cw().scrollTop = 99999;
   }
 }
 
@@ -3456,7 +3488,8 @@ async function send() {
     inp.value = txt; 
 
     if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
-    if (e?.refund) { addTokens(1); updateAllTokenDisplays(); }
+    if (e?.noToken) { await refreshTokens(); updateAllTokenDisplays(); addBubble(TX[lang].noToken, 'ai'); return; }
+    if (e?.refund)  { addTokens(1); updateAllTokenDisplays(); }
     const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
     addBubble(msg, 'ai');
     hist.pop();
@@ -4782,6 +4815,8 @@ checkAuth();
 refreshTokens();  // ⭐ 추가: 페이지 로드 시 서버 토큰 잔액 동기화
 
 // 페이지 로드 시 미완료 결제 자동 복구 (창 닫아도 승인 시 지급)
+// ✅ 기존 함수 전체를 아래 코드로 덮어쓰세요.
+
 (async function resumePendingPayment() {
   const pendingId = localStorage.getItem('myan_pending_pay_id');
   if (!pendingId || !EP) return;
@@ -4791,6 +4826,11 @@ refreshTokens();  // ⭐ 추가: 페이지 로드 시 서버 토큰 잔액 동�
     if (data.status === 'approved') {
       await refreshTokens();  // 서버에서 새 잔액 가져오기
       localStorage.removeItem('myan_pending_pay_id');
+      
+      // UX 개선: 복구 성공 시 사용자에게 알림 띄우기
+      setTimeout(() => {
+        alert(TX[lang]?.tkRedeemOk ? TX[lang].tkRedeemOk(data.tokens || 0) : '결제하신 토큰이 정상 지급되었습니다.');
+      }, 1000);
     }
   } catch {}
 })();
@@ -4917,16 +4957,33 @@ async function toggleNotification() {
   if (enabled) {
     if (window._notifTimer) clearTimeout(window._notifTimer);
     localStorage.removeItem('myan_notif_enabled');
-    btn.textContent = TX[lang]?.notifOn || '알림 켜기 🔔';
+    btn.textContent = '알림 켜기 🔔';
     btn.classList.remove('notif-on');
   } else {
     const ok = await requestNotificationPermission();
     if (ok) {
-      btn.textContent = TX[lang]?.notifOff || '알림 끄기 🔕';
+      btn.textContent = '알림 끄기 🔕';
       btn.classList.add('notif-on');
     }
   }
 }
+window.addEventListener('load', () => {
+  const btn = document.getElementById('notifToggleBtn');
+  if (btn && localStorage.getItem('myan_notif_enabled') === 'true') {
+    btn.textContent = '알림 끄기 🔕';
+    btn.classList.add('notif-on');
+  }
+});
+
+<div class="mypage-actions">
+  <button class="mypage-action-btn" id="notifToggleBtn" onclick="toggleNotification()">알림 켜기 🔔</button>
+
+  <button class="mypage-action-btn" id="mypageSupportBtn" onclick="openSupport()"></button>
+
+  <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
+  
+  <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
+</div>
 
 // ── 6. theme-color 메타 태그 동기화 ──
 function syncThemeColorMeta() {
@@ -4934,13 +4991,6 @@ function syncThemeColorMeta() {
   const meta = document.getElementById('metaThemeColor');
   if (meta) meta.setAttribute('content', isLight ? '#f5f0e8' : '#c9a96e');
 }
-
-// toggleTheme 후 메타 태그도 업데이트
-const _origApplyTheme = applyTheme;
-window.applyTheme = function(theme) {
-  _origApplyTheme(theme);
-  syncThemeColorMeta();
-};
 
 // ── 7. 앱 설치 배너 (A2HS) ──
 let _deferredInstallPrompt = null;
