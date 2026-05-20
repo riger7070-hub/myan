@@ -559,6 +559,7 @@ body {
   border-radius: 18px;
   animation: pop .35s ease;
   white-space: pre-wrap;
+  flex-shrink: 0; /* 말풍선이 찌그러지는 것 방지 */
 }
 .bubble-ai {
   align-self: flex-start;
@@ -583,6 +584,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--gold-dim);
   animation: pop .5s ease;
+  flex-shrink: 0; /* 대화가 길어져도 처방 카드가 절대 찌그러지거나 숨겨지지 않음 */
 }
 .rx-top {
   padding: 18px 20px;
@@ -4094,7 +4096,8 @@ function addRxCard(o) {
     </div>
     <div class="rx-bottom">${t.revisit}</div>
     <button class="rx-share-btn" onclick='_shareRxCard(${_shareData})'>🌟 오늘의 처방 공유하기</button>`;
-  cw().appendChild(c); cw().scrollTop = 99999;
+  cw().appendChild(c);
+  setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
   _setOrbTheme(o);
   _saveCalEntry(o); // 오늘 기운 캘린더에 저장
 }
