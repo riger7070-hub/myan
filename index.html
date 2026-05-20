@@ -4126,6 +4126,23 @@ function authHeaders(extra) {
   return h;
 }
 
+// 어드민 전용 헤더 (x-admin-secret 포함)
+function adminAuthHeaders(extra) {
+  const h = authHeaders(extra);
+  const secret = localStorage.getItem('myan_adm_key') || '';
+  if (secret) h['x-admin-secret'] = secret;
+  return h;
+}
+
+// 어드민 시크릿 초기화 (최초 1회 입력)
+function _ensureAdminSecret() {
+  if (localStorage.getItem('myan_adm_key')) return true;
+  const s = prompt('관리자 인증키를 입력하세요:');
+  if (!s) return false;
+  localStorage.setItem('myan_adm_key', s.trim());
+  return true;
+}
+
 const PAY_INFO = {
   small:  { tokens: 30,  prices: { ko:'4,900원',  en:'₩4,900',  zh:'₩4,900',  ja:'₩4,900'  } },
   medium: { tokens: 100, prices: { ko:'12,900원', en:'₩12,900', zh:'₩12,900', ja:'₩12,900' } },
@@ -4387,10 +4404,11 @@ async function adminGrantTokens() {
   msgEl.style.color = '#888';
   msgEl.textContent = '처리 중...';
 
+  if (!_ensureAdminSecret()) return;
   try {
     const res = await fetch(EP + 'admin/grant-tokens', {
       method: 'POST',
-      headers: authHeaders(),
+      headers: adminAuthHeaders(),
       body: JSON.stringify({ email, tokens, note }),
     });
     if (!res.ok) throw new Error('fail');
@@ -4408,9 +4426,10 @@ async function adminGrantTokens() {
 async function renderAdminPanel() {
   const listEl = document.getElementById('adminPaymentList');
   listEl.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+  if (!_ensureAdminSecret()) { listEl.innerHTML = '<div class="admin-empty">인증 취소됨</div>'; return; }
   try {
     const res = await fetch(EP + 'admin/payments', {
-      headers: authHeaders(),
+      headers: adminAuthHeaders(),
     });
     if (!res.ok) throw new Error('auth');
     const data = await res.json();
@@ -4458,7 +4477,7 @@ async function approvePayment(id, btn) {
   try {
     const res = await fetch(EP + 'admin/approve', {
       method: 'POST',
-      headers: authHeaders(),
+      headers: adminAuthHeaders(),
       body: JSON.stringify({ id }),
     });
     if (!res.ok) throw new Error('fail');
@@ -4485,7 +4504,7 @@ async function _checkAdminBadge() {
   document.getElementById('adminHdBtn').style.display = 'flex';
   try {
     const res = await fetch(EP + 'admin/payments', {
-      headers: authHeaders(),
+      headers: adminAuthHeaders(),
     });
 
     if (!res.ok) return;

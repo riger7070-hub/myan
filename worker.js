@@ -13,9 +13,6 @@
 // );
 // ============================================================================
 
-// ════════════════════════════
-// [사주 및 오행 기초 데이터]
-// ════════════════════════════
 const CG   = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
 const JJ   = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
 const CGO  = ['木','木','火','火','土','土','金','金','水','水'];
@@ -28,7 +25,6 @@ const ON = {
   ja:{木:'木(もく)',火:'火(か)',土:'土(ど)',金:'金(きん)',水:'水(すい)'},
 };
 
-// 일진 계산 함수
 function ilchin() {
   const ref = new Date(2023,0,1); ref.setHours(0,0,0,0);
   const now = new Date(); now.setHours(0,0,0,0);
@@ -42,12 +38,10 @@ export default {
     const path   = url.pathname.replace(/\/$/, '') || '/';
     const method = request.method;
 
-    // ── CORS 프리플라이트 (204 No Content 스펙 준수) ──
     if (method === 'OPTIONS') {
       return cors(null, 204);
     }
 
-    // ── D1 테이블 자동 생성 (없으면 만들기) ──
     if (env.DB) {
       await env.DB.exec(`
         CREATE TABLE IF NOT EXISTS payment_requests (
@@ -63,68 +57,23 @@ export default {
       `).catch(() => {});
     }
 
-    // ════════════════════════════
-    //  토큰 라우트
-    // ════════════════════════════
+    if (path === '/user-tokens' && method === 'GET') return handleUserTokens(request, env);
+    if (path === '/migrate-tokens' && method === 'POST') return handleMigrateTokens(request, env);
+    if (path === '/signup-grant' && method === 'POST') return handleSignupGrant(request, env);
+    if (path === '/payment-request' && method === 'POST') return handlePaymentRequest(request, env);
+    if (path === '/payment-status' && method === 'GET') return handlePaymentStatus(request, env);
+    if (path === '/admin/payments' && method === 'GET') return handleAdminPayments(request, env);
+    if (path === '/admin/approve' && method === 'POST') return handleAdminApprove(request, env);
+    if (path === '/admin/telegram-approve' && method === 'GET') return handleTelegramApprove(request, env);
+    if (path === '/admin/grant-tokens' && method === 'POST') return handleAdminGrantTokens(request, env);
+    if (path === '/chat' && method === 'POST') return handleGeminiChat(request, env);
 
-    if (path === '/user-tokens' && method === 'GET') {
-      return handleUserTokens(request, env);
-    }
-
-    if (path === '/migrate-tokens' && method === 'POST') {
-      return handleMigrateTokens(request, env);
-    }
-
-    if (path === '/signup-grant' && method === 'POST') {
-      return handleSignupGrant(request, env);
-    }
-
-    // ════════════════════════════
-    //  결제 라우트
-    // ════════════════════════════
-
-    if (path === '/payment-request' && method === 'POST') {
-      return handlePaymentRequest(request, env);
-    }
-
-    if (path === '/payment-status' && method === 'GET') {
-      return handlePaymentStatus(request, env);
-    }
-
-    // ════════════════════════════
-    //  관리자 라우트
-    // ════════════════════════════
-
-    if (path === '/admin/payments' && method === 'GET') {
-      return handleAdminPayments(request, env);
-    }
-
-    if (path === '/admin/approve' && method === 'POST') {
-      return handleAdminApprove(request, env);
-    }
-
-    if (path === '/admin/telegram-approve' && method === 'GET') {
-      return handleTelegramApprove(request, env);
-    }
-
-    if (path === '/admin/grant-tokens' && method === 'POST') {
-      return handleAdminGrantTokens(request, env);
-    }
-
-    // ════════════════════════════
-    //  Gemini AI 라우트 (경로 명시: POST /chat)
-    // ════════════════════════════
-    if (path === '/chat' && method === 'POST') {
-      return handleGeminiChat(request, env);
-    }
-
-    // ── 정의되지 않은 모든 경로는 404 차단 (라우팅 누수 방지) ──
     return cors(JSON.stringify({ error: { message: 'Not Found' } }), 404);
   }
 };
 
 // ════════════════════════════
-//  Gemini 핵심 핸들러 (서버 프롬프트 + 연타/우회 보안 강화 버전)
+//  Gemini 핵심 핸들러 (버그 픽스 완료 버전)
 // ════════════════════════════
 async function handleGeminiChat(request, env) {
   try {
@@ -133,7 +82,6 @@ async function handleGeminiChat(request, env) {
       return cors(JSON.stringify({ error: { message: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' } }), 500);
     }
 
-    // 1. 유저 인증
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
 
@@ -141,7 +89,6 @@ async function handleGeminiChat(request, env) {
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않거나 만료된 토큰입니다.' } }), 401);
     if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스가 연결되지 않았습니다.' } }), 500);
 
-    // 2. 현재 토큰 잔액 조회
     const balanceRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) as total FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -151,7 +98,6 @@ async function handleGeminiChat(request, env) {
       return cors(JSON.stringify({ error: { message: '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.' } }), 403);
     }
 
-    // 3. 요청 JSON 파싱 (프론트에서 mode, lang, contents만 넘어옴)
     let body;
     try { 
       body = await request.json(); 
@@ -160,18 +106,16 @@ async function handleGeminiChat(request, env) {
     }
     const { mode, lang, contents } = body;
 
-    // 🌟 [보안 핵심 1] 동시 연타 우회를 막기 위해 Gemini 호출 전 토큰 1개 '선차감'
+    // 선차감 행 진행
     const useId = `use_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await env.DB.prepare(
       `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
        VALUES (?, ?, 'gemini_use', 0, -1, 'approved', unixepoch())`
     ).bind(useId, email).run();
 
-    // 🌟 [보안 핵심 2] 백엔드에서 시스템 프롬프트 직접 조립
     const il = ilchin();
     const on = ON[lang || 'ko'];
     
-    // 언어 설정
     let langInstruct = '한국어로 답변해 주세요.';
     if (lang === 'en') langInstruct = 'Please respond in English.';
     if (lang === 'zh') langInstruct = '请用简体中文回答。';
@@ -183,7 +127,6 @@ async function handleGeminiChat(request, env) {
       ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm poetic long-form reading. (5) Give one specific advice for today.`
       : `You are the Ohaeng Harmony Master of M;Y 安.\n${basePrompt}\n\nMethod: (1) Each person's Saju Ohaeng. (2) Sangsaeng/Sangguk dynamics. (3) Today's Ilchin impact on the relationship. (4) How they complement each other. (5) Suggest shared activity or topic. Long-form, warm tone. NEVER say "compatibility is bad".`;
 
-    // Gemini API 규격 셋업
     const geminiReqBody = {
       systemInstruction: { parts: [{ text: sysText }] },
       contents: contents,
@@ -193,20 +136,15 @@ async function handleGeminiChat(request, env) {
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
       ],
-      generationConfig: {
-        temperature: 0.75,
-        maxOutputTokens: 3000,
-        topP: 0.95,
-      },
+      generationConfig: { temperature: 0.75, maxOutputTokens: 3000, topP: 0.95 },
     };
 
-    // 4. Gemini API 호출
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiReqBody) }
     );
 
-    // 5. 호출 실패 시 '환불' 조치 (+1)
+    // [케이스 A] 네트워크 단의 물리적 서버 호출 실패 발생 시 환불 처리
     if (!res.ok) {
       const refundId = `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await env.DB.prepare(
@@ -219,8 +157,28 @@ async function handleGeminiChat(request, env) {
     }
 
     const data = await res.json();
+    
+    // 🌟 [버그 픽스 핵심 코드] HTTP는 200이지만 세이프티 필터 등으로 차단되어 대답 본문이 공백인 경우 환불 처리
+    const cand = data?.candidates?.[0];
+    const rawText = cand?.content?.parts?.[0]?.text;
 
-    // 성공 시 최신 잔액을 응답에 포함 → 클라이언트 토큰 UI 즉시 동기화
+    if (!rawText) {
+      const safetyRefundId = `ref_safe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'gemini_safety_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(safetyRefundId, email).run();
+
+      // 환불 완료된 잔액을 다시 계산해서 담아줌 (프론트 UI 자동 동기화 대응)
+      const balRow = await env.DB.prepare(
+        `SELECT COALESCE(SUM(tokens), 0) as total FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+      ).bind(email).first();
+      data._tokens = balRow?.total || 0;
+      
+      return cors(JSON.stringify(data), 200);
+    }
+
+    // [케이스 B] 대답이 성공적으로 잘 수신되어 통과한 경우 잔액 최신화
     if (data.candidates) {
       const balRow = await env.DB.prepare(
         `SELECT COALESCE(SUM(tokens), 0) as total FROM payment_requests WHERE user_email = ? AND status = 'approved'`
@@ -239,18 +197,14 @@ async function handleGeminiChat(request, env) {
 //  토큰 핸들러 & 헬퍼 함수
 // ════════════════════════════
 
-// JWT 페이로드 다국어(한글) 깨짐 완벽 방지 디코딩
 async function getEmailFromToken(idToken, env) {
   try {
     const parts = idToken.split('.');
     if (parts.length !== 3) return null;
 
     let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4) {
-      base64 += '=';
-    }
+    while (base64.length % 4) { base64 += '='; }
 
-    // 🌟 TextDecoder를 이용해 한글 깨짐 및 JSON.parse 에러 완벽 차단
     const binString = atob(base64);
     const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
     const payload = JSON.parse(new TextDecoder().decode(bytes));
@@ -278,14 +232,14 @@ async function handleUserTokens(request, env) {
 
 async function handleMigrateTokens(request, env) {
   const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
-  if (!idToken) return cors('{"error":"unauthorized"}', 401);
+  if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
 
   const email = await getEmailFromToken(idToken, env);
-  if (!email) return cors('{"error":"unauthorized"}', 401);
-  if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+  if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   let body;
-  try { body = await request.json(); } catch { return cors('{"error":"invalid json"}', 400); }
+  try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
 
   const localTokens = parseInt(body.tokens, 10) || 0;
   if (localTokens <= 0) return cors(JSON.stringify({ ok: true, tokens: 0, migrated: true }));
@@ -314,11 +268,11 @@ async function handleMigrateTokens(request, env) {
 
 async function handleSignupGrant(request, env) {
   const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
-  if (!idToken) return cors('{"error":"unauthorized"}', 401);
+  if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
 
   const email = await getEmailFromToken(idToken, env);
-  if (!email) return cors('{"error":"unauthorized"}', 401);
-  if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+  if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   const existing = await env.DB.prepare(
     `SELECT id FROM payment_requests WHERE user_email = ? LIMIT 1`
@@ -343,32 +297,30 @@ async function handleSignupGrant(request, env) {
 // ════════════════════════════
 
 async function handlePaymentRequest(request, env) {
-  // 이메일은 반드시 서버에서 ID토큰으로 추출 (클라이언트 body 신뢰 금지)
   const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
-  if (!idToken) return cors('{"error":"unauthorized"}', 401);
+  if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
   const email = await getEmailFromToken(idToken, env);
-  if (!email) return cors('{"error":"unauthorized"}', 401);
+  if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
 
   let body;
-  try { body = await request.json(); } catch { return cors('{"error":"invalid json"}', 400); }
+  try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
 
   const { id, pkg } = body;
-  if (!id || !pkg) return cors('{"error":"missing fields"}', 400);
-  if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+  if (!id || !pkg) return cors(JSON.stringify({ error: { message: '필수 요청 파라미터가 누락되었습니다.' } }), 400);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
-  // PKG별 금액/토큰 서버에서 결정 (클라이언트 위조 방지)
   const PKG_TABLE = {
     small:  { amount: 4900,  tokens: 30  },
     medium: { amount: 12900, tokens: 100 },
     large:  { amount: 29900, tokens: 300 },
   };
   const pkgInfo = PKG_TABLE[pkg];
-  if (!pkgInfo) return cors('{"error":"invalid package"}', 400);
+  if (!pkgInfo) return cors(JSON.stringify({ error: { message: '유효하지 않은 결제 패키지입니다.' } }), 400);
 
   const existing = await env.DB.prepare(
     'SELECT id FROM payment_requests WHERE id = ?'
   ).bind(id).first();
-  if (existing) return cors('{"ok":true,"duplicate":true}');
+  if (existing) return cors(JSON.stringify({ ok: true, duplicate: true }));
 
   await env.DB.prepare(
     'INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, ?, ?, ?, ?)'
@@ -385,7 +337,7 @@ async function handlePaymentRequest(request, env) {
 async function handlePaymentStatus(request, env) {
   const url = new URL(request.url);
   const id  = url.searchParams.get('id');
-  if (!id) return cors('{"error":"missing id"}', 400);
+  if (!id) return cors(JSON.stringify({ error: { message: '결제 ID가 누락되었습니다.' } }), 400);
   if (!env.DB) return cors('{"status":"not_found"}');
 
   const row = await env.DB.prepare(
@@ -405,38 +357,43 @@ const ADMIN_EMAIL = 'riger7070@gmail.com';
 async function isAdmin(request, env) {
   const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
   if (!idToken) return false;
+
+  // 이중 잠금: 관리자 비밀키 헤더 검증
+  const clientSecret = request.headers.get('x-admin-secret');
+  if (!clientSecret || clientSecret !== env.ADMIN_SECRET) return false;
+
+  // 이메일 일치 검증
   const email = await getEmailFromToken(idToken, env);
   return email === ADMIN_EMAIL;
 }
 
 async function handleAdminPayments(request, env) {
-  if (!await isAdmin(request, env)) return cors('{"error":"unauthorized"}', 401);
-  if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+  if (!await isAdmin(request, env)) return cors(JSON.stringify({ error: { message: '관리자 권한이 필요합니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   const rows = await env.DB.prepare(
     'SELECT * FROM payment_requests ORDER BY created_at DESC LIMIT 100'
   ).all();
 
-  // 🌟 DB결과가 비어있을 경우 안전하게 빈 배열을 반환하도록 수정
   return cors(JSON.stringify(rows.results || []));
 }
 
 async function handleAdminApprove(request, env) {
-  if (!await isAdmin(request, env)) return cors('{"error":"unauthorized"}', 401);
-  if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+  if (!await isAdmin(request, env)) return cors(JSON.stringify({ error: { message: '관리자 권한이 필요합니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   let body;
-  try { body = await request.json(); } catch { return cors('{"error":"invalid json"}', 400); }
+  try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
 
   const { id } = body;
-  if (!id) return cors('{"error":"missing id"}', 400);
+  if (!id) return cors(JSON.stringify({ error: { message: '결제 ID가 누락되었습니다.' } }), 400);
 
   const row = await env.DB.prepare(
     'SELECT status FROM payment_requests WHERE id = ?'
   ).bind(id).first();
 
-  if (!row) return cors('{"error":"not found"}', 404);
-  if (row.status === 'approved') return cors('{"ok":true,"already":true}');
+  if (!row) return cors(JSON.stringify({ error: { message: '해당 결제 내역을 찾을 수 없습니다.' } }), 404);
+  if (row.status === 'approved') return cors(JSON.stringify({ ok: true, already: true }));
 
   await env.DB.prepare(
     'UPDATE payment_requests SET status = ?, approved_at = unixepoch() WHERE id = ?'
@@ -446,15 +403,14 @@ async function handleAdminApprove(request, env) {
 }
 
 async function handleAdminGrantTokens(request, env) {
-  if (!await isAdmin(request, env)) return cors('{"error":"unauthorized"}', 401);
-  if (!env.DB) return cors('{"error":"DB not configured"}', 500);
+  if (!await isAdmin(request, env)) return cors(JSON.stringify({ error: { message: '관리자 권한이 필요합니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   let body;
-  try { body = await request.json(); } catch { return cors('{"error":"invalid json"}', 400); }
+  try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
 
   const { email, tokens, note } = body;
   
-  // 🌟 NaN(숫자가 아닌 문자열) 입력에 대한 방어 로직 추가
   const tokenCount = parseInt(tokens, 10);
   if (!email || isNaN(tokenCount) || tokenCount <= 0) {
     return cors(JSON.stringify({ error: { message: '올바른 이메일과 1개 이상의 토큰 수량을 입력해주세요.' } }), 400);
