@@ -2373,13 +2373,27 @@ body {
         </div>
         <div class="fif-field">
           <label class="fif-label">생년월일</label>
-          <input class="fif-input" id="fifDate" type="date" max="2025-12-31">
+          <input class="fif-input" id="fifDate" type="date" max="2026-12-31">
         </div>
       </div>
       <div class="fif-row">
         <div class="fif-field">
           <label class="fif-label">태어난 시간 <span style="opacity:.5">(선택)</span></label>
-          <input class="fif-input" id="fifTime" type="time" placeholder="00:00">
+          <select class="fif-input" id="fifTime">
+            <option value="">모름 / 선택 안 함</option>
+            <option value="자시 (밤 11시~새벽 1시)">子時 자시 — 밤 11시~새벽 1시</option>
+            <option value="축시 (새벽 1시~3시)">丑時 축시 — 새벽 1시~3시</option>
+            <option value="인시 (새벽 3시~5시)">寅時 인시 — 새벽 3시~5시</option>
+            <option value="묘시 (새벽 5시~7시)">卯時 묘시 — 새벽 5시~7시</option>
+            <option value="진시 (오전 7시~9시)">辰時 진시 — 오전 7시~9시</option>
+            <option value="사시 (오전 9시~11시)">巳時 사시 — 오전 9시~11시</option>
+            <option value="오시 (오전 11시~오후 1시)">午時 오시 — 오전 11시~오후 1시</option>
+            <option value="미시 (오후 1시~3시)">未時 미시 — 오후 1시~3시</option>
+            <option value="신시 (오후 3시~5시)">申時 신시 — 오후 3시~5시</option>
+            <option value="유시 (오후 5시~7시)">酉時 유시 — 오후 5시~7시</option>
+            <option value="술시 (오후 7시~9시)">戌時 술시 — 오후 7시~9시</option>
+            <option value="해시 (오후 9시~11시)">亥時 해시 — 오후 9시~11시</option>
+          </select>
         </div>
       </div>
       <div class="fif-optional-note">시간을 모르시면 비워두셔도 됩니다</div>
@@ -2440,7 +2454,7 @@ body {
         </div>
         <div class="field third">
           <label id="lblYear"></label>
-          <input type="number" id="fYear" placeholder="1990" min="1900" max="2025">
+          <input type="number" id="fYear" placeholder="1990" min="1900" max="2026">
         </div>
         <div class="field third">
           <label id="lblMonth"></label>
@@ -2494,7 +2508,7 @@ body {
       <div class="form-grid">
         <div class="field third">
           <label id="mpLblYear"></label>
-          <input type="number" id="mpYear" placeholder="1990" min="1900" max="2025">
+          <input type="number" id="mpYear" placeholder="1990" min="1900" max="2026">
         </div>
         <div class="field third">
           <label id="mpLblMonth"></label>
@@ -2705,8 +2719,20 @@ body {
         <button class="admin-tab on" id="adminTabPending" onclick="setAdminTab('pending')">대기 중</button>
         <button class="admin-tab" id="adminTabApproved" onclick="setAdminTab('approved')">완료</button>
         <button class="admin-tab" id="adminTabAll" onclick="setAdminTab('all')">전체</button>
+        <button class="admin-tab" id="adminTabGrant" onclick="setAdminTab('grant')">직접 충전</button>
       </div>
       <div id="adminPaymentList"><div class="admin-empty">불러오는 중...</div></div>
+
+      <!-- 직접 충전 패널 -->
+      <div id="adminGrantPanel" style="display:none;padding:16px 0 4px">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input id="adminGrantEmail" class="fif-input" type="email" placeholder="충전할 사용자 이메일" style="background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.2);border-radius:8px;padding:10px 12px;color:#e8dcc8;font-size:0.85rem;outline:none">
+          <input id="adminGrantTokens" class="fif-input" type="number" placeholder="충전 토큰 수 (예: 10)" min="1" max="9999" style="background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.2);border-radius:8px;padding:10px 12px;color:#e8dcc8;font-size:0.85rem;outline:none">
+          <input id="adminGrantNote" class="fif-input" type="text" placeholder="사유 (예: 베타 이벤트)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.2);border-radius:8px;padding:10px 12px;color:#e8dcc8;font-size:0.85rem;outline:none">
+          <button onclick="adminGrantTokens()" style="background:linear-gradient(135deg,rgba(201,169,110,0.3),rgba(201,169,110,0.15));border:1px solid rgba(201,169,110,0.4);border-radius:8px;color:#c9a96e;padding:11px;font-size:0.85rem;cursor:pointer;letter-spacing:1px">✦ 토큰 지급하기</button>
+          <div id="adminGrantMsg" style="font-size:0.78rem;color:#7de8a8;text-align:center;min-height:18px"></div>
+        </div>
+      </div>
   </div>
 </div>
 
@@ -3899,11 +3925,47 @@ function closeAdminPanel() {
 
 function setAdminTab(tab) {
   _adminTab = tab;
-  ['pending','approved','all'].forEach(t => {
+  ['pending','approved','all','grant'].forEach(t => {
     document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1))
       .classList.toggle('on', t === tab);
   });
-  _renderAdminList();
+  const isGrant = tab === 'grant';
+  document.getElementById('adminPaymentList').style.display = isGrant ? 'none' : '';
+  document.getElementById('adminGrantPanel').style.display  = isGrant ? 'block' : 'none';
+  if (!isGrant) _renderAdminList();
+}
+
+async function adminGrantTokens() {
+  const email  = document.getElementById('adminGrantEmail').value.trim();
+  const tokens = parseInt(document.getElementById('adminGrantTokens').value, 10);
+  const note   = document.getElementById('adminGrantNote').value.trim() || '관리자 지급';
+  const msgEl  = document.getElementById('adminGrantMsg');
+
+  if (!email || !tokens || tokens <= 0) {
+    msgEl.style.color = '#e05a4a';
+    msgEl.textContent = '이메일과 토큰 수를 입력해주세요.';
+    return;
+  }
+
+  msgEl.style.color = '#888';
+  msgEl.textContent = '처리 중...';
+
+  try {
+    const res = await fetch(EP + 'admin/grant-tokens', {
+      method: 'POST',
+      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+      body: JSON.stringify({ email, tokens, note }),
+    });
+    if (!res.ok) throw new Error('fail');
+    msgEl.style.color = '#7de8a8';
+    msgEl.textContent = `✓ ${email} 님께 ${tokens}토큰 지급 완료!`;
+    document.getElementById('adminGrantEmail').value  = '';
+    document.getElementById('adminGrantTokens').value = '';
+    document.getElementById('adminGrantNote').value   = '';
+  } catch(e) {
+    msgEl.style.color = '#e05a4a';
+    msgEl.textContent = '지급 실패. 다시 시도해주세요.';
+  }
 }
 
 async function renderAdminPanel() {
