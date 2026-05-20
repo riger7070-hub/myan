@@ -5129,13 +5129,22 @@ function updateFreeBanner() {
 }
 
 function openMyPage() {
+  // 비로그인 유저 진입 차단 — 로그인 완료 후 마이페이지로 돌아오도록 예약
+  const u = getUser();
+  if (!u || !isLoggedIn()) {
+    pendingMode = '_token';
+    showLogin();
+    return;
+  }
+
   document.getElementById('screen-mode').style.display   = 'none';
   document.getElementById('screen-chat').style.display   = 'none';
   document.getElementById('screen-signup').style.display = 'none';
   document.getElementById('screen-login').style.display  = 'none';
   document.getElementById('screen-mypage').style.display = 'flex';
   document.getElementById('backBtn').style.display       = 'flex';
-  document.getElementById('userBtn').style.display       = 'none';
+  const _ub = document.getElementById('userBtn');
+  if (_ub) _ub.style.display = 'none';
   renderMyPage();
 }
 
