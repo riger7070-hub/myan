@@ -628,6 +628,78 @@ body {
   color: var(--text-dim);
   line-height: 1.7;
 }
+.rx-share-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.rx-share-btn:hover { background: rgba(255,255,255,0.04); color: var(--gold); }
+
+/* 사주 오행 게이지 (마이페이지) */
+.saju-gauge-section { margin: 20px 0 0; }
+.saju-gauge-wrap { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 0; }
+.saju-gauge-row { display: flex; align-items: center; gap: 10px; }
+.saju-gauge-label { width: 52px; font-size: 0.75rem; color: var(--text-dim); flex-shrink: 0; }
+.saju-gauge-bar-bg { flex: 1; height: 7px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+.saju-gauge-bar { height: 100%; border-radius: 4px; width: 0; transition: width 0.9s cubic-bezier(.4,0,.2,1); }
+.saju-gauge-pct { width: 34px; font-size: 0.72rem; color: var(--text-dim); text-align: right; flex-shrink: 0; }
+
+/* 오행 캘린더 모달 */
+#cal-modal {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(0,0,0,0.72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.cal-inner {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  width: 100%; max-width: 380px;
+  padding: 24px 20px 20px;
+}
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.cal-title { font-family: 'Noto Serif KR', serif; font-size: 1rem; color: var(--gold); letter-spacing: 1px; }
+.cal-close { background: none; border: none; color: var(--text-dim); font-size: 1.1rem; cursor: pointer; }
+.cal-nav { display: flex; align-items: center; gap: 12px; }
+.cal-nav-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 0.85rem; }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 6px; }
+.cal-weekday { text-align: center; font-size: 0.65rem; color: var(--text-dim); padding: 4px 0; opacity: 0.5; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+.cal-cell {
+  aspect-ratio: 1; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; color: var(--text-dim);
+  position: relative;
+}
+.cal-cell.has-entry { color: #fff; font-weight: 600; }
+.cal-cell.today { outline: 1.5px solid var(--gold); outline-offset: 1px; }
+.cal-cell.empty { background: none; }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: center; }
+.cal-legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--text-dim); }
+.cal-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* 드로어 배지 shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.drawer-teaser-badge {
+  background: linear-gradient(90deg, rgba(201,169,110,0.1) 25%, rgba(201,169,110,0.3) 50%, rgba(201,169,110,0.1) 75%);
+  background-size: 200% auto;
+  animation: shimmer 2.4s linear infinite;
+}
 
 /* 입력창 */
 .input-row {
@@ -2835,6 +2907,13 @@ body {
       </div>
       <div class="mypage-divider"></div>
 
+      <!-- 사주 오행 분포 게이지 -->
+      <div class="saju-gauge-section" id="saju-gauge-section" style="display:none">
+        <div class="mypage-section-label" id="sajuGaugeLbl">내 사주 오행 분포</div>
+        <div class="saju-gauge-wrap" id="sajuGaugeWrap"></div>
+      </div>
+      <div class="mypage-divider" id="sajuGaugeDivider" style="display:none"></div>
+
       <div class="mypage-section-label" id="mypageSectionLabel"></div>
       <div class="form-grid">
         <div class="field third">
@@ -2987,6 +3066,14 @@ body {
       </div>
       <div class="drawer-item-arrow">›</div>
     </button>
+    <button class="drawer-item" id="drawerCalBtn" onclick="closeDrawer();openCalModal()" style="display:none">
+      <div class="drawer-item-icon">📅</div>
+      <div class="drawer-item-text">
+        <div>나의 기운 캘린더</div>
+        <div class="drawer-item-sub">리딩 기록 · 오행 색 달력</div>
+      </div>
+      <div class="drawer-item-arrow">›</div>
+    </button>
   </div>
 
   <!-- 언어 설정 -->
@@ -3027,6 +3114,28 @@ body {
 
   <div class="drawer-footer">
     <div class="drawer-version">M ; Y 安 · 베타</div>
+  </div>
+</div>
+
+<!-- 오행 캘린더 모달 -->
+<div id="cal-modal" style="display:none" onclick="if(event.target===this)closeCalModal()">
+  <div class="cal-inner">
+    <div class="cal-header">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="_calPrevMonth()">‹</button>
+        <div class="cal-title" id="calTitle"></div>
+        <button class="cal-nav-btn" onclick="_calNextMonth()">›</button>
+      </div>
+      <button class="cal-close" onclick="closeCalModal()">✕</button>
+    </div>
+    <div class="cal-weekdays">
+      <div class="cal-weekday">일</div><div class="cal-weekday">월</div>
+      <div class="cal-weekday">화</div><div class="cal-weekday">수</div>
+      <div class="cal-weekday">목</div><div class="cal-weekday">금</div>
+      <div class="cal-weekday">토</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend" id="calLegend"></div>
   </div>
 </div>
 
@@ -3973,6 +4082,7 @@ function addRxCard(o) {
   const c   = document.createElement('div');
   c.className = 'rx-card';
   c.style.background = `linear-gradient(135deg, #0e0e0e, #080808)`;
+  const _shareData = JSON.stringify({ o, name: dk.name, desc: dk.desc });
   c.innerHTML = `
     <div class="rx-top" style="background:${bg}">
       <div class="rx-icon" style="background:rgba(0,0,0,.3);border-color:${col}30">${dk.icon}</div>
@@ -3982,9 +4092,11 @@ function addRxCard(o) {
         <div class="rx-desc">${dk.desc}</div>
       </div>
     </div>
-    <div class="rx-bottom">${t.revisit}</div>`;
+    <div class="rx-bottom">${t.revisit}</div>
+    <button class="rx-share-btn" onclick='_shareRxCard(${_shareData})'>🌟 오늘의 처방 공유하기</button>`;
   cw().appendChild(c); cw().scrollTop = 99999;
-  _setOrbTheme(o); // 오행 기운에 맞춰 배경 오브 색상 연동
+  _setOrbTheme(o);
+  _saveCalEntry(o); // 오늘 기운 캘린더에 저장
 }
 
 // 오행 오브 색상 팔레트 (각 오브별 강도 차등)
@@ -4007,6 +4119,143 @@ function _setOrbTheme(o) {
   }
 }
 function _resetOrbTheme() { _setOrbTheme(null); }
+
+// ── 처방 카드 공유 ──
+function _shareRxCard({ o, name, desc }) {
+  const text = `✦ M;Y 安 · 오늘의 오행 처방\n[${ON.ko[o] || o}] ${name}\n${desc}\n\nmyan-an.pages.dev`;
+  if (navigator.share) {
+    navigator.share({ title: 'M;Y 安 · 오늘의 처방', text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.rx-share-btn');
+      if (btn) { btn.textContent = '✓ 클립보드에 복사됨'; setTimeout(() => { btn.textContent = '🌟 오늘의 처방 공유하기'; }, 2000); }
+    });
+  }
+}
+
+// ── 캘린더 저장 ──
+function _saveCalEntry(element) {
+  const today = new Date().toISOString().slice(0, 10);
+  let cal = {};
+  try { cal = JSON.parse(localStorage.getItem('myan_cal') || '{}'); } catch {}
+  cal[today] = element;
+  localStorage.setItem('myan_cal', JSON.stringify(cal));
+}
+
+// ── 오행 캘린더 모달 ──
+let _calYear = new Date().getFullYear();
+let _calMonth = new Date().getMonth(); // 0-based
+
+function openCalModal() {
+  _calYear = new Date().getFullYear();
+  _calMonth = new Date().getMonth();
+  _renderCalendar();
+  document.getElementById('cal-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeCalModal() {
+  document.getElementById('cal-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function _calPrevMonth() { _calMonth--; if (_calMonth < 0) { _calMonth = 11; _calYear--; } _renderCalendar(); }
+function _calNextMonth() { _calMonth++; if (_calMonth > 11) { _calMonth = 0; _calYear++; } _renderCalendar(); }
+
+function _renderCalendar() {
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('calTitle').textContent = `${_calYear}년 ${monthNames[_calMonth]}`;
+
+  let cal = {};
+  try { cal = JSON.parse(localStorage.getItem('myan_cal') || '{}'); } catch {}
+
+  const today = new Date().toISOString().slice(0, 10);
+  const firstDay = new Date(_calYear, _calMonth, 1).getDay();
+  const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+
+  const grid = document.getElementById('calGrid');
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const elem = cal[key];
+    const isToday = key === today;
+    const bg = elem ? `background:${OC[elem]}33` : 'background:rgba(255,255,255,0.03)';
+    const border = elem ? `border:1.5px solid ${OC[elem]}66` : 'border:1px solid rgba(255,255,255,0.06)';
+    html += `<div class="cal-cell${elem ? ' has-entry' : ''}${isToday ? ' today' : ''}" style="${bg};${border}" title="${elem ? ON.ko[elem] : ''}">${d}${elem ? `<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);font-size:0.45rem;opacity:0.8">${elem}</span>` : ''}</div>`;
+  }
+  grid.innerHTML = html;
+
+  // 범례
+  const legend = document.getElementById('calLegend');
+  legend.innerHTML = Object.entries(OC).map(([e,col]) =>
+    `<div class="cal-legend-item"><div class="cal-legend-dot" style="background:${col}"></div>${ON.ko[e]||e}</div>`
+  ).join('');
+}
+
+// ── 사주 오행 분포 계산 ──
+function calcSajuElements(user) {
+  const year  = parseInt(user.birthYear)  || 2000;
+  const month = parseInt(user.birthMonth) || 1;
+  const day   = parseInt(user.birthDay)   || 1;
+  const time  = user.birthHour || '';
+
+  const SIJI_IDX = {'자시':0,'축시':1,'인시':2,'묘시':3,'진시':4,'사시':5,'오시':6,'미시':7,'신시':8,'유시':9,'술시':10,'해시':11};
+
+  // 년주
+  const yearIdx = ((year - 4) % 60 + 60) % 60;
+  const yStem   = yearIdx % 10;
+  const yBranch = yearIdx % 12;
+
+  // 월주 (절기 미반영 간략화)
+  const mBranchArr = [1,2,3,4,5,6,7,8,9,10,11,0];
+  const mBranch    = mBranchArr[month - 1];
+  const mStem      = ((yStem % 5) * 2 + mBranch) % 10;
+
+  // 일주
+  const ref    = new Date(2023, 0, 1);
+  const birth  = new Date(year, month - 1, day);
+  const diff   = Math.round((birth - ref) / 864e5);
+  const dayIdx = ((44 + diff) % 60 + 60) % 60;
+  const dStem   = dayIdx % 10;
+  const dBranch = dayIdx % 12;
+
+  // 시주
+  const siBranch = SIJI_IDX[time] ?? -1;
+  const siStem   = siBranch >= 0 ? ((dStem % 5) * 2 + siBranch) % 10 : -1;
+
+  const count = {木:0,火:0,土:0,金:0,水:0};
+  [yStem, mStem, dStem, ...(siStem >= 0 ? [siStem] : [])].forEach(s => count[CGO[s]]++);
+  [yBranch, mBranch, dBranch, ...(siBranch >= 0 ? [siBranch] : [])].forEach(b => count[JJO[b]]++);
+
+  const total = Object.values(count).reduce((a, b) => a + b, 0);
+  return { count, total };
+}
+
+function _renderSajuGauge(user) {
+  const section  = document.getElementById('saju-gauge-section');
+  const divider  = document.getElementById('sajuGaugeDivider');
+  if (!user?.birthYear) { section.style.display = 'none'; if (divider) divider.style.display = 'none'; return; }
+  section.style.display = ''; if (divider) divider.style.display = '';
+  const lbl = {ko:'내 사주 오행 분포', en:'My Five Elements', zh:'五行分布', ja:'五行分布'};
+  document.getElementById('sajuGaugeLbl').textContent = lbl[lang] || lbl.ko;
+  const { count, total } = calcSajuElements(user);
+  const nameMap = {ko:{木:'목(木)',火:'화(火)',土:'토(土)',金:'금(金)',水:'수(水)'}, en:{木:'Wood',火:'Fire',土:'Earth',金:'Metal',水:'Water'}, zh:{木:'木',火:'火',土:'土',金:'金',水:'水'}, ja:{木:'木気',火:'火気',土:'土気',金:'金気',水:'水気'}};
+  const names = nameMap[lang] || nameMap.ko;
+  const wrap = document.getElementById('sajuGaugeWrap');
+  wrap.innerHTML = ['木','火','土','金','水'].map(e => {
+    const pct = total > 0 ? Math.round((count[e] / total) * 100) : 0;
+    return `<div class="saju-gauge-row">
+      <div class="saju-gauge-label">${names[e]}</div>
+      <div class="saju-gauge-bar-bg"><div class="saju-gauge-bar" data-pct="${pct}" style="width:0;background:${OC[e]}"></div></div>
+      <div class="saju-gauge-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+  // 애니메이션: 다음 프레임에 width 적용
+  requestAnimationFrame(() => {
+    wrap.querySelectorAll('.saju-gauge-bar').forEach(bar => {
+      bar.style.width = bar.dataset.pct + '%';
+    });
+  });
+}
 
 /* 전송 */
 async function send() {
@@ -4986,6 +5235,9 @@ function renderMyPage() {
   document.getElementById('pkgBtn0').textContent           = t.tkPayBtn;
   document.getElementById('pkgBtn1').textContent           = t.tkPayBtn;
   document.getElementById('pkgBtn2').textContent           = t.tkPayBtn;
+
+  // 오행 분포 게이지
+  _renderSajuGauge(user);
 }
 
 function setGenderMp(g) {
@@ -5508,11 +5760,13 @@ function _syncDrawerState() {
     document.getElementById('drawerEmail').textContent  = user.email || '—';
     document.getElementById('drawerTokens').textContent = _tokenCache;
     document.getElementById('drawerMypageBtn').style.display = 'flex';
+    document.getElementById('drawerCalBtn').style.display    = 'flex';
     document.getElementById('drawerAccountSection').style.display = 'block';
   } else {
     document.getElementById('drawerProfile').style.display = 'none';
     document.getElementById('drawerLoginPrompt').style.display = 'block';
     document.getElementById('drawerMypageBtn').style.display = 'none';
+    document.getElementById('drawerCalBtn').style.display    = 'none';
     document.getElementById('drawerAccountSection').style.display = 'none';
   }
 
@@ -5554,8 +5808,10 @@ document.addEventListener('keydown', e => {
     if (document.getElementById('side-drawer').classList.contains('open')) { closeDrawer(); return; }
     const payModal    = document.getElementById('pay-modal');
     const tokenModal  = document.getElementById('token-modal');
+    const calModal    = document.getElementById('cal-modal');
     const adminPanel  = document.getElementById('admin-panel');
     if (adminPanel   && adminPanel.style.display   !== 'none') { closeAdminPanel(); return; }
+    if (calModal     && calModal.style.display     !== 'none') { closeCalModal(); return; }
     if (tokenModal   && tokenModal.style.display   !== 'none') { closeTokenModal(); return; }
     if (payModal     && payModal.style.display     !== 'none') {
       if (document.getElementById('payStateWaiting').style.display === 'none') closePayModal();
