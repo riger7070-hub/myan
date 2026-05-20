@@ -2231,6 +2231,7 @@ body {
 
   <div class="hd">
     <span class="back" id="backBtn">← <span id="backLabel"></span></span>
+    <button id="newChatBtn" onclick="clearAndRestartChat()" style="display:none;background:none;border:1px solid rgba(201,169,110,0.25);border-radius:6px;color:rgba(201,169,110,0.6);font-size:0.7rem;padding:4px 8px;cursor:pointer;letter-spacing:0.5px">✦ 새 대화</button>
     <div class="hd-right">
       <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="다크/라이트 모드">🌙</button>
       <button class="admin-hd-btn" id="adminHdBtn" onclick="openAdminPanel()" style="display:none" title="관리자">
@@ -3184,6 +3185,22 @@ function _enterMode(m, user) {
   updateUserBtn(user);
   document.getElementById('signupLinkBtn').style.display = 'none';
 
+  // ── 저장된 채팅 복원 ──
+  try {
+    const savedMode = localStorage.getItem('myan_chat_mode');
+    const savedHist = localStorage.getItem('myan_chat_hist');
+    const savedHtml = localStorage.getItem('myan_chat_html');
+    if (savedMode === m && savedHist && savedHtml) {
+      hist = JSON.parse(savedHist);
+      document.getElementById('chat-window').innerHTML = savedHtml;
+      document.getElementById('newChatBtn').style.display = 'inline-block';
+      showNormalInput(); hideSuggestChips();
+      document.getElementById('chat-window').scrollTop = 99999;
+      return; // 복원 완료 → 새 인사 메시지 생략
+    }
+  } catch(e) {}
+
+  document.getElementById('newChatBtn').style.display = 'none';
   const il = ilchin();
 
   if (m === 'solo' && user?.birthYear) {
@@ -3390,7 +3407,33 @@ async function autoAnalyze() {
   }
 }
 
+function saveChatState() {
+  if (!mode || !hist.length) return;
+  try {
+    localStorage.setItem('myan_chat_mode', mode);
+    localStorage.setItem('myan_chat_hist', JSON.stringify(hist));
+    localStorage.setItem('myan_chat_html', document.getElementById('chat-window').innerHTML);
+  } catch(e) {}
+}
+
+function clearChatState() {
+  localStorage.removeItem('myan_chat_mode');
+  localStorage.removeItem('myan_chat_hist');
+  localStorage.removeItem('myan_chat_html');
+}
+
+function clearAndRestartChat() {
+  clearChatState();
+  const m = mode;
+  const user = getUser();
+  hist = [];
+  document.getElementById('chat-window').innerHTML = '';
+  document.getElementById('newChatBtn').style.display = 'none';
+  _enterMode(m, user);
+}
+
 function goBack() {
+  saveChatState(); // 채팅 상태 저장
   document.getElementById('screen-chat').style.display   = 'none';
   document.getElementById('screen-signup').style.display = 'none';
   document.getElementById('screen-login').style.display  = 'none';
@@ -4074,10 +4117,11 @@ function goSignup() {
 let _gisInited = false;
 function _ensureGisInit() {
   if (_gisInited) return;
+  const wasSignedOut = localStorage.getItem('myan_signed_out') === 'true';
   google.accounts.id.initialize({
     client_id: GOOGLE_CID,
     callback: handleGoogleCredential,
-    auto_select: false,
+    auto_select: !wasSignedOut, // 명시적 로그아웃 후엔 자동 선택 차단
     cancel_on_tap_outside: true,
   });
   _gisInited = true;
@@ -4102,6 +4146,7 @@ function initGoogleSignin() {
 
 function handleGoogleCredential(response) {
   try {
+    localStorage.removeItem('myan_signed_out'); // 명시적 로그인 → 자동로그인 차단 해제
     setGoogleIdToken(response.credential);  // ⭐ ID Token 저장
     // JWT 페이로드 디코딩 — UTF-8(한글 포함) 안전 처리
     const b64  = response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
@@ -4470,12 +4515,17 @@ async function saveMyPage() {
 }
 
 function _signOut() {
-  // 로그아웃: 세션만 삭제, 계정 유지
+  // 로그아웃: 세션 삭제 + Google 자동 재로그인 차단
   localStorage.removeItem('myan_logged_in');
+  localStorage.removeItem('myan_id_token');
+  localStorage.setItem('myan_signed_out', 'true'); // 자동 재로그인 방지 플래그
+  _googleIdToken = ''; _googleIdTokenExp = 0;
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+  try { google.accounts.id.cancel(); } catch(e) {}
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('userBtn').style.display = 'none';
-  document.getElementById('signupLinkBtn').style.display = 'none'; // 계정은 있으므로 가입 링크 숨김
+  document.getElementById('signupLinkBtn').style.display = 'none';
   closeMyPage();
 }
 
