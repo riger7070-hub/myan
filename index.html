@@ -567,6 +567,8 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   border-bottom-left-radius: 4px;
+  position: relative;
+  padding-bottom: 24px; /* 복사 버튼 공간 확보 */
 }
 .bubble-user {
   align-self: flex-end;
@@ -575,6 +577,26 @@ body {
   color: var(--gold-light);
   border-bottom-right-radius: 4px;
 }
+/* AI 말풍선 복사 버튼 */
+.bubble-copy-btn {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity .2s, color .2s;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.bubble-ai:hover .bubble-copy-btn,
+.bubble-copy-btn.visible { opacity: 1; }
+.bubble-copy-btn:hover { color: var(--gold); background: rgba(255,255,255,0.05); }
+.bubble-copy-btn.copied { color: #4bc87a; opacity: 1; }
 
 /* 음료 카드 */
 .rx-card {
@@ -4063,9 +4085,31 @@ function addBubble(text, who) {
   const d = document.createElement('div');
   d.className = `bubble bubble-${who}`;
   d.textContent = text;
+  if (who === 'ai') {
+    const btn = document.createElement('button');
+    btn.className = 'bubble-copy-btn';
+    btn.title = '복사';
+    btn.textContent = '⎘';
+    btn.onclick = () => _copyBubble(btn, text);
+    // 모바일: 탭 후 2초간 버튼 표시
+    d.addEventListener('click', () => {
+      btn.classList.add('visible');
+      clearTimeout(btn._hideTimer);
+      btn._hideTimer = setTimeout(() => btn.classList.remove('visible'), 2500);
+    });
+    d.appendChild(btn);
+  }
   cw().appendChild(d);
   cw().scrollTop = 99999;
   return d;
+}
+
+function _copyBubble(btn, text) {
+  navigator.clipboard?.writeText(text).then(() => {
+    btn.textContent = '✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {});
 }
 
 function addLoader() {
