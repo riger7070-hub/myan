@@ -2524,6 +2524,7 @@ body {
       <div class="signup-notice" id="mypageNotice"></div>
 
       <div class="mypage-actions">
+        <button class="mypage-action-btn" id="notifToggleBtn" onclick="toggleNotification()">알림 켜기 🔔</button>
         <button class="mypage-action-btn" id="mypageSupportBtn" onclick="openSupport()"></button>
         <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
@@ -5023,16 +5024,6 @@ window.addEventListener('load', () => {
     btn.classList.add('notif-on');
   }
 });
-
-<div class="mypage-actions">
-  <button class="mypage-action-btn" id="notifToggleBtn" onclick="toggleNotification()">알림 켜기 🔔</button>
-
-  <button class="mypage-action-btn" id="mypageSupportBtn" onclick="openSupport()"></button>
-
-  <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
-  
-  <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
-</div>
 
 // ── 6. theme-color 메타 태그 동기화 ──
 function syncThemeColorMeta() {
