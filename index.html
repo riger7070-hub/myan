@@ -5981,13 +5981,17 @@ async function toggleNotification() {
   const enabled = localStorage.getItem('myan_notif_enabled') === 'true';
 
   if (enabled) {
+    // 알림 끄기
     if (window._notifTimer) clearTimeout(window._notifTimer);
     localStorage.removeItem('myan_notif_enabled');
     btn.textContent = '알림 켜기 🔔';
     btn.classList.remove('notif-on');
   } else {
+    // 알림 켜기 — 권한 허용 후 저장소·스케줄러 동기화
     const ok = await requestNotificationPermission();
     if (ok) {
+      localStorage.setItem('myan_notif_enabled', 'true');
+      scheduleLocalNotification();
       btn.textContent = '알림 끄기 🔕';
       btn.classList.add('notif-on');
     }
