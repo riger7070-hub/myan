@@ -191,6 +191,26 @@ body {
   100% { transform: translate(0,0) scale(1); }
 }
 
+/* 오행 기운 연동: 오브 색상 부드럽게 전환 */
+.orb { transition: background 2s ease; }
+
+/* 토큰 -1 팝업 애니메이션 */
+@keyframes tokenPopUp {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  60%  { opacity: 0.9; transform: translateY(-22px) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-40px) scale(0.8); }
+}
+.token-pop {
+  position: fixed;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gold);
+  pointer-events: none;
+  z-index: 9999;
+  animation: tokenPopUp 0.9s ease-out forwards;
+  letter-spacing: 0.5px;
+}
+
 .app {
   width: 100%;
   height: 100dvh;
@@ -1596,9 +1616,9 @@ body {
   .hd-sub  { display: none; }
   .ilchin  { display: none; }
 
-  /* 언어 버튼 */
+  /* 언어 버튼 — 모바일에서는 헤더 언어바 숨김 (사이드 드로어에서 선택) */
+  .hd-right .langs { display: none; }
   .lb { font-size: 0.68rem; padding: 4px 7px; }
-  .langs { border-radius: 6px; }
 
   /* ───── 각 화면 스크롤 가능하게 ───── */
   #screen-mode,
@@ -2218,6 +2238,39 @@ body {
   transition: all .2s;
 }
 .drawer-login-btn:hover { background: rgba(201,169,110,0.22); }
+
+/* 드로어 티저 */
+.drawer-teaser-badge {
+  font-size: 0.73rem;
+  color: var(--gold);
+  background: rgba(201,169,110,0.1);
+  border: 1px solid rgba(201,169,110,0.2);
+  border-radius: 20px;
+  padding: 5px 12px;
+  text-align: center;
+  margin-bottom: 10px;
+  letter-spacing: 0.3px;
+}
+.drawer-teaser-preview {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.drawer-teaser-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  filter: blur(0.4px);
+  opacity: 0.6;
+  pointer-events: none;
+}
 
 /* 메뉴 섹션 */
 .drawer-section {
@@ -2891,7 +2944,13 @@ body {
     <div class="drawer-token-badge">✦ <span id="drawerTokens">0</span></div>
   </div>
   <div id="drawerLoginPrompt" class="drawer-login-prompt" style="display:none">
-    <button class="drawer-login-btn" onclick="closeDrawer();goSignup()">✦ 로그인 / 회원가입</button>
+    <div class="drawer-teaser-badge">🎁 지금 가입하면 무료 대화권 3개 지급!</div>
+    <button class="drawer-login-btn" onclick="closeDrawer();goSignup()">✦ 시작하기 · 무료로 가입</button>
+    <div class="drawer-teaser-preview">
+      <div class="drawer-teaser-item">🔒 <span>나만의 리딩</span></div>
+      <div class="drawer-teaser-item">🔒 <span>우리의 조화</span></div>
+      <div class="drawer-teaser-item">🔒 <span>마이페이지 · 토큰 관리</span></div>
+    </div>
   </div>
 
   <!-- 바로가기 -->
@@ -3881,8 +3940,9 @@ function goBack() {
     if (_userBtn) _userBtn.style.display = 'none';
     document.getElementById('signupLinkBtn').style.display = '';
   }
-  // Change 1: 무료 배너 상태 업데이트
+  // 무료 배너 상태 업데이트 + 오브 색상 초기화
   updateFreeBanner();
+  _resetOrbTheme();
 }
 
 /* DOM 헬퍼 */
@@ -3924,7 +3984,29 @@ function addRxCard(o) {
     </div>
     <div class="rx-bottom">${t.revisit}</div>`;
   cw().appendChild(c); cw().scrollTop = 99999;
+  _setOrbTheme(o); // 오행 기운에 맞춰 배경 오브 색상 연동
 }
+
+// 오행 오브 색상 팔레트 (각 오브별 강도 차등)
+const _ORB_PALETTE = {
+  木: ['rgba(75,200,122,0.13)','rgba(75,200,122,0.07)','rgba(75,200,122,0.09)','rgba(75,200,122,0.05)','rgba(75,200,122,0.04)'],
+  火: ['rgba(224,90,74,0.13)', 'rgba(224,90,74,0.07)', 'rgba(224,90,74,0.09)', 'rgba(224,90,74,0.05)', 'rgba(224,90,74,0.04)'],
+  土: ['rgba(212,160,64,0.13)','rgba(212,160,64,0.07)','rgba(212,160,64,0.09)','rgba(212,160,64,0.05)','rgba(212,160,64,0.04)'],
+  金: ['rgba(160,170,180,0.11)','rgba(160,170,180,0.06)','rgba(160,170,180,0.08)','rgba(160,170,180,0.04)','rgba(160,170,180,0.04)'],
+  水: ['rgba(90,168,224,0.13)', 'rgba(90,168,224,0.07)', 'rgba(90,168,224,0.09)', 'rgba(90,168,224,0.05)', 'rgba(90,168,224,0.04)'],
+};
+const _ORB_DEFAULT = [
+  'rgba(75,200,122,0.07)','rgba(224,90,74,0.07)',
+  'rgba(90,168,224,0.07)','rgba(212,160,64,0.06)','rgba(160,170,180,0.05)',
+];
+function _setOrbTheme(o) {
+  const palette = o ? (_ORB_PALETTE[o] || _ORB_DEFAULT) : _ORB_DEFAULT;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.querySelector(`.orb-${i}`);
+    if (el) el.style.background = palette[i-1];
+  }
+}
+function _resetOrbTheme() { _setOrbTheme(null); }
 
 /* 전송 */
 async function send() {
@@ -4018,7 +4100,21 @@ function checkAndDeductToken() {
   // 낙관적 UI: 캐시는 미리 -1, 서버 응답으로 정확한 값 동기화
   _tokenCache = Math.max(0, _tokenCache - 1);
   updateAllTokenDisplays();
+  _spawnTokenPop();
   return true;
+}
+
+function _spawnTokenPop() {
+  const chip = document.getElementById('tokenChip');
+  if (!chip) return;
+  const rect = chip.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'token-pop';
+  el.textContent = '−1';
+  el.style.left = (rect.left + rect.width / 2 - 10) + 'px';
+  el.style.top  = (rect.top - 4) + 'px';
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
 }
 
 // 결제 승인·환불 후 서버 잔액으로 다시 맞추기
