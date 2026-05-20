@@ -3608,10 +3608,10 @@ function _enterMode(m, user) {
 
   if (m === 'solo' && user?.birthYear) {
     // 프로필 있는 경우: 구조화 폼 불필요
+    // (사주 정보는 첫 send() 시 질문과 결합하여 1개의 turn으로 전송 — Gemini 교대 규칙 준수)
     showNormalInput();
     hideSuggestChips();
     addBubble(TX[lang].g1_auto(il, user), 'ai');
-    hist.push({ role: 'user', parts: [{ text: buildUserProfile(user) }] });
   } else {
     const greet = m === 'solo' ? TX[lang].g1(il) : TX[lang].g2(il);
     addBubble(greet, 'ai');
@@ -3939,9 +3939,16 @@ async function send() {
     return;
   }
 
+  // [Gemini 교대 규칙 준수] solo 모드 첫 질문에 사주 프로필을 결합하여 1개의 turn으로 전송
+  let processedTxt = txt;
+  const _sendUser = getUser();
+  if (mode === 'solo' && _sendUser?.birthYear && hist.length === 0) {
+    processedTxt = `[사용자 사주 정보: ${buildUserProfile(_sendUser)}]\n\n질문: ${txt}`;
+  }
+
   btn.disabled = true; inp.disabled = true;
   addBubble(txt, 'user'); inp.value = '';
-  hist.push({role:'user', parts:[{text:txt}]});
+  hist.push({role:'user', parts:[{text:processedTxt}]});
   const loader = addLoader();
 
   try {
@@ -4826,11 +4833,12 @@ function closeMyPage() {
   document.getElementById('backBtn').style.display       = 'none';
   // 로그인 상태에 맞게 userBtn / signupLinkBtn 복원
   const u = getUser();
+  const _userBtn = document.getElementById('userBtn');
   if (u && isLoggedIn()) {
     updateUserBtn(u);
     document.getElementById('signupLinkBtn').style.display = 'none';
   } else {
-    document.getElementById('userBtn').style.display = 'none';
+    if (_userBtn) _userBtn.style.display = 'none';
     document.getElementById('signupLinkBtn').style.display = u ? 'none' : '';
   }
 }
@@ -5550,8 +5558,8 @@ async function requestNotificationPermission() {
     // 환영 알림
     new Notification('M;Y 安', {
       body: '일진 알림이 설정되었습니다. 매일 기운을 전해드릴게요.',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/icon-pwa-192-192.png',
+      badge: '/icon-pwa-192-192.png',
       tag: 'myan-welcome',
     });
     scheduleLocalNotification();

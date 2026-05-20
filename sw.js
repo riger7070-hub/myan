@@ -65,8 +65,8 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon:  '/icon-192.png',
-      badge: '/icon-192.png',
+      icon:  '/icon-pwa-192-192.png',
+      badge: '/icon-pwa-192-192.png',
       tag:   'myan-daily',
       renotify: true,
       data: { url: data.url || '/' },
