@@ -3641,11 +3641,8 @@ let _payDoneTimer   = null;
 let _adminTab       = 'pending';
 let _adminPayments  = [];
 
+// 관리자 인증: 구글 로그인 이메일이 ADMIN_EMAIL과 일치하면 허용 (서버에서 검증)
 const ADMIN_EMAIL  = 'riger7070@gmail.com';
-// ADMIN_SECRET은 클라이언트 코드에 두지 않음.
-// 관리자는 본인 브라우저 콘솔에서 1회 실행:
-//   localStorage.setItem('myan_admin_secret', '실제_시크릿_값');
-function getAdminSecret() { return localStorage.getItem('myan_admin_secret') || ''; }
 
 /* ── Google ID Token 관리 ── */
 let _googleIdToken = '';
@@ -3953,7 +3950,7 @@ async function adminGrantTokens() {
   try {
     const res = await fetch(EP + 'admin/grant-tokens', {
       method: 'POST',
-      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+      headers: authHeaders(),
       body: JSON.stringify({ email, tokens, note }),
     });
     if (!res.ok) throw new Error('fail');
@@ -3973,7 +3970,7 @@ async function renderAdminPanel() {
   listEl.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
   try {
     const res = await fetch(EP + 'admin/payments', {
-      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+      headers: authHeaders(),
     });
     if (!res.ok) throw new Error('auth');
     const data = await res.json();
@@ -4021,7 +4018,7 @@ async function approvePayment(id, btn) {
   try {
     const res = await fetch(EP + 'admin/approve', {
       method: 'POST',
-      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+      headers: authHeaders(),
       body: JSON.stringify({ id }),
     });
     if (!res.ok) throw new Error('fail');
@@ -4048,7 +4045,7 @@ async function _checkAdminBadge() {
   document.getElementById('adminHdBtn').style.display = 'flex';
   try {
     const res = await fetch(EP + 'admin/payments', {
-      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+      headers: authHeaders(),
     });
 
     if (!res.ok) return;
