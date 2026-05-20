@@ -1,0 +1,5010 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>M;Y 安 · 오늘의 오행 기운 리딩</title>
+
+<!-- SEO 메타 -->
+<meta name="description" content="명리학 기반 AI 사주 풀이. 오늘의 일진과 오행 기운, 나만의 리딩, 궁합 풀이를 제공하는 M;Y 安. 한·영·중·일 4개 언어 지원.">
+<meta name="keywords" content="사주, 운세, 명리학, 오행, 일진, 궁합, AI 사주">
+<meta name="author" content="M;Y 安">
+<link rel="canonical" href="https://myan-an.pages.dev/">
+
+<!-- Open Graph (카톡·페북·X 공유 썸네일) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="M;Y 安 · 오늘의 오행 기운 리딩">
+<meta property="og:description" content="내 사주와 오늘 일진이 만나는 방식 — 명리학으로 풀어보는 오늘 하루의 흐름">
+<meta property="og:image" content="https://myan-an.pages.dev/icon-og-512-512.png">
+<meta property="og:url" content="https://myan-an.pages.dev/">
+<meta property="og:site_name" content="M;Y 安">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="zh_CN">
+<meta property="og:locale:alternate" content="ja_JP">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="M;Y 安 · 오늘의 오행 기운 리딩">
+<meta name="twitter:description" content="명리학으로 풀어보는 오늘 하루의 흐름">
+<meta name="twitter:image" content="https://myan-an.pages.dev/icon-og-512-512.png">
+
+<!-- PWA 메타 -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#c9a96e" id="metaThemeColor">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="M;Y 安">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<!-- favicon -->
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-favicon-32-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icon-favicon-16-16.png">
+
+<!-- 스플래시 배경색 -->
+<meta name="msapplication-TileColor" content="#060608">
+<meta name="msapplication-TileImage" content="/icon-pwa-192-192.png">
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;400;700&family=Pretendard:wght@300;400;600&display=swap');
+
+:root {
+  --bg: #060608;
+  --gold: #c9a96e;
+  --gold-light: #e8d4a8;
+  --gold-dim: rgba(201,169,110,0.35);
+  --text: #e8e8e8;
+  --text-dim: #999;
+  --border: rgba(201,169,110,0.22);
+  --card: rgba(255,255,255,0.035);
+  --input-bg: rgba(255,255,255,0.05);
+  --bubble-ai-bg: rgba(255,255,255,0.03);
+  --hd-bg: rgba(6,6,8,0.95);
+}
+
+/* ── 라이트 모드 ── */
+[data-theme="light"] {
+  --bg: #f5f0e8;
+  --gold: #a07840;
+  --gold-light: #7a5c2a;
+  --gold-dim: rgba(160,120,64,0.35);
+  --text: #2a2420;
+  --text-dim: #6b5e52;
+  --border: rgba(160,120,64,0.25);
+  --card: rgba(160,120,64,0.07);
+  --input-bg: rgba(160,120,64,0.08);
+  --bubble-ai-bg: rgba(160,120,64,0.06);
+  --hd-bg: rgba(245,240,232,0.97);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+
+body {
+  background: var(--bg);
+  font-family: 'Pretendard', sans-serif;
+  color: var(--text);
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+  transition: background 0.3s ease, color 0.3s ease;
+  /* 노치/홈바 safe area */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* 스플래시 화면 */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #060608;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  transition: opacity 0.6s ease;
+}
+#splash.fade-out { opacity: 0; pointer-events: none; }
+#splash .sp-logo {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 2.8rem;
+  font-weight: 200;
+  letter-spacing: 16px;
+  color: #c9a96e;
+  text-shadow: 0 0 40px rgba(201,169,110,0.6);
+}
+#splash .sp-sub {
+  font-size: 0.75rem;
+  letter-spacing: 6px;
+  color: rgba(201,169,110,0.5);
+  text-transform: uppercase;
+}
+#splash .sp-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+#splash .sp-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(201,169,110,0.4);
+  animation: sp-pulse 1.4s ease infinite;
+}
+#splash .sp-dot:nth-child(2) { animation-delay: .2s; }
+#splash .sp-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes sp-pulse {
+  0%,100% { opacity: .3; transform: scale(1); }
+  50%      { opacity: 1;  transform: scale(1.3); }
+}
+
+/* ── 배경 오브 ── */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  animation: drift linear infinite;
+}
+.orb-1 { width:340px;height:340px; background:rgba(75,200,122,0.07); top:-80px;left:-60px; animation-duration:22s; }
+.orb-2 { width:260px;height:260px; background:rgba(224,90,74,0.07);  top:30%;right:-80px; animation-duration:28s; animation-delay:-8s; }
+.orb-3 { width:300px;height:300px; background:rgba(90,168,224,0.07); bottom:-60px;left:20%; animation-duration:25s; animation-delay:-14s; }
+.orb-4 { width:200px;height:200px; background:rgba(212,160,64,0.06);  bottom:20%;right:10%; animation-duration:32s; animation-delay:-5s; }
+/* 라이트 모드 오브 — 더 연하게 */
+[data-theme="light"] .orb-1 { background:rgba(75,200,122,0.10); }
+[data-theme="light"] .orb-2 { background:rgba(224,90,74,0.08); }
+[data-theme="light"] .orb-3 { background:rgba(90,168,224,0.10); }
+[data-theme="light"] .orb-4 { background:rgba(212,160,64,0.12); }
+.orb-5 { width:220px;height:220px; background:rgba(160,170,180,0.05); top:50%;left:40%;  animation-duration:20s; animation-delay:-18s; }
+
+@keyframes drift {
+  0%   { transform: translate(0,0) scale(1); }
+  33%  { transform: translate(30px,-20px) scale(1.05); }
+  66%  { transform: translate(-20px,30px) scale(0.95); }
+  100% { transform: translate(0,0) scale(1); }
+}
+
+.app {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 960px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── 헤더 ── */
+.hd {
+  padding: 30px 20px 22px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(201,169,110,0.04) 0%, transparent 100%);
+}
+
+.hd-logo {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 2.2rem;
+  font-weight: 200;
+  letter-spacing: 16px;
+  color: var(--gold);
+  line-height: 1;
+  text-shadow:
+    0 2px 4px rgba(0,0,0,0.8),
+    0 4px 16px rgba(0,0,0,0.6),
+    0 0 40px rgba(201,169,110,0.5),
+    0 0 80px rgba(201,169,110,0.25),
+    0 0 120px rgba(201,169,110,0.1);
+}
+
+.hd-deco {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 10px auto 0;
+  max-width: 260px;
+}
+.hd-deco-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,169,110,0.4), transparent);
+}
+.hd-deco-symbol {
+  font-size: 0.7rem;
+  color: rgba(201,169,110,0.5);
+  letter-spacing: 2px;
+}
+
+.hd-sub {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  letter-spacing: 5px;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+.ilchin {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 9px 22px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(201,169,110,0.05);
+  backdrop-filter: blur(10px);
+}
+
+.ilchin-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: blink 2s infinite;
+  box-shadow: 0 0 8px var(--gold);
+  flex-shrink: 0;
+}
+@keyframes blink { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+.ilchin-date {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  padding-right: 10px;
+  border-right: 1px solid rgba(201,169,110,0.15);
+}
+
+#ilchinText {
+  font-size: 0.85rem;
+  color: var(--gold-light);
+  letter-spacing: 0.5px;
+}
+
+/* 헤더 우측 컨테이너 — userBtn + 언어버튼 묶음 */
+.hd-right {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 언어 버튼 */
+.langs {
+  display: flex;
+  gap: 0;
+  flex-wrap: nowrap;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.lb {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border: none;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  padding: 5px 10px;
+  cursor: pointer;
+  background: none;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.lb:last-child { border-right: none; }
+.lb:hover, .lb.on { color: var(--gold); background: rgba(201,169,110,0.1); }
+
+/* 뒤로 버튼 */
+.back {
+  position: absolute;
+  top: 18px; left: 16px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  transition: all .2s;
+}
+.back:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+/* ── 모드 화면 ── */
+#screen-mode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 44px 28px 44px;
+  gap: 36px;
+  overflow-y: auto;
+}
+
+@media (min-width: 600px) {
+  #screen-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+    align-items: center;
+    padding: 60px 56px;
+    gap: 56px;
+  }
+  .mode-left  { display: flex; flex-direction: column; gap: 28px; justify-content: center; }
+  .mode-right { display: flex; flex-direction: column; gap: 20px; }
+}
+
+.section-label {
+  text-align: center;
+  font-size: 0.68rem;
+  letter-spacing: 6px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.section-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.5rem;
+  font-weight: 200;
+  color: var(--gold-light);
+  text-align: center;
+  line-height: 1.65;
+  letter-spacing: 1px;
+}
+
+.section-desc {
+  font-size: 0.92rem;
+  color: #b0b0b0;
+  text-align: center;
+  line-height: 2;
+}
+
+/* 오행 칩 */
+.ohaeng-chips {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+.chip {
+  font-size: 0.9rem;
+  font-weight: 400;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: .5;
+  transition: all .3s;
+  cursor: default;
+  letter-spacing: 0;
+}
+.chip:hover {
+  opacity: 1;
+  box-shadow: 0 0 16px currentColor;
+  transform: scale(1.1);
+}
+
+/* 모드 카드 */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card {
+  position: relative;
+  border-radius: 18px;
+  padding: 28px 26px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  background: var(--card);
+  transition: all .3s ease;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(201,169,110,0.3), rgba(201,169,110,0.05), rgba(201,169,110,0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(201,169,110,0.04) 0%, transparent 60%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.card:hover::after { opacity: 1; }
+.card:hover {
+  background: rgba(201,169,110,0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,169,110,0.25);
+}
+
+.card-icon {
+  font-size: 2.4rem;
+  width: 56px;
+  flex-shrink: 0;
+  text-align: center;
+  filter: drop-shadow(0 0 12px rgba(201,169,110,0.3));
+}
+
+.card-body { flex: 1; }
+
+.card-name {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.1rem;
+  color: var(--gold);
+  font-weight: 400;
+  letter-spacing: 1px;
+  margin-bottom: 7px;
+}
+
+.card-desc {
+  font-size: 0.86rem;
+  color: #b0b0b0;
+  line-height: 1.8;
+}
+
+.card-arrow {
+  font-size: 1.2rem;
+  color: rgba(201,169,110,0.4);
+  flex-shrink: 0;
+  transition: all .3s;
+}
+.card:hover .card-arrow {
+  color: var(--gold);
+  transform: translateX(4px);
+}
+
+.disclaimer {
+  font-size: 0.75rem;
+  color: #999;
+  text-align: center;
+  line-height: 1.9;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── 채팅 화면 ── */
+#screen-chat {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#chat-window {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  scroll-behavior: smooth;
+}
+#chat-window::-webkit-scrollbar { width: 2px; }
+#chat-window::-webkit-scrollbar-thumb { background: var(--border); }
+
+.bubble {
+  max-width: 92%;
+  padding: 16px 20px;
+  font-size: 0.95rem;
+  line-height: 1.9;
+  border-radius: 18px;
+  animation: pop .35s ease;
+  white-space: pre-wrap;
+}
+.bubble-ai {
+  align-self: flex-start;
+  background: var(--bubble-ai-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.bubble-user {
+  align-self: flex-end;
+  background: rgba(201,169,110,0.1);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold-light);
+  border-bottom-right-radius: 4px;
+}
+
+/* 음료 카드 */
+.rx-card {
+  align-self: flex-start;
+  width: 92%;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--gold-dim);
+  animation: pop .5s ease;
+}
+.rx-top {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.rx-icon {
+  font-size: 2.4rem;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+.rx-info {}
+.rx-label {
+  font-size: 0.68rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  opacity: .6;
+  margin-bottom: 4px;
+}
+.rx-name {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+  margin-bottom: 4px;
+}
+.rx-desc {
+  font-size: 0.78rem;
+  opacity: .7;
+  line-height: 1.6;
+}
+.rx-bottom {
+  padding: 12px 20px;
+  font-size: 0.72rem;
+  background: rgba(0,0,0,0.3);
+  border-top: 1px solid rgba(255,255,255,0.05);
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+/* 입력창 */
+.input-row {
+  padding: 16px 20px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--hd-bg);
+  flex-shrink: 0;
+}
+#inp {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 14px 18px;
+  color: #e8e8e8;
+  font-size: 0.95rem;
+  font-family: 'Pretendard', sans-serif;
+  outline: none;
+  transition: border-color .2s, background .2s;
+}
+#inp::placeholder { color: rgba(255,255,255,0.28); }
+#inp:focus { border-color: rgba(201,169,110,0.6); background: rgba(255,255,255,0.1); }
+#inp:disabled { opacity: .3; }
+
+#send {
+  width: 50px; height: 50px;
+  border-radius: 12px;
+  border: none;
+  background: var(--gold);
+  color: #111;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#send:hover { background: var(--gold-light); }
+#send:disabled { opacity: .25; cursor: not-allowed; }
+
+/* ── 회원가입 화면 ── */
+#screen-signup {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 40px 32px 40px;
+  gap: 32px;
+}
+
+@media (min-width: 600px) {
+  #screen-signup {
+    padding: 52px 90px;
+    justify-content: center;
+  }
+}
+
+/* 모바일: 폼 그리드 2열 축소 */
+@media (max-width: 540px) {
+  #screen-signup { padding: 32px 20px 40px; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .form-grid .half { grid-column: 1 / -1; }
+  .signup-headline { font-size: 1.55rem; }
+}
+
+.signup-header { margin-bottom: 4px; }
+.signup-headline {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.9rem;
+  font-weight: 200;
+  color: var(--gold-light);
+  line-height: 1.55;
+  white-space: pre-line;
+  margin-bottom: 12px;
+  letter-spacing: 0;
+  text-shadow: 0 0 40px rgba(201,169,110,0.2);
+}
+.signup-sub {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.85;
+  margin-bottom: 6px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 18px 16px;
+}
+.form-grid .full  { grid-column: 1 / -1; }
+.form-grid .half  { grid-column: span 2; }
+.form-grid .third { grid-column: span 1; }
+
+.field { display: flex; flex-direction: column; gap: 9px; }
+.field label {
+  font-size: 0.7rem;
+  color: rgba(201,169,110,0.7);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.field input, .field select {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(201,169,110,0.28);
+  border-radius: 10px;
+  padding: 13px 16px;
+  color: #e8e8e8;
+  font-size: 0.92rem;
+  font-family: 'Pretendard', sans-serif;
+  outline: none;
+  transition: border-color .2s, background .2s;
+  width: 100%;
+}
+.field input::placeholder { color: rgba(255,255,255,0.28); }
+.field input:focus, .field select:focus {
+  border-color: rgba(201,169,110,0.6);
+  background: rgba(255,255,255,0.1);
+}
+.field select { cursor: pointer; appearance: none; }
+.field select option { background: #1a1a1a; color: #e8e8e8; }
+
+.gender-row { display: flex; gap: 10px; }
+.gender-btn {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+}
+.gender-btn.active {
+  border-color: var(--gold-dim);
+  background: rgba(201,169,110,0.1);
+  color: var(--gold);
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(201,169,110,0.9), rgba(201,169,110,0.7));
+  border: none;
+  border-radius: 12px;
+  color: #111;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: 14px;
+}
+.submit-btn:hover { background: var(--gold); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,169,110,0.2); }
+.submit-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+.signup-notice {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.42);
+  text-align: center;
+  line-height: 1.9;
+  padding: 4px 8px;
+}
+
+/* 성공 화면 */
+.signup-success {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  flex: 1;
+}
+.success-icon { font-size: 3rem; animation: pop .4s ease; }
+.success-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.2rem;
+  color: var(--gold);
+  font-weight: 200;
+  letter-spacing: 2px;
+}
+.success-desc { font-size: 0.84rem; color: var(--text-dim); line-height: 1.9; }
+.success-back {
+  margin-top: 8px;
+  padding: 12px 28px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--gold);
+  font-size: 0.85rem;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+}
+.success-back:hover { background: rgba(201,169,110,0.08); }
+
+/* 모드 화면 가입 버튼 */
+.signup-link {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 10px;
+  transition: color .2s;
+  letter-spacing: 1px;
+}
+.signup-link:hover { color: var(--gold); }
+.signup-link span { border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+
+/* 카드 잠금 오버레이 힌트 */
+.card-lock {
+  font-size: 0.72rem;
+  color: var(--gold);
+  opacity: .7;
+  margin-top: 6px;
+  letter-spacing: 0.5px;
+}
+
+/* 다크/라이트 토글 버튼 */
+.theme-toggle-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all .2s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.theme-toggle-btn:hover {
+  background: var(--card);
+  border-color: var(--gold-dim);
+}
+
+/* 헤더 유저 버튼 */
+.user-btn {
+  width: auto;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 15px;
+  background: rgba(201,169,110,0.12);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.user-btn:hover { background: rgba(201,169,110,0.25); box-shadow: 0 0 12px var(--gold-dim); }
+
+/* 마이페이지 화면 */
+#screen-mypage {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 40px 32px 48px;
+}
+@media (min-width: 600px) {
+  #screen-mypage { padding: 52px 90px; justify-content: center; }
+}
+@media (max-width: 540px) {
+  #screen-mypage { padding: 32px 20px 48px; }
+}
+.mypage-profile {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+.mypage-avatar {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  background: rgba(201,169,110,0.12);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.5rem;
+  font-weight: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mypage-name-disp {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.15rem;
+  color: var(--gold-light);
+  font-weight: 200;
+  margin-bottom: 4px;
+}
+.mypage-email-disp {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.3px;
+}
+.mypage-divider {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 24px;
+}
+.mypage-section-label {
+  font-size: 0.72rem;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: rgba(201,169,110,0.65);
+  margin-bottom: 20px;
+}
+.mypage-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.mypage-action-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: all .25s;
+  text-align: center;
+}
+.mypage-action-btn:hover { border-color: rgba(255,255,255,0.18); color: var(--text); }
+.mypage-action-btn.danger { color: #c06060; }
+.mypage-action-btn.danger:hover { border-color: #c06060; background: rgba(192,96,96,0.06); }
+
+/* 구글 로그인 */
+.google-btn-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 8px;
+}
+.or-divider::before, .or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.or-divider span {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.google-filled {
+  border-color: rgba(201,169,110,0.7) !important;
+  background: rgba(201,169,110,0.06) !important;
+  transition: border-color .4s, background .4s;
+}
+
+/* ── 로그인 화면 ── */
+#screen-login {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+  overflow-y: auto;
+}
+.login-wrap {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.75rem;
+  font-weight: 200;
+  color: var(--gold-light);
+  line-height: 1.55;
+  white-space: pre-line;
+  margin-bottom: 6px;
+  text-shadow: 0 0 40px rgba(201,169,110,0.2);
+}
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 44px; }
+.pw-toggle {
+  position: absolute;
+  right: 14px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  font-size: 0.85rem; opacity: 0.35; transition: opacity .2s;
+  padding: 0; color: var(--text); line-height: 1;
+}
+.pw-toggle:hover { opacity: 0.75; }
+.login-err {
+  font-size: 0.78rem;
+  color: #e07070;
+  min-height: 18px;
+  text-align: center;
+}
+
+/* ── 토큰 칩 (채팅 입력창) ── */
+.token-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: rgba(201,169,110,0.7);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 10px 0 4px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  transition: color .2s;
+  user-select: none;
+}
+.token-chip:hover { color: var(--gold); }
+.token-chip.low { color: #e07070; }
+
+/* ── 마이페이지 토큰 섹션 ── */
+.token-balance-display {
+  text-align: center;
+  padding: 22px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  margin-bottom: 16px;
+}
+.token-balance-num {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 3rem;
+  font-weight: 200;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 5px;
+  text-shadow: 0 0 30px rgba(201,169,110,0.3);
+}
+.token-balance-unit {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+/* 패키지 그리드 */
+.pkg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+@media (max-width: 540px) {
+  .pkg-grid { grid-template-columns: 1fr 1fr; }
+}
+.pkg-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 14px;
+  cursor: pointer;
+  background: var(--card);
+  transition: all .25s;
+  position: relative;
+  overflow: hidden;
+}
+.pkg-card:hover {
+  border-color: var(--gold-dim);
+  background: rgba(201,169,110,0.05);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.pkg-card.sub-card { border-color: rgba(201,169,110,0.15); }
+.pkg-sub-label {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 0.72rem;
+  background: rgba(201,169,110,0.15);
+  color: var(--gold);
+  border-radius: 999px;
+  padding: 2px 7px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.pkg-badge {
+  font-size: 0.72rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.pkg-tokens {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.3rem;
+  color: var(--gold-light);
+  font-weight: 200;
+  margin-bottom: 3px;
+}
+.pkg-price {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.pkg-btn {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--gold-dim);
+  border-radius: 8px;
+  background: none;
+  color: var(--gold);
+  font-size: 0.68rem;
+  font-family: 'Pretendard', sans-serif;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+}
+
+
+/* ── 퀵액세스 바 (메인 화면 하단) ── */
+.quick-access-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+}
+@media (min-width: 600px) {
+  .quick-access-row {
+    grid-column: 1 / -1;
+    align-self: end;
+    margin-top: auto;
+  }
+}
+.quick-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  transition: all .25s;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+.quick-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .25s;
+  pointer-events: none;
+}
+.token-box::before  { background: linear-gradient(135deg, rgba(201,169,110,0.1), transparent 70%); }
+.support-box::before{ background: linear-gradient(135deg, rgba(90,168,224,0.1),  transparent 70%); }
+.quick-box:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+.quick-box:hover::before { opacity: 1; }
+.token-box:hover  { border-color: rgba(201,169,110,0.5); }
+.support-box:hover{ border-color: rgba(90,168,224,0.4); }
+.quick-icon { font-size: 1.6rem; flex-shrink: 0; line-height: 1; }
+.quick-body { flex: 1; min-width: 0; }
+.quick-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--gold-light);
+  margin-bottom: 4px;
+}
+.support-box .quick-title { color: #7ec8f0; }
+.quick-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quick-arrow {
+  font-size: 1.3rem;
+  color: rgba(201,169,110,0.35);
+  transition: all .25s;
+  flex-shrink: 0;
+}
+.support-box .quick-arrow { color: rgba(90,168,224,0.35); }
+.quick-box:hover .quick-arrow { transform: translateX(3px); }
+.token-box:hover  .quick-arrow { color: var(--gold); }
+.support-box:hover .quick-arrow { color: #7ec8f0; }
+@media (max-width: 400px) {
+  .quick-box { padding: 14px 12px; gap: 10px; }
+  .quick-title { font-size: 0.82rem; }
+  .quick-desc { display: none; }
+}
+
+/* ── 법적 푸터 ── */
+.legal-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 0 4px;
+}
+.legal-footer a {
+  font-size: 0.72rem;
+  color: rgba(201,169,110,0.4);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: color .2s;
+}
+.legal-footer a:hover { color: rgba(201,169,110,0.75); }
+
+/* ── 법적 모달 ── */
+.legal-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(6,6,8,0.88);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 9000;
+  animation: fadeIn .2s ease;
+}
+.legal-modal-box {
+  background: #111114;
+  border: 1px solid rgba(201,169,110,0.2);
+  border-radius: 16px 16px 0 0;
+  width: 100%; max-width: 640px;
+  max-height: 82vh;
+  display: flex; flex-direction: column;
+  padding: 0 0 env(safe-area-inset-bottom,0);
+}
+.legal-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(201,169,110,0.12);
+}
+.legal-modal-title {
+  font-size: 0.88rem; letter-spacing: 0.08em;
+  color: var(--gold); font-weight: 600;
+}
+.legal-modal-close {
+  background: none; border: none; color: rgba(255,255,255,0.4);
+  font-size: 1.2rem; cursor: pointer; padding: 0 4px;
+}
+.legal-modal-body {
+  overflow-y: auto; padding: 20px;
+  font-size: 0.78rem; line-height: 1.8;
+  color: rgba(255,255,255,0.55);
+}
+.legal-modal-body h3 {
+  font-size: 0.82rem; color: rgba(201,169,110,0.8);
+  margin: 18px 0 6px; font-weight: 600; letter-spacing: 0.06em;
+}
+.legal-modal-body h3:first-child { margin-top: 0; }
+.legal-modal-body p { margin: 0 0 8px; }
+.legal-modal-body table {
+  width: 100%; border-collapse: collapse;
+  margin: 8px 0; font-size: 0.75rem;
+}
+.legal-modal-body td, .legal-modal-body th {
+  border: 1px solid rgba(201,169,110,0.15);
+  padding: 6px 8px; text-align: left; vertical-align: top;
+}
+.legal-modal-body th {
+  color: rgba(201,169,110,0.7); font-weight: 600; background: rgba(201,169,110,0.04);
+}
+
+/* ── 토큰충전 모달 ── */
+#token-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(8px);
+}
+@media (min-width: 600px) {
+  #token-modal { align-items: center; }
+  .token-modal-box {
+    border-radius: 24px !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+}
+.token-modal-box {
+  width: 100%;
+  max-width: 520px;
+  background: #0d0d11;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 24px 24px 0 0;
+  padding: 28px 22px 44px;
+  animation: tmSlideUp .28s ease;
+}
+@keyframes tmSlideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.token-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.token-modal-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.15rem;
+  font-weight: 200;
+  color: var(--gold);
+  letter-spacing: 3px;
+}
+.token-modal-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all .2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.token-modal-close:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+.token-modal-balance {
+  text-align: center;
+  padding: 18px 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  margin-bottom: 18px;
+}
+.token-modal-balance-num {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 2.8rem;
+  font-weight: 200;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 6px;
+  text-shadow: 0 0 30px rgba(201,169,110,0.3);
+}
+.token-modal-balance-lbl {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+.token-modal-note {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 16px;
+  line-height: 1.7;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ── Change 1: 무료 토큰 배너 ── */
+.free-token-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: linear-gradient(90deg, rgba(201,169,110,0.12), rgba(201,169,110,0.06), rgba(201,169,110,0.12));
+  border: 1px solid rgba(201,169,110,0.3);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  color: var(--gold-light);
+  letter-spacing: 0.5px;
+  animation: fadeIn .4s ease;
+  cursor: pointer;
+  transition: background .2s;
+}
+.free-token-banner:hover { background: rgba(201,169,110,0.18); }
+.free-token-banner .ftb-icon { font-size: 0.9rem; }
+.free-token-banner strong { color: var(--gold); font-weight: 600; }
+
+/* ── 베타 배너 ── */
+.beta-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: linear-gradient(90deg, rgba(74,196,120,0.10), rgba(74,196,120,0.05), rgba(74,196,120,0.10));
+  border: 1px solid rgba(74,196,120,0.28);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  color: #7de8a8;
+  letter-spacing: 0.4px;
+  animation: fadeIn .4s ease;
+}
+.beta-banner strong { color: #a8f0c4; font-weight: 600; }
+
+/* ── Change 3: BEST 카드 강조 ── */
+.pkg-card.best-card {
+  border-color: var(--gold-dim);
+  background: rgba(201,169,110,0.06);
+  box-shadow: 0 0 20px rgba(201,169,110,0.08), inset 0 0 30px rgba(201,169,110,0.03);
+}
+.pkg-best-badge {
+  display: inline-block;
+  background: var(--gold);
+  color: #060608;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.pkg-unit-price {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  margin-top: -8px;
+  margin-bottom: 10px;
+}
+
+/* ── Change 4: 채팅 추천 질문 칩 ── */
+.suggest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px 4px;
+  animation: fadeIn .4s ease;
+}
+.suggest-chip {
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: var(--card);
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.suggest-chip:hover {
+  border-color: var(--gold-dim);
+  color: var(--gold-light);
+  background: rgba(201,169,110,0.06);
+}
+
+/* ── Change 2: 채팅 첫 입력 구조화 폼 ── */
+#firstInputForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  animation: fadeIn .3s ease;
+}
+.fif-row {
+  display: flex;
+  gap: 8px;
+}
+.fif-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.fif-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.fif-input {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: 'Pretendard', sans-serif;
+  outline: none;
+  transition: border-color .2s;
+  width: 100%;
+}
+.fif-input:focus { border-color: var(--gold-dim); }
+.fif-input[type="date"]::-webkit-calendar-picker-indicator,
+.fif-input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6) sepia(1) saturate(2) hue-rotate(5deg);
+  opacity: 0.6;
+  cursor: pointer;
+}
+.fif-submit {
+  width: 100%;
+  padding: 11px;
+  background: var(--gold);
+  color: #060608;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: background .2s;
+}
+.fif-submit:hover { background: var(--gold-light); }
+.fif-optional-note {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* 로딩 */
+.loading { display:flex; gap:6px; padding:8px 4px; }
+.loading span {
+  width:7px; height:7px;
+  background: var(--gold);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite;
+}
+.loading span:nth-child(2){animation-delay:.2s}
+.loading span:nth-child(3){animation-delay:.4s}
+@keyframes bounce { 0%,80%,100%{transform:translateY(0);opacity:.3} 40%{transform:translateY(-6px);opacity:1} }
+@keyframes pop { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+#screen-mode, #screen-chat, #screen-signup, #screen-login, #screen-mypage { animation: fadeIn .3s ease; }
+
+/* ── 모바일 최적화 ── */
+@media (max-width: 480px) {
+
+  /* ───── 헤더: 겹침 완전 해소 ───── */
+  /* hd를 flex-column으로 바꿔 absolute 겹침 제거 */
+  .hd {
+    padding: 8px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  /* hd-right을 normal flow 상단 우측으로 */
+  .hd-right {
+    position: static;
+    transform: none;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    min-height: 32px;
+  }
+
+  /* 뒤로 버튼 — hd-right 행의 좌측에 absolute */
+  .back {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    font-size: 0.68rem;
+    padding: 3px 8px;
+    z-index: 5;
+  }
+
+  /* 로고 */
+  .hd-logo { font-size: 1.7rem; letter-spacing: 10px; margin-top: 2px; }
+
+  /* 장식선 */
+  .hd-deco { margin-top: 8px; max-width: 220px; }
+
+  /* 서브 태그라인 · 일진 배지 — 공간 확보를 위해 숨김 */
+  .hd-sub  { display: none; }
+  .ilchin  { display: none; }
+
+  /* 언어 버튼 */
+  .lb { font-size: 0.68rem; padding: 4px 7px; }
+  .langs { border-radius: 6px; }
+
+  /* ───── 각 화면 스크롤 가능하게 ───── */
+  #screen-mode,
+  #screen-signup,
+  #screen-login,
+  #screen-mypage {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ───── 모드 화면 — 여유롭게 ───── */
+  #screen-mode {
+    padding: 36px 22px 60px;
+    gap: 32px;
+    /* 그리드 해제하고 flex-column 유지 */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-label { letter-spacing: 4px; }
+  .section-title { font-size: 1.3rem; line-height: 1.7; }
+  .section-desc  { font-size: 0.86rem; line-height: 2.0; }
+
+  /* 오행 칩 */
+  .ohaeng-chips { gap: 14px; margin: 8px 0; }
+  .chip { width: 42px; height: 42px; font-size: 0.85rem; }
+
+  /* 모드 카드 */
+  .card {
+    padding: 26px 22px;
+    gap: 18px;
+    border-radius: 18px;
+    min-height: 110px;
+    align-items: center;
+  }
+  .card-icon { font-size: 2.1rem; width: 50px; }
+  .card-name { font-size: 1rem; margin-bottom: 8px; }
+  .card-desc {
+    font-size: 0.82rem;
+    line-height: 1.85;
+    word-break: keep-all;
+    word-wrap: break-word;
+  }
+  /* mode-right: grid로 두 카드 동일 높이 + 간격 확보 */
+  .mode-right {
+    display: grid !important;
+    grid-template-rows: 1fr 1fr auto !important;
+    gap: 20px !important;
+  }
+  /* 카드가 grid 셀을 꽉 채우도록 */
+  .mode-right .card {
+    height: 100%;
+    align-items: center;
+  }
+
+  /* 면책 안내 */
+  .disclaimer { font-size: 0.63rem; padding-top: 12px; }
+
+  /* ───── 로그인 화면 ───── */
+  #screen-login {
+    justify-content: flex-start;   /* center → start: 스크롤 방해 해소 */
+    padding: 32px 24px 56px;
+    align-items: center;
+  }
+  .login-wrap { gap: 14px; width: 100%; max-width: 420px; }
+  .login-title { font-size: 1.45rem; }
+
+  /* ───── 회원가입 화면 ───── */
+  #screen-signup { padding: 28px 20px 56px; gap: 28px; }
+  .signup-headline { font-size: 1.4rem; }
+  .signup-sub { font-size: 0.84rem; line-height: 1.9; }
+  .form-grid { gap: 16px 14px; }
+
+  /* ───── 마이페이지 ───── */
+  #screen-mypage { padding: 28px 20px 56px; }
+  .mypage-actions { flex-direction: column; }
+  .mypage-action-btn { min-width: unset; padding: 14px 16px; }
+
+  /* ───── 채팅 입력창 ───── */
+  .input-row { padding: 10px 12px; gap: 8px; }
+  .token-chip { font-size: 0.68rem; padding: 0 8px 0 2px; }
+  #inp { font-size: 0.88rem; padding: 11px 14px; }
+  #send { width: 44px; height: 44px; font-size: 0.9rem; }
+
+  /* 채팅 버블 */
+  .bubble { font-size: 0.88rem; padding: 13px 16px; }
+  #chat-window { padding: 20px 14px; gap: 18px; }
+
+  /* ───── 패키지 그리드 ───── */
+  .pkg-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pkg-grid.sub-grid { grid-template-columns: 1fr; }
+  .pkg-card { padding: 16px 14px; }
+  .pkg-tokens { font-size: 1.1rem; }
+  .pkg-price  { font-size: 0.7rem; }
+
+  /* ───── 결제 모달 ───── */
+  .pay-box { padding: 26px 20px 22px; gap: 12px; }
+  .pay-price { font-size: 1.25rem; }
+  .pay-qr-wrap { width: 156px; height: 156px; padding: 10px; }
+  .pay-toss-btn { font-size: 0.88rem; padding: 13px; }
+  .pay-done-btn { font-size: 0.84rem; padding: 12px; }
+  .pay-success-amount { font-size: 1.7rem; }
+
+  /* ───── 관리자 패널 ───── */
+  .admin-box { padding: 22px 16px 20px; }
+  .admin-card { padding: 14px 14px; gap: 10px; }
+  .admin-approve-btn { padding: 8px 14px; font-size: 0.75rem; }
+}
+
+/* 극소형 화면 (375px 미만 — 아이폰 SE 등) */
+@media (max-width: 374px) {
+  .hd-logo { font-size: 1.45rem; letter-spacing: 7px; }
+  .lb { font-size: 0.5rem; padding: 4px 5px; }
+  .hd-deco { display: none; }
+}
+
+/* ── 이용 안내 모달 ── */
+#guide-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  animation: fadeIn .3s ease;
+}
+.guide-box {
+  background: #0d0d10;
+  border: 1px solid rgba(201,169,110,0.3);
+  border-radius: 22px;
+  padding: 36px 32px 28px;
+  max-width: 440px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+}
+.guide-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.25rem;
+  font-weight: 200;
+  color: var(--gold-light);
+  letter-spacing: 1px;
+  text-align: center;
+}
+.guide-deco {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,169,110,0.35), transparent);
+}
+.guide-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.guide-item {
+  font-size: 0.88rem;
+  color: #c0c0c0;
+  line-height: 1.75;
+  padding-left: 4px;
+}
+.guide-confirm-btn {
+  margin-top: 4px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--gold-dim);
+  background: rgba(201,169,110,0.1);
+  color: var(--gold);
+  font-size: 0.92rem;
+  font-family: 'Pretendard', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: 0.5px;
+}
+.guide-confirm-btn:hover {
+  background: rgba(201,169,110,0.22);
+  box-shadow: 0 4px 20px rgba(201,169,110,0.15);
+}
+.guide-skip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: background .2s;
+  margin-top: -4px;
+}
+.guide-skip-row:hover { background: rgba(255,255,255,0.06); }
+.guide-skip-row input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.guide-skip-row span {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  user-select: none;
+}
+@media (max-width: 480px) {
+  .guide-box { padding: 28px 22px 22px; gap: 16px; border-radius: 18px; }
+  .guide-title { font-size: 1.1rem; }
+  .guide-item { font-size: 0.85rem; }
+}
+
+/* ── 결제 모달 ── */
+#pay-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pay-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+.pay-box {
+  position: relative;
+  z-index: 1;
+  background: #0e0e12;
+  border: 1px solid rgba(201,169,110,0.25);
+  border-radius: 22px;
+  padding: 32px 28px 28px;
+  width: min(360px, 92vw);
+  max-height: 90dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.7), 0 0 60px rgba(201,169,110,0.06);
+  animation: payBoxIn .22s ease;
+  scrollbar-width: none;
+}
+.pay-box::-webkit-scrollbar { display: none; }
+@keyframes payBoxIn {
+  from { opacity:0; transform: scale(.94) translateY(10px); }
+  to   { opacity:1; transform: scale(1)  translateY(0); }
+}
+.pay-close {
+  position: absolute;
+  top: 14px; right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: all .2s;
+}
+.pay-close:hover { color: var(--gold); background: rgba(201,169,110,0.1); }
+.pay-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 0.72rem;
+  letter-spacing: 5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.pay-price {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.pay-qr-wrap {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 176px; height: 176px;
+}
+.pay-qr-wrap canvas, .pay-qr-wrap img {
+  display: block;
+}
+.pay-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.7;
+  letter-spacing: 0.3px;
+  white-space: pre-line;
+}
+.pay-toss-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #0064ff 0%, #0044cc 100%);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.pay-toss-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.pay-toss-btn:active { transform: translateY(0); }
+.pay-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+}
+.pay-divider::before, .pay-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+}
+
+/* 결제 완료 버튼 */
+.pay-done-btn {
+  width: 100%;
+  padding: 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(201,169,110,0.3);
+  background: rgba(201,169,110,0.07);
+  color: var(--gold);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all .3s;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+.pay-done-btn.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.pay-done-btn:hover { background: rgba(201,169,110,0.14); border-color: rgba(201,169,110,0.5); }
+
+/* 대기 상태 */
+.pay-state-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0 8px;
+}
+.pay-spinner {
+  width: 50px; height: 50px;
+  border: 3px solid rgba(201,169,110,0.18);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: paySpin 1s linear infinite;
+}
+@keyframes paySpin { to { transform: rotate(360deg); } }
+.pay-wait-title {
+  font-size: 1rem;
+  color: var(--gold-light);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.pay-wait-sub {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.8;
+}
+
+/* 성공 상태 */
+.pay-state-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 4px;
+}
+.pay-success-icon {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: rgba(75,200,122,0.12);
+  border: 2px solid rgba(75,200,122,0.4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  color: #4bc87a;
+  animation: successPop .4s cubic-bezier(.175,.885,.32,1.275);
+  text-shadow: 0 0 24px rgba(75,200,122,0.5);
+}
+@keyframes successPop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  70%  { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pay-success-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--gold-light);
+  text-align: center;
+  letter-spacing: 1px;
+}
+.pay-success-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #4bc87a;
+  letter-spacing: 1px;
+  text-shadow: 0 0 20px rgba(75,200,122,0.3);
+}
+.pay-success-sub {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.7;
+}
+.pay-success-close {
+  width: 100%;
+  padding: 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(201,169,110,0.25);
+  background: rgba(201,169,110,0.08);
+  color: var(--gold);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: 6px;
+}
+.pay-success-close:hover { background: rgba(201,169,110,0.14); }
+
+/* ── 관리자 버튼 (헤더) ── */
+.admin-hd-btn {
+  position: relative;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.admin-hd-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
+.admin-hd-dot {
+  position: absolute;
+  top: -2px; right: -2px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #e05a4a;
+  border: 2px solid var(--bg);
+  display: none;
+  animation: dotPulse 1.5s ease infinite;
+}
+.admin-hd-dot.on { display: block; }
+@keyframes dotPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(224,90,74,0.4); }
+  50%      { box-shadow: 0 0 0 4px rgba(224,90,74,0); }
+}
+
+/* ── 관리자 패널 ── */
+#admin-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 16px 5vh;
+  overflow-y: auto;
+}
+.admin-box {
+  position: relative;
+  background: #0d0d11;
+  border: 1px solid rgba(201,169,110,0.2);
+  border-radius: 20px;
+  padding: 26px 22px 22px;
+  width: min(500px, 100%);
+  max-height: 85dvh;
+  overflow-y: auto;
+  animation: payBoxIn .2s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201,169,110,0.2) transparent;
+}
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.admin-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 0.9rem;
+  color: var(--gold);
+  letter-spacing: 3px;
+}
+.admin-header-right { display: flex; gap: 8px; align-items: center; }
+.admin-refresh {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: 0.5px;
+}
+.admin-refresh:hover { color: var(--gold); border-color: var(--gold-dim); }
+.admin-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.admin-close-btn:hover { color: var(--gold); background: rgba(201,169,110,0.1); }
+.admin-tabs {
+  display: flex;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.admin-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  padding: 7px 4px;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: 0.5px;
+}
+.admin-tab:last-child { border-right: none; }
+.admin-tab.on { color: var(--gold); background: rgba(201,169,110,0.1); }
+.admin-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  padding: 36px 0;
+  letter-spacing: 1px;
+}
+.admin-card {
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.02);
+  transition: border-color .2s;
+}
+.admin-card:hover { border-color: rgba(201,169,110,0.2); }
+.admin-card-info { flex: 1; min-width: 0; }
+.admin-card-email {
+  font-size: 0.8rem;
+  color: var(--gold-light);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-card-detail {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+.admin-card-time {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.22);
+  margin-top: 2px;
+}
+.admin-approve-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #4bc87a, #2ea85e);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.admin-approve-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.admin-approve-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: none; }
+.admin-approved-tag {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(75,200,122,0.25);
+  color: rgba(75,200,122,0.7);
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<!-- 배경 오브 -->
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+<div class="orb orb-4"></div>
+<div class="orb orb-5"></div>
+
+<!-- 스플래시 화면 -->
+<div id="splash">
+  <div class="sp-logo">M ; Y &nbsp;安</div>
+  <div class="sp-sub">木 火 土 金 水</div>
+  <div class="sp-dots">
+    <div class="sp-dot"></div>
+    <div class="sp-dot"></div>
+    <div class="sp-dot"></div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- 헤더 -->
+  <div class="hd">
+    <span class="back" id="backBtn">← <span id="backLabel"></span></span>
+    <div class="hd-right">
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="다크/라이트 모드">🌙</button>
+      <button class="admin-hd-btn" id="adminHdBtn" onclick="openAdminPanel()" style="display:none" title="관리자">
+        ⚙<span class="admin-hd-dot" id="adminHdDot"></span>
+      </button>
+      <button class="user-btn" id="userBtn" onclick="openMyPage()"></button>
+      <div class="langs">
+        <button class="lb on" onclick="setLang('ko')">한</button>
+        <button class="lb" onclick="setLang('en')">EN</button>
+        <button class="lb" onclick="setLang('zh')">中</button>
+        <button class="lb" onclick="setLang('ja')">日</button>
+      </div>
+    </div>
+    <div class="hd-logo">M ; Y &nbsp;安</div>
+    <div class="hd-deco">
+      <div class="hd-deco-line"></div>
+      <div class="hd-deco-symbol">木 火 土 金 水</div>
+      <div class="hd-deco-line"></div>
+    </div>
+    <div class="hd-sub" id="tagline"></div>
+    <div class="ilchin">
+      <span class="ilchin-dot"></span>
+      <span class="ilchin-date" id="ilchinDate"></span>
+      <span id="ilchinText"></span>
+    </div>
+  </div>
+
+  <!-- 모드 선택 -->
+  <div id="screen-mode" style="display:none">
+
+    <!-- ── 베타 기간 배너 ── -->
+    <div class="beta-banner">
+      <span>🎁</span>
+      <span><strong>베타 기간</strong> — 신규 가입 시 3토큰 무료 · 정식 결제는 곧 오픈됩니다</span>
+    </div>
+
+    <!-- ── 무료 토큰 배너 (비로그인 상태에서만 표시) ── -->
+    <div class="free-token-banner" id="freeBanner" onclick="goSignup()" style="display:none">
+      <span class="ftb-icon">✦</span>
+      <span>가입만 해도 <strong>3토큰 무료</strong> 지급 — 지금 바로 시작해보세요</span>
+      <span>›</span>
+    </div>
+
+    <!-- 왼쪽: 타이틀 영역 -->
+    <div class="mode-left">
+      <div>
+        <div class="section-label" id="eyebrow" style="margin-bottom:10px"></div>
+        <div class="section-title" id="headline"></div>
+      </div>
+      <div class="section-desc" id="subdesc"></div>
+      <div class="ohaeng-chips">
+        <span class="chip" style="color:#4bc87a">木</span>
+        <span class="chip" style="color:#e05a4a">火</span>
+        <span class="chip" style="color:#d4a040">土</span>
+        <span class="chip" style="color:#a0aab4">金</span>
+        <span class="chip" style="color:#5aa8e0">水</span>
+      </div>
+      <div class="disclaimer" id="disclaimer"></div>
+    </div>
+
+    <!-- 오른쪽: 카드 영역 -->
+    <div class="mode-right">
+      <div class="card" onclick="startMode('solo')">
+        <div class="card-icon">☯</div>
+        <div class="card-body">
+          <div class="card-name" id="soloName"></div>
+          <div class="card-desc" id="soloDesc"></div>
+        </div>
+        <div class="card-arrow">›</div>
+      </div>
+      <div class="card" onclick="startMode('couple')">
+        <div class="card-icon">∞</div>
+        <div class="card-body">
+          <div class="card-name" id="coupleName"></div>
+          <div class="card-desc" id="coupleDesc"></div>
+        </div>
+        <div class="card-arrow">›</div>
+      </div>
+      <div class="signup-link" id="signupLinkBtn" onclick="goSignup()"><span id="signupLinkText"></span></div>
+    </div>
+
+    <!-- ── 하단 퀵액세스 (토큰충전 · 1대1 상담) ── -->
+    <div class="quick-access-row">
+
+      <div class="quick-box token-box" onclick="openTokenModal()">
+        <div class="quick-icon">✦</div>
+        <div class="quick-body">
+          <div class="quick-title" id="quickTokenTitle">토큰 충전</div>
+          <div class="quick-desc" id="quickTokenDesc">잔여 토큰 충전하기</div>
+        </div>
+        <div class="quick-arrow">›</div>
+      </div>
+      <div class="quick-box support-box" onclick="openSupport()">
+        <div class="quick-icon">💬</div>
+        <div class="quick-body">
+          <div class="quick-title" id="quickSupportTitle">1대1 상담</div>
+          <div class="quick-desc" id="quickSupportDesc">이메일로 문의하기</div>
+        </div>
+        <div class="quick-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- 법적 푸터 -->
+    <div class="legal-footer">
+      <a href="#" onclick="openLegal('privacy');return false;">개인정보처리방침</a>
+      <a href="#" onclick="openLegal('refund');return false;">환불정책</a>
+      <a href="#" onclick="openLegal('terms');return false;">이용약관</a>
+    </div>
+
+
+  </div>
+
+  <!-- 채팅 -->
+  <div id="screen-chat">
+    <div id="chat-window"></div>
+
+    <!-- Change 4: 추천 질문 칩 (첫 메시지 전에만 표시) -->
+    <div class="suggest-chips" id="suggestChips">
+      <span class="suggest-chip" onclick="useSuggest(this)">오늘 재물운</span>
+      <span class="suggest-chip" onclick="useSuggest(this)">이직해도 될까요?</span>
+      <span class="suggest-chip" onclick="useSuggest(this)">오늘 피해야 할 것</span>
+      <span class="suggest-chip" onclick="useSuggest(this)">지금 연애운</span>
+      <span class="suggest-chip" onclick="useSuggest(this)">오늘 하루 총운</span>
+    </div>
+
+    <!-- Change 2: 구조화 첫 입력 폼 -->
+    <div id="firstInputForm" style="display:none">
+      <div class="fif-row">
+        <div class="fif-field">
+          <label class="fif-label">성함</label>
+          <input class="fif-input" id="fifName" type="text" placeholder="홍길동" autocomplete="name">
+        </div>
+        <div class="fif-field">
+          <label class="fif-label">생년월일</label>
+          <input class="fif-input" id="fifDate" type="date" max="2025-12-31">
+        </div>
+      </div>
+      <div class="fif-row">
+        <div class="fif-field">
+          <label class="fif-label">태어난 시간 <span style="opacity:.5">(선택)</span></label>
+          <input class="fif-input" id="fifTime" type="time" placeholder="00:00">
+        </div>
+      </div>
+      <div class="fif-optional-note">시간을 모르시면 비워두셔도 됩니다</div>
+      <button class="fif-submit" onclick="submitFirstForm()">기운 리딩 시작하기 ›</button>
+    </div>
+
+    <!-- 일반 텍스트 입력창 -->
+    <div class="input-row" id="normalInputRow">
+      <div class="token-chip" id="tokenChip" onclick="openMyPage()" title="토큰 잔액 · 클릭하여 충전">✦ <span id="chatTokenCount">-</span></div>
+      <input id="inp" type="text" autocomplete="off">
+      <button id="send">▶</button>
+    </div>
+  </div>
+
+  <!-- 로그인 -->
+  <div id="screen-login">
+    <div class="login-wrap">
+      <div class="login-title" id="loginTitle"></div>
+      <div class="google-btn-wrap" id="loginGoogleBtnWrap">
+        <div id="loginGoogleBtnEl"></div>
+      </div>
+      <!-- 비밀번호 로그인 비활성화: Google 로그인만 사용 -->
+      <div class="or-divider" id="loginOrDivider" style="display:none"><span id="loginOrText"></span></div>
+      <div class="field full" style="display:none">
+        <label id="lblLoginId"></label>
+        <input type="text" id="loginIdInp" autocomplete="username">
+      </div>
+      <div class="field full pw-wrap" style="display:none">
+        <label id="lblLoginPw"></label>
+        <input type="password" id="loginPwInp" autocomplete="current-password">
+        <button class="pw-toggle" onclick="togglePwVis('loginPwInp',this)" type="button">👁</button>
+      </div>
+      <button class="submit-btn" id="loginSubmitBtn" onclick="doLogin()" style="display:none"></button>
+      <div class="login-err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <!-- 회원가입 -->
+  <div id="screen-signup">
+    <div id="signup-form-wrap">
+      <div class="signup-header">
+        <div class="signup-headline" id="signupHeadline"></div>
+        <div class="signup-sub" id="signupSub"></div>
+      </div>
+      <div class="google-btn-wrap" id="googleBtnWrap">
+        <div id="googleBtnEl"></div>
+      </div>
+      <div class="or-divider" id="orDivider"><span id="orDividerText"></span></div>
+
+      <div class="form-grid">
+        <div class="field full">
+          <label id="lblName"></label>
+          <input type="text" id="fName" autocomplete="name">
+        </div>
+        <div class="field full">
+          <label id="lblEmail"></label>
+          <input type="email" id="fEmail" autocomplete="email" placeholder="name@example.com">
+        </div>
+        <div class="field third">
+          <label id="lblYear"></label>
+          <input type="number" id="fYear" placeholder="1990" min="1900" max="2025">
+        </div>
+        <div class="field third">
+          <label id="lblMonth"></label>
+          <select id="fMonth"></select>
+        </div>
+        <div class="field third">
+          <label id="lblDay"></label>
+          <input type="number" id="fDay" placeholder="15" min="1" max="31">
+        </div>
+        <!-- 비밀번호 로그인 비활성화: username/password 필드 숨김 -->
+        <div class="field full" style="display:none">
+          <label id="lblUsername"></label>
+          <input type="text" id="fUsername" autocomplete="username">
+        </div>
+        <div class="field full pw-wrap" style="display:none">
+          <label id="lblPassword"></label>
+          <input type="password" id="fPassword" autocomplete="new-password">
+          <button class="pw-toggle" onclick="togglePwVis('fPassword',this)" type="button">👁</button>
+        </div>
+        <div class="field full pw-wrap" style="display:none">
+          <label id="lblConfirmPw"></label>
+          <input type="password" id="fConfirmPw" autocomplete="new-password">
+          <button class="pw-toggle" onclick="togglePwVis('fConfirmPw',this)" type="button">👁</button>
+        </div>
+      </div>
+      <button class="submit-btn" id="submitBtn" onclick="submitSignup()"></button>
+      <div class="signup-notice" id="signupNotice"></div>
+    </div>
+    <div class="signup-success" id="signup-success">
+      <div class="success-icon">✦</div>
+      <div class="success-title" id="successTitle"></div>
+      <div class="success-desc" id="successDesc"></div>
+      <button class="success-back" id="successBackBtn" onclick="goToApp()"></button>
+    </div>
+  </div>
+
+  <!-- 마이페이지 -->
+  <div id="screen-mypage">
+    <div id="mypage-wrap">
+      <div class="mypage-profile">
+        <div class="mypage-avatar" id="mypageAvatar"></div>
+        <div>
+          <div class="mypage-name-disp" id="mypageNameDisp"></div>
+          <div class="mypage-email-disp" id="mypageEmailDisp"></div>
+        </div>
+      </div>
+      <div class="mypage-divider"></div>
+
+      <!-- ① 사주 기본 정보 (생년월일 수정) -->
+      <div class="mypage-section-label" id="mypageSectionLabel"></div>
+      <div class="form-grid">
+        <div class="field third">
+          <label id="mpLblYear"></label>
+          <input type="number" id="mpYear" placeholder="1990" min="1900" max="2025">
+        </div>
+        <div class="field third">
+          <label id="mpLblMonth"></label>
+          <select id="mpMonth"></select>
+        </div>
+        <div class="field third">
+          <label id="mpLblDay"></label>
+          <input type="number" id="mpDay" placeholder="15" min="1" max="31">
+        </div>
+      </div>
+
+      <!-- ② 상세 선택 정보 (이사주 정밀도↑) -->
+      <div class="mypage-divider" style="margin:24px 0 20px"></div>
+      <div class="mypage-section-label" id="mypageDetailLabel"></div>
+      <div class="signup-notice" id="mypageDetailNotice" style="margin-bottom:14px;text-align:left;line-height:1.7"></div>
+      <div class="form-grid">
+        <div class="field half">
+          <label id="mpLblHour"></label>
+          <select id="mpHour"></select>
+        </div>
+        <div class="field third">
+          <label id="mpLblGender"></label>
+          <div class="gender-row">
+            <button class="gender-btn" id="mpGbM" onclick="setGenderMp('M')"></button>
+            <button class="gender-btn" id="mpGbF" onclick="setGenderMp('F')"></button>
+          </div>
+        </div>
+        <div class="field full">
+          <label id="mpLblPhone"></label>
+          <input type="tel" id="mpPhone" autocomplete="tel" placeholder="010-0000-0000">
+        </div>
+        <div class="field full">
+          <label id="mpLblRegion"></label>
+          <input type="text" id="mpRegion">
+        </div>
+      </div>
+
+      <button class="submit-btn" id="mypageSaveBtn" onclick="saveMyPage()"></button>
+      <div class="signup-notice" id="mypageNotice"></div>
+
+      <div class="mypage-actions">
+        <button class="mypage-action-btn" id="mypageSupportBtn" onclick="openSupport()"></button>
+        <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
+        <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
+      </div>
+
+      <!-- ── 토큰 충전 섹션 ── -->
+      <div class="mypage-divider" style="margin:32px 0 24px"></div>
+      <div class="mypage-section-label" id="tkSectionLbl"></div>
+
+      <!-- 잔액 -->
+      <div class="token-balance-display">
+        <div class="token-balance-num" id="mypageTokenNum">0</div>
+        <div class="token-balance-unit" id="mypageTokenUnitLbl"></div>
+      </div>
+
+      <!-- 일회성 패키지 -->
+      <div class="pkg-grid">
+        <div class="pkg-card" onclick="openTossPay('small')">
+          <div class="pkg-badge" id="pkgBadge0"></div>
+          <div class="pkg-tokens">30</div>
+          <div class="pkg-price">4,900원</div>
+          <div class="pkg-unit-price">약 163원 / 토큰</div>
+          <button class="pkg-btn" id="pkgBtn0"></button>
+        </div>
+        <div class="pkg-card best-card" onclick="openTossPay('medium')">
+          <div class="pkg-best-badge">가장 인기</div>
+          <div class="pkg-badge" id="pkgBadge1"></div>
+          <div class="pkg-tokens">100</div>
+          <div class="pkg-price">12,900원</div>
+          <div class="pkg-unit-price">약 129원 / 토큰</div>
+          <button class="pkg-btn" id="pkgBtn1"></button>
+        </div>
+        <div class="pkg-card" onclick="openTossPay('large')">
+          <div class="pkg-badge" id="pkgBadge2"></div>
+          <div class="pkg-tokens">300</div>
+          <div class="pkg-price">29,900원</div>
+          <div class="pkg-unit-price">약 100원 / 토큰</div>
+          <button class="pkg-btn" id="pkgBtn2"></button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 이용 안내 모달 ── -->
+<div id="guide-modal" style="display:none">
+  <div class="guide-box">
+    <div class="guide-title" id="guideTitle"></div>
+    <div class="guide-deco"></div>
+    <div class="guide-items" id="guideItems"></div>
+    <label class="guide-skip-row">
+      <input type="checkbox" id="guideSkipToday">
+      <span id="guideSkipLabel">오늘 하루 보지 않기</span>
+    </label>
+    <button class="guide-confirm-btn" id="guideConfirmBtn" onclick="closeGuideModal()"></button>
+  </div>
+</div>
+
+<!-- ── 토큰충전 모달 ── -->
+<div id="token-modal" style="display:none" onclick="if(event.target===this)closeTokenModal()">
+  <div class="token-modal-box">
+    <div class="token-modal-header">
+      <div class="token-modal-title" id="tmTitle">토큰 충전</div>
+      <button class="token-modal-close" onclick="closeTokenModal()">✕</button>
+    </div>
+    <div class="token-modal-balance">
+      <div class="token-modal-balance-num" id="tmBalanceNum">0</div>
+      <div class="token-modal-balance-lbl" id="tmBalanceLbl">TOKENS</div>
+    </div>
+    <div class="pkg-grid">
+      <div class="pkg-card" onclick="openTossPay('small')">
+        <div class="pkg-badge" id="tmBadge0"></div>
+        <div class="pkg-tokens">30</div>
+        <div class="pkg-price">4,900원</div>
+        <div class="pkg-unit-price">약 163원 / 토큰</div>
+        <button class="pkg-btn" id="tmBtn0"></button>
+      </div>
+      <div class="pkg-card best-card" onclick="openTossPay('medium')">
+        <div class="pkg-best-badge">가장 인기</div>
+        <div class="pkg-badge" id="tmBadge1"></div>
+        <div class="pkg-tokens">100</div>
+        <div class="pkg-price">12,900원</div>
+        <div class="pkg-unit-price">약 129원 / 토큰</div>
+        <button class="pkg-btn" id="tmBtn1"></button>
+      </div>
+      <div class="pkg-card" onclick="openTossPay('large')">
+        <div class="pkg-badge" id="tmBadge2"></div>
+        <div class="pkg-tokens">300</div>
+        <div class="pkg-price">29,900원</div>
+        <div class="pkg-unit-price">약 100원 / 토큰</div>
+        <button class="pkg-btn" id="tmBtn2"></button>
+      </div>
+    </div>
+    <div class="token-modal-note" id="tmNote"></div>
+  </div>
+</div>
+
+<!-- ── 결제 모달 ── -->
+<div id="pay-modal" style="display:none">
+  <div class="pay-overlay" onclick="closePayModal()"></div>
+  <div class="pay-box">
+    <button class="pay-close" onclick="closePayModal()">✕</button>
+
+    <!-- 상태 1: QR 코드 -->
+    <div id="payStateQr">
+      <div class="pay-title" id="payModalTitle"></div>
+      <div class="pay-price" id="payModalPrice"></div>
+      <div class="pay-qr-wrap" id="payModalQr"></div>
+      <div class="pay-hint" id="payModalHint"></div>
+      <div class="pay-divider" id="payDivider"></div>
+      <button class="pay-toss-btn" onclick="openTossApp()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span id="payModalBtnText"></span>
+      </button>
+      <button class="pay-done-btn" id="payDoneBtn" onclick="submitPaymentDone()">
+        <span id="payDoneBtnText"></span>
+      </button>
+    </div>
+
+    <!-- 상태 2: 확인 중 -->
+    <div id="payStateWaiting" style="display:none">
+      <div class="pay-state-waiting">
+        <div class="pay-spinner"></div>
+        <div class="pay-wait-title" id="payWaitTitle"></div>
+        <div class="pay-wait-sub" id="payWaitSub"></div>
+      </div>
+    </div>
+
+    <!-- 상태 3: 충전 완료 -->
+    <div id="payStateSuccess" style="display:none">
+      <div class="pay-state-success">
+        <div class="pay-success-icon">✓</div>
+        <div class="pay-success-title" id="paySuccessTitle"></div>
+        <div class="pay-success-amount" id="paySuccessAmount"></div>
+        <div class="pay-success-sub" id="paySuccessSub"></div>
+        <button class="pay-success-close" onclick="closePayModal()"><span id="paySuccessCloseBtn"></span></button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 법적 모달 ── -->
+<div id="legal-modal" class="legal-modal-overlay" style="display:none" onclick="if(event.target===this)closeLegal()">
+  <div class="legal-modal-box">
+    <div class="legal-modal-header">
+      <span class="legal-modal-title" id="legalModalTitle">개인정보처리방침</span>
+      <button class="legal-modal-close" onclick="closeLegal()">✕</button>
+    </div>
+    <div class="legal-modal-body" id="legalModalBody"></div>
+  </div>
+</div>
+
+<!-- ── 관리자 패널 ── -->
+<div id="admin-panel" style="display:none" onclick="if(event.target===this)closeAdminPanel()">
+  <div class="admin-box">
+      <div class="admin-header">
+        <div class="admin-title">관리자 · 결제 현황</div>
+        <div class="admin-header-right">
+          <button class="admin-refresh" onclick="renderAdminPanel()">↻ 새로고침</button>
+          <button class="admin-close-btn" onclick="closeAdminPanel()">✕</button>
+        </div>
+      </div>
+      <div class="admin-tabs">
+        <button class="admin-tab on" id="adminTabPending" onclick="setAdminTab('pending')">대기 중</button>
+        <button class="admin-tab" id="adminTabApproved" onclick="setAdminTab('approved')">완료</button>
+        <button class="admin-tab" id="adminTabAll" onclick="setAdminTab('all')">전체</button>
+      </div>
+      <div id="adminPaymentList"><div class="admin-empty">불러오는 중...</div></div>
+  </div>
+</div>
+
+<script>
+const EP = "https://5984.riger7070.workers.dev/";
+let lang = 'ko', mode = null, hist = [];
+
+/* 오행 데이터 */
+const CG   = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+const CG_K = ['갑','을','병','정','무','기','경','신','임','계'];
+const CG_P = ['jiǎ','yǐ','bǐng','dīng','wù','jǐ','gēng','xīn','rén','guǐ'];
+const JJ   = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+const JJ_K = ['자','축','인','묘','진','사','오','미','신','유','술','해'];
+const JJ_P = ['zǐ','chǒu','yín','mǎo','chén','sì','wǔ','wèi','shēn','yǒu','xū','hài'];
+const CGO  = ['木','木','火','火','土','土','金','金','水','水'];
+const JJO  = ['水','土','木','木','土','火','火','土','金','金','土','水'];
+const OC   = {木:'#4bc87a',火:'#e05a4a',土:'#d4a040',金:'#a0aab4',水:'#5aa8e0'};
+const OBG  = {木:'rgba(75,200,122,.08)',火:'rgba(224,90,74,.08)',土:'rgba(212,160,64,.08)',金:'rgba(160,170,180,.08)',水:'rgba(90,168,224,.08)'};
+
+function ilchin() {
+  const ref = new Date(2023,0,1); ref.setHours(0,0,0,0);
+  const now = new Date(); now.setHours(0,0,0,0);
+  const idx = ((44 + Math.round((now-ref)/864e5)) % 60 + 60) % 60;
+  return { ci: idx%10, ji: idx%12, o: CGO[idx%10], jo: JJO[idx%12] };
+}
+
+const ON = {
+  ko:{木:'목(木)',火:'화(火)',土:'토(土)',金:'금(金)',水:'수(水)'},
+  en:{木:'Wood',火:'Fire',土:'Earth',金:'Metal',水:'Water'},
+  zh:{木:'木气',火:'火气',土:'土气',金:'金气',水:'水气'},
+  ja:{木:'木(もく)',火:'火(か)',土:'土(ど)',金:'金(きん)',水:'水(すい)'},
+};
+
+/* 번역 */
+const TX = {
+  ko:{
+    tagline:'마음의 영양을 처방합니다',
+    ilchin: il=>`오늘의 일진 · ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일 · ${ON.ko[il.o]}`,
+    back:'처음으로',
+    eyebrow:'오늘의 기운',
+    headline:'어떤 리딩을\n받으시겠습니까',
+    desc:'내 사주와 오늘 일진이 만나는 방식을 풀이해 드립니다.\n일진은 매일 바뀌므로 처방도 매일 달라집니다.',
+    s1:'나만의 리딩',
+    d1:'내 사주와 오늘 일진의 흐름을 분석해\n오늘 나에게 꼭 맞는 처방을 받습니다.',
+    s2:'우리의 조화',
+    d2:'두 사람의 오행과 오늘 일진을 함께 풀이해\n관계의 흐름과 처방을 함께 받습니다.',
+    note:'※ 본 서비스는 명리학 이론 기반 문화 체험 콘텐츠입니다.\n의학·법적 조언을 대체하지 않으며 모든 풀이는 참고용입니다.',
+    ph:'메시지를 입력하세요…',
+    rxlbl: o=>`오늘의 처방 · ${ON.ko[o]}`,
+    revisit:'✦ 일진은 매일 바뀝니다. 내일 오시면 오늘과 다른 처방을 받으실 수 있습니다.',
+    err:'잠시 기운이 엇갈렸습니다. 다시 시도해 주세요.',
+    noLogin:'로그인이 필요합니다. 다시 로그인해 주세요.',
+    errSafety:'해당 질문은 기운 리딩의 범위를 벗어납니다. 사주·오행·에너지 흐름에 관한 질문을 해주세요.',
+    g1: il=>`안녕히 오셨습니다.\n오늘은 ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일, ${ON.ko[il.o]} 기운이 흐르는 날입니다.\n\n성함과 생년월일을 알려주시면 오늘의 오행 기운과 일진의 흐름을 풀이해 드리겠습니다.\n태어난 시간도 아신다면 함께 말씀해 주세요.`,
+    g2: il=>`안녕히 오셨습니다.\n오늘은 ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일, ${ON.ko[il.o]} 기운이 흐르는 날입니다.\n\n두 분의 성함과 생년월일을 각각 알려주시면 오행 조화와 오늘 일진의 흐름을 함께 풀이해 드리겠습니다.`,
+    sys:'반드시 한국어로 답변해 주세요.',
+    sgTitle:'회원가입',
+    sgHeadline:'회원가입하고\n더 섬세한 기운을\n받으세요.',
+    sgSub:'한 번 등록하시면 매일 오실 때마다 더 정확하고 섬세한 기운 풀이를 받으실 수 있습니다.',
+    sgLink:'✦ 회원가입하고 더 섬세한 기운 받기 →', sgName:'이름', sgEmail:'이메일', sgPhone:'전화번호', sgYear:'생년', sgMonth:'생월', sgDay:'생일',
+    sgHour:'생시', sgGender:'성별', sgM:'남성', sgF:'여성', sgOpt:'(선택)', sgRegion:'거주지역',
+    sgSubmit:'가입하기',
+    sgNotice:'수집된 정보는 기운 풀이 개선 및 맞춤 처방 목적으로만 사용되며 제3자에게 제공되지 않습니다.',
+    sgSuccTitle:'가입이 완료되었습니다', sgSuccDesc:'소중한 기운이 기록되었습니다.\n내일 오시면 더욱 섬세한 처방을 받으실 수 있습니다.',
+    sgBack:'처음으로 →', sgErr:'저장 중 오류가 발생했습니다. 다시 시도해 주세요.', sgUnknown:'모름', sgOr:'또는 직접 입력',
+    g1_auto: (il, u) => `반갑습니다, ${u.name}님.\n오늘은 ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일, ${ON.ko[il.o]} 기운이 흐르는 날입니다.\n\n저장된 사주 정보가 준비되어 있습니다.\n오늘의 기운이나 궁금하신 점을 말씀해 주세요.`,
+    mpLink:'마이페이지', mpTitle:'마이페이지', mpSection:'생년월일 수정',
+    mpDetailSection:'상세 정보 입력',
+    mpDetailNotice:'아래 정보를 추가하면 더욱 정밀한 사주 풀이를 받으실 수 있습니다. 모두 선택 사항입니다.',
+    mpSave:'저장하기', mpSaved:'저장되었습니다 ✦',
+    mpLogout:'로그아웃', mpWithdraw:'회원 탈퇴',
+    mpLogoutQ:'다시 누르면 로그아웃됩니다', mpWithdrawQ:'다시 누르면 탈퇴됩니다',
+    tkSection:'토큰 충전', tkUnit:'TOKENS',
+    noToken:'토큰이 부족합니다.\n마이페이지에서 충전 후 이용해 주세요.',
+    tkPkgS:'소', tkPkgM:'중', tkPkgL:'대', tkSub:'구독형', tkUnlimited:'무제한',
+    tkPayBtn:'Toss로 결제하기',
+    tkAfterPay:'결제 완료 후 운영자에게 받은 바우처 코드를 아래에 입력해 주세요.',
+    tkVoucher:'바우처 코드', tkVoucherPh:'코드를 입력하세요', tkRedeem:'적용',
+    tkRedeemOk: n=>`✦ ${n} 토큰이 충전되었습니다!`,
+    tkRedeemFail:'유효하지 않거나 이미 사용된 코드입니다.',
+    loginTitle:'다시 오셨군요.\n안녕히 오셨습니다.',
+    loginId:'아이디', loginPw:'비밀번호', loginBtn:'로그인',
+    sgUsername:'아이디', sgPassword:'비밀번호', sgConfirmPw:'비밀번호 확인',
+    pwMismatch:'비밀번호가 일치하지 않습니다.', pwTooShort:'비밀번호는 6자 이상이어야 합니다.',
+    loginFail:'아이디 또는 비밀번호가 올바르지 않습니다.',
+    mpSupport:'✉ 1:1 고객센터',
+    quickTokenTitle:'토큰 충전', quickTokenDesc:'대화권 충전하기',
+    quickSupportTitle:'1대1 상담', quickSupportDesc:'이메일로 문의하기',
+    tmNote:'대화 1회 = 토큰 1개 차감\n신규 가입 시 3토큰 무료 지급',
+    guideSkip:'오늘 하루 보지 않기',
+    guideTitle:'M;Y 安 이용 안내',
+    guideItems:[
+      '✦  M;Y 安은 사주 오행(五行) 이론에 기반한 AI 기운 해석 서비스입니다.',
+      '✦  대화 1회에 토큰 1개가 사용됩니다. 신규 가입 시 3토큰이 무료 지급됩니다.',
+      '✦  토큰이 소진되면 마이페이지에서 충전할 수 있습니다.',
+      '✦  본 서비스는 의료·법률·금융 상담을 대체하지 않습니다.',
+      '✦  일진은 매일 자정에 갱신되어 새로운 기운 처방이 제공됩니다.',
+    ],
+    guideBtn:'확인, 시작합니다',
+  },
+  en:{
+    tagline:'Prescribing nourishment for the soul',
+    ilchin: il=>`Today · ${CG[il.ci]}${JJ[il.ji]} (${CG_P[il.ci]}-${JJ_P[il.ji]}) · ${ON.en[il.o]}`,
+    back:'Back',
+    eyebrow:"Today's Energy",
+    headline:'Which reading\nwould you like?',
+    desc:"We interpret your Four Pillars and today's Ilchin.\nThe Ilchin changes daily — so does your prescription.",
+    s1:'My Reading',
+    d1:'Analyze your Saju and today\'s Ilchin to\nreceive a prescription tailored just for today.',
+    s2:'Our Harmony',
+    d2:"Interpret two people's Ohaeng and today's\nIlchin to receive a shared prescription.",
+    note:'※ This is a cultural experience based on Four Pillars theory.\nNot a substitute for medical or legal advice.',
+    ph:'Type your message…',
+    rxlbl: o=>`Today's Prescription · ${ON.en[o]}`,
+    revisit:"✦ The Ilchin changes daily. Visit tomorrow for a different prescription.",
+    err:'Energy crossed for a moment. Please try again.',
+    noLogin:'Please sign in to continue.',
+    errSafety:'This question falls outside the scope of energy reading. Please ask about Saju, Ohaeng, or energy flow.',
+    g1: il=>`Welcome.\nToday is ${CG[il.ci]}${JJ[il.ji]} day — flowing with ${ON.en[il.o]} energy.\n\nPlease share your name and date of birth.\nI will read the flow of your Ohaeng and today's Ilchin.`,
+    g2: il=>`Welcome.\nToday is ${CG[il.ci]}${JJ[il.ji]} day — flowing with ${ON.en[il.o]} energy.\n\nPlease share both names and dates of birth.\nI will read your Ohaeng harmony and today's Ilchin together.`,
+    sys:'Please respond in English.',
+    sgTitle:'Sign Up',
+    sgHeadline:'Sign up and receive\na more refined\nenergy reading.',
+    sgSub:'Register once to receive a more precise and personalised reading every day.',
+    sgLink:'✦ Sign up for a more refined reading →', sgName:'Name', sgEmail:'Email', sgPhone:'Phone', sgYear:'Birth Year', sgMonth:'Month', sgDay:'Day',
+    sgHour:'Birth Hour', sgGender:'Gender', sgM:'Male', sgF:'Female', sgOpt:'(optional)', sgRegion:'Region',
+    sgSubmit:'Sign Up',
+    sgNotice:'Your information is used only to refine your readings and will not be shared with any third party.',
+    sgSuccTitle:'Welcome', sgSuccDesc:'Your energy has been recorded.\nVisit tomorrow for a more refined prescription.',
+    sgBack:'Back to Home →', sgErr:'An error occurred. Please try again.', sgUnknown:'Unknown', sgOr:'or fill in manually',
+    g1_auto: (il, u) => `Welcome back, ${u.name}.\nToday is ${CG[il.ci]}${JJ[il.ji]} day — flowing with ${ON.en[il.o]} energy.\n\nYour saved profile is ready.\nFeel free to ask about today's energy or anything on your mind.`,
+    mpLink:'My Page', mpTitle:'My Page', mpSection:'Date of Birth',
+    mpDetailSection:'Additional Details',
+    mpDetailNotice:'Adding the details below allows for a more precise energy reading. All fields are optional.',
+    mpSave:'Save Changes', mpSaved:'Saved ✦',
+    mpLogout:'Log Out', mpWithdraw:'Delete Account',
+    mpLogoutQ:'Tap again to log out', mpWithdrawQ:'Tap again to delete account',
+    tkSection:'Top Up Tokens', tkUnit:'TOKENS',
+    noToken:'Not enough tokens.\nPlease top up in My Page.',
+    tkPkgS:'Small', tkPkgM:'Medium', tkPkgL:'Large', tkSub:'Subscription', tkUnlimited:'Unlimited',
+    tkPayBtn:'Pay with Toss',
+    tkAfterPay:'After payment, enter the voucher code you receive from the operator below.',
+    tkVoucher:'Voucher Code', tkVoucherPh:'Enter your code', tkRedeem:'Apply',
+    tkRedeemOk: n=>`✦ ${n} tokens added!`,
+    tkRedeemFail:'Invalid or already used code.',
+    loginTitle:'Welcome back.',
+    loginId:'Username', loginPw:'Password', loginBtn:'Log In',
+    sgUsername:'Username', sgPassword:'Password', sgConfirmPw:'Confirm Password',
+    pwMismatch:'Passwords do not match.', pwTooShort:'Password must be at least 6 characters.',
+    loginFail:'Incorrect username or password.',
+    mpSupport:'✉ Customer Support',
+    quickTokenTitle:'Top Up', quickTokenDesc:'Recharge your tokens',
+    quickSupportTitle:'Support', quickSupportDesc:'Contact us by email',
+    tmNote:'1 token per conversation\n3 free tokens for new members',
+    guideSkip:'Don\'t show today',
+    guideTitle:'How to Use M;Y 安',
+    guideItems:[
+      '✦  M;Y 安 interprets your energy based on Four Pillars (Saju) and Ohaeng theory.',
+      '✦  Each conversation uses 1 token. New members receive 3 free tokens on sign-up.',
+      '✦  When tokens run out, you can top up in My Page.',
+      '✦  This service does not replace medical, legal, or financial advice.',
+      '✦  The daily Ilchin refreshes at midnight, bringing a new energy prescription each day.',
+    ],
+    guideBtn:'Got it — Let\'s start',
+  },
+  zh:{
+    tagline:'为心灵开具营养处方',
+    ilchin: il=>`今日日辰 · ${CG[il.ci]}${JJ[il.ji]}日 · ${ON.zh[il.o]}`,
+    back:'返回',
+    eyebrow:'今日气运',
+    headline:'请选择\n您的解读方式',
+    desc:'我们将解读您的四柱与今日日辰的交汇方式。\n日辰每日更替，处方也因此每日不同。',
+    s1:'个人解读',
+    d1:'分析您的四柱与今日日辰，\n为您量身定制今日处方。',
+    s2:'二人调和',
+    d2:'共同解读两人的五行与今日日辰，\n揭示关系流动并开具共享处方。',
+    note:'※ 本服务为基于命理学理论的文化体验内容。\n不替代医疗或法律建议，仅供参考。',
+    ph:'请输入消息…',
+    rxlbl: o=>`今日处方 · ${ON.zh[o]}`,
+    revisit:'✦ 日辰每日更替。明日再来，将获得不同气运的全新处方。',
+    err:'气运暂时交错，请再试一次。',
+    noLogin:'请重新登录后继续。',
+    errSafety:'此问题超出气运解读范围。请提问关于四柱、五行或能量流动的内容。',
+    g1: il=>`欢迎光临。\n今日为${CG[il.ci]}${JJ[il.ji]}日，流动着${ON.zh[il.o]}的气运。\n\n请告知您的姓名与出生年月日，若知晓出生时辰更佳。\n我将为您解读四柱与今日日辰的流动。`,
+    g2: il=>`欢迎光临。\n今日为${CG[il.ci]}${JJ[il.ji]}日，流动着${ON.zh[il.o]}的气运。\n\n请分别告知两位的姓名与出生年月日。\n我将共同解读二人的五行调和与今日日辰。`,
+    sys:'请用简体中文回答。',
+    sgTitle:'会员注册',
+    sgHeadline:'注册，享受\n更精准的\n气运解读。',
+    sgSub:'注册一次，即可每日享受更精准、更个性化的气运解读。',
+    sgLink:'✦ 注册，获取更精准的气运解读 →', sgName:'姓名', sgEmail:'邮箱', sgPhone:'电话', sgYear:'出生年', sgMonth:'出生月', sgDay:'出生日',
+    sgHour:'出生时辰', sgGender:'性别', sgM:'男', sgF:'女', sgOpt:'(选填)', sgRegion:'居住地区',
+    sgSubmit:'立即注册',
+    sgNotice:'您的信息仅用于改善气运解读及提供个性化处方，不会提供给第三方。',
+    sgSuccTitle:'注册完成', sgSuccDesc:'您的气运已被记录。\n明日再来，将获得更精准的处方。',
+    sgBack:'返回首页 →', sgErr:'保存时出错，请稍后再试。', sgUnknown:'不知道', sgOr:'或手动填写',
+    g1_auto: (il, u) => `欢迎回来，${u.name}。\n今日为${CG[il.ci]}${JJ[il.ji]}日，流动着${ON.zh[il.o]}的气运。\n\n您的四柱信息已准备就绪。\n请告诉我今日气运或您想了解的问题。`,
+    mpLink:'个人页面', mpTitle:'个人页面', mpSection:'出生日期',
+    mpDetailSection:'详细信息',
+    mpDetailNotice:'补充以下信息可获得更精准的气运解读，全部为选填项。',
+    mpSave:'保存', mpSaved:'已保存 ✦',
+    mpLogout:'退出登录', mpWithdraw:'注销账号',
+    mpLogoutQ:'再次点击确认退出', mpWithdrawQ:'再次点击确认注销',
+    tkSection:'充值代币', tkUnit:'TOKENS',
+    noToken:'代币不足。\n请前往个人页面充值。',
+    tkPkgS:'小', tkPkgM:'中', tkPkgL:'大', tkSub:'订阅制', tkUnlimited:'无限制',
+    tkPayBtn:'Toss付款',
+    tkAfterPay:'付款完成后，请在下方输入运营商提供的兑换码。',
+    tkVoucher:'兑换码', tkVoucherPh:'请输入兑换码', tkRedeem:'确认',
+    tkRedeemOk: n=>`✦ 已充值 ${n} 代币！`,
+    tkRedeemFail:'无效或已使用的兑换码。',
+    loginTitle:'欢迎回来。',
+    loginId:'用户名', loginPw:'密码', loginBtn:'登录',
+    sgUsername:'用户名', sgPassword:'密码', sgConfirmPw:'确认密码',
+    pwMismatch:'密码不一致。', pwTooShort:'密码至少需要6个字符。',
+    loginFail:'用户名或密码不正确。',
+    mpSupport:'✉ 客服中心',
+    quickTokenTitle:'充值代币', quickTokenDesc:'充值对话次数',
+    quickSupportTitle:'1对1咨询', quickSupportDesc:'发送邮件联系我们',
+    tmNote:'每次对话消耗1代币\n新会员注册赠送3代币',
+    guideSkip:'今天不再显示',
+    guideTitle:'M;Y 安 使用指南',
+    guideItems:[
+      '✦  M;Y 安 是基于四柱五行理论的AI气运解读服务。',
+      '✦  每次对话消耗1个代币。新会员注册时赠送3个免费代币。',
+      '✦  代币用完后，可在个人页面充值。',
+      '✦  本服务不能替代医疗、法律或财务建议。',
+      '✦  日辰每天午夜更新，每天提供全新的气运处方。',
+    ],
+    guideBtn:'明白了，开始吧',
+  },
+  ja:{
+    tagline:'心の栄養を処方します',
+    ilchin: il=>`今日の日辰 · ${CG[il.ci]}${JJ[il.ji]}日 · ${ON.ja[il.o]}`,
+    back:'戻る',
+    eyebrow:'今日の気運',
+    headline:'どのリーディングを\nご希望ですか',
+    desc:'あなたの四柱と今日の日辰が出会う方式を読み解きます。\n日辰は毎日変わるため、処方も毎日異なります。',
+    s1:'私のリーディング',
+    d1:'あなたの四柱と今日の日辰の流れを分析し、\n今日だけの処方をお届けします。',
+    s2:'二人の調和',
+    d2:'二人の五行と今日の日辰を共に読み解き、\n関係の流れと処方を共にお届けします。',
+    note:'※ 本サービスは命理学理論に基づく文化体験コンテンツです。\n医療・法的アドバイスの代替ではなく、参考用としてご活用ください。',
+    ph:'メッセージを入力してください…',
+    rxlbl: o=>`本日の処方 · ${ON.ja[o]}`,
+    revisit:'✦ 日辰は毎日変わります。明日またお越しいただくと、異なる気運の処方をお届けします。',
+    err:'少々気運が交錯しました。もう一度お試しください。',
+    noLogin:'再度ログインしてからご利用ください。',
+    errSafety:'このご質問は気運リーディングの範囲外です。四柱・五行・エネルギーの流れに関するご質問をお願いします。',
+    g1: il=>`ようこそ。\n今日は${CG[il.ci]}${JJ[il.ji]}日 — ${ON.ja[il.o]}の気運が流れる日です。\n\nお名前と生年月日をお教えください。\n出生時刻もご存知でしたら、合わせてお知らせください。`,
+    g2: il=>`ようこそ。\n今日は${CG[il.ci]}${JJ[il.ji]}日 — ${ON.ja[il.o]}の気運が流れる日です。\n\nお二人のお名前と生年月日をそれぞれお教えください。\n五行の調和と今日の日辰の流れを共に読み解きます。`,
+    sys:'必ず日本語でお答えください。',
+    sgTitle:'会員登録',
+    sgHeadline:'会員登録して\nより精密な気運\nリーディングを。',
+    sgSub:'一度ご登録いただくと、毎日より精密でパーソナルな気運リーディングをお届けします。',
+    sgLink:'✦ 会員登録でより精密な気運リーディングを →', sgName:'お名前', sgEmail:'メールアドレス', sgPhone:'電話番号', sgYear:'生年', sgMonth:'生月', sgDay:'生日',
+    sgHour:'生時', sgGender:'性別', sgM:'男性', sgF:'女性', sgOpt:'(任意)', sgRegion:'お住まいの地域',
+    sgSubmit:'登録する',
+    sgNotice:'ご提供いただいた情報は気運リーディング改善及び処方目的のみに使用し、第三者には提供いたしません。',
+    sgSuccTitle:'登録完了', sgSuccDesc:'大切な気運が記録されました。\n明日またお越しいただくと、より精密な処方をお届けします。',
+    sgBack:'ホームへ →', sgErr:'保存中にエラーが発生しました。もう一度お試しください。', sgUnknown:'不明', sgOr:'または手動で入力',
+    g1_auto: (il, u) => `おかえりなさい、${u.name}様。\n今日は${CG[il.ci]}${JJ[il.ji]}日 — ${ON.ja[il.o]}の気運が流れる日です。\n\n登録された情報が準備できています。\n今日の気運やお気になることをお聞かせください。`,
+    mpLink:'マイページ', mpTitle:'マイページ', mpSection:'生年月日',
+    mpDetailSection:'詳細情報の入力',
+    mpDetailNotice:'以下の情報を追加すると、より精密な気運リーディングをお届けします。すべて任意入力です。',
+    mpSave:'保存する', mpSaved:'保存しました ✦',
+    mpLogout:'ログアウト', mpWithdraw:'退会する',
+    mpLogoutQ:'もう一度でログアウト', mpWithdrawQ:'もう一度で退会します',
+    tkSection:'トークンチャージ', tkUnit:'TOKENS',
+    noToken:'トークンが不足しています。\nマイページでチャージしてください。',
+    tkPkgS:'小', tkPkgM:'中', tkPkgL:'大', tkSub:'サブスク', tkUnlimited:'無制限',
+    tkPayBtn:'Tossで決済',
+    tkAfterPay:'決済完了後、運営者から受け取ったバウチャーコードを下に入力してください。',
+    tkVoucher:'バウチャーコード', tkVoucherPh:'コードを入力', tkRedeem:'適用',
+    tkRedeemOk: n=>`✦ ${n} トークンがチャージされました！`,
+    tkRedeemFail:'無効またはすでに使用されたコードです。',
+    loginTitle:'おかえりなさい。',
+    loginId:'ユーザー名', loginPw:'パスワード', loginBtn:'ログイン',
+    sgUsername:'ユーザー名', sgPassword:'パスワード', sgConfirmPw:'パスワード確認',
+    pwMismatch:'パスワードが一致しません。', pwTooShort:'パスワードは6文字以上が必要です。',
+    loginFail:'ユーザー名またはパスワードが正しくありません。',
+    mpSupport:'✉ カスタマーサポート',
+    quickTokenTitle:'トークン充電', quickTokenDesc:'会話券をチャージ',
+    quickSupportTitle:'1対1相談', quickSupportDesc:'メールでお問い合わせ',
+    tmNote:'会話1回 = トークン1個\n新規登録で3トークン無料',
+    guideSkip:'今日は表示しない',
+    guideTitle:'M;Y 安 ご利用ガイド',
+    guideItems:[
+      '✦  M;Y 安は四柱五行理論に基づくAI気運リーディングサービスです。',
+      '✦  会話1回につきトークン1個を消費します。新規登録で3トークンを無料進呈。',
+      '✦  トークンがなくなったら、マイページでチャージできます。',
+      '✦  本サービスは医療・法律・金融アドバイスの代替ではありません。',
+      '✦  日辰は毎日深夜に更新され、毎日新しい気運処方をお届けします。',
+    ],
+    guideBtn:'確認、はじめる',
+  },
+};
+
+const DK = {
+  ko:{
+    木:{icon:'🌱',name:'청몽 채움 에이드',desc:'청포도·매실·민트의 생동감. 목(木) 기운을 깨워 새로운 시작과 성장의 에너지를 북돋웁니다.'},
+    火:{icon:'🔥',name:'태양의 안식 티',desc:'히비스커스·자몽·생강의 정화. 화(火) 기운을 다스려 열정 속 고요함을 선사합니다.'},
+    土:{icon:'⛰️',name:'대지의 단잠 라떼',desc:'단호박·현미·귀리의 포근함. 토(土) 기운으로 흔들리는 중심을 잡아 안정감을 드립니다.'},
+    金:{icon:'💎',name:'순백의 정화 밀크',desc:'코코넛·리치·백련의 투명함. 금(金) 기운으로 흐릿해진 감각을 맑게 정화합니다.'},
+    水:{icon:'🌊',name:'심연의 고요 라떼',desc:'흑임자·흑미·아마씨의 깊이. 수(水) 기운으로 지친 몸과 마음에 진정한 휴식을 드립니다.'},
+  },
+  en:{
+    木:{icon:'🌱',name:'Azure Dream Ade',desc:'Green grape, plum & mint. Awakens Wood energy to nurture new beginnings and growth.'},
+    火:{icon:'🔥',name:'Solar Repose Tea',desc:'Hibiscus, grapefruit & ginger. Soothes Fire energy to find stillness within passion.'},
+    土:{icon:'⛰️',name:"Earth's Slumber Latte",desc:'Pumpkin, brown rice & oat. Grounds Earth energy to restore deep stability.'},
+    金:{icon:'💎',name:'Pure Clarity Milk',desc:'Coconut, lychee & lotus. Purifies Metal energy to sharpen and brighten the senses.'},
+    水:{icon:'🌊',name:'Deep Stillness Latte',desc:'Black sesame, black rice & flaxseed. Channels Water energy for true rest.'},
+  },
+  zh:{
+    木:{icon:'🌱',name:'青梦补气饮',desc:'青葡萄、梅子与薄荷。唤醒木气，滋养新的开始与成长。'},
+    火:{icon:'🔥',name:'太阳安息茶',desc:'木槿、西柚与生姜。调和火气，在热情中寻得内心宁静。'},
+    土:{icon:'⛰️',name:'大地安眠拿铁',desc:'南瓜、糙米与燕麦。稳固土气，恢复深层安定感。'},
+    金:{icon:'💎',name:'纯白净化奶',desc:'椰子、荔枝与白莲。净化金气，使感官清晰明亮。'},
+    水:{icon:'🌊',name:'深渊宁静拿铁',desc:'黑芝麻、黑米与亚麻籽。引导水气，赐予真正的休憩。'},
+  },
+  ja:{
+    木:{icon:'🌱',name:'青夢の満ちるエード',desc:'青葡萄・梅・ミントの生命力。木の気を呼び覚まし、新たな始まりと成長のエネルギーを高めます。'},
+    火:{icon:'🔥',name:'太陽の安息ティー',desc:'ハイビスカス・グレープフルーツ・生姜の浄化。火の気を整え、情熱の中に静けさをもたらします。'},
+    土:{icon:'⛰️',name:'大地のうたた寝ラテ',desc:'かぼちゃ・玄米・オーツの温もり。土の気で揺れる心の軸を整え、深い安定感をもたらします。'},
+    金:{icon:'💎',name:'純白の浄化ミルク',desc:'ココナッツ・ライチ・白蓮の透明感。金の気で曇った感覚を澄み渡らせます。'},
+    水:{icon:'🌊',name:'深淵の静寂ラテ',desc:'黒ごま・黒米・アマニの深み。水の気で疲れた身体と心に真の休息をもたらします。'},
+  },
+};
+
+function sysPrompt() {
+  const il = ilchin();
+  const on = ON[lang];
+  const t  = TX[lang];
+  const base = `
+Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]} · Secondary: ${on[il.jo]}
+${t.sys}
+Rules: Use "energy reading / flow / prescription" — never "fortune-telling / fate / divination".
+No definitive predictions. Frame negatives as areas for balance. No markdown bold. End with ONE tag: #木 #火 #土 #金 or #水`.trim();
+
+  return mode === 'solo'
+    ? `You are the Ohaeng Energy Master of M;Y 安.\n${base}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm poetic long-form reading. (5) Give one specific advice for today.`
+    : `You are the Ohaeng Harmony Master of M;Y 安.\n${base}\n\nMethod: (1) Each person's Saju Ohaeng. (2) Sangsaeng/Sangguk dynamics. (3) Today's Ilchin impact on the relationship. (4) How they complement each other. (5) Suggest shared activity or topic. Long-form, warm tone. NEVER say "compatibility is bad".`;
+}
+
+/* UI 렌더 */
+function render() {
+  const t   = TX[lang];
+  const il  = ilchin();
+  const col = OC[il.o];
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+
+  document.getElementById('tagline').textContent    = t.tagline;
+  document.getElementById('backLabel').textContent  = t.back;
+  document.getElementById('eyebrow').textContent    = t.eyebrow;
+  document.getElementById('headline').textContent   = t.headline;
+  document.getElementById('subdesc').textContent    = t.desc;
+  document.getElementById('soloName').textContent   = t.s1;
+  document.getElementById('soloDesc').textContent   = t.d1;
+  document.getElementById('coupleName').textContent = t.s2;
+  document.getElementById('coupleDesc').textContent = t.d2;
+  document.getElementById('disclaimer').textContent = t.note;
+  document.getElementById('inp').placeholder        = t.ph;
+  document.getElementById('ilchinDate').textContent = dateStr;
+  document.getElementById('ilchinText').innerHTML =
+    t.ilchin(il).replace(ON[lang][il.o], `<b style="color:${col}">${ON[lang][il.o]}</b>`);
+  document.getElementById('signupLinkText').textContent = t.sgLink;
+  // 퀵액세스 박스 텍스트
+  const qtt = document.getElementById('quickTokenTitle');
+  const qtd = document.getElementById('quickTokenDesc');
+  const qst = document.getElementById('quickSupportTitle');
+  const qsd = document.getElementById('quickSupportDesc');
+  if (qtt) qtt.textContent = t.quickTokenTitle   || '토큰 충전';
+  if (qtd) qtd.textContent = t.quickTokenDesc    || '대화권 충전하기';
+  if (qst) qst.textContent = t.quickSupportTitle || '1대1 상담';
+  if (qsd) qsd.textContent = t.quickSupportDesc  || '이메일로 문의하기';
+  if (document.getElementById('screen-signup').style.display === 'flex') renderSignup();
+  if (document.getElementById('screen-login').style.display  === 'flex') renderLogin();
+  if (document.getElementById('screen-mypage').style.display === 'flex') renderMyPage();
+  // 마이페이지 버튼 텍스트 다국어 갱신
+  const userBtn = document.getElementById('userBtn');
+  if (userBtn && userBtn.style.display !== 'none') userBtn.textContent = t.mpLink;
+}
+
+/* 자정 자동 갱신 */
+function schedMidnightRefresh() {
+  const now  = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5);
+  setTimeout(() => { render(); schedMidnightRefresh(); }, next - now);
+}
+
+function setLang(l) {
+  lang = l;
+  document.querySelectorAll('.lb').forEach(b => b.classList.remove('on'));
+  document.querySelector(`.lb[onclick="setLang('${l}')"]`).classList.add('on');
+  render();
+}
+
+// ── 다크 / 라이트 모드 ──
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  applyTheme(next);
+  localStorage.setItem('myan_theme', next);
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.getElementById('themeToggleBtn').textContent = '☀️';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    document.getElementById('themeToggleBtn').textContent = '🌙';
+  }
+}
+
+// 저장된 테마 적용
+(function initTheme() {
+  const saved = localStorage.getItem('myan_theme') || 'dark';
+  applyTheme(saved);
+})();
+
+/* 모드 시작 — 미가입 시 회원가입 화면으로 */
+let pendingMode = null; // 가입 후 진입할 모드 저장
+
+function startMode(m) {
+  const user = getUser();
+
+  // 미가입자 → 회원가입 게이트
+  if (!user) {
+    pendingMode = m;
+    goSignup();
+    return;
+  }
+
+  // 비밀번호 계정인데 로그인 안 된 상태 → 로그인 게이트
+  if (user.passwordHash && !isLoggedIn()) {
+    pendingMode = m;
+    showLogin();
+    return;
+  }
+
+  // 레거시 계정(비밀번호 없음) → 자동 로그인
+  if (!isLoggedIn()) {
+    localStorage.setItem('myan_logged_in', 'true');
+  }
+
+  // 이용 안내 모달 — 하루 스킵이 아니면 매번 표시
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  if (localStorage.getItem('myan_guide_skip_date') !== today) {
+    pendingMode = m;
+    openGuideModal();
+    return;
+  }
+
+  pendingMode = null;
+  _enterMode(m, user);
+}
+
+/* ── 이용 안내 모달 ── */
+function openGuideModal() {
+  const t = TX[lang];
+  document.getElementById('guideTitle').textContent      = t.guideTitle;
+  document.getElementById('guideConfirmBtn').textContent = t.guideBtn;
+  document.getElementById('guideSkipLabel').textContent  = t.guideSkip || '오늘 하루 보지 않기';
+  document.getElementById('guideSkipToday').checked      = false;
+  const itemsEl = document.getElementById('guideItems');
+  itemsEl.innerHTML = (t.guideItems || []).map(
+    txt => `<div class="guide-item">${txt}</div>`
+  ).join('');
+  document.getElementById('guide-modal').style.display = 'flex';
+}
+
+function closeGuideModal() {
+  // 체크박스가 선택된 경우만 오늘 날짜 저장 (내일 다시 표시)
+  if (document.getElementById('guideSkipToday').checked) {
+    const today = new Date().toISOString().slice(0, 10);
+    localStorage.setItem('myan_guide_skip_date', today);
+  }
+  document.getElementById('guide-modal').style.display = 'none';
+  if (pendingMode) {
+    const m = pendingMode; pendingMode = null;
+    const user = getUser();
+    _enterMode(m, user);
+  }
+}
+
+function _enterMode(m, user) {
+  // 토큰 충전 모달 특수 처리
+  if (m === '_token') {
+    openTokenModal();
+    return;
+  }
+  mode = m; hist = [];
+  document.getElementById('screen-mode').style.display = 'none';
+  document.getElementById('screen-chat').style.display = 'flex';
+  document.getElementById('backBtn').style.display = 'flex';
+  document.getElementById('chat-window').innerHTML = '';
+  updateAllTokenDisplays();
+  updateUserBtn(user);
+  document.getElementById('signupLinkBtn').style.display = 'none';
+
+  const il = ilchin();
+
+  if (m === 'solo' && user?.birthYear) {
+    // 프로필 있는 경우: 구조화 폼 불필요
+    showNormalInput();
+    hideSuggestChips();
+    addBubble(TX[lang].g1_auto(il, user), 'ai');
+    hist.push({ role: 'user', parts: [{ text: buildUserProfile(user) }] });
+  } else {
+    const greet = m === 'solo' ? TX[lang].g1(il) : TX[lang].g2(il);
+    addBubble(greet, 'ai');
+    // Change 2: solo 모드에서 구조화 폼 표시
+    if (m === 'solo') {
+      showFirstInputForm();
+    } else {
+      showNormalInput();
+      document.getElementById('inp').focus();
+    }
+    // Change 4: 추천 칩 표시
+    showSuggestChips();
+  }
+}
+
+// ── Change 2: 첫 입력 폼 토글 ──
+function showFirstInputForm() {
+  document.getElementById('firstInputForm').style.display = 'flex';
+  document.getElementById('normalInputRow').style.display = 'none';
+  document.getElementById('fifName').focus();
+}
+function showNormalInput() {
+  document.getElementById('firstInputForm').style.display = 'none';
+  document.getElementById('normalInputRow').style.display = 'flex';
+}
+function submitFirstForm() {
+  const name = document.getElementById('fifName').value.trim();
+  const date = document.getElementById('fifDate').value;
+  const time = document.getElementById('fifTime').value;
+  if (!name) { document.getElementById('fifName').focus(); return; }
+  if (!date)  { document.getElementById('fifDate').focus(); return; }
+  const [y, mo, d] = date.split('-');
+  let msg = `${name}, ${y}년 ${parseInt(mo)}월 ${parseInt(d)}일생`;
+  if (time) msg += `, ${time}`;
+  showNormalInput();
+  hideSuggestChips();
+  document.getElementById('inp').value = msg;
+  send();
+}
+
+// ── Change 4: 추천 칩 토글 ──
+function showSuggestChips() {
+  const el = document.getElementById('suggestChips');
+  if (el) el.style.display = 'flex';
+}
+function hideSuggestChips() {
+  const el = document.getElementById('suggestChips');
+  if (el) el.style.display = 'none';
+}
+function useSuggest(el) {
+  const txt = el.textContent;
+  showNormalInput();
+  hideSuggestChips();
+  document.getElementById('inp').value = txt;
+  send();
+}
+
+function buildUserProfile(u) {
+  const gMap = { ko:{M:'남성',F:'여성'}, en:{M:'Male',F:'Female'}, zh:{M:'男',F:'女'}, ja:{M:'男性',F:'女性'} };
+  // 언어별 생년월일 형식
+  const bFmt = {
+    ko: `${u.birthYear}년 ${u.birthMonth}월 ${u.birthDay}일생`,
+    en: `born ${u.birthYear}-${String(u.birthMonth).padStart(2,'0')}-${String(u.birthDay).padStart(2,'0')}`,
+    zh: `${u.birthYear}年${u.birthMonth}月${u.birthDay}日生`,
+    ja: `${u.birthYear}年${u.birthMonth}月${u.birthDay}日生`,
+  };
+  // 언어별 시간 표기
+  const hMap = {
+    ko:{'子':'자시(23-01)','丑':'축시(01-03)','寅':'인시(03-05)','卯':'묘시(05-07)','辰':'진시(07-09)','巳':'사시(09-11)','午':'오시(11-13)','未':'미시(13-15)','申':'신시(15-17)','酉':'유시(17-19)','戌':'술시(19-21)','亥':'해시(21-23)'},
+    en:{'子':'Rat hour (23-01)','丑':'Ox hour (01-03)','寅':'Tiger hour (03-05)','卯':'Rabbit hour (05-07)','辰':'Dragon hour (07-09)','巳':'Snake hour (09-11)','午':'Horse hour (11-13)','未':'Goat hour (13-15)','申':'Monkey hour (15-17)','酉':'Rooster hour (17-19)','戌':'Dog hour (19-21)','亥':'Pig hour (21-23)'},
+    zh:{'子':'子时(23-01)','丑':'丑时(01-03)','寅':'寅时(03-05)','卯':'卯时(05-07)','辰':'辰时(07-09)','巳':'巳时(09-11)','午':'午时(11-13)','未':'未时(13-15)','申':'申时(15-17)','酉':'酉时(17-19)','戌':'戌时(19-21)','亥':'亥时(21-23)'},
+    ja:{'子':'子の刻(23-01)','丑':'丑の刻(01-03)','寅':'寅の刻(03-05)','卯':'卯の刻(05-07)','辰':'辰の刻(07-09)','巳':'巳の刻(09-11)','午':'午の刻(11-13)','未':'未の刻(13-15)','申':'申の刻(15-17)','酉':'酉の刻(17-19)','戌':'戌の刻(19-21)','亥':'亥の刻(21-23)'},
+  };
+  const regSuffix = {ko:' 거주', en:', ', zh:'居住', ja:'在住'}[lang] || '';
+  let s = `${u.name}, ${(bFmt[lang] || bFmt.ko)}`;
+  if (u.birthHour) s += `, ${(hMap[lang]||hMap.ko)[u.birthHour] || u.birthHour}`;
+  if (u.gender)    s += `, ${(gMap[lang]||gMap.ko)[u.gender]}`;
+  if (u.region)    s += `, ${u.region}${regSuffix}`;
+  return s;
+}
+
+// 대화 기록 최대 유지 수 (turn 기준 — user+model 쌍 8개 = 16개 메시지)
+const MAX_HIST = 16;
+function trimmedHist() {
+  if (hist.length <= MAX_HIST) return hist;
+  // 첫 번째 user 메시지(프로필)는 항상 보존
+  const first = hist[0];
+  const rest  = hist.slice(-(MAX_HIST - 1));
+  return [first, ...rest];
+}
+
+// Gemini 요청 공통 바디 생성
+function buildGeminiBody(contents) {
+  return {
+    systemInstruction: { parts: [{ text: sysPrompt() }] },
+    contents,
+    // 안전 필터 완화 — 사주/오행 콘텐츠가 오탐(점술 등)으로 차단되는 것 방지
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+    ],
+    generationConfig: {
+      temperature:     0.75,
+      maxOutputTokens: 3000,
+      topP:            0.95,
+    },
+  };
+}
+
+async function callGemini(contents) {
+  if (!getGoogleIdToken()) throw { refund: false, noLogin: true };
+
+  const doFetch = () => fetch(EP + 'chat', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(buildGeminiBody(contents)),
+  });
+
+  let res  = await doFetch();
+  let data = await res.json();
+
+  // 토큰 부족 (서버에서 차감 실패)
+  if (res.status === 402) throw { refund: false, noToken: true };
+
+  // 인증 실패 → 토큰 폐기
+  if (res.status === 401) {
+    _googleIdToken = ''; _googleIdTokenExp = 0;
+    localStorage.removeItem('myan_id_token');
+    throw { refund: false, noLogin: true };
+  }
+
+  // 속도 제한 → 1회 재시도
+  if (res.status === 429 || data?.error?.code === 429) {
+    await new Promise(r => setTimeout(r, 3000));
+    res  = await doFetch();
+    data = await res.json();
+  }
+
+  if (data?.error) throw { refund: true, code: data.error.code, msg: data.error.message };
+  if (data?.promptFeedback?.blockReason) throw { refund: true, blocked: true };
+
+  // 서버가 현재 잔액을 함께 내려줌 → 캐시 갱신
+  if (data._tokens !== undefined) {
+    _tokenCache = parseInt(data._tokens, 10) || 0;
+    updateAllTokenDisplays();
+  }
+
+  return data;
+}
+
+async function autoAnalyze() {
+  // 토큰 차감
+  if (!checkAndDeductToken()) {
+    addBubble(TX[lang].noToken, 'ai');
+    return;
+  }
+  const inp = document.getElementById('inp');
+  const btn = document.getElementById('send');
+  btn.disabled = true; inp.disabled = true;
+  const loader = addLoader();
+  try {
+    const data = await callGemini(trimmedHist());
+    const cand = data?.candidates?.[0];
+    const raw  = cand?.content?.parts?.[0]?.text;
+    // 안전 필터 / 빈 응답 → 토큰 환불
+    if (!raw) throw { refund: true, reason: cand?.finishReason };
+    hist.push({ role: 'model', parts: [{ text: raw }] });
+    const clean = raw.replace(/#[木火土金水]\s*/g, '').replace(/\*\*/g, '').trim();
+    addBubble(clean, 'ai');
+    const tag = ['木','火','土','金','水'].find(k => raw.includes('#' + k));
+    if (tag) addRxCard(tag);
+  } catch(e) {
+    if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
+    if (e?.refund) { addTokens(1); updateAllTokenDisplays(); }
+    const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
+    addBubble(msg, 'ai');
+    hist.pop();
+  } finally {
+    loader.remove(); btn.disabled = false; inp.disabled = false;
+    inp.focus(); cw().scrollTop = 99999;
+  }
+}
+
+function goBack() {
+  document.getElementById('screen-chat').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('backBtn').style.display       = 'none';
+  mode = null; hist = [];
+  // 모드 화면 복귀 시 userBtn / signupLinkBtn 복원
+  const u = getUser();
+  if (u && isLoggedIn()) {
+    updateUserBtn(u);
+    document.getElementById('signupLinkBtn').style.display = 'none';
+  } else if (u && !isLoggedIn()) {
+    document.getElementById('userBtn').style.display = 'none';
+    document.getElementById('signupLinkBtn').style.display = 'none';
+  } else {
+    document.getElementById('userBtn').style.display = 'none';
+    document.getElementById('signupLinkBtn').style.display = '';
+  }
+  // Change 1: 무료 배너 상태 업데이트
+  updateFreeBanner();
+}
+
+/* DOM 헬퍼 */
+const cw = () => document.getElementById('chat-window');
+
+function addBubble(text, who) {
+  const d = document.createElement('div');
+  d.className = `bubble bubble-${who}`;
+  d.textContent = text;
+  cw().appendChild(d);
+  cw().scrollTop = 99999;
+  return d;
+}
+
+function addLoader() {
+  const d = document.createElement('div');
+  d.className = 'bubble bubble-ai loading';
+  d.innerHTML = '<span></span><span></span><span></span>';
+  cw().appendChild(d); cw().scrollTop = 99999;
+  return d;
+}
+
+function addRxCard(o) {
+  const dk  = DK[lang][o];
+  const col = OC[o];
+  const bg  = OBG[o];
+  const t   = TX[lang];
+  const c   = document.createElement('div');
+  c.className = 'rx-card';
+  c.style.background = `linear-gradient(135deg, #0e0e0e, #080808)`;
+  c.innerHTML = `
+    <div class="rx-top" style="background:${bg}">
+      <div class="rx-icon" style="background:rgba(0,0,0,.3);border-color:${col}30">${dk.icon}</div>
+      <div class="rx-info">
+        <div class="rx-label" style="color:${col}">${t.rxlbl(o)}</div>
+        <div class="rx-name" style="color:${col}">${dk.name}</div>
+        <div class="rx-desc">${dk.desc}</div>
+      </div>
+    </div>
+    <div class="rx-bottom">${t.revisit}</div>`;
+  cw().appendChild(c); cw().scrollTop = 99999;
+}
+
+/* 전송 */
+async function send() {
+  const inp = document.getElementById('inp');
+  const btn = document.getElementById('send');
+  const txt = inp.value.trim();
+  if (!txt || btn.disabled) return;
+
+  // 토큰 차감
+  if (!checkAndDeductToken()) {
+    addBubble(TX[lang].noToken, 'ai');
+    return;
+  }
+
+  btn.disabled = true; inp.disabled = true;
+  hideSuggestChips();
+  addBubble(txt, 'user'); inp.value = '';
+  hist.push({role:'user', parts:[{text:txt}]});
+  const loader = addLoader();
+
+  try {
+    const data = await callGemini(trimmedHist());
+    const cand = data?.candidates?.[0];
+    const raw  = cand?.content?.parts?.[0]?.text;
+    if (!raw) throw { refund: true, reason: cand?.finishReason };
+    hist.push({role:'model', parts:[{text:raw}]});
+    const clean = raw.replace(/#[木火土金水]\s*/g,'').replace(/\*\*/g,'').trim();
+    addBubble(clean, 'ai');
+    const tag = ['木','火','土','金','水'].find(k => raw.includes('#'+k));
+    if (tag) addRxCard(tag);
+  } catch(e) {
+    if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
+    if (e?.refund) { addTokens(1); updateAllTokenDisplays(); }
+    const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
+    addBubble(msg, 'ai');
+    hist.pop();
+  } finally {
+    loader.remove(); btn.disabled = false; inp.disabled = false;
+    inp.focus(); cw().scrollTop = 99999;
+  }
+}
+
+document.getElementById('send').addEventListener('click', send);
+document.getElementById('inp').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+document.getElementById('backBtn').addEventListener('click', () => {
+  if      (document.getElementById('screen-mypage').style.display === 'flex') closeMyPage();
+  else if (document.getElementById('screen-signup').style.display === 'flex') goBackFromSignup();
+  else if (document.getElementById('screen-login').style.display  === 'flex') goBackFromLogin();
+  else goBack();
+});
+
+/* ── 회원가입 ── */
+const SHEETS_EP  = 'https://script.google.com/macros/s/AKfycbyJEDLW1Ohx9rQYrkSxFUNNl8LmRtUK-WkXg4sgtLBLfpPJcYfpXMJXQH9Ya2k36j3l/exec';
+const GOOGLE_CID = '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com';
+
+// ── Toss 결제 링크 ── 토스 대시보드에서 결제 링크 만든 후 여기에 붙여넣으세요
+const TOSS_LINKS = {
+  small:  'supertoss://send?amount=4900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
+  medium: 'supertoss://send?amount=12900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
+  large:  'supertoss://send?amount=29900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
+};
+
+// ── 바우처 코드 ── 결제 확인 후 고객에게 발송하는 코드와 토큰 수를 여기에 입력하세요
+// 예: 'MY24-ABCD': 30  → 고객이 MY24-ABCD 입력 시 30토큰 지급
+const VOUCHER_CODES = {
+  // 'MY-FREE-5': 5,   // ← 이런 형식으로 추가
+};
+
+let selGender = '';
+let selGenderMp = '';
+
+/* ── 토큰 시스템 (서버 기반) ── */
+let _tokenCache = 0;
+
+function getTokens() { return _tokenCache; }
+
+// 클라이언트는 더 이상 토큰을 직접 차감하지 않음.
+// 서버(/chat)가 호출 시 자동 차감/검증/환불 처리.
+// 이 함수는 호환을 위해 남겨두지만 항상 true를 반환 — 실제 차감은 서버에서.
+function checkAndDeductToken() {
+  if (_tokenCache <= 0) return false;
+  // 낙관적 UI: 캐시는 미리 -1, 서버 응답으로 정확한 값 동기화
+  _tokenCache = Math.max(0, _tokenCache - 1);
+  updateAllTokenDisplays();
+  return true;
+}
+
+// 결제 승인·환불 후 서버 잔액으로 다시 맞추기
+async function addTokens(_amount) {
+  await refreshTokens();
+}
+
+async function refreshTokens() {
+  if (!getGoogleIdToken()) { _tokenCache = 0; updateAllTokenDisplays(); return 0; }
+  try {
+    const res = await fetch(EP + 'user-tokens', { headers: authHeaders() });
+    if (!res.ok) { updateAllTokenDisplays(); return _tokenCache; }
+    const data = await res.json();
+    _tokenCache = parseInt(data.tokens, 10) || 0;
+    // localStorage 표시값 동기화 (옛 코드 호환)
+    try {
+      const u = JSON.parse(localStorage.getItem('myan_user') || 'null');
+      if (u) { u.tokens = _tokenCache; localStorage.setItem('myan_user', JSON.stringify(u)); }
+    } catch {}
+    // 기존 사용자 1회 마이그레이션
+    if (!data.migrated) await migrateLocalTokens();
+  } catch {}
+  updateAllTokenDisplays();
+  return _tokenCache;
+}
+
+async function migrateLocalTokens() {
+  try {
+    const u = JSON.parse(localStorage.getItem('myan_user') || 'null');
+    const local = u && u.tokens ? parseInt(u.tokens, 10) : 0;
+    if (local <= 0) return;
+    const res = await fetch(EP + 'migrate-tokens', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ tokens: local }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      _tokenCache = parseInt(data.tokens, 10) || _tokenCache;
+    }
+  } catch {}
+}
+
+function updateAllTokenDisplays() {
+  const t = _tokenCache;
+  const count = document.getElementById('chatTokenCount');
+  const chip  = document.getElementById('tokenChip');
+  const num   = document.getElementById('mypageTokenNum');
+  const tmNum = document.getElementById('tmBalanceNum');
+  if (count) count.textContent = t;
+  if (chip)  chip.classList.toggle('low', t > 0 && t <= 5);
+  if (num)   num.textContent = t;
+  if (tmNum) tmNum.textContent = t;
+}
+
+// ── 결제 모달 상태 ──
+let _payCurrentLink = '';
+let _payCurrentPkg  = '';
+let _payRequestId   = '';
+let _payPollTimer   = null;
+let _payDoneTimer   = null;
+let _adminTab       = 'pending';
+let _adminPayments  = [];
+
+const ADMIN_EMAIL  = 'riger7070@gmail.com';
+// ADMIN_SECRET은 클라이언트 코드에 두지 않음.
+// 관리자는 본인 브라우저 콘솔에서 1회 실행:
+//   localStorage.setItem('myan_admin_secret', '실제_시크릿_값');
+function getAdminSecret() { return localStorage.getItem('myan_admin_secret') || ''; }
+
+/* ── Google ID Token 관리 ── */
+let _googleIdToken = '';
+let _googleIdTokenExp = 0;
+function setGoogleIdToken(token) {
+  _googleIdToken = token;
+  try {
+    const p = token.split('.')[1];
+    const pad = '='.repeat((4 - p.length % 4) % 4);
+    const payload = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/') + pad));
+    _googleIdTokenExp = (payload.exp || 0) * 1000;
+    localStorage.setItem('myan_id_token', token);
+  } catch {}
+}
+function getGoogleIdToken() {
+  if (!_googleIdToken) _googleIdToken = localStorage.getItem('myan_id_token') || '';
+  if (!_googleIdToken) return '';
+  if (_googleIdTokenExp && Date.now() > _googleIdTokenExp - 5*60*1000) {
+    _googleIdToken = ''; _googleIdTokenExp = 0;
+    localStorage.removeItem('myan_id_token');
+    return '';
+  }
+  // exp를 한 번 더 파싱 (페이지 새로고침 직후)
+  if (!_googleIdTokenExp) {
+    try {
+      const p = _googleIdToken.split('.')[1];
+      const pad = '='.repeat((4 - p.length % 4) % 4);
+      const payload = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/') + pad));
+      _googleIdTokenExp = (payload.exp || 0) * 1000;
+      if (Date.now() > _googleIdTokenExp - 5*60*1000) {
+        _googleIdToken = ''; localStorage.removeItem('myan_id_token'); return '';
+      }
+    } catch {}
+  }
+  return _googleIdToken;
+}
+function authHeaders(extra) {
+  const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+  const t = getGoogleIdToken();
+  if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+
+const PAY_INFO = {
+  small:  { tokens: 30,  prices: { ko:'4,900원',  en:'₩4,900',  zh:'₩4,900',  ja:'₩4,900'  } },
+  medium: { tokens: 100, prices: { ko:'12,900원', en:'₩12,900', zh:'₩12,900', ja:'₩12,900' } },
+  large:  { tokens: 300, prices: { ko:'29,900원', en:'₩29,900', zh:'₩29,900', ja:'₩29,900' } },
+};
+
+const PAY_TX = {
+  ko: {
+    title:      '토스로 결제하기',
+    qrHint:     'QR코드를 스캔하거나 아래 버튼으로 토스 앱을 여세요',
+    or:         '또는',
+    openApp:    '토스 앱 열기',
+    doneBtn:    '✓  결제 완료했어요',
+    waitTitle:  '결제를 확인하고 있습니다',
+    waitSub:    '잠시만 기다려 주세요.\n보통 1~2분 내로 충전됩니다.',
+    successTitle: '토큰이 충전됐습니다!',
+    successSub:   '토큰이 지급되었습니다. 지금 바로 사용해 보세요.',
+    successClose: '확인',
+    noLink:     '결제 링크가 준비 중입니다. 잠시 후 다시 시도해 주세요.',
+    noUser:     '로그인 후 결제해 주세요.',
+  },
+  en: {
+    title:      'Pay via Toss',
+    qrHint:     'Scan the QR code or tap the button below to open Toss',
+    or:         'OR',
+    openApp:    'Open Toss App',
+    doneBtn:    '✓  I completed the payment',
+    waitTitle:  'Verifying your payment',
+    waitSub:    'Please wait a moment.\nTokens are usually credited within 1–2 minutes.',
+    successTitle: 'Tokens added!',
+    successSub:   'Your tokens have been credited. Start using them now.',
+    successClose: 'Done',
+    noLink:     'Payment link not ready. Please try again shortly.',
+    noUser:     'Please log in to make a payment.',
+  },
+  zh: {
+    title:      '通过 Toss 付款',
+    qrHint:     '扫描二维码或点击下方按钮打开 Toss',
+    or:         '或者',
+    openApp:    '打开 Toss App',
+    doneBtn:    '✓  我已完成付款',
+    waitTitle:  '正在确认您的付款',
+    waitSub:    '请稍等片刻。\n通常在1~2分钟内完成充值。',
+    successTitle: '代币已充值！',
+    successSub:   '您的代币已到账，立即开始使用吧。',
+    successClose: '确认',
+    noLink:     '支付链接尚未准备好，请稍后再试。',
+    noUser:     '请先登录再进行付款。',
+  },
+  ja: {
+    title:      'Tossで決済',
+    qrHint:     'QRコードをスキャンするか下のボタンからTossを開いてください',
+    or:         'または',
+    openApp:    'Toss アプリを開く',
+    doneBtn:    '✓  決済を完了しました',
+    waitTitle:  '決済を確認しています',
+    waitSub:    'しばらくお待ちください。\n通常1〜2分以内にチャージされます。',
+    successTitle: 'トークンがチャージされました！',
+    successSub:   'トークンが付与されました。今すぐご利用ください。',
+    successClose: '確認',
+    noLink:     '決済リンクはまだ準備中です。しばらくしてから再試行してください。',
+    noUser:     'ログイン後に決済してください。',
+  },
+};
+
+function _pt(key) { return (PAY_TX[lang] || PAY_TX.ko)[key] || ''; }
+
+function openTossPay(pkg) {
+  const link = TOSS_LINKS[pkg];
+  if (!link) {
+    const msgEl = document.getElementById('voucherMsg');
+    if (msgEl) {
+      msgEl.style.color = '#e07070';
+      msgEl.textContent = _pt('noLink');
+      setTimeout(() => { if (msgEl) { msgEl.style.color=''; msgEl.textContent=''; } }, 4000);
+    }
+    return;
+  }
+
+  // 로그인 확인
+  const user = getUser();
+  if (!user || !isLoggedIn()) {
+    const msgEl = document.getElementById('voucherMsg');
+    if (msgEl) {
+      msgEl.style.color = '#e07070';
+      msgEl.textContent = _pt('noUser');
+      setTimeout(() => { if (msgEl) { msgEl.style.color=''; msgEl.textContent=''; } }, 4000);
+    }
+    return;
+  }
+
+  _payCurrentLink = link;
+  _payCurrentPkg  = pkg;
+  _payRequestId   = '';
+
+  const info = PAY_INFO[pkg] || {};
+
+  // QR 상태로 초기화
+  _setPayState('qr');
+
+  document.getElementById('payModalTitle').textContent    = _pt('title');
+  document.getElementById('payModalPrice').textContent    = (info.prices && info.prices[lang]) || '';
+  document.getElementById('payModalHint').textContent     = _pt('qrHint');
+  document.getElementById('payDivider').textContent       = _pt('or');
+  document.getElementById('payModalBtnText').textContent  = _pt('openApp');
+  document.getElementById('payDoneBtnText').textContent   = _pt('doneBtn');
+
+  // QR 코드 생성
+  const qrEl = document.getElementById('payModalQr');
+  qrEl.innerHTML = '';
+  try {
+    new QRCode(qrEl, {
+      text: link,
+      width: 148, height: 148,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch(e) {
+    qrEl.textContent = '⚠ QR 생성 오류';
+  }
+
+  // 3초 후 "결제 완료했어요" 버튼 표시
+  const doneBtn = document.getElementById('payDoneBtn');
+  doneBtn.classList.remove('visible');
+  clearTimeout(_payDoneTimer);
+  _payDoneTimer = setTimeout(() => doneBtn.classList.add('visible'), 3000);
+
+  document.getElementById('pay-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function _setPayState(state) {
+  document.getElementById('payStateQr').style.display      = state === 'qr'      ? '' : 'none';
+  document.getElementById('payStateWaiting').style.display = state === 'waiting' ? '' : 'none';
+  document.getElementById('payStateSuccess').style.display = state === 'success' ? '' : 'none';
+  // 대기 중일 때 X 버튼 숨김 (실수로 닫는 것 방지)
+  document.querySelector('#pay-modal .pay-close').style.display = state === 'waiting' ? 'none' : '';
+}
+
+function openTossApp() {
+  if (_payCurrentLink) window.location.href = _payCurrentLink;
+}
+
+async function submitPaymentDone() {
+  const user = getUser();
+  if (!user) return;
+
+  const pkg  = _payCurrentPkg;
+  const info = PAY_INFO[pkg];
+  if (!info) return;
+
+  // 고유 요청 ID 생성
+  _payRequestId = 'pr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+  // 창이 닫혀도 재접속 시 복구할 수 있도록 localStorage에 저장
+  localStorage.setItem('myan_pending_pay_id', _payRequestId);
+
+  _setPayState('waiting');
+  document.getElementById('payWaitTitle').textContent = _pt('waitTitle');
+  document.getElementById('payWaitSub').innerHTML = _pt('waitSub').replace('\n','<br>');
+
+try {
+    if (!getGoogleIdToken()) throw new Error('not logged in');
+    const res = await fetch(EP + 'payment-request', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        id:  _payRequestId,
+        pkg: pkg,
+        // email/amount/tokens는 서버가 ID Token과 PKG_TABLE로 결정
+      }),
+    });
+    if (!res.ok) throw new Error('server error');
+  } catch(e) {
+    console.warn('payment-request failed, will still poll', e);
+  }
+
+  // 5초 간격 폴링
+  clearInterval(_payPollTimer);
+  _payPollTimer = setInterval(_pollPaymentStatus, 5000);
+}
+
+async function _pollPaymentStatus() {
+  if (!_payRequestId) return;
+  try {
+    const res = await fetch(EP + 'payment-status?id=' + _payRequestId);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.status === 'approved') {
+      clearInterval(_payPollTimer);
+      _onPaymentApproved(data.tokens);
+    }
+  } catch(e) { /* 네트워크 오류 무시 */ }
+}
+
+async function _onPaymentApproved(tokens) {
+  const granted = parseInt(tokens, 10) || (PAY_INFO[_payCurrentPkg] || {}).tokens || 0;
+  await refreshTokens();  // 서버에서 새 잔액 가져오기
+  localStorage.removeItem('myan_pending_pay_id');
+
+  _setPayState('success');
+  document.getElementById('paySuccessTitle').textContent  = _pt('successTitle');
+  document.getElementById('paySuccessAmount').textContent = '+' + granted + ' 토큰';
+  document.getElementById('paySuccessSub').textContent    = _pt('successSub');
+  document.getElementById('paySuccessCloseBtn').textContent = _pt('successClose');
+
+  const num = document.getElementById('mypageTokenNum');
+  if (num) num.textContent = _tokenCache;
+}  // _onPaymentApproved 닫기
+
+function closePayModal() {
+  clearInterval(_payPollTimer);
+  clearTimeout(_payDoneTimer);
+  document.getElementById('pay-modal').style.display = 'none';
+  document.body.style.overflow = '';
+  _payCurrentLink = '';
+  _payCurrentPkg  = '';
+  _payRequestId   = '';
+}
+
+// ── 관리자 패널 ──
+async function openAdminPanel() {
+  const user = getUser();
+  if (!user || user.email !== ADMIN_EMAIL) return;
+  document.getElementById('admin-panel').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await renderAdminPanel();
+}
+
+function closeAdminPanel() {
+  document.getElementById('admin-panel').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function setAdminTab(tab) {
+  _adminTab = tab;
+  ['pending','approved','all'].forEach(t => {
+    document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1))
+      .classList.toggle('on', t === tab);
+  });
+  _renderAdminList();
+}
+
+async function renderAdminPanel() {
+  const listEl = document.getElementById('adminPaymentList');
+  listEl.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+  try {
+    const res = await fetch(EP + 'admin/payments', {
+      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+    });
+    if (!res.ok) throw new Error('auth');
+    const data = await res.json();
+    _adminPayments = data.results || data || [];
+    _renderAdminList();
+    _refreshAdminBadge();
+  } catch(e) {
+    listEl.innerHTML = '<div class="admin-empty">불러오기 실패. Worker 설정을 확인하세요.</div>';
+  }
+}
+
+function _renderAdminList() {
+  const listEl = document.getElementById('adminPaymentList');
+  let filtered = _adminPayments;
+  if (_adminTab === 'pending')  filtered = filtered.filter(p => p.status === 'pending');
+  if (_adminTab === 'approved') filtered = filtered.filter(p => p.status === 'approved');
+
+  if (!filtered.length) {
+    listEl.innerHTML = '<div class="admin-empty">' +
+      (_adminTab === 'pending' ? '대기 중인 결제가 없습니다 ✓' : '내역이 없습니다') + '</div>';
+    return;
+  }
+
+  const PKG_NAME = { small:'소 (30토큰)', medium:'중 (100토큰)', large:'대 (300토큰)' };
+
+  listEl.innerHTML = filtered.map(p => {
+    const d = new Date(p.created_at * 1000);
+    const timeStr = d.toLocaleDateString('ko-KR') + ' ' + d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    const approved = p.status === 'approved';
+    return `<div class="admin-card">
+      <div class="admin-card-info">
+        <div class="admin-card-email">${p.user_email}</div>
+        <div class="admin-card-detail">${PKG_NAME[p.pkg] || p.pkg} · ${(p.amount||'').toLocaleString()}원</div>
+        <div class="admin-card-time">${timeStr}</div>
+      </div>
+      ${approved
+        ? '<span class="admin-approved-tag">✓ 완료</span>'
+        : `<button class="admin-approve-btn" onclick="approvePayment('${p.id}',this)">승인</button>`}
+    </div>`;
+  }).join('');
+}
+
+async function approvePayment(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+  try {
+    const res = await fetch(EP + 'admin/approve', {
+      method: 'POST',
+      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) throw new Error('fail');
+    // 로컬 상태 업데이트
+    const p = _adminPayments.find(x => x.id === id);
+    if (p) p.status = 'approved';
+    _renderAdminList();
+    _refreshAdminBadge();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '승인'; }
+    alert('승인 실패. 다시 시도해 주세요.');
+  }
+}
+
+function _refreshAdminBadge() {
+  const pending = (_adminPayments || []).filter(p => p.status === 'pending').length;
+  const dot = document.getElementById('adminHdDot');
+  if (dot) dot.classList.toggle('on', pending > 0);
+}
+
+async function _checkAdminBadge() {
+  const user = getUser();
+  if (!user || user.email !== ADMIN_EMAIL) return;
+  document.getElementById('adminHdBtn').style.display = 'flex';
+  try {
+    const res = await fetch(EP + 'admin/payments', {
+      headers: authHeaders({ 'x-admin-secret': getAdminSecret() }),
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    _adminPayments = data.results || data || [];
+    _refreshAdminBadge();
+  } catch(e) {}
+}
+
+function redeemVoucher() {
+  const input = document.getElementById('voucherInput');
+  const msgEl = document.getElementById('voucherMsg');
+  const code  = (input?.value || '').trim().toUpperCase();
+  if (!code) return;
+
+  let usedCodes = [];
+  try { usedCodes = JSON.parse(localStorage.getItem('myan_used_codes') || '[]'); } catch {}
+
+  const tokens = VOUCHER_CODES[code];
+  if (!tokens || usedCodes.includes(code)) {
+    msgEl.style.color = '#e07070';
+    msgEl.textContent = TX[lang].tkRedeemFail;
+    setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3500);
+    return;
+  }
+
+  usedCodes.push(code);
+  localStorage.setItem('myan_used_codes', JSON.stringify(usedCodes));
+  addTokens(tokens);
+
+  input.value = '';
+  msgEl.style.color = '#4bc87a';
+  msgEl.textContent = TX[lang].tkRedeemOk(tokens);
+  const num = document.getElementById('mypageTokenNum');
+  if (num) num.textContent = getTokens();
+  setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 4000);
+}
+
+function goSignup() {
+  document.getElementById('screen-mode').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'flex';
+  document.getElementById('backBtn').style.display       = 'flex';
+  renderSignup();
+  // 구글 버튼 초기화 (스크립트 로드 대기)
+  const tryInit = (attempts) => {
+    if (typeof google !== 'undefined' && GOOGLE_CID) {
+      initGoogleSignin();
+    } else if (!GOOGLE_CID) {
+      document.getElementById('googleBtnWrap').style.display = 'none';
+      document.getElementById('orDivider').style.display     = 'none';
+    } else if (attempts > 0) {
+      setTimeout(() => tryInit(attempts - 1), 300);
+    }
+  };
+  tryInit(10);
+}
+
+/* ── 구글 로그인 ── */
+let _gisInited = false;
+function _ensureGisInit() {
+  if (_gisInited) return;
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CID,
+    callback: handleGoogleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: true,
+  });
+  _gisInited = true;
+}
+
+function initGoogleSignin() {
+  const wrap = document.getElementById('googleBtnEl');
+  if (!wrap) return;
+  wrap.innerHTML = ''; // 재렌더 시 초기화
+  _ensureGisInit();
+  const localeMap = { ko:'ko', en:'en', zh:'zh-CN', ja:'ja' };
+  google.accounts.id.renderButton(wrap, {
+    type: 'standard',
+    theme: 'filled_black',
+    size: 'large',
+    text: 'signup_with',
+    shape: 'rectangular',
+    width: Math.min(Math.max(window.innerWidth - 64, 280), 480),
+    locale: localeMap[lang] || 'ko',
+  });
+}
+
+function handleGoogleCredential(response) {
+  try {
+    setGoogleIdToken(response.credential);  // ⭐ ID Token 저장
+    // JWT 페이로드 디코딩 — UTF-8(한글 포함) 안전 처리
+    const b64  = response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const pad  = b64.length % 4 === 0 ? '' : '='.repeat(4 - b64.length % 4);
+    const raw  = atob(b64 + pad);
+    const utf8 = decodeURIComponent(
+      raw.split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    const pl = JSON.parse(utf8);
+
+    const name  = pl.name  || '';
+    const email = pl.email || '';
+    if (!name && !email) return;
+
+    // 기존 프로필 유지하면서 이름/이메일 업데이트
+    let existing = {};
+    try { existing = JSON.parse(localStorage.getItem('myan_user') || '{}'); } catch {}
+
+    const isReturning = existing.email && existing.email === email;
+
+    const profile = {
+      ...existing,
+      name:       name  || existing.name  || '',
+      email:      email || existing.email || '',
+      phone:      existing.phone      || '',
+      birthYear:  existing.birthYear  || '',
+      birthMonth: existing.birthMonth || '',
+      birthDay:   existing.birthDay   || '',
+      birthHour:  existing.birthHour  || '',
+      gender:     existing.gender     || '',
+      region:     existing.region     || '',
+      tokens:     existing.tokens !== undefined ? existing.tokens : 3,
+    };
+    localStorage.setItem('myan_user', JSON.stringify(profile));
+    localStorage.setItem('myan_logged_in', 'true');
+
+    // Sheets 저장
+    if (SHEETS_EP) {
+      fetch(SHEETS_EP, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({...profile, timestamp: new Date().toISOString(), lang, source: 'google_signup'})
+      });
+    }
+
+    // 유저 버튼 업데이트
+    updateUserBtn(profile);
+    refreshTokens();  // 서버 토큰 잔액 동기화
+
+    // 관리자 배지 확인
+    _checkAdminBadge();
+
+    // 어느 화면에서 왔든 모든 auth 화면 닫고 앱으로 이동
+    document.getElementById('screen-login').style.display     = 'none';
+    document.getElementById('screen-signup').style.display    = 'none';
+    document.getElementById('signupLinkBtn').style.display    = 'none';
+    document.getElementById('backBtn').style.display          = 'none';
+    document.getElementById('signup-form-wrap').style.display = '';
+    document.getElementById('signup-success').style.display   = 'none';
+
+    if (pendingMode) {
+      const m = pendingMode; pendingMode = null;
+      _enterMode(m, profile);
+    } else {
+      document.getElementById('screen-mode').style.display = 'flex';
+    }
+  } catch(e) {
+    console.error('Google 자격증명 파싱 오류:', e);
+  }
+}
+
+function goBackFromSignup() {
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('backBtn').style.display       = 'none';
+  document.getElementById('signup-form-wrap').style.display = '';
+  document.getElementById('signup-success').style.display   = 'none';
+}
+
+function setGender(g) {
+  selGender = g; // signup 폼에서 성별 선택은 제거됨 (My Page에서 입력)
+}
+
+function buildSignupDropdowns() {
+  const mSel = document.getElementById('fMonth');
+  const mSuf = {ko:'월', en:'', zh:'月', ja:'月'}[lang] || '';
+  mSel.innerHTML = '<option value=""></option>';
+  for (let i = 1; i <= 12; i++) {
+    const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
+  }
+}
+
+function renderSignup() {
+  const s = TX[lang];
+  buildSignupDropdowns();
+  document.getElementById('signupHeadline').textContent  = s.sgHeadline;
+  document.getElementById('signupSub').textContent       = s.sgSub;
+  document.getElementById('signupLinkText').textContent  = s.sgLink;
+  document.getElementById('lblName').textContent         = s.sgName;
+  document.getElementById('fName').placeholder           = s.sgName;
+  document.getElementById('lblEmail').textContent        = s.sgEmail;
+  document.getElementById('lblYear').textContent         = s.sgYear;
+  document.getElementById('lblMonth').textContent        = s.sgMonth;
+  document.getElementById('lblDay').textContent          = s.sgDay;
+  document.getElementById('lblUsername').textContent     = s.sgUsername;
+  document.getElementById('fUsername').placeholder       = s.sgUsername;
+  document.getElementById('lblPassword').textContent     = s.sgPassword;
+  document.getElementById('fPassword').placeholder       = s.sgPassword;
+  document.getElementById('lblConfirmPw').textContent    = s.sgConfirmPw;
+  document.getElementById('fConfirmPw').placeholder      = s.sgConfirmPw;
+  document.getElementById('submitBtn').textContent       = s.sgSubmit;
+  document.getElementById('signupNotice').textContent    = s.sgNotice;
+  document.getElementById('successTitle').textContent    = s.sgSuccTitle;
+  document.getElementById('successDesc').textContent     = s.sgSuccDesc;
+  document.getElementById('successBackBtn').textContent  = s.sgBack;
+  document.getElementById('orDividerText').textContent   = s.sgOr;
+}
+
+let _sgErrTimer = null;
+function showSignupError(msg) {
+  const notice = document.getElementById('signupNotice');
+  if (_sgErrTimer) clearTimeout(_sgErrTimer);
+  notice.style.color = '#e07070';
+  notice.textContent = '⚠ ' + msg;
+  _sgErrTimer = setTimeout(() => {
+    notice.style.color = '';
+    notice.textContent = TX[lang].sgNotice;
+    _sgErrTimer = null;
+  }, 3500);
+}
+
+async function submitSignup() {
+  const s    = TX[lang];
+  const name = document.getElementById('fName').value.trim();
+  const email = document.getElementById('fEmail').value.trim();
+  const year  = document.getElementById('fYear').value.trim();
+  const mon   = document.getElementById('fMonth').value;
+  const day   = document.getElementById('fDay').value.trim();
+  // 선택 정보는 마이페이지에서 입력
+  const phone = ''; const hour = ''; const region = '';
+
+  // 필수 항목 검사
+  if (!name || !email || !year || !mon || !day) {
+    const msg = {ko:'이름, 이메일, 생년월일을 입력해 주세요.', en:'Please fill in name, email, and date of birth.',
+                 zh:'请填写姓名、邮箱和出生日期。', ja:'お名前、メールアドレス、生年月日を入力してください。'};
+    showSignupError(msg[lang] || msg.ko); return;
+  }
+  // 이메일 형식 간단 검사
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const msg = {ko:'올바른 이메일 주소를 입력해 주세요.', en:'Please enter a valid email address.',
+                 zh:'请输入有效的电子邮件地址。', ja:'正しいメールアドレスを入力してください。'};
+    showSignupError(msg[lang] || msg.ko); return;
+  }
+  // 생년 범위 검사
+  const yearNum = parseInt(year, 10);
+  if (yearNum < 1900 || yearNum > new Date().getFullYear()) {
+    const msg = {ko:'올바른 생년을 입력해 주세요.', en:'Please enter a valid birth year.',
+                 zh:'请输入有效的出生年份。', ja:'正しい生年を入力してください。'};
+    showSignupError(msg[lang] || msg.ko); return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = {ko:'저장 중…', en:'Saving…', zh:'保存中…', ja:'保存中…'}[lang] || '…';
+
+  const payload = {
+    timestamp: new Date().toISOString(),
+    name, email, phone, birthYear: year, birthMonth: mon, birthDay: day,
+    birthHour: hour, gender: selGender, region, lang, source: 'signup'
+  };
+
+  try {
+    if (SHEETS_EP) {
+      await fetch(SHEETS_EP, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+    localStorage.setItem('myan_user', JSON.stringify({
+      name, email, phone,
+      birthYear: year, birthMonth: mon, birthDay: day,
+      birthHour: hour, gender: selGender, region,
+      tokens: 3   // 신규 가입 무료 토큰
+    }));
+    localStorage.setItem('myan_logged_in', 'true');
+    document.getElementById('signup-form-wrap').style.display = 'none';
+    document.getElementById('signup-success').style.display   = 'flex';
+  } catch(e) {
+    showSignupError(s.sgErr);
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+/* ── 마이페이지 ── */
+function updateUserBtn(user) {
+  const btn = document.getElementById('userBtn');
+  if (!user) { btn.style.display = 'none'; return; }
+  btn.textContent = TX[lang].mpLink || '마이페이지';
+  btn.style.display = 'flex';
+}
+
+// ── Change 1: 무료 토큰 배너 표시 (비로그인 시에만) ──
+function updateFreeBanner() {
+  const banner = document.getElementById('freeBanner');
+  if (!banner) return;
+  const loggedIn = isLoggedIn();
+  banner.style.display = loggedIn ? 'none' : 'flex';
+}
+
+function openMyPage() {
+  document.getElementById('screen-mode').style.display   = 'none';
+  document.getElementById('screen-chat').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-mypage').style.display = 'flex';
+  document.getElementById('backBtn').style.display       = 'flex';
+  document.getElementById('userBtn').style.display       = 'none';
+  renderMyPage();
+}
+
+function closeMyPage() {
+  document.getElementById('screen-mypage').style.display = 'none';
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('backBtn').style.display       = 'none';
+  // 로그인 상태에 맞게 userBtn / signupLinkBtn 복원
+  const u = getUser();
+  if (u && isLoggedIn()) {
+    updateUserBtn(u);
+    document.getElementById('signupLinkBtn').style.display = 'none';
+  } else {
+    document.getElementById('userBtn').style.display = 'none';
+    document.getElementById('signupLinkBtn').style.display = u ? 'none' : '';
+  }
+}
+
+function buildMypageDropdowns() {
+  const t    = TX[lang];
+  const mSel = document.getElementById('mpMonth');
+  const hSel = document.getElementById('mpHour');
+  const mSuf = {ko:'월', en:'', zh:'月', ja:'月'}[lang] || '';
+  mSel.innerHTML = '<option value=""></option>';
+  for (let i = 1; i <= 12; i++) {
+    const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
+  }
+  const hrs = [['子','23-01'],['丑','01-03'],['寅','03-05'],['卯','05-07'],
+               ['辰','07-09'],['巳','09-11'],['午','11-13'],['未','13-15'],
+               ['申','15-17'],['酉','17-19'],['戌','19-21'],['亥','21-23']];
+  hSel.innerHTML = `<option value="">${t.sgUnknown}</option>`;
+  hrs.forEach(([c, r]) => {
+    const o = document.createElement('option'); o.value = c; o.textContent = `${c}時 (${r})`; hSel.appendChild(o);
+  });
+}
+
+function renderMyPage() {
+  const t    = TX[lang];
+  const user = (() => { try { return JSON.parse(localStorage.getItem('myan_user')); } catch { return null; } })();
+  if (!user) return;
+
+  buildMypageDropdowns();
+
+  // 프로필 표시
+  document.getElementById('mypageAvatar').textContent   = (user.name || '?').charAt(0);
+  document.getElementById('mypageNameDisp').textContent  = user.name  || '';
+  document.getElementById('mypageEmailDisp').textContent = user.email || '';
+  document.getElementById('mypageSectionLabel').textContent  = t.mpSection;
+  document.getElementById('mypageDetailLabel').textContent   = t.mpDetailSection;
+  document.getElementById('mypageDetailNotice').textContent  = t.mpDetailNotice;
+
+  // 라벨
+  document.getElementById('mpLblYear').textContent    = t.sgYear;
+  document.getElementById('mpLblMonth').textContent   = t.sgMonth;
+  document.getElementById('mpLblDay').textContent     = t.sgDay;
+  document.getElementById('mpLblHour').innerHTML      = t.sgHour + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpLblGender').innerHTML    = t.sgGender + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpLblPhone').innerHTML     = t.sgPhone + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpLblRegion').innerHTML    = t.sgRegion + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpGbM').textContent        = t.sgM;
+  document.getElementById('mpGbF').textContent        = t.sgF;
+  document.getElementById('mypageSaveBtn').textContent    = t.mpSave;
+  document.getElementById('mypageNotice').textContent     = '';
+  document.getElementById('mypageSupportBtn').textContent = t.mpSupport || '✉ 고객센터';
+  document.getElementById('mypageLogoutBtn').textContent  = t.mpLogout;
+  document.getElementById('mypageWithdrawBtn').textContent = t.mpWithdraw;
+
+  // 저장된 값 채우기
+  document.getElementById('mpYear').value  = user.birthYear  || '';
+  document.getElementById('mpMonth').value = user.birthMonth || '';
+  document.getElementById('mpDay').value   = user.birthDay   || '';
+  document.getElementById('mpHour').value  = user.birthHour  || '';
+  document.getElementById('mpPhone').value = user.phone      || '';
+  document.getElementById('mpRegion').value = user.region    || '';
+  document.getElementById('mpRegion').placeholder = t.sgRegion;
+
+  // 성별 버튼
+  selGenderMp = user.gender || '';
+  document.getElementById('mpGbM').classList.toggle('active', selGenderMp === 'M');
+  document.getElementById('mpGbF').classList.toggle('active', selGenderMp === 'F');
+
+  // ── 토큰 섹션 ──
+  document.getElementById('tkSectionLbl').textContent      = t.tkSection;
+  document.getElementById('mypageTokenUnitLbl').textContent = t.tkUnit;
+  document.getElementById('mypageTokenNum').textContent    = getTokens();
+  document.getElementById('pkgBadge0').textContent         = t.tkPkgS;
+  document.getElementById('pkgBadge1').textContent         = t.tkPkgM;
+  document.getElementById('pkgBadge2').textContent         = t.tkPkgL;
+  document.getElementById('pkgBtn0').textContent           = t.tkPayBtn;
+  document.getElementById('pkgBtn1').textContent           = t.tkPayBtn;
+  document.getElementById('pkgBtn2').textContent           = t.tkPayBtn;
+}
+
+function setGenderMp(g) {
+  selGenderMp = g;
+  document.getElementById('mpGbM').classList.toggle('active', g === 'M');
+  document.getElementById('mpGbF').classList.toggle('active', g === 'F');
+}
+
+async function saveMyPage() {
+  const user = (() => { try { return JSON.parse(localStorage.getItem('myan_user')); } catch { return null; } })();
+  if (!user) return;
+
+  const year   = document.getElementById('mpYear').value.trim();
+  const mon    = document.getElementById('mpMonth').value;
+  const day    = document.getElementById('mpDay').value.trim();
+  const hour   = document.getElementById('mpHour').value;
+  const phone  = document.getElementById('mpPhone').value.trim();
+  const region = document.getElementById('mpRegion').value.trim();
+
+  // 생년 범위 검사
+  if (year) {
+    const y = parseInt(year, 10);
+    if (y < 1900 || y > new Date().getFullYear()) {
+      const notice = document.getElementById('mypageNotice');
+      notice.style.color = '#e07070';
+      notice.textContent = {ko:'올바른 생년을 입력해 주세요.', en:'Enter a valid birth year.',
+                            zh:'请输入有效出生年份。', ja:'正しい生年を入力してください。'}[lang] || '';
+      setTimeout(() => { notice.style.color = ''; notice.textContent = ''; }, 3000);
+      return;
+    }
+  }
+
+  const updated = {
+    ...user,
+    phone, birthYear: year, birthMonth: mon, birthDay: day,
+    birthHour: hour, gender: selGenderMp, region,
+  };
+  localStorage.setItem('myan_user', JSON.stringify(updated));
+
+  if (SHEETS_EP) {
+    fetch(SHEETS_EP, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({...updated, timestamp: new Date().toISOString(), lang, source: 'mypage_update'})
+    });
+  }
+
+  const btn = document.getElementById('mypageSaveBtn');
+  btn.textContent = TX[lang].mpSaved;
+  btn.style.background = 'rgba(75,200,122,0.25)';
+  setTimeout(() => {
+    btn.textContent = TX[lang].mpSave;
+    btn.style.background = '';
+  }, 2200);
+}
+
+function _signOut() {
+  // 로그아웃: 세션만 삭제, 계정 유지
+  localStorage.removeItem('myan_logged_in');
+  selGender = ''; selGenderMp = '';
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('userBtn').style.display = 'none';
+  document.getElementById('signupLinkBtn').style.display = 'none'; // 계정은 있으므로 가입 링크 숨김
+  closeMyPage();
+}
+
+function _withdrawAccount() {
+  // 탈퇴: 세션 + 계정 모두 삭제
+  localStorage.removeItem('myan_logged_in');
+  localStorage.removeItem('myan_user');
+  selGender = ''; selGenderMp = '';
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('userBtn').style.display = 'none';
+  document.getElementById('signupLinkBtn').style.display = ''; // 계정 없으므로 가입 링크 표시
+  closeMyPage();
+}
+
+function _confirmAction(btnId, confirmText, action) {
+  const btn = document.getElementById(btnId);
+  if (btn.dataset.confirm === '1') { action(); return; }
+  btn.dataset.confirm = '1';
+  const orig = btn.textContent;
+  const origColor = btn.style.color;
+  btn.textContent = confirmText;
+  btn.style.color = '#e07070';
+  btn.style.borderColor = 'rgba(224,112,112,0.4)';
+  setTimeout(() => {
+    if (btn.dataset.confirm === '1') {
+      btn.dataset.confirm = '';
+      btn.textContent = orig;
+      btn.style.color = origColor;
+      btn.style.borderColor = '';
+    }
+  }, 3000);
+}
+
+function openTokenModal() {
+  // 베타 기간: 결제 모달 비활성화
+  const msg = {
+    ko: '🎁 베타 기간 중에는 결제가 준비 중이에요.\n정식 오픈 시 알림을 드릴게요!',
+    en: '🎁 Payments are coming soon!\nWe\'ll notify you when officially launched.',
+    zh: '🎁 付款功能即将开放！\n正式上线后我们会通知您。',
+    ja: '🎁 決済機能は近日公開予定です！\n正式リリース時にお知らせします。'
+  };
+  alert(msg[lang] || msg.ko);
+}
+
+function closeTokenModal() {
+  document.getElementById('token-modal').style.display = 'none';
+}
+
+function openSupport() {
+  const user = getUser();
+  const subject = encodeURIComponent({ko:'M;Y 安 1:1 문의', en:'M;Y 安 Support', zh:'M;Y 安 客服', ja:'M;Y 安 サポート'}[lang] || 'M;Y 安 문의');
+  const body    = encodeURIComponent(user ? `이름: ${user.name}\n이메일: ${user.email}\n\n문의 내용:\n` : '문의 내용:\n');
+  window.open(`mailto:riger1124@naver.com?subject=${subject}&body=${body}`, '_blank');
+}
+
+function logout() {
+  _confirmAction('mypageLogoutBtn', TX[lang].mpLogoutQ, _signOut);
+}
+
+/* ── 법적 모달 ── */
+const LEGAL_CONTENT = {
+  privacy: {
+    ko: {
+      title: '개인정보처리방침',
+      body: `
+<h3>1. 수집하는 개인정보 항목</h3>
+<p>이름, 이메일, 생년월일, 성별, 지역, 전화번호(선택)</p>
+
+<h3>2. 개인정보 수집 및 이용 목적</h3>
+<p>사주 리딩 서비스 제공, 서비스 개선, 이용자 식별</p>
+
+<h3>3. 보유 및 이용 기간</h3>
+<p>회원 탈퇴 시 또는 동의 철회 시 즉시 파기. 단, 관계 법령에 따라 보존이 필요한 경우 해당 기간 보유.</p>
+
+<h3>4. 개인정보의 제3자 제공</h3>
+<p>원칙적으로 외부에 제공하지 않습니다. 단, 법령에 따른 요청이 있는 경우 제공할 수 있습니다.</p>
+
+<h3>5. 개인정보 국외 이전 (Google Sheets 운영 데이터)</h3>
+<table>
+<tr><th>항목</th><td>이전받는 자: Google LLC (미국)</td></tr>
+<tr><th>이전 항목</th><td>이름, 이메일, 생년월일 등 가입 정보</td></tr>
+<tr><th>이전 목적</th><td>운영 데이터 백업 및 서비스 운영</td></tr>
+<tr><th>이전 방법</th><td>가입/수정 즉시 HTTPS 전송</td></tr>
+<tr><th>보유 기간</th><td>회원 탈퇴 시 삭제 요청 가능</td></tr>
+</table>
+<p>※ 개인정보보호법 제28조의8에 따라 고지합니다.</p>
+
+<h3>6. 이용자의 권리</h3>
+<p>언제든지 개인정보 열람, 정정, 삭제, 처리정지를 요청할 수 있습니다.<br>
+문의: riger1124@naver.com</p>
+
+<h3>7. 개인정보 보호책임자</h3>
+<p>담당자: M;Y 安 운영팀 · 이메일: riger1124@naver.com</p>
+
+<h3>8. 시행일</h3>
+<p>2025년 5월 1일</p>
+`
+    }
+  },
+  refund: {
+    ko: {
+      title: '환불정책',
+      body: `
+<h3>1. 환불 원칙</h3>
+<p>충전한 토큰 중 미사용분에 대해 환불을 요청할 수 있습니다.</p>
+
+<h3>2. 환불 가능 조건</h3>
+<p>• 결제 후 7일 이내 요청<br>
+• 미사용 토큰이 남아 있는 경우</p>
+
+<h3>3. 환불 불가 조건</h3>
+<p>• 이미 사용된 토큰<br>
+• 결제 후 7일 초과<br>
+• 이용자의 서비스 이용 규칙 위반으로 인한 제한</p>
+
+<h3>4. 환불 신청 방법</h3>
+<p>이메일(riger1124@naver.com)로 결제 내역과 함께 요청해 주세요.<br>
+처리 기간: 영업일 기준 3~5일</p>
+
+<h3>5. 소비자 분쟁 해결 기준</h3>
+<p>공정거래위원회 고시 소비자분쟁해결기준에 따릅니다.</p>
+`
+    }
+  },
+  terms: {
+    ko: {
+      title: '이용약관',
+      body: `
+<h3>제1조 (목적)</h3>
+<p>본 약관은 M;Y 安(이하 "서비스")의 이용 조건 및 절차를 규정합니다.</p>
+
+<h3>제2조 (서비스 내용)</h3>
+<p>사주 오행 기반 AI 리딩 서비스를 제공합니다. 본 서비스는 문화 체험 콘텐츠로, 의료·법률·금융 조언을 대체하지 않습니다.</p>
+
+<h3>제3조 (이용자 의무)</h3>
+<p>• 타인의 정보를 도용하거나 허위 정보를 입력하지 않습니다.<br>
+• 서비스를 불법적인 목적으로 이용하지 않습니다.<br>
+• 서비스의 정상적인 운영을 방해하지 않습니다.</p>
+
+<h3>제4조 (서비스 제한)</h3>
+<p>이용자가 약관을 위반하거나 서비스를 악용할 경우, 운영자는 사전 고지 없이 이용을 제한할 수 있습니다.</p>
+
+<h3>제5조 (면책조항)</h3>
+<p>AI 리딩 결과는 참고용이며, 이를 근거로 한 결정에 대해 서비스는 책임을 지지 않습니다.</p>
+
+<h3>제6조 (준거법)</h3>
+<p>본 약관은 대한민국 법률에 따라 해석됩니다.</p>
+
+<h3>시행일: 2025년 5월 1일</h3>
+`
+    }
+  }
+};
+
+function openLegal(type) {
+  const data = LEGAL_CONTENT[type]?.ko;
+  if (!data) return;
+  document.getElementById('legalModalTitle').textContent = data.title;
+  document.getElementById('legalModalBody').innerHTML = data.body;
+  document.getElementById('legal-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLegal() {
+  document.getElementById('legal-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function withdraw() {
+  _confirmAction('mypageWithdrawBtn', TX[lang].mpWithdrawQ, _withdrawAccount);
+}
+
+/* ── 로그인 시스템 ── */
+async function hashPassword(password, salt) {
+  const enc  = new TextEncoder();
+  const data = enc.encode(salt + password);
+  const buf  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function isLoggedIn() {
+  return localStorage.getItem('myan_logged_in') === 'true';
+}
+
+function getUser() {
+  try { return JSON.parse(localStorage.getItem('myan_user')); } catch { return null; }
+}
+
+function togglePwVis(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
+  else                         { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+function renderLogin() {
+  const t = TX[lang];
+  document.getElementById('loginTitle').textContent      = t.loginTitle;
+  document.getElementById('lblLoginId').textContent      = t.loginId;
+  document.getElementById('lblLoginPw').textContent      = t.loginPw;
+  document.getElementById('loginSubmitBtn').textContent  = t.loginBtn;
+  document.getElementById('loginErr').textContent        = '';
+  document.getElementById('loginOrText').textContent     = t.sgOr;
+}
+
+function showLogin() {
+  document.getElementById('screen-mode').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'flex';
+  document.getElementById('backBtn').style.display       = 'flex';
+  renderLogin();
+  // Google 버튼 초기화 (로그인용)
+  const tryInit = (attempts) => {
+    if (typeof google !== 'undefined' && GOOGLE_CID) {
+      initGoogleLoginBtn();
+    } else if (!GOOGLE_CID) {
+      document.getElementById('loginGoogleBtnWrap').style.display = 'none';
+      document.getElementById('loginOrDivider').style.display     = 'none';
+    } else if (attempts > 0) {
+      setTimeout(() => tryInit(attempts - 1), 300);
+    }
+  };
+  tryInit(10);
+}
+
+function initGoogleLoginBtn() {
+  const wrap = document.getElementById('loginGoogleBtnEl');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  _ensureGisInit();
+  const localeMap = { ko:'ko', en:'en', zh:'zh-CN', ja:'ja' };
+  google.accounts.id.renderButton(wrap, {
+    type: 'standard', theme: 'filled_black', size: 'large',
+    text: 'signin_with', shape: 'rectangular',
+    width: Math.min(Math.max(window.innerWidth - 64, 280), 480),
+    locale: localeMap[lang] || 'ko',
+  });
+}
+
+function goBackFromLogin() {
+  pendingMode = null;
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-mode').style.display  = 'flex';
+  document.getElementById('backBtn').style.display      = 'none';
+}
+
+async function doLogin() {
+  const id    = (document.getElementById('loginIdInp').value || '').trim();
+  const pw    = (document.getElementById('loginPwInp').value || '');
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+
+  const user = getUser();
+  if (!user || !user.passwordHash || !user.salt) {
+    errEl.textContent = TX[lang].loginFail;
+    return;
+  }
+  if (user.username !== id) {
+    errEl.textContent = TX[lang].loginFail;
+    return;
+  }
+
+  const hash = await hashPassword(pw, user.salt);
+  if (hash !== user.passwordHash) {
+    errEl.textContent = TX[lang].loginFail;
+    return;
+  }
+
+  // 로그인 성공
+  localStorage.setItem('myan_logged_in', 'true');
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('backBtn').style.display      = 'none';
+  updateUserBtn(user);
+  document.getElementById('signupLinkBtn').style.display = 'none';
+  _checkAdminBadge();
+
+  // 로그인 전 클릭했던 모드가 있으면 바로 진입
+  if (pendingMode) {
+    const m = pendingMode; pendingMode = null;
+    _enterMode(m, user);
+  } else {
+    document.getElementById('screen-mode').style.display = 'flex';
+  }
+}
+
+/* ── 인증 게이트 ── 항상 모드 화면 먼저 */
+function checkAuth() {
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-mypage').style.display = 'none';
+  document.getElementById('backBtn').style.display       = 'none';
+
+  const user = getUser();
+  const loggedIn = isLoggedIn();
+
+  if (user && loggedIn) {
+    document.getElementById('signupLinkBtn').style.display = 'none';
+    updateUserBtn(user);
+  }
+  else if (user && !loggedIn) {
+    document.getElementById('signupLinkBtn').style.display = 'none';
+    document.getElementById('userBtn').style.display = 'none';
+  }
+  else {
+    document.getElementById('signupLinkBtn').style.display = '';
+    document.getElementById('userBtn').style.display = 'none';
+  }
+
+  if (user && loggedIn) _checkAdminBadge();
+}
+
+function goToApp() {
+  localStorage.setItem('myan_logged_in', 'true');
+  document.getElementById('screen-signup').style.display   = 'none';
+  document.getElementById('signup-form-wrap').style.display = '';
+  document.getElementById('signup-success').style.display  = 'none';
+  document.getElementById('backBtn').style.display         = 'none';
+  selGender = '';
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+
+  const u = getUser();
+  updateUserBtn(u);
+  document.getElementById('signupLinkBtn').style.display = u ? 'none' : '';
+  _checkAdminBadge();
+
+  if (pendingMode) {
+    const m = pendingMode; pendingMode = null;
+    _enterMode(m, u);
+  } else {
+    document.getElementById('screen-mode').style.display = 'flex';
+  }
+}
+
+render();
+schedMidnightRefresh();
+checkAuth();
+refreshTokens();  // ⭐ 추가: 페이지 로드 시 서버 토큰 잔액 동기화
+
+// 페이지 로드 시 미완료 결제 자동 복구 (창 닫아도 승인 시 지급)
+(async function resumePendingPayment() {
+  const pendingId = localStorage.getItem('myan_pending_pay_id');
+  if (!pendingId || !EP) return;
+  try {
+    const res  = await fetch(`${EP}payment-status?id=${pendingId}`);
+    const data = await res.json();
+    if (data.status === 'approved') {
+      await refreshTokens();  // 서버에서 새 잔액 가져오기
+      localStorage.removeItem('myan_pending_pay_id');
+    }
+  } catch {}
+})();
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const payModal    = document.getElementById('pay-modal');
+    const tokenModal  = document.getElementById('token-modal');
+    const adminPanel  = document.getElementById('admin-panel');
+    if (adminPanel   && adminPanel.style.display   !== 'none') { closeAdminPanel(); return; }
+    if (tokenModal   && tokenModal.style.display   !== 'none') { closeTokenModal(); return; }
+    if (payModal     && payModal.style.display     !== 'none') {
+      if (document.getElementById('payStateWaiting').style.display === 'none') closePayModal();
+    }
+  }
+});
+
+// ══════════════════════════════════════════════
+// ── PWA · 앱 기능 ──
+// ══════════════════════════════════════════════
+
+// ── 1. 스플래시 화면 ──
+window.addEventListener('load', () => {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  // 폰트 + 리소스 로딩 후 1.2초 뒤 페이드아웃
+  setTimeout(() => {
+    splash.classList.add('fade-out');
+    setTimeout(() => splash.remove(), 650);
+  }, 1200);
+});
+
+// ── 2. Service Worker 등록 ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => {}).catch(() => {});
+  });
+}
+
+// ── 3. 햅틱 피드백 ──
+function haptic(type = 'light') {
+  if (!navigator.vibrate) return;
+  const patterns = {
+    light:   [20],
+    medium:  [40],
+    heavy:   [60],
+    success: [20, 30, 20],
+    error:   [50, 30, 50],
+  };
+  navigator.vibrate(patterns[type] || [20]);
+}
+
+// 모든 버튼/카드 클릭에 햅틱 적용
+document.addEventListener('click', e => {
+  const target = e.target.closest('button, .card, .quick-box, .pkg-card, .lb');
+  if (!target) return;
+  if (target.classList.contains('card') || target.classList.contains('quick-box')) {
+    haptic('medium');
+  } else {
+    haptic('light');
+  }
+}, { passive: true });
+
+// ── 4. 푸시 알림 권한 요청 ──
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') {
+    // 환영 알림
+    new Notification('M;Y 安', {
+      body: '일진 알림이 설정되었습니다. 매일 기운을 전해드릴게요.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'myan-welcome',
+    });
+    scheduleLocalNotification();
+    return true;
+  }
+  return false;
+}
+
+// 로컬 알림 스케줄링 (오전 8시 알림)
+function scheduleLocalNotification() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const now  = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  const delay = next - now;
+
+  // 기존 타이머 클리어
+  if (window._notifTimer) clearTimeout(window._notifTimer);
+
+  window._notifTimer = setTimeout(() => {
+    new Notification('M;Y 安 · 오늘의 기운', {
+      body: '오늘의 일진과 오행 기운을 확인해 보세요.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'myan-daily',
+      renotify: true,
+    });
+    scheduleLocalNotification(); // 내일도 반복
+  }, delay);
+
+  localStorage.setItem('myan_notif_enabled', 'true');
+}
+
+// 앱 진입 시 알림 재스케줄
+if (localStorage.getItem('myan_notif_enabled') === 'true') {
+  scheduleLocalNotification();
+}
+
+// ── 5. 알림 설정 버튼 (마이페이지에서 호출) ──
+async function toggleNotification() {
+  const btn = document.getElementById('notifToggleBtn');
+  if (!btn) return;
+  const enabled = localStorage.getItem('myan_notif_enabled') === 'true';
+
+  if (enabled) {
+    if (window._notifTimer) clearTimeout(window._notifTimer);
+    localStorage.removeItem('myan_notif_enabled');
+    btn.textContent = TX[lang]?.notifOn || '알림 켜기 🔔';
+    btn.classList.remove('notif-on');
+  } else {
+    const ok = await requestNotificationPermission();
+    if (ok) {
+      btn.textContent = TX[lang]?.notifOff || '알림 끄기 🔕';
+      btn.classList.add('notif-on');
+    }
+  }
+}
+
+// ── 6. theme-color 메타 태그 동기화 ──
+function syncThemeColorMeta() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const meta = document.getElementById('metaThemeColor');
+  if (meta) meta.setAttribute('content', isLight ? '#f5f0e8' : '#c9a96e');
+}
+
+// toggleTheme 후 메타 태그도 업데이트
+const _origApplyTheme = applyTheme;
+window.applyTheme = function(theme) {
+  _origApplyTheme(theme);
+  syncThemeColorMeta();
+};
+
+// ── 7. 앱 설치 배너 (A2HS) ──
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  // 3초 뒤 설치 배너 표시
+  setTimeout(showInstallBanner, 3000);
+});
+
+function showInstallBanner() {
+  if (!_deferredInstallPrompt) return;
+  if (localStorage.getItem('myan_install_dismissed')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.style.cssText = `
+    position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%;
+    transform:translateX(-50%); z-index:8000;
+    background:rgba(20,18,14,0.97); border:1px solid rgba(201,169,110,0.4);
+    border-radius:16px; padding:14px 20px; display:flex; align-items:center;
+    gap:14px; box-shadow:0 8px 32px rgba(0,0,0,0.6); max-width:340px; width:90%;
+    animation:pop .35s ease;
+  `;
+  banner.innerHTML = `
+    <img src="/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0">
+    <div style="flex:1">
+      <div style="color:#c9a96e;font-size:0.9rem;font-weight:600">M;Y 安 앱 설치</div>
+      <div style="color:#999;font-size:0.75rem;margin-top:2px">홈 화면에 추가하면 더 편리해요</div>
+    </div>
+    <button onclick="installApp()" style="background:rgba(201,169,110,0.15);border:1px solid rgba(201,169,110,0.4);color:#c9a96e;border-radius:8px;padding:6px 12px;font-size:0.8rem;cursor:pointer;white-space:nowrap">설치</button>
+    <button onclick="dismissInstallBanner()" style="background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer;padding:0 4px;line-height:1">×</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+async function installApp() {
+  if (!_deferredInstallPrompt) return;
+  _deferredInstallPrompt.prompt();
+  const { outcome } = await _deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    localStorage.setItem('myan_install_dismissed', 'true');
+  }
+  _deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.remove();
+}
+
+function dismissInstallBanner() {
+  localStorage.setItem('myan_install_dismissed', 'true');
+  document.getElementById('install-banner')?.remove();
+}
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.remove();
+  localStorage.setItem('myan_install_dismissed', 'true');
+});
+</script>
+</body>
+</html>

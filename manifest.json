@@ -1,0 +1,51 @@
+{
+  "name": "M;Y 安 · 오행 기운 리딩",
+  "short_name": "M;Y 安",
+  "description": "내 사주와 오늘 일진이 만나는 오행 에너지 리딩",
+  "id": "/?source=pwa",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060608",
+  "theme_color": "#c9a96e",
+  "lang": "ko",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon-pwa-192-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-pwa-512-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["lifestyle", "health"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "나만의 리딩",
+      "short_name": "리딩",
+      "description": "오늘의 기운 리딩 시작",
+      "url": "/?mode=solo",
+      "icons": [{ "src": "/icon-pwa-192-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
