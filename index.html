@@ -4001,11 +4001,6 @@ const TOSS_LINKS = {
   large:  'supertoss://send?amount=29900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
 };
 
-// ── 바우처 코드 ── 결제 확인 후 고객에게 발송하는 코드와 토큰 수를 여기에 입력하세요
-// 예: 'MY24-ABCD': 30  → 고객이 MY24-ABCD 입력 시 30토큰 지급
-const VOUCHER_CODES = {
-  // 'MY-FREE-5': 5,   // ← 이런 형식으로 추가
-};
 
 let selGender = '';
 let selGenderMp = '';
@@ -4521,34 +4516,6 @@ async function _checkAdminBadge() {
   } catch(e) {}
 }
 
-function redeemVoucher() {
-  const input = document.getElementById('voucherInput');
-  const msgEl = document.getElementById('voucherMsg');
-  const code  = (input?.value || '').trim().toUpperCase();
-  if (!code) return;
-
-  let usedCodes = [];
-  try { usedCodes = JSON.parse(localStorage.getItem('myan_used_codes') || '[]'); } catch {}
-
-  const tokens = VOUCHER_CODES[code];
-  if (!tokens || usedCodes.includes(code)) {
-    msgEl.style.color = '#e07070';
-    msgEl.textContent = TX[lang].tkRedeemFail;
-    setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3500);
-    return;
-  }
-
-  usedCodes.push(code);
-  localStorage.setItem('myan_used_codes', JSON.stringify(usedCodes));
-  addTokens(tokens);
-
-  input.value = '';
-  msgEl.style.color = '#4bc87a';
-  msgEl.textContent = TX[lang].tkRedeemOk(tokens);
-  const num = document.getElementById('mypageTokenNum');
-  if (num) num.textContent = getTokens();
-  setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 4000);
-}
 
 function goSignup() {
   document.getElementById('screen-mode').style.display   = 'none';
