@@ -5425,9 +5425,21 @@ function closeTokenModal() {
 
 function openSupport() {
   const user = getUser();
-  const subject = encodeURIComponent({ko:'M;Y 安 1:1 문의', en:'M;Y 安 Support', zh:'M;Y 安 客服', ja:'M;Y 安 サポート'}[lang] || 'M;Y 安 문의');
-  const body    = encodeURIComponent(user ? `이름: ${user.name}\n이메일: ${user.email}\n\n문의 내용:\n` : '문의 내용:\n');
-  window.open(`mailto:riger7070@naver.com?subject=${subject}&body=${body}`, '_blank');
+  const subject = encodeURIComponent({
+    ko: 'M;Y 安 1:1 문의',
+    en: 'M;Y 安 Support',
+    zh: 'M;Y 安 客服',
+    ja: 'M;Y 安 サポート'
+  }[lang] || 'M;Y 安 문의');
+
+  const body = encodeURIComponent(user
+    ? `이름: ${user.name}\n이메일: ${user.email}\n\n문의 내용:\n`
+    : '문의 내용:\n'
+  );
+
+  // ✅ [버그 픽스] window.open 대신 window.location.href를 사용하여
+  // PWA/모바일 환경에서 고스트 흰 화면(새 창) 없이 이메일 앱만 깔끔하게 깨웁니다.
+  window.location.href = `mailto:riger7070@naver.com?subject=${subject}&body=${body}`;
 }
 
 function logout() {
