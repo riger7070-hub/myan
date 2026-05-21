@@ -1,4 +1,4 @@
-// M;Y 安 — Service Worker v1.0
+// M;Y 安 — Service Worker v2.0
 const CACHE_NAME = 'myan-v2';
 const OFFLINE_URL = '/index.html';
 

@@ -32,6 +32,52 @@ function ilchin() {
   return { ci: idx%10, ji: idx%12, o: CGO[idx%10], jo: JJO[idx%12] };
 }
 
+// ════════════════════════════
+//  보안 헬퍼 함수
+// ════════════════════════════
+
+// HTML 이스케이프 (XSS 방지)
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// HMAC-SHA256 서명 생성 (Telegram URL 보안)
+async function hmacSign(secret, data) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// HMAC-SHA256 서명 검증
+async function hmacVerify(secret, data, signature) {
+  const expected = await hmacSign(secret, data);
+  return expected === signature;
+}
+
+// DB 초기화 (워커 인스턴스 당 최초 1회만 실행)
+let _dbReady = false;
+async function ensureDB(env) {
+  if (_dbReady || !env.DB) return;
+  await env.DB.exec(`
+    CREATE TABLE IF NOT EXISTS payment_requests (
+      id          TEXT    PRIMARY KEY,
+      user_email  TEXT    NOT NULL,
+      pkg         TEXT    NOT NULL,
+      amount      INTEGER NOT NULL DEFAULT 0,
+      tokens      INTEGER NOT NULL DEFAULT 0,
+      status      TEXT    NOT NULL DEFAULT 'pending',
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+      approved_at INTEGER
+    )
+  `).catch(() => {});
+  _dbReady = true;
+}
+
 export default {
   async fetch(request, env) {
     const url    = new URL(request.url);
@@ -42,20 +88,7 @@ export default {
       return cors(null, 204);
     }
 
-    if (env.DB) {
-      await env.DB.exec(`
-        CREATE TABLE IF NOT EXISTS payment_requests (
-          id          TEXT    PRIMARY KEY,
-          user_email  TEXT    NOT NULL,
-          pkg         TEXT    NOT NULL,
-          amount      INTEGER NOT NULL DEFAULT 0,
-          tokens      INTEGER NOT NULL DEFAULT 0,
-          status      TEXT    NOT NULL DEFAULT 'pending',
-          created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
-          approved_at INTEGER
-        )
-      `).catch(() => {});
-    }
+    await ensureDB(env);
 
     if (path === '/user-tokens' && method === 'GET') return handleUserTokens(request, env);
     if (path === '/migrate-tokens' && method === 'POST') return handleMigrateTokens(request, env);
@@ -197,7 +230,7 @@ async function handleGeminiChat(request, env) {
     return cors(JSON.stringify(data), 200);
 
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    return cors(JSON.stringify({ error: { message: '서버 오류가 발생했습니다.' } }), 500);
   }
 }
 
@@ -207,19 +240,25 @@ async function handleGeminiChat(request, env) {
 
 async function getEmailFromToken(idToken, env) {
   try {
+    // 1) 만료일 선행 체크 (빠른 거부 — 네트워크 절약)
     const parts = idToken.split('.');
     if (parts.length !== 3) return null;
-
-    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4) { base64 += '='; }
-
-    const binString = atob(base64);
-    const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    
+    let b64 = parts[1].replace(/-/g,'+').replace(/_/g,'/');
+    while (b64.length % 4) b64 += '=';
+    const payload = JSON.parse(atob(b64));
     if (payload.exp && Date.now() / 1000 > payload.exp) return null;
 
-    return payload.email || null;
+    // 2) Google tokeninfo API로 서명 검증 (위변조 방지 핵심)
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`
+    );
+    if (!res.ok) return null;
+    const info = await res.json();
+
+    // 이메일 인증 여부 확인
+    if (!info.email || info.email_verified !== 'true') return null;
+
+    return info.email;
   } catch { return null; }
 }
 
@@ -249,7 +288,7 @@ async function handleMigrateTokens(request, env) {
   let body;
   try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
 
-  const localTokens = parseInt(body.tokens, 10) || 0;
+  const localTokens = Math.min(parseInt(body.tokens, 10) || 0, 30); // 최대 30개 상한
   if (localTokens <= 0) return cors(JSON.stringify({ ok: true, tokens: 0, migrated: true }));
 
   const existing = await env.DB.prepare(
@@ -446,10 +485,11 @@ async function handleAdminGrantTokens(request, env) {
 
 async function handleTelegramApprove(request, env) {
   const url    = new URL(request.url);
-  const id     = url.searchParams.get('id');
-  const secret = url.searchParams.get('secret');
+  const id    = url.searchParams.get('id');
+  const token = url.searchParams.get('token');
 
-  if (!secret || secret !== env.ADMIN_SECRET) {
+  // HMAC 서명 검증 — URL에서 ADMIN_SECRET 완전 제거
+  if (!id || !token || !await hmacVerify(env.ADMIN_SECRET, id, token)) {
     return htmlPage('❌ 인증 실패', '올바르지 않은 접근입니다.');
   }
   if (!id) return htmlPage('❌ 오류', '결제 ID가 없습니다.');
@@ -484,7 +524,9 @@ async function handleTelegramApprove(request, env) {
 
 async function sendTelegramNotification(env, workerBase, { id, email, pkg, amount, tokens }) {
   const PKG_LABEL = { small:'소 (30토큰)', medium:'중 (100토큰)', large:'대 (300토큰)' };
-  const approveUrl = `${workerBase}/admin/telegram-approve?id=${id}&secret=${env.ADMIN_SECRET}`;
+  // HMAC 서명으로 승인 URL 생성 — ADMIN_SECRET을 URL에 직접 노출하지 않음
+  const token = await hmacSign(env.ADMIN_SECRET, id);
+  const approveUrl = `${workerBase}/admin/telegram-approve?id=${id}&token=${token}`;
 
   const text =
     `💰 새 결제 요청\n\n` +
@@ -505,10 +547,12 @@ async function sendTelegramNotification(env, workerBase, { id, email, pkg, amoun
 }
 
 function htmlPage(title, desc) {
+  const t = escapeHtml(title);
+  const d = escapeHtml(desc);
   return new Response(
     `<!DOCTYPE html><html><head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>${title}</title>
+    <title>${t}</title>
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
       body{font-family:-apple-system,'Pretendard',sans-serif;background:#060608;color:#c9a96e;
@@ -520,9 +564,9 @@ function htmlPage(title, desc) {
       .brand{margin-top:32px;font-size:0.7rem;letter-spacing:4px;color:rgba(201,169,110,0.4)}
     </style>
     </head><body>
-    <div class="box"><h1>${title}</h1><p>${desc}</p><div class="brand">M ; Y 安</div></div>
+    <div class="box"><h1>${t}</h1><p>${d}</p><div class="brand">M ; Y 安</div></div>
     </body></html>`,
-    { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+    { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8', 'X-Content-Type-Options': 'nosniff' } }
   );
 }
 
@@ -531,7 +575,13 @@ function htmlPage(title, desc) {
 // ════════════════════════════
 async function handlePaymentVerify(request, env) {
   try {
-    const { paymentId, pkg, email, amount, tokens } = await request.json();
+    // 0. 인증 토큰에서 이메일 추출 (클라이언트 body 값 신뢰 X)
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { paymentId, pkg, amount, tokens } = await request.json();
 
     // 1. 포트원 V2 API로 결제 단독 조회 (위변조 방지)
     //    Cloudflare Worker Secret: PORTONE_SECRET = V2 API Secret
@@ -572,7 +622,7 @@ async function handlePaymentVerify(request, env) {
     }));
 
   } catch (err) {
-    return cors(JSON.stringify({ error: { message: err.message } }), 500);
+    return cors(JSON.stringify({ error: { message: '결제 처리 중 오류가 발생했습니다.' } }), 500);
   }
 }
 
@@ -581,9 +631,10 @@ function cors(body, status = 200) {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': 'https://myan.riger7070.workers.dev',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-admin-secret, Authorization',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }
