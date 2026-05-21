@@ -43,6 +43,7 @@
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.iamport.kr/v1/iamport.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;400;700&family=Pretendard:wght@300;400;600&display=swap');
 
@@ -3187,14 +3188,14 @@ body {
       <div class="token-modal-balance-lbl" id="tmBalanceLbl">TOKENS</div>
     </div>
     <div class="pkg-grid">
-      <div class="pkg-card" onclick="openTossPay('small')">
+      <div class="pkg-card" onclick="buyToken('S')">
         <div class="pkg-badge" id="tmBadge0"></div>
         <div class="pkg-tokens">30</div>
         <div class="pkg-price">4,900원</div>
         <div class="pkg-unit-price">약 163원 / 토큰</div>
         <button class="pkg-btn" id="tmBtn0"></button>
       </div>
-      <div class="pkg-card best-card" onclick="openTossPay('medium')">
+      <div class="pkg-card best-card" onclick="buyToken('M')">
         <div class="pkg-best-badge">가장 인기</div>
         <div class="pkg-badge" id="tmBadge1"></div>
         <div class="pkg-tokens">100</div>
@@ -3202,7 +3203,7 @@ body {
         <div class="pkg-unit-price">약 129원 / 토큰</div>
         <button class="pkg-btn" id="tmBtn1"></button>
       </div>
-      <div class="pkg-card" onclick="openTossPay('large')">
+      <div class="pkg-card" onclick="buyToken('L')">
         <div class="pkg-badge" id="tmBadge2"></div>
         <div class="pkg-tokens">300</div>
         <div class="pkg-price">29,900원</div>
@@ -4611,6 +4612,64 @@ const PAY_TX = {
 
 function _pt(key) { return (PAY_TX[lang] || PAY_TX.ko)[key] || ''; }
 
+// ── 포트원(iamport) PG 결제창 호출 ──
+function buyToken(pkg) {
+  const user = getUser();
+  if (!user || !isLoggedIn()) { showLogin(); return; }
+
+  const pkgs = {
+    'S': { name: '마이안 토큰 30개',  amount: 4900,  tokens: 30 },
+    'M': { name: '마이안 토큰 100개', amount: 12900, tokens: 100 },
+    'L': { name: '마이안 토큰 300개', amount: 29900, tokens: 300 }
+  };
+  const selected = pkgs[pkg];
+  if (!selected) return;
+
+  // 💡 포트원 관리자 콘솔(https://admin.portone.io) 에서 확인한 가맹점 식별코드로 교체하세요.
+  IMP.init('imp_XXXXXXXX');
+
+  const merchantUid = `myan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+
+  IMP.request_pay({
+    pg:           'kakaopay.TC0DMERCHM', // 테스트 코드 — 실서비스 계약 후 발급받은 코드로 변경
+    pay_method:   'card',
+    merchant_uid: merchantUid,
+    name:         selected.name,
+    amount:       selected.amount,
+    buyer_email:  user.email,
+    buyer_name:   user.name,
+  }, async function(rsp) {
+    if (rsp.success) {
+      try {
+        const res = await fetch(`${EP}api/payment/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({
+            imp_uid:      rsp.imp_uid,
+            merchant_uid: rsp.merchant_uid,
+            pkg,
+            email:        user.email,
+            amount:       selected.amount,
+            tokens:       selected.tokens
+          })
+        });
+        const result = await res.json();
+        if (result.success) {
+          alert(`✦ ${selected.tokens}토큰이 충전되었습니다!`);
+          if (typeof _onUserUpdated === 'function') _onUserUpdated();
+          closeTokenModal();
+        } else {
+          alert(`결제 검증 실패: ${result.error?.message || '고객센터로 문의해 주세요.'}`);
+        }
+      } catch(err) {
+        alert('결제 후 서버 통신 실패. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
+      }
+    } else {
+      if (rsp.error_msg) alert(`결제 취소: ${rsp.error_msg}`);
+    }
+  });
+}
+
 function openTossPay(pkg) {
   const link = TOSS_LINKS[pkg];
   if (!link) {
@@ -5485,7 +5544,7 @@ const LEGAL_CONTENT = {
 <div style="background:rgba(255,255,255,0.02); padding:16px; border-radius:12px; border:1px solid rgba(201,169,110,0.15); line-height:2; margin-top:12px;">
   • 상호(서비스명): M;Y 安 (마이안)<br>
   • 대표자 성명: <b>안태현</b><br>
-  • 사업자등록번호: <b>[사업자등록번호 입력 칸]</b><br>
+  • 사업자등록번호: <b>501-33-63980</b><br>
   • 주소: <b>부산광역시 수영구 망미동 현대한누리타운 101-1101</b><br>
   • 개인정보 보호책임자: <b>안태현</b><br>
   • 연락처/이메일: riger7070@naver.com
