@@ -522,47 +522,37 @@ function htmlPage(title, desc) {
 }
 
 // ════════════════════════════
-//  포트원 결제 검증 핸들러
+//  포트원 V2 결제 검증 핸들러
 // ════════════════════════════
 async function handlePaymentVerify(request, env) {
   try {
-    const { imp_uid, merchant_uid, pkg, email, amount, tokens } = await request.json();
+    const { paymentId, pkg, email, amount, tokens } = await request.json();
 
-    // 1. 포트원 Access Token 발급
-    const tokenRes = await fetch('https://api.iamport.kr/users/getToken', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imp_key:    env.IMP_KEY,    // 포트원 REST API Key  (Worker Secret에 저장)
-        imp_secret: env.IMP_SECRET, // 포트원 REST API Secret (Worker Secret에 저장)
-      })
-    });
-    const tokenData = await tokenRes.json();
-    if (tokenData.code !== 0) {
-      return cors(JSON.stringify({ error: { message: '포트원 인증 실패' } }), 400);
+    // 1. 포트원 V2 API로 결제 단독 조회 (위변조 방지)
+    //    Cloudflare Worker Secret: PORTONE_SECRET = V2 API Secret
+    const verifyRes = await fetch(
+      `https://api.portone.io/payments/${encodeURIComponent(paymentId)}`,
+      { headers: { Authorization: `PortOne ${env.PORTONE_SECRET}` } }
+    );
+
+    if (!verifyRes.ok) {
+      return cors(JSON.stringify({ error: { message: '포트원 결제 조회 실패' } }), 400);
     }
-    const accessToken = tokenData.response.access_token;
 
-    // 2. 실제 결제 금액 단독 검증 (위변조 방지)
-    const payRes = await fetch(`https://api.iamport.kr/payments/${imp_uid}`, {
-      headers: { Authorization: accessToken }
-    });
-    const payData = await payRes.json();
-    const paid = payData.response;
+    const payment = await verifyRes.json();
 
-    if (!paid || paid.status !== 'paid' || paid.amount !== amount) {
-      return cors(JSON.stringify({ error: { message: '결제 금액 불일치 — 위변조 감지' } }), 400);
+    // 2. 실제 결제 금액·상태 교차 검증
+    if (payment.status !== 'PAID' || payment.amount?.total !== amount) {
+      return cors(JSON.stringify({ error: { message: '결제 금액 불일치 또는 미완료 — 위변조 감지' } }), 400);
     }
 
     // 3. 검증 통과 → D1 DB에 approved 상태로 기록
-    const reqId = imp_uid || merchant_uid;
-    const now   = Math.floor(Date.now() / 1000);
-
+    const now = Math.floor(Date.now() / 1000);
     await env.DB.prepare(`
       INSERT OR IGNORE INTO payment_requests
         (id, user_email, pkg, amount, tokens, status, created_at, approved_at)
       VALUES (?, ?, ?, ?, ?, 'approved', ?, ?)
-    `).bind(reqId, email, pkg, amount, tokens, now, now).run();
+    `).bind(paymentId, email, pkg, amount, tokens, now, now).run();
 
     // 4. 최신 잔액 계산 후 반환
     const balRes = await env.DB.prepare(`
