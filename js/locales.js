@@ -53,7 +53,7 @@ const TX = {
     loginFail:'아이디 또는 비밀번호가 올바르지 않습니다.',
     mpSupport:'✉ 1:1 고객센터',
     quickTokenTitle:'토큰 충전', quickTokenDesc:'대화권 충전하기',
-    quickSupportTitle:'1대1 상담', quickSupportDesc:'이메일로 문의하기',
+    quickSupportTitle:'1대1 상담', quickSupportDesc:'카카오로 바로 상담',
     tmNote:'정상적으로 리딩 답변이 완료될 때만 1토큰이 차감됩니다.\n신규 가입 시 3토큰이 무료 지급됩니다.',
     guideSkip:'오늘 하루 보지 않기',
     guideTitle:'M;Y 安 이용 안내',
