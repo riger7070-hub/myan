@@ -69,18 +69,9 @@ export default {
     if (path === '/chat' && method === 'POST') return handleGeminiChat(request, env);
     if (path === '/api/payment/verify' && method === 'POST') return handlePaymentVerify(request, env);
 
-    // 루트 경로: Pages에서 index.html 가져와서 서빙
-    if (path === '/' && method === 'GET') {
-      const res = await fetch('https://myan-an.pages.dev/', {
-        headers: { 'User-Agent': 'Cloudflare-Worker-Proxy' }
-      });
-      const html = await res.text();
-      return new Response(html, {
-        headers: {
-          'Content-Type': 'text/html; charset=UTF-8',
-          'Cache-Control': 'no-cache',
-        }
-      });
+    // 루트 경로: Worker Assets에서 index.html 직접 서빙
+    if (method === 'GET') {
+      return env.ASSETS.fetch(request);
     }
 
     return cors(JSON.stringify({ error: { message: 'Not Found' } }), 404);
