@@ -2764,10 +2764,17 @@ body {
       </div>
     </div>
 
-    <div class="legal-footer">
-      <a href="#" onclick="openLegal('privacy');return false;">개인정보처리방침</a>
-      <a href="#" onclick="openLegal('refund');return false;">환불정책</a>
-      <a href="#" onclick="openLegal('terms');return false;">이용약관</a>
+    <div class="legal-footer" style="flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px;">
+      <div style="display: flex; gap: 16px;">
+        <a href="#" onclick="openLegal('privacy');return false;">개인정보처리방침</a>
+        <a href="#" onclick="openLegal('refund');return false;">환불정책</a>
+        <a href="#" onclick="openLegal('terms');return false;">이용약관</a>
+      </div>
+      <div class="biz-info" style="font-size: 0.65rem; color: rgba(201,169,110,0.3); text-align: center; line-height: 1.6; margin-top: 4px; word-break: keep-all;">
+        상호명: M;Y 安 (마이안) &nbsp;|&nbsp; 대표자: 안태현 &nbsp;|&nbsp; 사업자등록번호: 501-33-63980<br>
+        통신판매업신고: 2026-부산수영-0348호 &nbsp;|&nbsp; 호스팅 제공자: Cloudflare, Inc.<br>
+        주소: 부산광역시 수영구 망미동 현대한누리타운 101-1101 &nbsp;|&nbsp; 이메일: riger7070@naver.com
+      </div>
     </div>
 
 
@@ -2999,14 +3006,14 @@ body {
       </div>
 
       <div class="pkg-grid">
-        <div class="pkg-card" onclick="openTossPay('small')">
+        <div class="pkg-card" onclick="buyToken('S')">
           <div class="pkg-badge" id="pkgBadge0"></div>
           <div class="pkg-tokens">30</div>
           <div class="pkg-price">4,900원</div>
           <div class="pkg-unit-price">약 163원 / 토큰</div>
           <button class="pkg-btn" id="pkgBtn0"></button>
         </div>
-        <div class="pkg-card best-card" onclick="openTossPay('medium')">
+        <div class="pkg-card best-card" onclick="buyToken('M')">
           <div class="pkg-best-badge">가장 인기</div>
           <div class="pkg-badge" id="pkgBadge1"></div>
           <div class="pkg-tokens">100</div>
@@ -3014,7 +3021,7 @@ body {
           <div class="pkg-unit-price">약 129원 / 토큰</div>
           <button class="pkg-btn" id="pkgBtn1"></button>
         </div>
-        <div class="pkg-card" onclick="openTossPay('large')">
+        <div class="pkg-card" onclick="buyToken('L')">
           <div class="pkg-badge" id="pkgBadge2"></div>
           <div class="pkg-tokens">300</div>
           <div class="pkg-price">29,900원</div>
