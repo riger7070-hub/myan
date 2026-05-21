@@ -2630,3 +2630,87 @@ select.fif-input option { background: #ffffff !important; color: #111111 !import
 select { color: #111111 !important; }
 /* option 목록이 펼쳐질 때만 흰 배경 + 검정 글씨 */
 select option { background-color: #ffffff !important; color: #111111 !important; }
+
+/* ── 메인화면 언어 선택 행 ──────────────────────────────────────── */
+.main-lang-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px 4px;
+}
+.main-lb {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color .2s, color .2s;
+  letter-spacing: 0.3px;
+}
+.main-lb:hover { border-color: rgba(201,169,110,0.4); color: var(--gold-dim); }
+.main-lb.on { border-color: var(--gold-dim); color: var(--gold); }
+
+/* ── 마이페이지 토큰 0 안내 ─────────────────────────────────────── */
+.mp-zero-note {
+  margin: 12px 20px 0;
+  padding: 12px 16px;
+  background: rgba(201,169,110,0.08);
+  border: 1px solid rgba(201,169,110,0.22);
+  border-radius: 12px;
+  font-size: 0.78rem;
+  color: var(--gold-dim);
+  line-height: 1.55;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+
+/* ── 마이페이지 하단 카드 (충전·상담) ──────────────────────────── */
+.mp-bottom-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 20px 24px;
+}
+.mp-bottom-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.mp-bottom-card:hover {
+  border-color: rgba(201,169,110,0.25);
+  background: rgba(201,169,110,0.05);
+}
+.mp-bc-icon {
+  font-size: 1.3rem;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--gold);
+}
+.mp-bc-body { flex: 1; min-width: 0; }
+.mp-bc-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+  letter-spacing: 0.2px;
+}
+.mp-bc-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.mp-bc-arrow {
+  font-size: 1.2rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  opacity: 0.6;
+}

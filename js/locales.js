@@ -38,7 +38,7 @@ const TX = {
     mpSave:'저장하기', mpSaved:'저장되었습니다 ✦',
     mpLogout:'로그아웃', mpWithdraw:'회원 탈퇴',
     mpLogoutQ:'다시 누르면 로그아웃됩니다', mpWithdrawQ:'다시 누르면 탈퇴됩니다',
-    tkSection:'토큰 충전', tkUnit:'TOKENS',
+    tkSection:'잔여 토큰', tkUnit:'TOKENS',
     noToken:'토큰이 부족합니다.\n마이페이지에서 충전 후 이용해 주세요.',
     tkPkgS:'소', tkPkgM:'중', tkPkgL:'대', tkSub:'구독형', tkUnlimited:'무제한',
     tkPayBtn:'Toss로 결제하기',
@@ -65,6 +65,28 @@ const TX = {
       '✦  일진은 매일 자정에 갱신되어 새로운 기운 처방이 제공됩니다.',
     ],
     guideBtn:'확인, 시작합니다',
+    // 드로어 메뉴 다국어
+    drNav:'바로가기', drLangLabel:'언어', drThemeLabel:'화면', drAccountLabel:'계정',
+    drHome:'처음으로', drHomeSub:'메인 화면으로 돌아가기',
+    drSoloTitle:'나만의 리딩', drSoloSub:'오늘 나의 오행 기운 풀이',
+    drCoupleTitle:'우리의 조화', drCoupleSub:'두 사람의 오행 궁합 풀이',
+    drMypageTitle:'마이페이지', drMypageSub:'토큰 · 생년월일 · 설정',
+    drCalTitle:'나의 기운 캘린더', drCalSub:'리딩 기록 · 오행 색 달력',
+    drThemeTitle:'테마', drDark:'🌙 다크', drLight:'☀️ 라이트',
+    drSupportTitle:'1:1 카카오 상담', drLogoutTitle:'로그아웃',
+    // 첫 입력 폼
+    fifLblName:'성함', fifLblYear:'태어난 해', fifLblMonth:'월', fifLblDay:'일',
+    fifLblTime:'태어난 시간', fifTimeOpt:'(선택)', fifTimeUnknown:'모름 / 선택 안 함',
+    fifOptNote:'시간을 모르시면 비워두셔도 됩니다',
+    fifSubmitBtn:'기운 리딩 시작하기 ›',
+    fifNamePh:'홍길동',
+    // 추천 칩
+    suggestChips:['오늘 재물운','이직해도 될까요?','오늘 피해야 할 것','지금 연애운','오늘 하루 총운'],
+    // 마이페이지 하단
+    mpZeroNote:'토큰이 없습니다. 아래에서 충전하시면 리딩을 계속하실 수 있어요 ✦',
+    mpBotCharge:'토큰 충전', mpBotChargeDesc:'잔여 토큰 충전하기',
+    mpBotSupport:'1:1 카카오 상담', mpBotSupportDesc:'궁금한 점을 바로 물어보세요',
+
   },
   en:{
     tagline:'Prescribing nourishment for the soul',
@@ -103,7 +125,7 @@ const TX = {
     mpSave:'Save Changes', mpSaved:'Saved ✦',
     mpLogout:'Log Out', mpWithdraw:'Delete Account',
     mpLogoutQ:'Tap again to log out', mpWithdrawQ:'Tap again to delete account',
-    tkSection:'Top Up Tokens', tkUnit:'TOKENS',
+    tkSection:'Remaining Tokens', tkUnit:'TOKENS',
     noToken:'Not enough tokens.\nPlease top up in My Page.',
     tkPkgS:'Small', tkPkgM:'Medium', tkPkgL:'Large', tkSub:'Subscription', tkUnlimited:'Unlimited',
     tkPayBtn:'Pay with Toss',
@@ -130,6 +152,28 @@ const TX = {
       '✦  The daily Ilchin refreshes at midnight, bringing a new energy prescription each day.',
     ],
     guideBtn:'Got it — Let\'s start',
+    // Drawer menu translations
+    drNav:'Quick Access', drLangLabel:'Language', drThemeLabel:'Display', drAccountLabel:'Account',
+    drHome:'Home', drHomeSub:'Back to main screen',
+    drSoloTitle:'My Reading', drSoloSub:"Today's Ohaeng energy reading",
+    drCoupleTitle:'Our Harmony', drCoupleSub:"Two people's Ohaeng compatibility",
+    drMypageTitle:'My Page', drMypageSub:'Tokens · Profile · Settings',
+    drCalTitle:'Energy Calendar', drCalSub:'Reading history · Calendar',
+    drThemeTitle:'Theme', drDark:'🌙 Dark', drLight:'☀️ Light',
+    drSupportTitle:'1:1 KakaoTalk Chat', drLogoutTitle:'Log out',
+    // First input form
+    fifLblName:'Your Name', fifLblYear:'Birth Year', fifLblMonth:'Month', fifLblDay:'Day',
+    fifLblTime:'Birth Time', fifTimeOpt:'(optional)', fifTimeUnknown:'Unknown / Skip',
+    fifOptNote:'You may leave the time blank if you are unsure',
+    fifSubmitBtn:'Start My Reading ›',
+    fifNamePh:'Jane Doe',
+    // Suggest chips
+    suggestChips:['Wealth today','Should I change jobs?','What to avoid today','Love fortune','Daily outlook'],
+    // Mypage bottom
+    mpZeroNote:'No tokens left. Charge below to continue your reading ✦',
+    mpBotCharge:'Buy Tokens', mpBotChargeDesc:'Top up to continue readings',
+    mpBotSupport:'KakaoTalk Support', mpBotSupportDesc:'Ask us anything, anytime',
+
   },
   zh:{
     tagline:'为心灵开具营养处方',
@@ -168,7 +212,7 @@ const TX = {
     mpSave:'保存', mpSaved:'已保存 ✦',
     mpLogout:'退出登录', mpWithdraw:'注销账号',
     mpLogoutQ:'再次点击确认退出', mpWithdrawQ:'再次点击确认注销',
-    tkSection:'充值代币', tkUnit:'TOKENS',
+    tkSection:'剩余代币', tkUnit:'TOKENS',
     noToken:'代币不足。\n请前往个人页面充值。',
     tkPkgS:'小', tkPkgM:'中', tkPkgL:'大', tkSub:'订阅制', tkUnlimited:'无限制',
     tkPayBtn:'Toss付款',
@@ -195,6 +239,28 @@ const TX = {
       '✦  日辰每天午夜更新，每天提供全新的气运处方。',
     ],
     guideBtn:'明白了，开始吧',
+    // 抽屉菜单翻译
+    drNav:'快捷导航', drLangLabel:'语言', drThemeLabel:'显示', drAccountLabel:'账户',
+    drHome:'首页', drHomeSub:'返回主界面',
+    drSoloTitle:'个人解读', drSoloSub:'今日五行气运解析',
+    drCoupleTitle:'缘分和谐', drCoupleSub:'两人五行宫合解析',
+    drMypageTitle:'我的页面', drMypageSub:'代币 · 生日 · 设置',
+    drCalTitle:'气运日历', drCalSub:'解读记录 · 五行色彩日历',
+    drThemeTitle:'主题', drDark:'🌙 深色', drLight:'☀️ 浅色',
+    drSupportTitle:'1:1 客服咨询', drLogoutTitle:'退出登录',
+    // 首次输入表单
+    fifLblName:'姓名', fifLblYear:'出生年', fifLblMonth:'月', fifLblDay:'日',
+    fifLblTime:'出生时辰', fifTimeOpt:'(可选)', fifTimeUnknown:'不知道 / 跳过',
+    fifOptNote:'不知道出生时辰可以留空',
+    fifSubmitBtn:'开始气运解读 ›',
+    fifNamePh:'张三',
+    // 推荐话题
+    suggestChips:['今日财运','可以换工作吗？','今日应避之事','爱情运势','今日总运'],
+    // 我的页面底部
+    mpZeroNote:'代币不足，请在下方充值后继续解读 ✦',
+    mpBotCharge:'充值代币', mpBotChargeDesc:'充值后继续解读',
+    mpBotSupport:'1:1 客服咨询', mpBotSupportDesc:'随时欢迎咨询',
+
   },
   ja:{
     tagline:'心の栄養を処方します',
@@ -233,7 +299,7 @@ const TX = {
     mpSave:'保存する', mpSaved:'保存しました ✦',
     mpLogout:'ログアウト', mpWithdraw:'退会する',
     mpLogoutQ:'もう一度でログアウト', mpWithdrawQ:'もう一度で退会します',
-    tkSection:'トークンチャージ', tkUnit:'TOKENS',
+    tkSection:'残りトークン', tkUnit:'TOKENS',
     noToken:'トークンが不足しています。\nマイページでチャージしてください。',
     tkPkgS:'小', tkPkgM:'中', tkPkgL:'大', tkSub:'サブスク', tkUnlimited:'無制限',
     tkPayBtn:'Tossで決済',
@@ -260,6 +326,25 @@ const TX = {
       '✦  日辰は毎日深夜に更新され、毎日新しい気運処方をお届けします。',
     ],
     guideBtn:'確認、はじめる',
+    // ドロワーメニュー翻訳
+    drNav:'ナビゲーション', drLangLabel:'言語', drThemeLabel:'表示', drAccountLabel:'アカウント',
+    drHome:'ホーム', drHomeSub:'メイン画面に戻る',
+    drSoloTitle:'マイリーディング', drSoloSub:'今日の五行エネルギー解読',
+    drCoupleTitle:'ふたりの調和', drCoupleSub:'二人の五行相性解読',
+    drMypageTitle:'マイページ', drMypageSub:'トークン · 生年月日 · 設定',
+    drCalTitle:'エネルギーカレンダー', drCalSub:'リーディング履歴 · 五行カレンダー',
+    drThemeTitle:'テーマ', drDark:'🌙 ダーク', drLight:'☀️ ライト',
+    drSupportTitle:'1:1 カカオ相談', drLogoutTitle:'ログアウト',
+    fifLblName:'お名前', fifLblYear:'生まれ年', fifLblMonth:'月', fifLblDay:'日',
+    fifLblTime:'生まれ時刻', fifTimeOpt:'(任意)', fifTimeUnknown:'不明 / スキップ',
+    fifOptNote:'時刻が不明な場合は空白のままで構いません',
+    fifSubmitBtn:'リーディングを始める ›',
+    fifNamePh:'山田太郎',
+    suggestChips:['今日の金運','転職すべきか？','今日避けること','恋愛運','今日の総合運'],
+    mpZeroNote:'トークンがありません。以下から充電してリーディングを続けましょう ✦',
+    mpBotCharge:'トークン充電', mpBotChargeDesc:'続けるために充電する',
+    mpBotSupport:'1:1 カカオ相談', mpBotSupportDesc:'いつでもお気軽にどうぞ',
+
   },
 };
 

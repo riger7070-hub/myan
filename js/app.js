@@ -499,6 +499,13 @@ function updateAllTokenDisplays() {
   if (chip)  chip.classList.toggle('low', t > 0 && t <= 5);
   if (num)   num.textContent = t;
   if (tmNum) tmNum.textContent = t;
+  // 토큰 0 안내 표시
+  const zeroNote = document.getElementById('mpZeroNote');
+  if (zeroNote) {
+    const msg = (TX[lang] || TX.ko).mpZeroNote;
+    zeroNote.textContent = msg || '';
+    zeroNote.style.display = (t === 0) ? 'block' : 'none';
+  }
 }
 
 // ── 결제 모달 상태 ──
@@ -1357,7 +1364,6 @@ function renderMyPage() {
   document.getElementById('mpGbF').textContent        = t.sgF;
   document.getElementById('mypageSaveBtn').textContent    = t.mpSave;
   document.getElementById('mypageNotice').textContent     = '';
-  document.getElementById('mypageSupportBtn').textContent = t.mpSupport || '✉ 고객센터';
   document.getElementById('mypageLogoutBtn').textContent  = t.mpLogout;
   document.getElementById('mypageWithdrawBtn').textContent = t.mpWithdraw;
   // 알림 버튼 현재 상태 반영
@@ -1386,12 +1392,6 @@ function renderMyPage() {
   document.getElementById('tkSectionLbl').textContent      = t.tkSection;
   document.getElementById('mypageTokenUnitLbl').textContent = t.tkUnit;
   document.getElementById('mypageTokenNum').textContent    = getTokens();
-  document.getElementById('pkgBadge0').textContent         = t.tkPkgS;
-  document.getElementById('pkgBadge1').textContent         = t.tkPkgM;
-  document.getElementById('pkgBadge2').textContent         = t.tkPkgL;
-  document.getElementById('pkgBtn0').textContent           = t.tkPayBtn;
-  document.getElementById('pkgBtn1').textContent           = t.tkPayBtn;
-  document.getElementById('pkgBtn2').textContent           = t.tkPayBtn;
 
   // 오행 분포 게이지 — AI 정밀 분석 데이터 우선, 없으면 JS 계산 값 표시
   const _savedOhaeng = (() => {
@@ -1942,13 +1942,61 @@ function _syncDrawerState() {
 }
 
 function _syncDrawerLangs() {
+  const t = TX[lang] || TX.ko;
+
+  // ── 언어 버튼 활성화 동기화 (드로어 + 메인화면) ──
   ['ko','en','zh','ja'].forEach(l => {
     document.getElementById('dlb-' + l)?.classList.toggle('on', lang === l);
+    document.getElementById('mlb-' + l)?.classList.toggle('on', lang === l);
   });
-  // 기존 헤더 lang 버튼도 동기화
-  document.querySelectorAll('.lb').forEach(b => b.classList.remove('on'));
-  const hBtn = document.querySelector(`.lb[onclick="setLang('${lang}')"]`);
-  if (hBtn) hBtn.classList.add('on');
+
+  // ── 드로어 텍스트 다국어 업데이트 ──
+  const _t = (id, txt) => { const el = document.getElementById(id); if (el && txt) el.textContent = txt; };
+  _t('drLblNav',     t.drNav);
+  _t('drLblLang',    t.drLangLabel);
+  _t('drLblTheme',   t.drThemeLabel);
+  _t('drLblAccount', t.drAccountLabel);
+  _t('drTxtHome',    t.drHome);      _t('drSubHome',   t.drHomeSub);
+  _t('drTxtSolo',    t.drSoloTitle); _t('drSubSolo',   t.drSoloSub);
+  _t('drTxtCouple',  t.drCoupleTitle); _t('drSubCouple', t.drCoupleSub);
+  _t('drTxtMypage',  t.drMypageTitle); _t('drSubMypage', t.drMypageSub);
+  _t('drTxtCal',     t.drCalTitle);  _t('drSubCal',    t.drCalSub);
+  _t('drTxtTheme',   t.drThemeTitle);
+  _t('drTxtSupport', t.drSupportTitle);
+  _t('drTxtLogout',  t.drLogoutTitle);
+
+  // ── firstInputForm 라벨 다국어 ──
+  _t('fifLblName',   t.fifLblName);
+  _t('fifLblYear',   t.fifLblYear);
+  _t('fifLblMonth',  t.fifLblMonth);
+  _t('fifLblDay',    t.fifLblDay);
+  _t('fifLblTime',   t.fifLblTime);   // span은 별도 처리
+  const fifTimeOptEl = document.getElementById('fifTimeOpt');
+  if (fifTimeOptEl) fifTimeOptEl.textContent = t.fifTimeOpt || '(선택)';
+  _t('fifOptNote',   t.fifOptNote);
+  _t('fifSubmitBtn', t.fifSubmitBtn);
+  const fifNameEl = document.getElementById('fifName');
+  if (fifNameEl) fifNameEl.placeholder = t.fifNamePh || '홍길동';
+
+  // fifTime 옵션 목록 다국어 (시진은 한국어 고정, 첫 항목만 번역)
+  const fifTimeEl = document.getElementById('fifTime');
+  if (fifTimeEl && fifTimeEl.options[0]) {
+    fifTimeEl.options[0].textContent = t.fifTimeUnknown || '모름 / 선택 안 함';
+  }
+
+  // ── 추천 칩 다국어 ──
+  if (t.suggestChips) {
+    t.suggestChips.forEach((txt, i) => {
+      const chip = document.getElementById('chip' + i);
+      if (chip) chip.textContent = txt;
+    });
+  }
+
+  // ── 마이페이지 하단 카드 다국어 ──
+  _t('mpBotChargeTitle',  t.mpBotCharge);
+  _t('mpBotChargeDesc',   t.mpBotChargeDesc);
+  _t('mpBotSupportTitle', t.mpBotSupport);
+  _t('mpBotSupportDesc',  t.mpBotSupportDesc);
 }
 
 function _syncDrawerTheme() {

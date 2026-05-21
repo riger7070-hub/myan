@@ -159,6 +159,13 @@
       </div>
     </div>
 
+    <div class="main-lang-row">
+      <button class="main-lb" id="mlb-ko" onclick="setLang('ko');_syncDrawerLangs()">한국어</button>
+      <button class="main-lb" id="mlb-en" onclick="setLang('en');_syncDrawerLangs()">English</button>
+      <button class="main-lb" id="mlb-zh" onclick="setLang('zh');_syncDrawerLangs()">中文</button>
+      <button class="main-lb" id="mlb-ja" onclick="setLang('ja');_syncDrawerLangs()">日本語</button>
+    </div>
+
     <div class="legal-footer" style="flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px;">
       <div style="display: flex; gap: 16px;">
         <a href="#" onclick="openLegal('privacy');return false;">개인정보처리방침</a>
@@ -179,40 +186,40 @@
     <div id="chat-window"></div>
 
     <div class="suggest-chips" id="suggestChips">
-      <span class="suggest-chip" onclick="useSuggest(this)">오늘 재물운</span>
-      <span class="suggest-chip" onclick="useSuggest(this)">이직해도 될까요?</span>
-      <span class="suggest-chip" onclick="useSuggest(this)">오늘 피해야 할 것</span>
-      <span class="suggest-chip" onclick="useSuggest(this)">지금 연애운</span>
-      <span class="suggest-chip" onclick="useSuggest(this)">오늘 하루 총운</span>
+      <span class="suggest-chip" id="chip0" onclick="useSuggest(this)">오늘 재물운</span>
+      <span class="suggest-chip" id="chip1" onclick="useSuggest(this)">이직해도 될까요?</span>
+      <span class="suggest-chip" id="chip2" onclick="useSuggest(this)">오늘 피해야 할 것</span>
+      <span class="suggest-chip" id="chip3" onclick="useSuggest(this)">지금 연애운</span>
+      <span class="suggest-chip" id="chip4" onclick="useSuggest(this)">오늘 하루 총운</span>
     </div>
 
     <div id="firstInputForm" style="display:none">
       <div class="fif-row">
         <div class="fif-field" style="flex:1.2">
-          <label class="fif-label">성함</label>
+          <label class="fif-label" id="fifLblName">성함</label>
           <input class="fif-input" id="fifName" type="text" placeholder="홍길동" autocomplete="name">
         </div>
       </div>
       <div class="fif-row">
         <div class="fif-field" style="flex:1.6">
-          <label class="fif-label">태어난 해</label>
+          <label class="fif-label" id="fifLblYear">태어난 해</label>
           <input type="number" class="fif-input" id="fifYear"
                  placeholder="1990" min="1920" max="2025" inputmode="numeric">
         </div>
         <div class="fif-field">
-          <label class="fif-label">월</label>
+          <label class="fif-label" id="fifLblMonth">월</label>
           <input type="number" class="fif-input" id="fifMonth"
                  placeholder="1" min="1" max="12" inputmode="numeric">
         </div>
         <div class="fif-field">
-          <label class="fif-label">일</label>
+          <label class="fif-label" id="fifLblDay">일</label>
           <input type="number" class="fif-input" id="fifDay"
                  placeholder="1" min="1" max="31" inputmode="numeric">
         </div>
       </div>
       <div class="fif-row">
         <div class="fif-field">
-          <label class="fif-label">태어난 시간 <span style="opacity:.5">(선택)</span></label>
+          <label class="fif-label" id="fifLblTime">태어난 시간 <span id="fifTimeOpt" style="opacity:.5">(선택)</span></label>
           <select class="fif-input" id="fifTime">
             <option value="">모름 / 선택 안 함</option>
             <option value="자시">🌑 자시 (밤 11시 ~ 새벽 1시)</option>
@@ -230,8 +237,8 @@
           </select>
         </div>
       </div>
-      <div class="fif-optional-note">시간을 모르시면 비워두셔도 됩니다</div>
-      <button class="fif-submit" onclick="submitFirstForm()">기운 리딩 시작하기 ›</button>
+      <div class="fif-optional-note" id="fifOptNote">시간을 모르시면 비워두셔도 됩니다</div>
+      <button class="fif-submit" id="fifSubmitBtn" onclick="submitFirstForm()">기운 리딩 시작하기 ›</button>
     </div>
 
     <div class="input-row" id="normalInputRow">
@@ -384,7 +391,6 @@
 
       <div class="mypage-actions">
         <button class="mypage-action-btn" id="notifToggleBtn" onclick="toggleNotification()">알림 켜기 🔔</button>
-        <button class="mypage-action-btn" id="mypageSupportBtn" onclick="openSupport()"></button>
         <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
       </div>
@@ -397,28 +403,26 @@
         <div class="token-balance-unit" id="mypageTokenUnitLbl"></div>
       </div>
 
-      <div class="pkg-grid">
-        <div class="pkg-card" onclick="buyToken('S')">
-          <div class="pkg-badge" id="pkgBadge0"></div>
-          <div class="pkg-tokens">30</div>
-          <div class="pkg-price">4,900원</div>
-          <div class="pkg-unit-price">약 163원 / 토큰</div>
-          <button class="pkg-btn" id="pkgBtn0"></button>
+      <!-- 토큰 0 안내 -->
+      <div id="mpZeroNote" style="display:none" class="mp-zero-note"></div>
+
+      <!-- 하단 상담·충전 박스 -->
+      <div class="mp-bottom-cards">
+        <div class="mp-bottom-card" onclick="buyToken('M')">
+          <div class="mp-bc-icon">✦</div>
+          <div class="mp-bc-body">
+            <div class="mp-bc-title" id="mpBotChargeTitle">토큰 충전</div>
+            <div class="mp-bc-desc" id="mpBotChargeDesc">잔여 토큰 충전하기</div>
+          </div>
+          <div class="mp-bc-arrow">›</div>
         </div>
-        <div class="pkg-card best-card" onclick="buyToken('M')">
-          <div class="pkg-best-badge">가장 인기</div>
-          <div class="pkg-badge" id="pkgBadge1"></div>
-          <div class="pkg-tokens">100</div>
-          <div class="pkg-price">12,900원</div>
-          <div class="pkg-unit-price">약 129원 / 토큰</div>
-          <button class="pkg-btn" id="pkgBtn1"></button>
-        </div>
-        <div class="pkg-card" onclick="buyToken('L')">
-          <div class="pkg-badge" id="pkgBadge2"></div>
-          <div class="pkg-tokens">300</div>
-          <div class="pkg-price">29,900원</div>
-          <div class="pkg-unit-price">약 100원 / 토큰</div>
-          <button class="pkg-btn" id="pkgBtn2"></button>
+        <div class="mp-bottom-card" onclick="openSupport()">
+          <div class="mp-bc-icon">💬</div>
+          <div class="mp-bc-body">
+            <div class="mp-bc-title" id="mpBotSupportTitle">1:1 카카오 상담</div>
+            <div class="mp-bc-desc" id="mpBotSupportDesc">궁금한 점을 바로 물어보세요</div>
+          </div>
+          <div class="mp-bc-arrow">›</div>
         </div>
       </div>
 
@@ -458,43 +462,43 @@
 
   <!-- 바로가기 -->
   <div class="drawer-section">
-    <div class="drawer-section-label">바로가기</div>
+    <div class="drawer-section-label" id="drLblNav">바로가기</div>
     <button class="drawer-item" onclick="closeDrawer();_goHome()">
       <div class="drawer-item-icon">🏠</div>
       <div class="drawer-item-text">
-        <div>처음으로</div>
-        <div class="drawer-item-sub">메인 화면으로 돌아가기</div>
+        <div id="drTxtHome">처음으로</div>
+        <div class="drawer-item-sub" id="drSubHome">메인 화면으로 돌아가기</div>
       </div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();startMode('solo')">
       <div class="drawer-item-icon">☯</div>
       <div class="drawer-item-text">
-        <div>나만의 리딩</div>
-        <div class="drawer-item-sub">오늘 나의 오행 기운 풀이</div>
+        <div id="drTxtSolo">나만의 리딩</div>
+        <div class="drawer-item-sub" id="drSubSolo">오늘 나의 오행 기운 풀이</div>
       </div>
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();startMode('couple')">
       <div class="drawer-item-icon">∞</div>
       <div class="drawer-item-text">
-        <div>우리의 조화</div>
-        <div class="drawer-item-sub">두 사람의 오행 궁합 풀이</div>
+        <div id="drTxtCouple">우리의 조화</div>
+        <div class="drawer-item-sub" id="drSubCouple">두 사람의 오행 궁합 풀이</div>
       </div>
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" id="drawerMypageBtn" onclick="closeDrawer();openMyPage()" style="display:none">
       <div class="drawer-item-icon">👤</div>
       <div class="drawer-item-text">
-        <div>마이페이지</div>
-        <div class="drawer-item-sub">토큰 · 생년월일 · 설정</div>
+        <div id="drTxtMypage">마이페이지</div>
+        <div class="drawer-item-sub" id="drSubMypage">토큰 · 생년월일 · 설정</div>
       </div>
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" id="drawerCalBtn" onclick="closeDrawer();openCalModal()" style="display:none">
       <div class="drawer-item-icon">📅</div>
       <div class="drawer-item-text">
-        <div>나의 기운 캘린더</div>
-        <div class="drawer-item-sub">리딩 기록 · 오행 색 달력</div>
+        <div id="drTxtCal">나의 기운 캘린더</div>
+        <div class="drawer-item-sub" id="drSubCal">리딩 기록 · 오행 색 달력</div>
       </div>
       <div class="drawer-item-arrow">›</div>
     </button>
@@ -502,7 +506,7 @@
 
   <!-- 언어 설정 -->
   <div class="drawer-section">
-    <div class="drawer-section-label">언어</div>
+    <div class="drawer-section-label" id="drLblLang">언어</div>
     <div class="drawer-langs">
       <button class="drawer-lb on" id="dlb-ko" onclick="setLang('ko');_syncDrawerLangs()">한국어</button>
       <button class="drawer-lb" id="dlb-en" onclick="setLang('en');_syncDrawerLangs()">English</button>
@@ -513,9 +517,9 @@
 
   <!-- 화면 설정 -->
   <div class="drawer-section">
-    <div class="drawer-section-label">화면</div>
+    <div class="drawer-section-label" id="drLblTheme">화면</div>
     <div class="drawer-theme-row">
-      <div class="drawer-theme-label">테마</div>
+      <div class="drawer-theme-label" id="drTxtTheme">테마</div>
       <div class="drawer-theme-toggle">
         <button class="drawer-theme-btn" id="drawerThemeDark" onclick="applyTheme('dark');localStorage.setItem('myan_theme','dark');_syncDrawerTheme()">🌙 다크</button>
         <button class="drawer-theme-btn" id="drawerThemeLight" onclick="applyTheme('light');localStorage.setItem('myan_theme','light');_syncDrawerTheme()">☀️ 라이트</button>
@@ -525,14 +529,14 @@
 
   <!-- 계정 -->
   <div class="drawer-section" id="drawerAccountSection" style="display:none">
-    <div class="drawer-section-label">계정</div>
+    <div class="drawer-section-label" id="drLblAccount">계정</div>
     <button class="drawer-item" onclick="openSupport();closeDrawer()">
       <div class="drawer-item-icon">💬</div>
-      <div class="drawer-item-text">1:1 카카오 상담</div>
+      <div class="drawer-item-text" id="drTxtSupport">1:1 카카오 상담</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();setTimeout(()=>{openMyPage();setTimeout(()=>logout(),100)},100)" style="color:var(--text-dim)">
       <div class="drawer-item-icon">🚪</div>
-      <div class="drawer-item-text">로그아웃</div>
+      <div class="drawer-item-text" id="drTxtLogout">로그아웃</div>
     </button>
   </div>
 
