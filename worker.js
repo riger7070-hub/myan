@@ -285,8 +285,7 @@ async function handleGeminiChat(request, env) {
             try { const p = JSON.parse(m[0]); if (p.ohaeng) data._ohaeng = p.ohaeng; } catch {}
           }
           data.candidates[0].content.parts[0].text = rawText
-            .replace(/
-?\{"ohaeng"\s*:\s*\{[^}]+\}\}/, '').trim();
+            .replace(/\n?\{"ohaeng"\s*:\s*\{[^}]+\}\}/, '').trim();
         }
       }
     }
