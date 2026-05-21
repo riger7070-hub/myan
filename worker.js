@@ -138,6 +138,7 @@ async function handleGeminiChat(request, env) {
 
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    if (idToken.length > 4096) return cors(JSON.stringify({ error: { message: '토큰 형식이 올바르지 않습니다.' } }), 400);
 
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않거나 만료된 토큰입니다.' } }), 401);
@@ -164,6 +165,11 @@ async function handleGeminiChat(request, env) {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); 
     }
     const { mode, lang, contents } = body;
+
+    // contents 기본 검증 (과대 payload 방지)
+    if (!Array.isArray(contents) || contents.length > 50) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 요청 형식입니다.' } }), 400);
+    }
 
     // 선차감 행 진행
     const useId = `use_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -374,6 +380,7 @@ async function handlePaymentRequest(request, env) {
 
   const { id, pkg } = body;
   if (!id || !pkg) return cors(JSON.stringify({ error: { message: '필수 요청 파라미터가 누락되었습니다.' } }), 400);
+  if (typeof id !== 'string' || id.length > 200) return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 ID입니다.' } }), 400);
   if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   const PKG_TABLE = {
@@ -601,35 +608,61 @@ async function handlePaymentVerify(request, env) {
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
-    const { paymentId, pkg, amount, tokens } = await request.json();
+    // paymentId만 클라이언트에서 수신 — pkg/amount/tokens는 서버에서 결정
+    let body;
+    try { body = await request.json(); } catch {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400);
+    }
+    const { paymentId } = body;
+    if (!paymentId || typeof paymentId !== 'string' || paymentId.length > 200) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 ID입니다.' } }), 400);
+    }
 
     // 1. 포트원 V2 API로 결제 단독 조회 (위변조 방지)
-    //    Cloudflare Worker Secret: PORTONE_SECRET = V2 API Secret
     const verifyRes = await fetch(
       `https://api.portone.io/payments/${encodeURIComponent(paymentId)}`,
       { headers: { Authorization: `PortOne ${env.PORTONE_SECRET}` } }
     );
-
     if (!verifyRes.ok) {
       return cors(JSON.stringify({ error: { message: '포트원 결제 조회 실패' } }), 400);
     }
-
     const payment = await verifyRes.json();
 
-    // 2. 실제 결제 금액·상태 교차 검증
-    if (payment.status !== 'PAID' || payment.amount?.total !== amount) {
-      return cors(JSON.stringify({ error: { message: '결제 금액 불일치 또는 미완료 — 위변조 감지' } }), 400);
+    // 2. 결제 상태 확인
+    if (payment.status !== 'PAID') {
+      return cors(JSON.stringify({ error: { message: '결제가 완료되지 않았습니다.' } }), 400);
     }
 
-    // 3. 검증 통과 → D1 DB에 approved 상태로 기록
+    // 3. 서버 PKG_TABLE로 금액 → pkg/tokens 결정 (클라이언트 조작 원천 차단)
+    const VERIFY_PKG_TABLE = {
+      4900:  { pkg: 'small',  tokens: 30  },
+      12900: { pkg: 'medium', tokens: 100 },
+      29900: { pkg: 'large',  tokens: 300 },
+    };
+    const paidAmount = payment.amount?.total;
+    const pkgEntry = VERIFY_PKG_TABLE[paidAmount];
+    if (!pkgEntry) {
+      return cors(JSON.stringify({ error: { message: '유효하지 않은 결제 금액입니다.' } }), 400);
+    }
+    const { pkg: serverPkg, tokens: serverTokens } = pkgEntry;
+
+    // 4. 중복 결제 방지 확인
+    const dupCheck = await env.DB.prepare(
+      'SELECT id FROM payment_requests WHERE id = ?'
+    ).bind(paymentId).first();
+    if (dupCheck) {
+      return cors(JSON.stringify({ error: { message: '이미 처리된 결제입니다.' } }), 409);
+    }
+
+    // 5. 검증 통과 → D1 DB에 approved 상태로 기록 (서버 계산값 사용)
     const now = Math.floor(Date.now() / 1000);
     await env.DB.prepare(`
-      INSERT OR IGNORE INTO payment_requests
+      INSERT INTO payment_requests
         (id, user_email, pkg, amount, tokens, status, created_at, approved_at)
       VALUES (?, ?, ?, ?, ?, 'approved', ?, ?)
-    `).bind(paymentId, email, pkg, amount, tokens, now, now).run();
+    `).bind(paymentId, email, serverPkg, paidAmount, serverTokens, now, now).run();
 
-    // 4. 최신 잔액 계산 후 반환
+    // 6. 최신 잔액 계산 후 반환
     const balRes = await env.DB.prepare(`
       SELECT COALESCE(SUM(tokens), 0) AS balance
       FROM payment_requests
@@ -638,7 +671,7 @@ async function handlePaymentVerify(request, env) {
 
     return cors(JSON.stringify({
       success: true,
-      balance: balRes ? balRes.balance : tokens
+      balance: balRes ? balRes.balance : serverTokens
     }));
 
   } catch (err) {
