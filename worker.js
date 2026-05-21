@@ -127,9 +127,10 @@ export default {
     if (path === '/chat' && method === 'POST') return handleGeminiChat(request, env);
     if (path === '/api/payment/verify' && method === 'POST') return handlePaymentVerify(request, env);
 
-    // 루트 경로: Worker Assets에서 index.html 직접 서빙
+    // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
     if (method === 'GET') {
-      return env.ASSETS.fetch(request);
+      const res = await env.ASSETS.fetch(request);
+      return addSecurityHeaders(res);
     }
 
     return cors(JSON.stringify({ error: { message: 'Not Found' } }), 404);
@@ -705,6 +706,47 @@ async function handlePaymentVerify(request, env) {
   }
 }
 
+// ════════════════════════════
+//  보안 헤더 (정적 파일 응답에 주입)
+// ════════════════════════════
+function addSecurityHeaders(response) {
+  const h = new Headers(response.headers);
+
+  // HTTPS 강제 (1년, 서브도메인 포함)
+  h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+  // 클릭재킹 방지 (iframe 삽입 차단)
+  h.set('X-Frame-Options', 'DENY');
+
+  // MIME 스니핑 방지
+  h.set('X-Content-Type-Options', 'nosniff');
+
+  // Referrer: 같은 출처끼리만 전체 URL, 외부엔 도메인만
+  h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // 불필요한 브라우저 기능 차단
+  h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+
+  // Content-Security-Policy (XSS 브라우저 차단)
+  h.set('Content-Security-Policy', [
+    "default-src 'self'",
+    // 구글 로그인 + PortOne + QR 라이브러리 스크립트
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdnjs.cloudflare.com https://cdn.portone.io",
+    // 인라인 스타일 + 구글 폰트
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    // 구글 폰트 파일
+    "font-src 'self' https://fonts.gstatic.com",
+    // 이미지: self, data URI
+    "img-src 'self' data: https:",
+    // API 통신 허용 출처
+    "connect-src 'self' https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.portone.io https://script.google.com",
+    // 구글 로그인 팝업 허용
+    "frame-src https://accounts.google.com",
+  ].join('; '));
+
+  return new Response(response.body, { status: response.status, headers: h });
+}
+
 function cors(body, status = 200) {
   return new Response(body || null, {
     status,
@@ -714,6 +756,9 @@ function cors(body, status = 200) {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-admin-secret, Authorization',
       'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
   });
 }
