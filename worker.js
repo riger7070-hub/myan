@@ -59,6 +59,21 @@ async function hmacVerify(secret, data, signature) {
   return expected === signature;
 }
 
+// 인메모리 속도 제한 (isolate당, 이메일 기준)
+const _rateLimit = new Map();
+function checkRateLimit(key, limitMs) {
+  const now = Date.now();
+  const last = _rateLimit.get(key) || 0;
+  if (now - last < limitMs) return false;
+  _rateLimit.set(key, now);
+  // 메모리 누수 방지: 1000개 초과 시 오래된 항목 정리
+  if (_rateLimit.size > 1000) {
+    const cutoff = now - limitMs * 2;
+    for (const [k, v] of _rateLimit) { if (v < cutoff) _rateLimit.delete(k); }
+  }
+  return true;
+}
+
 // DB 초기화 (워커 인스턴스 당 최초 1회만 실행)
 let _dbReady = false;
 async function ensureDB(env) {
@@ -135,6 +150,11 @@ async function handleGeminiChat(request, env) {
     const currentBalance = balanceRow?.total || 0;
     if (currentBalance < 1) {
       return cors(JSON.stringify({ error: { message: '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.' } }), 403);
+    }
+
+    // 속도 제한: 이메일당 3초에 1회 (토큰 차감 전 체크 — 토큰 낭비 방지)
+    if (!checkRateLimit(`chat:${email}`, 3000)) {
+      return cors(JSON.stringify({ error: { message: '요청이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' } }), 429);
     }
 
     let body;

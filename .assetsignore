@@ -14,3 +14,7 @@ SECURITY.md
 icon-usage-guide.md
 myan-icons.zip
 main
+
+# Pages 전용 설정 파일 (Worker에서 노출 금지)
+_redirects
+_headers
