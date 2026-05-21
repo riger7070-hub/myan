@@ -1584,8 +1584,27 @@ body {
   outline: none;
   transition: border-color .2s;
   width: 100%;
+  /* select/number input 브라우저 기본 외형 제거 */
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: none;
+}
+/* number input 스피너 화살표 숨김 (크롬/사파리) */
+.fif-input[type="number"]::-webkit-outer-spin-button,
+.fif-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .fif-input:focus { border-color: var(--gold-dim); }
+/* select 드롭다운 화살표 커스텀 (fifTime 유지용) */
+.fif-input[type="select"],
+select.fif-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23c9a96e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
 .fif-submit {
   width: 100%;
   padding: 11px;

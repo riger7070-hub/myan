@@ -495,31 +495,17 @@ function _enterMode(m, user) {
 }
 
 // ── Change 2: 첫 입력 폼 토글 ──
-function _buildFifYearOptions() {
-  const sel = document.getElementById('fifYear');
-  if (!sel || sel.options.length > 1) return;
-  sel.innerHTML = '<option value="">년</option>';
-  const cur = new Date().getFullYear();
-  for (let y = cur; y >= 1920; y--) {
-    const o = document.createElement('option');
-    o.value = y; o.textContent = y + '년'; sel.appendChild(o);
-  }
-}
-function _buildFifDayOptions() {
-  const sel = document.getElementById('fifDay');
-  if (!sel || sel.options.length > 1) return;
-  sel.innerHTML = '<option value="">일</option>';
-  for (let d = 1; d <= 31; d++) {
-    const o = document.createElement('option');
-    o.value = d; o.textContent = d + '일'; sel.appendChild(o);
-  }
-}
-
 function showFirstInputForm() {
-  _buildFifYearOptions();
-  _buildFifDayOptions();
   document.getElementById('firstInputForm').style.display = 'flex';
   document.getElementById('normalInputRow').style.display = 'none';
+  // number input에서 Enter 키 → 폼 제출
+  ['fifName','fifYear','fifMonth','fifDay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el._fifEnter) {
+      el._fifEnter = true;
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') submitFirstForm(); });
+    }
+  });
   document.getElementById('fifName').focus();
 }
 function showNormalInput() {
@@ -527,16 +513,32 @@ function showNormalInput() {
   document.getElementById('normalInputRow').style.display = 'flex';
 }
 function submitFirstForm() {
-  const name = document.getElementById('fifName').value.trim();
-  const year  = document.getElementById('fifYear').value;
-  const month = document.getElementById('fifMonth').value;
-  const day   = document.getElementById('fifDay').value;
+  const name  = document.getElementById('fifName').value.trim();
+  const yearV = parseInt(document.getElementById('fifYear').value, 10);
+  const monV  = parseInt(document.getElementById('fifMonth').value, 10);
+  const dayV  = parseInt(document.getElementById('fifDay').value, 10);
   const time  = document.getElementById('fifTime').value;
-  if (!name)  { document.getElementById('fifName').focus(); return; }
-  if (!year)  { document.getElementById('fifYear').focus(); return; }
-  if (!month) { document.getElementById('fifMonth').focus(); return; }
-  if (!day)   { document.getElementById('fifDay').focus(); return; }
-  let msg = `${name}, ${year}년 ${month}월 ${day}일생`;
+
+  // ── 유효성 검증 ──
+  const curYear = new Date().getFullYear();
+  if (!name) { document.getElementById('fifName').focus(); return; }
+  if (!yearV || yearV < 1920 || yearV > curYear) {
+    document.getElementById('fifYear').focus();
+    document.getElementById('fifYear').select();
+    return;
+  }
+  if (!monV || monV < 1 || monV > 12) {
+    document.getElementById('fifMonth').focus();
+    document.getElementById('fifMonth').select();
+    return;
+  }
+  if (!dayV || dayV < 1 || dayV > 31) {
+    document.getElementById('fifDay').focus();
+    document.getElementById('fifDay').select();
+    return;
+  }
+
+  let msg = `${name}, ${yearV}년 ${monV}월 ${dayV}일생`;
   if (time) msg += `, ${time}`;
   showNormalInput();
   document.getElementById('inp').value = msg;

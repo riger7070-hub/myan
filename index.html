@@ -194,23 +194,20 @@
         </div>
       </div>
       <div class="fif-row">
-        <div class="fif-field">
+        <div class="fif-field" style="flex:1.6">
           <label class="fif-label">태어난 해</label>
-          <select class="fif-input" id="fifYear"></select>
+          <input type="number" class="fif-input" id="fifYear"
+                 placeholder="1990" min="1920" max="2025" inputmode="numeric">
         </div>
         <div class="fif-field">
           <label class="fif-label">월</label>
-          <select class="fif-input" id="fifMonth">
-            <option value="">월</option>
-            <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
-            <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
-            <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
-            <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
-          </select>
+          <input type="number" class="fif-input" id="fifMonth"
+                 placeholder="1" min="1" max="12" inputmode="numeric">
         </div>
         <div class="fif-field">
           <label class="fif-label">일</label>
-          <select class="fif-input" id="fifDay"></select>
+          <input type="number" class="fif-input" id="fifDay"
+                 placeholder="1" min="1" max="31" inputmode="numeric">
         </div>
       </div>
       <div class="fif-row">
