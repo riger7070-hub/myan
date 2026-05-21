@@ -59,7 +59,7 @@ async function hmacVerify(secret, data, signature) {
   return expected === signature;
 }
 
-// 인메모리 속도 제한 (isolate당, 이메일 기준)
+// 인메모리 속도 제한 (isolate당, 1차 빠른 거부용)
 const _rateLimit = new Map();
 function checkRateLimit(key, limitMs) {
   const now = Date.now();
@@ -72,6 +72,16 @@ function checkRateLimit(key, limitMs) {
     for (const [k, v] of _rateLimit) { if (v < cutoff) _rateLimit.delete(k); }
   }
   return true;
+}
+
+// Cloudflare Workers 분산 Rate Limiting (전 세계 인스턴스 통합 제한)
+// 바인딩 없으면(로컬 개발 등) 항상 통과 처리
+async function cfRateLimit(limiter, key) {
+  if (!limiter) return true;
+  try {
+    const { success } = await limiter.limit({ key });
+    return success;
+  } catch { return true; }
 }
 
 // DB 초기화 (워커 인스턴스 당 최초 1회만 실행)
@@ -153,9 +163,13 @@ async function handleGeminiChat(request, env) {
       return cors(JSON.stringify({ error: { message: '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.' } }), 403);
     }
 
-    // 속도 제한: 이메일당 3초에 1회 (토큰 차감 전 체크 — 토큰 낭비 방지)
+    // 1차: 인메모리 빠른 거부 (3초 이내 연속 요청 차단)
     if (!checkRateLimit(`chat:${email}`, 3000)) {
       return cors(JSON.stringify({ error: { message: '요청이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' } }), 429);
+    }
+    // 2차: Cloudflare 분산 Rate Limit (분당 10회 — 전 인스턴스 통합)
+    if (!await cfRateLimit(env.RL_CHAT, email)) {
+      return cors(JSON.stringify({ error: { message: '분당 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' } }), 429);
     }
 
     let body;
@@ -309,6 +323,9 @@ async function handleMigrateTokens(request, env) {
 
   const email = await getEmailFromToken(idToken, env);
   if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
+  if (!await cfRateLimit(env.RL_API, email)) {
+    return cors(JSON.stringify({ error: { message: '요청 한도를 초과했습니다.' } }), 429);
+  }
   if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   let body;
@@ -345,6 +362,9 @@ async function handleSignupGrant(request, env) {
 
   const email = await getEmailFromToken(idToken, env);
   if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
+  if (!await cfRateLimit(env.RL_API, email)) {
+    return cors(JSON.stringify({ error: { message: '요청 한도를 초과했습니다.' } }), 429);
+  }
   if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
 
   const existing = await env.DB.prepare(
@@ -374,6 +394,9 @@ async function handlePaymentRequest(request, env) {
   if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
   const email = await getEmailFromToken(idToken, env);
   if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
+  if (!await cfRateLimit(env.RL_API, email)) {
+    return cors(JSON.stringify({ error: { message: '요청 한도를 초과했습니다.' } }), 429);
+  }
 
   let body;
   try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
@@ -607,6 +630,9 @@ async function handlePaymentVerify(request, env) {
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    if (!await cfRateLimit(env.RL_PAYMENT, email)) {
+      return cors(JSON.stringify({ error: { message: '결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' } }), 429);
+    }
 
     // paymentId만 클라이언트에서 수신 — pkg/amount/tokens는 서버에서 결정
     let body;
