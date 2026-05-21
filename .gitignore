@@ -1,0 +1,17 @@
+# Wrangler 로컬 캐시 (절대 올리면 안 됨)
+.wrangler/
+
+# 실수로 생성된 빈 파일
+main
+
+# 환경변수 파일 (혹시 생성 시 대비)
+.env
+.env.local
+.dev.vars
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# 노드 모듈 (혹시 생성 시 대비)
+node_modules/
