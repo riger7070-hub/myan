@@ -2946,7 +2946,7 @@ body {
         </div>
         <div class="field third">
           <label id="mpLblMonth"></label>
-          <select id="mpMonth"></select>
+          <input type="number" id="mpMonth" min="1" max="12" placeholder="5">
         </div>
         <div class="field third">
           <label id="mpLblDay"></label>
@@ -3810,12 +3810,12 @@ function _enterMode(m, user) {
     // Change 2: solo 모드에서 구조화 폼 표시
     if (m === 'solo') {
       showFirstInputForm();
+      hideSuggestChips(); // 사주 입력 폼 활성 중엔 추천 칩 숨김
     } else {
       showNormalInput();
       document.getElementById('inp').focus();
+      showSuggestChips();
     }
-    // Change 4: 추천 칩 표시
-    showSuggestChips();
   }
 }
 
@@ -4311,6 +4311,14 @@ async function send() {
   const txt = inp.value.trim();
   if (!txt || btn.disabled) return;
 
+  // solo 모드에서 사주 미입력 시 우회 차단
+  const _sendUser = getUser();
+  if (mode === 'solo' && !_sendUser?.birthYear && hist.length === 0 && !txt.includes('일생')) {
+    addBubble('오늘 하루의 오행 기운을 정확히 처방하기 위해, 먼저 성함과 생년월일을 입력해 주세요. 🙏', 'ai');
+    showFirstInputForm();
+    return;
+  }
+
   // 토큰 차감
   if (!checkAndDeductToken()) {
     addBubble(TX[lang].noToken, 'ai');
@@ -4319,7 +4327,6 @@ async function send() {
 
   // [Gemini 교대 규칙 준수] solo 모드 첫 질문에 사주 프로필을 결합하여 1개의 turn으로 전송
   let processedTxt = txt;
-  const _sendUser = getUser();
   if (mode === 'solo' && _sendUser?.birthYear && hist.length === 0) {
     processedTxt = `[사용자 사주 정보: ${buildUserProfile(_sendUser)}]\n\n질문: ${txt}`;
   }
@@ -5216,9 +5223,12 @@ function buildMypageDropdowns() {
   const mSel = document.getElementById('mpMonth');
   const hSel = document.getElementById('mpHour');
   const mSuf = {ko:'월', en:'', zh:'月', ja:'月'}[lang] || '';
-  mSel.innerHTML = '<option value=""></option>';
-  for (let i = 1; i <= 12; i++) {
-    const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
+  // mpMonth가 select일 때만 옵션 생성 (input type="number"로 교체된 경우 건너뜀)
+  if (mSel && mSel.tagName === 'SELECT') {
+    mSel.innerHTML = '<option value=""></option>';
+    for (let i = 1; i <= 12; i++) {
+      const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
+    }
   }
   const hrs = [['子','23-01'],['丑','01-03'],['寅','03-05'],['卯','05-07'],
                ['辰','07-09'],['巳','09-11'],['午','11-13'],['未','13-15'],
@@ -5404,14 +5414,9 @@ function _confirmAction(btnId, confirmText, action) {
 }
 
 function openTokenModal() {
-  // 베타 기간: 결제 모달 비활성화
-  const msg = {
-    ko: '🎁 베타 기간 중에는 결제가 준비 중이에요.\n정식 오픈 시 알림을 드릴게요!',
-    en: '🎁 Payments are coming soon!\nWe\'ll notify you when officially launched.',
-    zh: '🎁 付款功能即将开放！\n正式上线后我们会通知您。',
-    ja: '🎁 決済機能は近日公開予定です！\n正式リリース時にお知らせします。'
-  };
-  alert(msg[lang] || msg.ko);
+  document.getElementById('token-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  renderMyPage(); // 잔액 및 패키지 레이아웃 최신화
 }
 
 function closeTokenModal() {
