@@ -13,5 +13,8 @@ main
 .DS_Store
 Thumbs.db
 
-# 노드 모듈 (혹시 생성 시 대비)
+# 노드 모듈
 node_modules/
+
+# 아카이브 (git에 불필요)
+myan-icons.zip

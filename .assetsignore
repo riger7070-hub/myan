@@ -1,7 +1,16 @@
+# Worker 코드 (절대 외부 노출 금지)
 worker.js
 wrangler.toml
+
+# Git/설정 파일
 .gitignore
 .assetsignore
 .github/
-node_modules/
+.git/
 .wrangler/
+
+# 문서/아카이브 (서빙 불필요)
+SECURITY.md
+icon-usage-guide.md
+myan-icons.zip
+main
