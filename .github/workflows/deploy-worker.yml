@@ -6,6 +6,12 @@ on:
     paths:
       - 'worker.js'
       - 'wrangler.toml'
+      - 'index.html'
+      - 'manifest.json'
+      - 'sw.js'
+      - '*.png'
+      - '*.ico'
+      - '.assetsignore'
 
 jobs:
   deploy:

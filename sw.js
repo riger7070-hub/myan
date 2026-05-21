@@ -1,4 +1,4 @@
-// M;Y 安 — Service Worker v2.0
+// M;Y 安 — Service Worker v2.1
 const CACHE_NAME = 'myan-v2';
 const OFFLINE_URL = '/index.html';
 
@@ -33,12 +33,21 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
-  // API 요청은 캐시하지 않음
-  if (e.request.url.includes('workers.dev') ||
-      e.request.url.includes('googleapis.com') ||
-      e.request.url.includes('accounts.google.com')) {
+  // 외부 API 요청은 캐시하지 않음
+  if (e.request.url.includes('googleapis.com') ||
+      e.request.url.includes('accounts.google.com') ||
+      e.request.url.includes('portone.io') ||
+      e.request.url.includes('telegram.org')) {
     return;
   }
+
+  // 자체 Worker API 엔드포인트는 캐시하지 않음 (동적 데이터)
+  try {
+    const reqPath = new URL(e.request.url).pathname;
+    const apiPaths = ['/chat', '/user-tokens', '/migrate-tokens', '/signup-grant',
+                      '/payment-request', '/payment-status', '/admin/', '/api/'];
+    if (apiPaths.some(p => reqPath.startsWith(p))) return;
+  } catch { return; }
 
   e.respondWith(
     fetch(e.request)
