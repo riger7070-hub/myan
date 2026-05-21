@@ -802,7 +802,7 @@ body {
   background: rgba(255,255,255,0.1);
 }
 .field select { cursor: pointer; appearance: none; color: #111111; }
-.field select option { background: #ffffff; color: #111111; }
+.field select option { background: #ffffff !important; color: #111111 !important; }
 
 .gender-row { display: flex; gap: 10px; }
 .gender-btn {
@@ -1606,7 +1606,7 @@ select.fif-input {
   cursor: pointer;
   color: #111111;
 }
-select.fif-input option { background: #ffffff; color: #111111; }
+select.fif-input option { background: #ffffff !important; color: #111111 !important; }
 .fif-submit {
   width: 100%;
   padding: 11px;
@@ -2625,8 +2625,8 @@ select.fif-input option { background: #ffffff; color: #111111; }
   flex-shrink: 0;
 }
 
-/* ── 전역 select 드롭다운 텍스트 색상 (모든 브라우저/OS 대응) ──────── */
-select, select option {
-  color: #111111 !important;
-  background-color: #ffffff !important;
-}
+/* ── 전역 select 드롭다운 텍스트/옵션 색상 (모든 브라우저/OS 대응) ──── */
+/* select 자체: 닫힌 상태는 앱 배경 그대로, 글씨만 검정 */
+select { color: #111111 !important; }
+/* option 목록이 펼쳐질 때만 흰 배경 + 검정 글씨 */
+select option { background-color: #ffffff !important; color: #111111 !important; }
