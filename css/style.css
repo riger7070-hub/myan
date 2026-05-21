@@ -801,8 +801,8 @@ body {
   border-color: rgba(201,169,110,0.6);
   background: rgba(255,255,255,0.1);
 }
-.field select { cursor: pointer; appearance: none; }
-.field select option { background: #1a1a1a; color: #e8e8e8; }
+.field select { cursor: pointer; appearance: none; color: #111111; }
+.field select option { background: #ffffff; color: #111111; }
 
 .gender-row { display: flex; gap: 10px; }
 .gender-btn {
@@ -1604,7 +1604,9 @@ select.fif-input {
   background-position: right 10px center;
   padding-right: 28px;
   cursor: pointer;
+  color: #111111;
 }
+select.fif-input option { background: #ffffff; color: #111111; }
 .fif-submit {
   width: 100%;
   padding: 11px;
@@ -2621,4 +2623,10 @@ select.fif-input {
   color: rgba(75,200,122,0.7);
   font-size: 0.72rem;
   flex-shrink: 0;
+}
+
+/* ── 전역 select 드롭다운 텍스트 색상 (모든 브라우저/OS 대응) ──────── */
+select, select option {
+  color: #111111 !important;
+  background-color: #ffffff !important;
 }
