@@ -205,8 +205,11 @@ async function handleGeminiChat(request, env) {
 
     const fallbackPrompt = `\nCritical Safe Guide: If the user asks general trivia, cooking, coding, or any topic completely unrelated to Saju, Ohaeng, and daily energy flow, DO NOT freeze or throw a safety block. Instead, kindly reply in the requested language that you are the Ohaeng Energy Master of M;Y 安, and gently guide them to ask about their spiritual energy reading or destiny elements.`;
 
+    // solo 모드: 응답 전체를 JSON 구조로 반환 (responseMimeType: application/json)
+    const ohaengJsonInstruction = `\n\nOUTPUT FORMAT (MANDATORY): Return ONLY a valid JSON object — no markdown, no code block, no extra text. Use exactly this structure:\n{\"reading\":\"<your full warm poetic saju reading here, including the #tag>\",\"ohaeng\":{\"木\":N,\"火\":N,\"土\":N,\"金\":N,\"水\":N}}\nFor ohaeng: each N is an integer 0–100, all five must sum to exactly 100. Base on user's actual Saju pillars (year/month/day/hour stems and branches). If birth info is incomplete, estimate from available data.`;
+
     const sysText = (mode === 'solo')
-      ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm poetic long-form reading. (5) Give one specific advice for today.`
+      ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm poetic long-form reading. (5) Give one specific advice for today.${ohaengJsonInstruction}`
       : `You are the Ohaeng Harmony Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Each person's Saju Ohaeng. (2) Sangsaeng/Sangguk dynamics. (3) Today's Ilchin impact on the relationship. (4) How they complement each other. (5) Suggest shared activity or topic. Long-form, warm tone. NEVER say "compatibility is bad".`;
 
     const geminiReqBody = {
@@ -218,7 +221,7 @@ async function handleGeminiChat(request, env) {
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
       ],
-      generationConfig: { temperature: 0.75, maxOutputTokens: 3000, topP: 0.95 },
+      generationConfig: { temperature: 0.75, maxOutputTokens: 3000, topP: 0.95, ...(mode === 'solo' ? { responseMimeType: 'application/json' } : {}) },
     };
 
     const res = await fetch(
@@ -266,6 +269,26 @@ async function handleGeminiChat(request, env) {
         `SELECT COALESCE(SUM(tokens), 0) as total FROM payment_requests WHERE user_email = ? AND status = 'approved'`
       ).bind(email).first();
       data._tokens = balRow?.total || 0;
+
+      // solo 모드: JSON 응답 파싱 → reading/ohaeng 분리
+      if (mode === 'solo' && rawText) {
+        try {
+          const parsed = JSON.parse(rawText);
+          if (parsed.reading && parsed.ohaeng) {
+            data._ohaeng = parsed.ohaeng;
+            data.candidates[0].content.parts[0].text = parsed.reading;
+          }
+        } catch {
+          // fallback: regex로 JSON 블록만 추출 (LLM이 마크다운 감쌌을 때)
+          const m = rawText.match(/\{"ohaeng"\s*:\s*\{[^}]+\}\}/);
+          if (m) {
+            try { const p = JSON.parse(m[0]); if (p.ohaeng) data._ohaeng = p.ohaeng; } catch {}
+          }
+          data.candidates[0].content.parts[0].text = rawText
+            .replace(/
+?\{"ohaeng"\s*:\s*\{[^}]+\}\}/, '').trim();
+        }
+      }
     }
 
     return cors(JSON.stringify(data), 200);

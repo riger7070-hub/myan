@@ -1,0 +1,2195 @@
+// M;Y 安 — app.js  (API·채팅·결제·마이페이지 메인 로직)
+async function callGemini(contents) {
+  if (!getGoogleIdToken()) throw { refund: false, noLogin: true };
+
+  const doFetch = () => fetch(EP + 'chat', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      mode: mode,
+      lang: lang,
+      contents: contents
+    }),
+  });
+
+  let res  = await doFetch();
+  let data = await res.json();
+
+  // 토큰 부족 (서버에서 차감 실패)
+  if (res.status === 402 || res.status === 403) throw { refund: false, noToken: true };
+
+  // 인증 실패 → 토큰 폐기
+  if (res.status === 401) {
+    _googleIdToken = ''; _googleIdTokenExp = 0;
+    localStorage.removeItem('myan_id_token');
+    throw { refund: false, noLogin: true };
+  }
+
+  // 속도 제한 → 1회 재시도
+  if (res.status === 429 || data?.error?.code === 429) {
+    await new Promise(r => setTimeout(r, 3000));
+    res  = await doFetch();
+    data = await res.json();
+  }
+
+  if (data?.error) throw { refund: true, code: data.error.code, msg: data.error.message };
+  if (data?.promptFeedback?.blockReason) throw { refund: true, blocked: true };
+
+  // 서버가 현재 잔액을 함께 내려줌 → 캐시 갱신
+  if (data._tokens !== undefined) {
+    _tokenCache = parseInt(data._tokens, 10) || 0;
+    updateAllTokenDisplays();
+  }
+
+  return data;
+}
+
+async function autoAnalyze() {
+  // 1. 토큰 차감 전 잔액 확인
+  if (!checkAndDeductToken()) {
+    addBubble(TX[lang].noToken, 'ai');
+    return;
+  }
+  
+  const inp = document.getElementById('inp');
+  const btn = document.getElementById('send');
+  btn.disabled = true; inp.disabled = true;
+  const loader = addLoader();
+
+  try {
+    const data = await callGemini(trimmedHist());
+    const cand = data?.candidates?.[0];
+    const raw  = cand?.content?.parts?.[0]?.text;
+    
+    // 안전 필터 / 빈 응답 → 에러로 간주하여 throw
+    if (!raw) throw { refund: true, reason: cand?.finishReason };
+    
+    hist.push({ role: 'model', parts: [{ text: raw }] });
+    const clean = raw.replace(/#[木火土金水]\s*/g, '').replace(/\*\*/g, '').trim();
+    addBubble(clean, 'ai');
+    
+    const tag = ['木','火','土','金','水'].find(k => raw.includes('#' + k));
+    if (tag) addRxCard(tag);
+    // solo 모드: AI 오행 분석 게이지 업데이트
+    if (mode === 'solo' && data._ohaeng) {
+      try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
+      _renderSajuGaugeFromGemini(data._ohaeng);
+    }
+    showSuggestChips(); // 응답 후 추천 칩 다시 표시
+
+  } catch(e) {
+    // 2. 에러 발생 시 토큰 복구 및 즉시 화면 동기화
+    if (e?.noLogin) {
+        addTokens(1);
+        updateAllTokenDisplays();
+        showLogin();
+        return;
+    }
+    if (e?.noToken) {
+        await refreshTokens();
+        updateAllTokenDisplays();
+        addBubble(TX[lang].noToken, 'ai');
+        return;
+    }
+    if (e?.refund) {
+        addTokens(1);
+        updateAllTokenDisplays();
+    }
+
+    // 3. 에러 메시지 세분화 (Safety 관련인지 여부)
+    const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
+    addBubble(msg, 'ai');
+    showSuggestChips();
+
+    if (hist.length > 0 && hist[hist.length-1].role === 'model') hist.pop();
+    
+  } finally {
+    // 4. 로딩 제거 및 입력창 상태 복구
+    loader.remove(); 
+    btn.disabled = false; 
+    inp.disabled = false;
+    inp.focus(); 
+    cw().scrollTop = 99999;
+  }
+}
+
+function saveChatState() {
+  if (!mode || !hist.length) return;
+  try {
+    localStorage.setItem('myan_chat_mode', mode);
+    localStorage.setItem('myan_chat_hist', JSON.stringify(hist));
+    localStorage.setItem('myan_chat_html', document.getElementById('chat-window').innerHTML);
+  } catch(e) {}
+}
+
+function clearChatState() {
+  localStorage.removeItem('myan_chat_mode');
+  localStorage.removeItem('myan_chat_hist');
+  localStorage.removeItem('myan_chat_html');
+}
+
+function clearAndRestartChat() {
+  clearChatState();
+  const m = mode;
+  const user = getUser();
+  hist = [];
+  document.getElementById('chat-window').innerHTML = '';
+  document.getElementById('newChatBtn').style.display = 'none';
+  _enterMode(m, user);
+}
+
+function goBack() {
+  saveChatState(); // 채팅 상태 저장
+  document.getElementById('screen-chat').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('backBtn').style.display       = 'none';
+  mode = null; hist = [];
+  // 모드 화면 복귀 시 userBtn / signupLinkBtn 복원
+  const u = getUser();
+  const _userBtn = document.getElementById('userBtn');
+  if (u && isLoggedIn()) {
+    updateUserBtn(u);
+    document.getElementById('signupLinkBtn').style.display = 'none';
+  } else if (u && !isLoggedIn()) {
+    if (_userBtn) _userBtn.style.display = 'none';
+    document.getElementById('signupLinkBtn').style.display = 'none';
+  } else {
+    if (_userBtn) _userBtn.style.display = 'none';
+    document.getElementById('signupLinkBtn').style.display = '';
+  }
+  // 무료 배너 상태 업데이트 + 오브 색상 초기화
+  updateFreeBanner();
+  _resetOrbTheme();
+}
+
+/* DOM 헬퍼 */
+const cw = () => document.getElementById('chat-window');
+
+function addBubble(text, who) {
+  const d = document.createElement('div');
+  d.className = `bubble bubble-${who}`;
+  d.textContent = text;
+  if (who === 'ai') {
+    const btn = document.createElement('button');
+    btn.className = 'bubble-copy-btn';
+    btn.title = '복사';
+    btn.textContent = '⎘';
+    btn.onclick = () => _copyBubble(btn, text);
+    // 모바일: 탭 후 2초간 버튼 표시
+    d.addEventListener('click', () => {
+      btn.classList.add('visible');
+      clearTimeout(btn._hideTimer);
+      btn._hideTimer = setTimeout(() => btn.classList.remove('visible'), 2500);
+    });
+    d.appendChild(btn);
+  }
+  cw().appendChild(d);
+  cw().scrollTop = 99999;
+  return d;
+}
+
+function _copyBubble(btn, text) {
+  navigator.clipboard?.writeText(text).then(() => {
+    btn.textContent = '✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {});
+}
+
+function addLoader() {
+  const d = document.createElement('div');
+  d.className = 'bubble bubble-ai loading';
+  d.innerHTML = '<span></span><span></span><span></span>';
+  cw().appendChild(d); cw().scrollTop = 99999;
+  return d;
+}
+
+function addRxCard(o) {
+  const dk  = DK[lang][o];
+  const col = OC[o];
+  const bg  = OBG[o];
+  const t   = TX[lang];
+  const c   = document.createElement('div');
+  c.className = 'rx-card';
+  c.style.background = `linear-gradient(135deg, #0e0e0e, #080808)`;
+  const _shareData = JSON.stringify({ o, name: dk.name, desc: dk.desc });
+  c.innerHTML = `
+    <div class="rx-top" style="background:${bg}">
+      <div class="rx-icon" style="background:rgba(0,0,0,.3);border-color:${col}30">${dk.icon}</div>
+      <div class="rx-info">
+        <div class="rx-label" style="color:${col}">${t.rxlbl(o)}</div>
+        <div class="rx-name" style="color:${col}">${dk.name}</div>
+        <div class="rx-desc">${dk.desc}</div>
+      </div>
+    </div>
+    <div class="rx-bottom">${t.revisit}</div>
+    <button class="rx-share-btn" onclick='_shareRxCard(${_shareData})'>🌟 오늘의 처방 공유하기</button>`;
+  cw().appendChild(c);
+  setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
+  _setOrbTheme(o);
+  _saveCalEntry(o); // 오늘 기운 캘린더에 저장
+}
+
+// 오행 오브 색상 팔레트 (각 오브별 강도 차등)
+const _ORB_PALETTE = {
+  木: ['rgba(75,200,122,0.13)','rgba(75,200,122,0.07)','rgba(75,200,122,0.09)','rgba(75,200,122,0.05)','rgba(75,200,122,0.04)'],
+  火: ['rgba(224,90,74,0.13)', 'rgba(224,90,74,0.07)', 'rgba(224,90,74,0.09)', 'rgba(224,90,74,0.05)', 'rgba(224,90,74,0.04)'],
+  土: ['rgba(212,160,64,0.13)','rgba(212,160,64,0.07)','rgba(212,160,64,0.09)','rgba(212,160,64,0.05)','rgba(212,160,64,0.04)'],
+  金: ['rgba(160,170,180,0.11)','rgba(160,170,180,0.06)','rgba(160,170,180,0.08)','rgba(160,170,180,0.04)','rgba(160,170,180,0.04)'],
+  水: ['rgba(90,168,224,0.13)', 'rgba(90,168,224,0.07)', 'rgba(90,168,224,0.09)', 'rgba(90,168,224,0.05)', 'rgba(90,168,224,0.04)'],
+};
+const _ORB_DEFAULT = [
+  'rgba(75,200,122,0.07)','rgba(224,90,74,0.07)',
+  'rgba(90,168,224,0.07)','rgba(212,160,64,0.06)','rgba(160,170,180,0.05)',
+];
+function _setOrbTheme(o) {
+  const palette = o ? (_ORB_PALETTE[o] || _ORB_DEFAULT) : _ORB_DEFAULT;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.querySelector(`.orb-${i}`);
+    if (el) el.style.background = palette[i-1];
+  }
+}
+function _resetOrbTheme() { _setOrbTheme(null); }
+
+// ── 처방 카드 공유 ──
+function _shareRxCard({ o, name, desc }) {
+  const text = `✦ M;Y 安 · 오늘의 오행 처방\n[${ON.ko[o] || o}] ${name}\n${desc}\n\nmyan.riger7070.workers.dev`;
+  if (navigator.share) {
+    navigator.share({ title: 'M;Y 安 · 오늘의 처방', text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.rx-share-btn');
+      if (btn) { btn.textContent = '✓ 클립보드에 복사됨'; setTimeout(() => { btn.textContent = '🌟 오늘의 처방 공유하기'; }, 2000); }
+    });
+  }
+}
+
+// ── 캘린더 저장 ──
+function _saveCalEntry(element) {
+  const today = new Date().toISOString().slice(0, 10);
+  let cal = {};
+  try { cal = JSON.parse(localStorage.getItem('myan_cal') || '{}'); } catch {}
+  cal[today] = element;
+  localStorage.setItem('myan_cal', JSON.stringify(cal));
+}
+
+// ── 오행 캘린더 모달 ──
+let _calYear = new Date().getFullYear();
+let _calMonth = new Date().getMonth(); // 0-based
+
+function openCalModal() {
+  _calYear = new Date().getFullYear();
+  _calMonth = new Date().getMonth();
+  _renderCalendar();
+  document.getElementById('cal-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeCalModal() {
+  document.getElementById('cal-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function _calPrevMonth() { _calMonth--; if (_calMonth < 0) { _calMonth = 11; _calYear--; } _renderCalendar(); }
+function _calNextMonth() { _calMonth++; if (_calMonth > 11) { _calMonth = 0; _calYear++; } _renderCalendar(); }
+
+function _renderCalendar() {
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('calTitle').textContent = `${_calYear}년 ${monthNames[_calMonth]}`;
+
+  let cal = {};
+  try { cal = JSON.parse(localStorage.getItem('myan_cal') || '{}'); } catch {}
+
+  const today = new Date().toISOString().slice(0, 10);
+  const firstDay = new Date(_calYear, _calMonth, 1).getDay();
+  const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+
+  const grid = document.getElementById('calGrid');
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const elem = cal[key];
+    const isToday = key === today;
+    const bg = elem ? `background:${OC[elem]}33` : 'background:rgba(255,255,255,0.03)';
+    const border = elem ? `border:1.5px solid ${OC[elem]}66` : 'border:1px solid rgba(255,255,255,0.06)';
+    html += `<div class="cal-cell${elem ? ' has-entry' : ''}${isToday ? ' today' : ''}" style="${bg};${border}" title="${elem ? ON.ko[elem] : ''}">${d}${elem ? `<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);font-size:0.45rem;opacity:0.8">${elem}</span>` : ''}</div>`;
+  }
+  grid.innerHTML = html;
+
+  // 범례
+  const legend = document.getElementById('calLegend');
+  legend.innerHTML = Object.entries(OC).map(([e,col]) =>
+    `<div class="cal-legend-item"><div class="cal-legend-dot" style="background:${col}"></div>${ON.ko[e]||e}</div>`
+  ).join('');
+}
+
+// ── 사주 오행 분포 계산 ──
+
+
+/* 전송 */
+async function send() {
+  const inp = document.getElementById('inp');
+  const btn = document.getElementById('send');
+  const txt = inp.value.trim();
+  if (!txt || btn.disabled) return;
+
+  // solo 모드에서 사주 미입력 시 우회 차단
+  const _sendUser = getUser();
+  if (mode === 'solo' && !_sendUser?.birthYear && hist.length === 0 && !txt.includes('일생')) {
+    addBubble('오늘 하루의 오행 기운을 정확히 처방하기 위해, 먼저 성함과 생년월일을 입력해 주세요. 🙏', 'ai');
+    showFirstInputForm();
+    return;
+  }
+
+  // 토큰 차감
+  if (!checkAndDeductToken()) {
+    addBubble(TX[lang].noToken, 'ai');
+    return;
+  }
+
+  // [Gemini 교대 규칙 준수] solo 모드 첫 질문에 사주 프로필을 결합하여 1개의 turn으로 전송
+  let processedTxt = txt;
+  if (mode === 'solo' && _sendUser?.birthYear && hist.length === 0) {
+    processedTxt = `[사용자 사주 정보: ${buildUserProfile(_sendUser)}]\n\n질문: ${txt}`;
+  }
+
+  btn.disabled = true; inp.disabled = true;
+  addBubble(txt, 'user'); inp.value = '';
+  hist.push({role:'user', parts:[{text:processedTxt}]});
+  const loader = addLoader();
+
+  try {
+    const data = await callGemini(trimmedHist());
+    const cand = data?.candidates?.[0];
+    const raw  = cand?.content?.parts?.[0]?.text;
+    if (!raw) throw { refund: true, reason: cand?.finishReason };
+    hist.push({role:'model', parts:[{text:raw}]});
+    const clean = raw.replace(/#[木火土金水]\s*/g,'').replace(/\*\*/g,'').trim();
+    addBubble(clean, 'ai');
+    const tag = ['木','火','土','金','水'].find(k => raw.includes('#'+k));
+    if (tag) addRxCard(tag);
+    // solo 모드: AI 오행 분석 게이지 업데이트
+    if (mode === 'solo' && data._ohaeng) {
+      try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
+      _renderSajuGaugeFromGemini(data._ohaeng);
+    }
+    showSuggestChips(); // 응답 후 추천 칩 다시 표시
+ } catch(e) {
+    // ✨ 에러 발생 시 사용자가 썼던 텍스트를 입력창에 복구
+    inp.value = txt;
+
+    if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
+    if (e?.noToken) { await refreshTokens(); updateAllTokenDisplays(); addBubble(TX[lang].noToken, 'ai'); return; }
+    if (e?.refund)  { addTokens(1); updateAllTokenDisplays(); }
+    const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
+    addBubble(msg, 'ai');
+    hist.pop();
+    showSuggestChips();
+  } finally {
+    loader.remove(); btn.disabled = false; inp.disabled = false;
+    inp.focus(); cw().scrollTop = 99999;
+  }
+}
+
+document.getElementById('send').addEventListener('click', send);
+document.getElementById('inp').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+document.getElementById('backBtn').addEventListener('click', () => {
+  if      (document.getElementById('screen-mypage').style.display === 'flex') closeMyPage();
+  else if (document.getElementById('screen-signup').style.display === 'flex') goBackFromSignup();
+  else if (document.getElementById('screen-login').style.display  === 'flex') goBackFromLogin();
+  else goBack();
+});
+
+/* ── 회원가입 ── */
+const SHEETS_EP  = 'https://script.google.com/macros/s/AKfycbyJEDLW1Ohx9rQYrkSxFUNNl8LmRtUK-WkXg4sgtLBLfpPJcYfpXMJXQH9Ya2k36j3l/exec';
+const GOOGLE_CID = '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com';
+
+// ── Toss 결제 링크 ── 토스 대시보드에서 결제 링크 만든 후 여기에 붙여넣으세요
+const TOSS_LINKS = {
+  small:  'supertoss://send?amount=4900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
+  medium: 'supertoss://send?amount=12900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
+  large:  'supertoss://send?amount=29900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
+};
+
+
+let selGender = '';
+let selGenderMp = '';
+
+/* ── 토큰 시스템 (서버 기반) ── */
+let _tokenCache = 0;
+
+function getTokens() { return _tokenCache; }
+
+// 클라이언트는 더 이상 토큰을 직접 차감하지 않음.
+// 서버(/chat)가 호출 시 자동 차감/검증/환불 처리.
+// 이 함수는 호환을 위해 남겨두지만 항상 true를 반환 — 실제 차감은 서버에서.
+function checkAndDeductToken() {
+  if (_tokenCache <= 0) return false;
+  // 낙관적 UI: 캐시는 미리 -1, 서버 응답으로 정확한 값 동기화
+  _tokenCache = Math.max(0, _tokenCache - 1);
+  updateAllTokenDisplays();
+  _spawnTokenPop();
+  return true;
+}
+
+function _spawnTokenPop() {
+  const chip = document.getElementById('tokenChip');
+  if (!chip) return;
+  const rect = chip.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'token-pop';
+  el.textContent = '−1';
+  el.style.left = (rect.left + rect.width / 2 - 10) + 'px';
+  el.style.top  = (rect.top - 4) + 'px';
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
+// 결제 승인·환불 후 서버 잔액으로 다시 맞추기
+async function addTokens(_amount) {
+  await refreshTokens();
+}
+
+async function refreshTokens() {
+  if (!getGoogleIdToken()) { _tokenCache = 0; updateAllTokenDisplays(); return 0; }
+  try {
+    const res = await fetch(EP + 'user-tokens', { headers: authHeaders() });
+    if (!res.ok) { updateAllTokenDisplays(); return _tokenCache; }
+    const data = await res.json();
+    _tokenCache = parseInt(data.tokens, 10) || 0;
+    // localStorage 표시값 동기화 (옛 코드 호환)
+    try {
+      const u = JSON.parse(localStorage.getItem('myan_user') || 'null');
+      if (u) { u.tokens = _tokenCache; localStorage.setItem('myan_user', JSON.stringify(u)); }
+    } catch {}
+    // 기존 사용자 1회 마이그레이션
+    if (!data.migrated) await migrateLocalTokens();
+  } catch {}
+  updateAllTokenDisplays();
+  return _tokenCache;
+}
+
+async function migrateLocalTokens() {
+  try {
+    const u = JSON.parse(localStorage.getItem('myan_user') || 'null');
+    const local = u && u.tokens ? parseInt(u.tokens, 10) : 0;
+    if (local <= 0) return;
+    const res = await fetch(EP + 'migrate-tokens', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ tokens: local }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      _tokenCache = parseInt(data.tokens, 10) || _tokenCache;
+    }
+  } catch {}
+}
+
+function updateAllTokenDisplays() {
+  const t = _tokenCache;
+  const count = document.getElementById('chatTokenCount');
+  const chip  = document.getElementById('tokenChip');
+  const num   = document.getElementById('mypageTokenNum');
+  const tmNum = document.getElementById('tmBalanceNum');
+  if (count) count.textContent = t;
+  if (chip)  chip.classList.toggle('low', t > 0 && t <= 5);
+  if (num)   num.textContent = t;
+  if (tmNum) tmNum.textContent = t;
+}
+
+// ── 결제 모달 상태 ──
+let _payCurrentLink = '';
+let _payCurrentPkg  = '';
+let _payRequestId   = '';
+let _payPollTimer   = null;
+let _payDoneTimer   = null;
+let _adminTab       = 'pending';
+let _adminPayments  = [];
+
+// 관리자 인증: 구글 로그인 이메일이 ADMIN_EMAIL과 일치하면 허용 (서버에서 검증)
+const ADMIN_EMAIL  = 'riger7070@gmail.com';
+
+/* ── Google ID Token 관리 ── */
+let _googleIdToken = '';
+let _googleIdTokenExp = 0;
+function setGoogleIdToken(token) {
+  _googleIdToken = token;
+  try {
+    const p = token.split('.')[1];
+    const pad = '='.repeat((4 - p.length % 4) % 4);
+    const payload = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/') + pad));
+    _googleIdTokenExp = (payload.exp || 0) * 1000;
+    localStorage.setItem('myan_id_token', token);
+  } catch {}
+}
+function getGoogleIdToken() {
+  if (!_googleIdToken) _googleIdToken = localStorage.getItem('myan_id_token') || '';
+  if (!_googleIdToken) return '';
+  if (_googleIdTokenExp && Date.now() > _googleIdTokenExp - 5*60*1000) {
+    _googleIdToken = ''; _googleIdTokenExp = 0;
+    localStorage.removeItem('myan_id_token');
+    return '';
+  }
+  // exp를 한 번 더 파싱 (페이지 새로고침 직후)
+  if (!_googleIdTokenExp) {
+    try {
+      const p = _googleIdToken.split('.')[1];
+      const pad = '='.repeat((4 - p.length % 4) % 4);
+      const payload = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/') + pad));
+      _googleIdTokenExp = (payload.exp || 0) * 1000;
+      if (Date.now() > _googleIdTokenExp - 5*60*1000) {
+        _googleIdToken = ''; localStorage.removeItem('myan_id_token'); return '';
+      }
+    } catch {}
+  }
+  return _googleIdToken;
+}
+function authHeaders(extra) {
+  const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+  const t = getGoogleIdToken();
+  if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+
+// 어드민 전용 헤더 (x-admin-secret 포함)
+function adminAuthHeaders(extra) {
+  const h = authHeaders(extra);
+  const secret = localStorage.getItem('myan_adm_key') || '';
+  if (secret) h['x-admin-secret'] = secret;
+  return h;
+}
+
+// 어드민 시크릿 초기화 (최초 1회 입력)
+function _ensureAdminSecret() {
+  if (localStorage.getItem('myan_adm_key')) return true;
+  const s = prompt('관리자 인증키를 입력하세요:');
+  if (!s) return false;
+  localStorage.setItem('myan_adm_key', s.trim());
+  return true;
+}
+
+const PAY_INFO = {
+  small:  { tokens: 30,  prices: { ko:'4,900원',  en:'₩4,900',  zh:'₩4,900',  ja:'₩4,900'  } },
+  medium: { tokens: 100, prices: { ko:'12,900원', en:'₩12,900', zh:'₩12,900', ja:'₩12,900' } },
+  large:  { tokens: 300, prices: { ko:'29,900원', en:'₩29,900', zh:'₩29,900', ja:'₩29,900' } },
+};
+
+const PAY_TX = {
+  ko: {
+    title:      '토스로 결제하기',
+    qrHint:     'QR코드를 스캔하거나 아래 버튼으로 토스 앱을 여세요',
+    or:         '또는',
+    openApp:    '토스 앱 열기',
+    doneBtn:    '✓  결제 완료했어요',
+    waitTitle:  '결제를 확인하고 있습니다',
+    waitSub:    '잠시만 기다려 주세요.\n보통 1~2분 내로 충전됩니다.',
+    successTitle: '토큰이 충전됐습니다!',
+    successSub:   '토큰이 지급되었습니다. 지금 바로 사용해 보세요.',
+    successClose: '확인',
+    noLink:     '결제 링크가 준비 중입니다. 잠시 후 다시 시도해 주세요.',
+    noUser:     '로그인 후 결제해 주세요.',
+  },
+  en: {
+    title:      'Pay via Toss',
+    qrHint:     'Scan the QR code or tap the button below to open Toss',
+    or:         'OR',
+    openApp:    'Open Toss App',
+    doneBtn:    '✓  I completed the payment',
+    waitTitle:  'Verifying your payment',
+    waitSub:    'Please wait a moment.\nTokens are usually credited within 1–2 minutes.',
+    successTitle: 'Tokens added!',
+    successSub:   'Your tokens have been credited. Start using them now.',
+    successClose: 'Done',
+    noLink:     'Payment link not ready. Please try again shortly.',
+    noUser:     'Please log in to make a payment.',
+  },
+  zh: {
+    title:      '通过 Toss 付款',
+    qrHint:     '扫描二维码或点击下方按钮打开 Toss',
+    or:         '或者',
+    openApp:    '打开 Toss App',
+    doneBtn:    '✓  我已完成付款',
+    waitTitle:  '正在确认您的付款',
+    waitSub:    '请稍等片刻。\n通常在1~2分钟内完成充值。',
+    successTitle: '代币已充值！',
+    successSub:   '您的代币已到账，立即开始使用吧。',
+    successClose: '确认',
+    noLink:     '支付链接尚未准备好，请稍后再试。',
+    noUser:     '请先登录再进行付款。',
+  },
+  ja: {
+    title:      'Tossで決済',
+    qrHint:     'QRコードをスキャンするか下のボタンからTossを開いてください',
+    or:         'または',
+    openApp:    'Toss アプリを開く',
+    doneBtn:    '✓  決済を完了しました',
+    waitTitle:  '決済を確認しています',
+    waitSub:    'しばらくお待ちください。\n通常1〜2分以内にチャージされます。',
+    successTitle: 'トークンがチャージされました！',
+    successSub:   'トークンが付与されました。今すぐご利用ください。',
+    successClose: '確認',
+    noLink:     '決済リンクはまだ準備中です。しばらくしてから再試行してください。',
+    noUser:     'ログイン後に決済してください。',
+  },
+};
+
+function _pt(key) { return (PAY_TX[lang] || PAY_TX.ko)[key] || ''; }
+
+// ── 포트원 V2 PG 결제창 호출 ──
+async function buyToken(pkg) {
+  const user = getUser();
+  if (!user || !isLoggedIn()) { showLogin(); return; }
+
+  const pkgs = {
+    'S': { name: '마이안 토큰 30개',  amount: 4900,  tokens: 30 },
+    'M': { name: '마이안 토큰 100개', amount: 12900, tokens: 100 },
+    'L': { name: '마이안 토큰 300개', amount: 29900, tokens: 300 }
+  };
+  const selected = pkgs[pkg];
+  if (!selected) return;
+
+  const paymentId = `myan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+
+  try {
+    const response = await PortOne.requestPayment({
+      storeId:    'store-2527e72d-c141-4d7e-8ade-7d430f27d088',
+      channelKey: 'channel-key-a9bbeff3-fe3b-4c88-8e25-c6cf75f7a86c',
+      paymentId:  paymentId,
+      orderName:  selected.name,
+      totalAmount: selected.amount,
+      currency:   'KRW',
+      payMethod:  'CARD',
+      customer: {
+        email:    user.email,
+        fullName: user.name,
+      },
+    });
+
+    // 사용자 취소 또는 오류
+    if (response?.code !== undefined) {
+      if (response.code !== 'USER_CANCEL') {
+        alert(`결제 실패: ${response.message}`);
+      }
+      return;
+    }
+
+    // 결제 성공 → 백엔드 위변조 검증 및 토큰 적재
+    const res = await fetch(`${EP}api/payment/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        paymentId,
+        pkg,
+        email:  user.email,
+        amount: selected.amount,
+        tokens: selected.tokens,
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      alert(`✦ ${selected.tokens}토큰이 충전되었습니다!`);
+      if (typeof _onUserUpdated === 'function') _onUserUpdated();
+      closeTokenModal();
+    } else {
+      alert(`결제 검증 실패: ${result.error?.message || '고객센터로 문의해 주세요.'}`);
+    }
+  } catch (err) {
+    alert('결제 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
+  }
+}
+
+function openTossPay(pkg) {
+  const link = TOSS_LINKS[pkg];
+  if (!link) {
+    const msgEl = document.getElementById('voucherMsg');
+    if (msgEl) {
+      msgEl.style.color = '#e07070';
+      msgEl.textContent = _pt('noLink');
+      setTimeout(() => { if (msgEl) { msgEl.style.color=''; msgEl.textContent=''; } }, 4000);
+    }
+    return;
+  }
+
+  // 로그인 확인
+  const user = getUser();
+  if (!user || !isLoggedIn()) {
+    const msgEl = document.getElementById('voucherMsg');
+    if (msgEl) {
+      msgEl.style.color = '#e07070';
+      msgEl.textContent = _pt('noUser');
+      setTimeout(() => { if (msgEl) { msgEl.style.color=''; msgEl.textContent=''; } }, 4000);
+    }
+    return;
+  }
+
+  _payCurrentLink = link;
+  _payCurrentPkg  = pkg;
+  _payRequestId   = '';
+
+  const info = PAY_INFO[pkg] || {};
+
+  // QR 상태로 초기화
+  _setPayState('qr');
+
+  document.getElementById('payModalTitle').textContent    = _pt('title');
+  document.getElementById('payModalPrice').textContent    = (info.prices && info.prices[lang]) || '';
+  document.getElementById('payModalHint').textContent     = _pt('qrHint');
+  document.getElementById('payDivider').textContent       = _pt('or');
+  document.getElementById('payModalBtnText').textContent  = _pt('openApp');
+  document.getElementById('payDoneBtnText').textContent   = _pt('doneBtn');
+
+  // QR 코드 생성
+  const qrEl = document.getElementById('payModalQr');
+  qrEl.innerHTML = '';
+  try {
+    new QRCode(qrEl, {
+      text: link,
+      width: 148, height: 148,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch(e) {
+    qrEl.textContent = '⚠ QR 생성 오류';
+  }
+
+  // 3초 후 "결제 완료했어요" 버튼 표시
+  const doneBtn = document.getElementById('payDoneBtn');
+  doneBtn.classList.remove('visible');
+  clearTimeout(_payDoneTimer);
+  _payDoneTimer = setTimeout(() => doneBtn.classList.add('visible'), 3000);
+
+  document.getElementById('pay-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function _setPayState(state) {
+  document.getElementById('payStateQr').style.display      = state === 'qr'      ? '' : 'none';
+  document.getElementById('payStateWaiting').style.display = state === 'waiting' ? '' : 'none';
+  document.getElementById('payStateSuccess').style.display = state === 'success' ? '' : 'none';
+  // 대기 중일 때 X 버튼 숨김 (실수로 닫는 것 방지)
+  document.querySelector('#pay-modal .pay-close').style.display = state === 'waiting' ? 'none' : '';
+}
+
+function openTossApp() {
+  if (_payCurrentLink) window.location.href = _payCurrentLink;
+}
+
+async function submitPaymentDone() {
+  const user = getUser();
+  if (!user) return;
+
+  const pkg  = _payCurrentPkg;
+  const info = PAY_INFO[pkg];
+  if (!info) return;
+
+  // 고유 요청 ID 생성
+  _payRequestId = 'pr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+  // 창이 닫혀도 재접속 시 복구할 수 있도록 localStorage에 저장
+  localStorage.setItem('myan_pending_pay_id', _payRequestId);
+
+  _setPayState('waiting');
+  document.getElementById('payWaitTitle').textContent = _pt('waitTitle');
+  document.getElementById('payWaitSub').innerHTML = _pt('waitSub').replace('\n','<br>');
+
+try {
+    if (!getGoogleIdToken()) throw new Error('not logged in');
+    const res = await fetch(EP + 'payment-request', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        id:  _payRequestId,
+        pkg: pkg,
+        // email/amount/tokens는 서버가 ID Token과 PKG_TABLE로 결정
+      }),
+    });
+    if (!res.ok) throw new Error('server error');
+  } catch(e) {
+    console.warn('payment-request failed, will still poll', e);
+  }
+
+  // 5초 간격 폴링
+  clearInterval(_payPollTimer);
+  _payPollTimer = setInterval(_pollPaymentStatus, 5000);
+}
+
+async function _pollPaymentStatus() {
+  if (!_payRequestId) return;
+  try {
+    const res = await fetch(EP + 'payment-status?id=' + _payRequestId);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.status === 'approved') {
+      clearInterval(_payPollTimer);
+      _onPaymentApproved(data.tokens);
+    }
+  } catch(e) { /* 네트워크 오류 무시 */ }
+}
+
+async function _onPaymentApproved(tokens) {
+  const granted = parseInt(tokens, 10) || (PAY_INFO[_payCurrentPkg] || {}).tokens || 0;
+  await refreshTokens();  // 서버에서 새 잔액 가져오기
+  localStorage.removeItem('myan_pending_pay_id');
+
+  _setPayState('success');
+  document.getElementById('paySuccessTitle').textContent  = _pt('successTitle');
+  document.getElementById('paySuccessAmount').textContent = '+' + granted + ' 토큰';
+  document.getElementById('paySuccessSub').textContent    = _pt('successSub');
+  document.getElementById('paySuccessCloseBtn').textContent = _pt('successClose');
+
+  const num = document.getElementById('mypageTokenNum');
+  if (num) num.textContent = _tokenCache;
+}  // _onPaymentApproved 닫기
+
+function closePayModal() {
+  clearInterval(_payPollTimer);
+  clearTimeout(_payDoneTimer);
+  document.getElementById('pay-modal').style.display = 'none';
+  document.body.style.overflow = '';
+  _payCurrentLink = '';
+  _payCurrentPkg  = '';
+  _payRequestId   = '';
+}
+
+// ── 관리자 패널 ──
+async function openAdminPanel() {
+  const user = getUser();
+  if (!user || user.email !== ADMIN_EMAIL) return;
+  document.getElementById('admin-panel').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await renderAdminPanel();
+}
+
+function closeAdminPanel() {
+  document.getElementById('admin-panel').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function setAdminTab(tab) {
+  _adminTab = tab;
+  ['pending','approved','all','grant'].forEach(t => {
+    document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1))
+      .classList.toggle('on', t === tab);
+  });
+  const isGrant = tab === 'grant';
+  document.getElementById('adminPaymentList').style.display = isGrant ? 'none' : '';
+  document.getElementById('adminGrantPanel').style.display  = isGrant ? 'block' : 'none';
+  if (!isGrant) _renderAdminList();
+}
+
+async function adminGrantTokens() {
+  const email  = document.getElementById('adminGrantEmail').value.trim();
+  const tokens = parseInt(document.getElementById('adminGrantTokens').value, 10);
+  const note   = document.getElementById('adminGrantNote').value.trim() || '관리자 지급';
+  const msgEl  = document.getElementById('adminGrantMsg');
+
+  if (!email || !tokens || tokens <= 0) {
+    msgEl.style.color = '#e05a4a';
+    msgEl.textContent = '이메일과 토큰 수를 입력해주세요.';
+    return;
+  }
+
+  msgEl.style.color = '#888';
+  msgEl.textContent = '처리 중...';
+
+  if (!_ensureAdminSecret()) return;
+  try {
+    const res = await fetch(EP + 'admin/grant-tokens', {
+      method: 'POST',
+      headers: adminAuthHeaders(),
+      body: JSON.stringify({ email, tokens, note }),
+    });
+    if (!res.ok) throw new Error('fail');
+    msgEl.style.color = '#7de8a8';
+    msgEl.textContent = `✓ ${email} 님께 ${tokens}토큰 지급 완료!`;
+    document.getElementById('adminGrantEmail').value  = '';
+    document.getElementById('adminGrantTokens').value = '';
+    document.getElementById('adminGrantNote').value   = '';
+  } catch(e) {
+    msgEl.style.color = '#e05a4a';
+    msgEl.textContent = '지급 실패. 다시 시도해주세요.';
+  }
+}
+
+async function renderAdminPanel() {
+  const listEl = document.getElementById('adminPaymentList');
+  listEl.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+  if (!_ensureAdminSecret()) { listEl.innerHTML = '<div class="admin-empty">인증 취소됨</div>'; return; }
+  try {
+    const res = await fetch(EP + 'admin/payments', {
+      headers: adminAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('auth');
+    const data = await res.json();
+    _adminPayments = data.results || data || [];
+    _renderAdminList();
+    _refreshAdminBadge();
+  } catch(e) {
+    listEl.innerHTML = '<div class="admin-empty">불러오기 실패. Worker 설정을 확인하세요.</div>';
+  }
+}
+
+function _renderAdminList() {
+  const listEl = document.getElementById('adminPaymentList');
+  let filtered = _adminPayments;
+  if (_adminTab === 'pending')  filtered = filtered.filter(p => p.status === 'pending');
+  if (_adminTab === 'approved') filtered = filtered.filter(p => p.status === 'approved');
+
+  if (!filtered.length) {
+    listEl.innerHTML = '<div class="admin-empty">' +
+      (_adminTab === 'pending' ? '대기 중인 결제가 없습니다 ✓' : '내역이 없습니다') + '</div>';
+    return;
+  }
+
+  const PKG_NAME = { small:'소 (30토큰)', medium:'중 (100토큰)', large:'대 (300토큰)' };
+
+  listEl.innerHTML = filtered.map(p => {
+    const d = new Date(p.created_at * 1000);
+    const timeStr = d.toLocaleDateString('ko-KR') + ' ' + d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    const approved = p.status === 'approved';
+    return `<div class="admin-card">
+      <div class="admin-card-info">
+        <div class="admin-card-email">${p.user_email}</div>
+        <div class="admin-card-detail">${PKG_NAME[p.pkg] || p.pkg} · ${(p.amount||'').toLocaleString()}원</div>
+        <div class="admin-card-time">${timeStr}</div>
+      </div>
+      ${approved
+        ? '<span class="admin-approved-tag">✓ 완료</span>'
+        : `<button class="admin-approve-btn" onclick="approvePayment('${p.id}',this)">승인</button>`}
+    </div>`;
+  }).join('');
+}
+
+async function approvePayment(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+  try {
+    const res = await fetch(EP + 'admin/approve', {
+      method: 'POST',
+      headers: adminAuthHeaders(),
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) throw new Error('fail');
+    // 로컬 상태 업데이트
+    const p = _adminPayments.find(x => x.id === id);
+    if (p) p.status = 'approved';
+    _renderAdminList();
+    _refreshAdminBadge();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '승인'; }
+    alert('승인 실패. 다시 시도해 주세요.');
+  }
+}
+
+function _refreshAdminBadge() {
+  const pending = (_adminPayments || []).filter(p => p.status === 'pending').length;
+  const dot = document.getElementById('adminHdDot');
+  if (dot) dot.classList.toggle('on', pending > 0);
+}
+
+async function _checkAdminBadge() {
+  const user = getUser();
+  if (!user || user.email !== ADMIN_EMAIL) return;
+  document.getElementById('adminHdBtn').style.display = 'flex';
+  try {
+    const res = await fetch(EP + 'admin/payments', {
+      headers: adminAuthHeaders(),
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    _adminPayments = data.results || data || [];
+    _refreshAdminBadge();
+  } catch(e) {}
+}
+
+
+function goSignup() {
+  document.getElementById('screen-mode').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'flex';
+  document.getElementById('backBtn').style.display       = 'flex';
+  renderSignup();
+  // 구글 버튼 초기화 (스크립트 로드 대기)
+  const tryInit = (attempts) => {
+    if (typeof google !== 'undefined' && GOOGLE_CID) {
+      initGoogleSignin();
+    } else if (!GOOGLE_CID) {
+      document.getElementById('googleBtnWrap').style.display = 'none';
+      document.getElementById('orDivider').style.display     = 'none';
+    } else if (attempts > 0) {
+      setTimeout(() => tryInit(attempts - 1), 300);
+    }
+  };
+  tryInit(10);
+}
+
+/* ── 구글 로그인 ── */
+let _gisInited = false;
+function _ensureGisInit() {
+  if (_gisInited) return;
+  const wasSignedOut = localStorage.getItem('myan_signed_out') === 'true';
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CID,
+    callback: handleGoogleCredential,
+    auto_select: !wasSignedOut, // 명시적 로그아웃 후엔 자동 선택 차단
+    cancel_on_tap_outside: true,
+  });
+  _gisInited = true;
+}
+
+function initGoogleSignin() {
+  const wrap = document.getElementById('googleBtnEl');
+  if (!wrap) return;
+  wrap.innerHTML = ''; // 재렌더 시 초기화
+  _ensureGisInit();
+  const localeMap = { ko:'ko', en:'en', zh:'zh-CN', ja:'ja' };
+  google.accounts.id.renderButton(wrap, {
+    type: 'standard',
+    theme: 'filled_black',
+    size: 'large',
+    text: 'signup_with',
+    shape: 'rectangular',
+    width: Math.min(Math.max(window.innerWidth - 64, 280), 480),
+    locale: localeMap[lang] || 'ko',
+  });
+}
+
+function handleGoogleCredential(response) {
+  try {
+    localStorage.removeItem('myan_signed_out'); // 명시적 로그인 → 자동로그인 차단 해제
+    setGoogleIdToken(response.credential);  // ⭐ ID Token 저장
+    // JWT 페이로드 디코딩 — UTF-8(한글 포함) 안전 처리
+    const b64  = response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const pad  = b64.length % 4 === 0 ? '' : '='.repeat(4 - b64.length % 4);
+    const raw  = atob(b64 + pad);
+    const utf8 = decodeURIComponent(
+      raw.split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    const pl = JSON.parse(utf8);
+
+    const name  = pl.name  || '';
+    const email = pl.email || '';
+    if (!name && !email) return;
+
+    // 기존 프로필 유지하면서 이름/이메일 업데이트
+    let existing = {};
+    try { existing = JSON.parse(localStorage.getItem('myan_user') || '{}'); } catch {}
+
+    const isReturning = existing.email && existing.email === email;
+
+    const profile = {
+      ...existing,
+      name:       name  || existing.name  || '',
+      email:      email || existing.email || '',
+      phone:      existing.phone      || '',
+      birthYear:  existing.birthYear  || '',
+      birthMonth: existing.birthMonth || '',
+      birthDay:   existing.birthDay   || '',
+      birthHour:  existing.birthHour  || '',
+      gender:     existing.gender     || '',
+      region:     existing.region     || '',
+      tokens:     existing.tokens !== undefined ? existing.tokens : 3,
+    };
+    localStorage.setItem('myan_user', JSON.stringify(profile));
+    localStorage.setItem('myan_logged_in', 'true');
+
+    // Sheets 저장
+    if (SHEETS_EP) {
+      fetch(SHEETS_EP, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({...profile, timestamp: new Date().toISOString(), lang, source: 'google_signup'})
+      });
+    }
+
+    // 유저 버튼 업데이트
+    updateUserBtn(profile);
+    refreshTokens();  // 서버 토큰 잔액 동기화
+
+    // 관리자 배지 확인
+    _checkAdminBadge();
+
+    // 어느 화면에서 왔든 모든 auth 화면 닫고 앱으로 이동
+    document.getElementById('screen-login').style.display     = 'none';
+    document.getElementById('screen-signup').style.display    = 'none';
+    document.getElementById('signupLinkBtn').style.display    = 'none';
+    document.getElementById('backBtn').style.display          = 'none';
+    document.getElementById('signup-form-wrap').style.display = '';
+    document.getElementById('signup-success').style.display   = 'none';
+
+    if (pendingMode) {
+      const m = pendingMode; pendingMode = null;
+      _enterMode(m, profile);
+    } else {
+      document.getElementById('screen-mode').style.display = 'flex';
+    }
+  } catch(e) {
+    console.error('Google 자격증명 파싱 오류:', e);
+  }
+}
+
+function goBackFromSignup() {
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('backBtn').style.display       = 'none';
+  document.getElementById('signup-form-wrap').style.display = '';
+  document.getElementById('signup-success').style.display   = 'none';
+}
+
+function setGender(g) {
+  selGender = g; // signup 폼에서 성별 선택은 제거됨 (My Page에서 입력)
+}
+
+function buildSignupDropdowns() {
+  const mSel = document.getElementById('fMonth');
+  const mSuf = {ko:'월', en:'', zh:'月', ja:'月'}[lang] || '';
+  mSel.innerHTML = '<option value=""></option>';
+  for (let i = 1; i <= 12; i++) {
+    const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
+  }
+}
+
+function renderSignup() {
+  const s = TX[lang];
+  buildSignupDropdowns();
+  document.getElementById('signupHeadline').textContent  = s.sgHeadline;
+  document.getElementById('signupSub').textContent       = s.sgSub;
+  document.getElementById('signupLinkText').textContent  = s.sgLink;
+  document.getElementById('lblName').textContent         = s.sgName;
+  document.getElementById('fName').placeholder           = s.sgName;
+  document.getElementById('lblEmail').textContent        = s.sgEmail;
+  document.getElementById('lblYear').textContent         = s.sgYear;
+  document.getElementById('lblMonth').textContent        = s.sgMonth;
+  document.getElementById('lblDay').textContent          = s.sgDay;
+  document.getElementById('lblUsername').textContent     = s.sgUsername;
+  document.getElementById('fUsername').placeholder       = s.sgUsername;
+  document.getElementById('lblPassword').textContent     = s.sgPassword;
+  document.getElementById('fPassword').placeholder       = s.sgPassword;
+  document.getElementById('lblConfirmPw').textContent    = s.sgConfirmPw;
+  document.getElementById('fConfirmPw').placeholder      = s.sgConfirmPw;
+  document.getElementById('submitBtn').textContent       = s.sgSubmit;
+  document.getElementById('signupNotice').textContent    = s.sgNotice;
+  document.getElementById('successTitle').textContent    = s.sgSuccTitle;
+  document.getElementById('successDesc').textContent     = s.sgSuccDesc;
+  document.getElementById('successBackBtn').textContent  = s.sgBack;
+  document.getElementById('orDividerText').textContent   = s.sgOr;
+}
+
+let _sgErrTimer = null;
+function showSignupError(msg) {
+  const notice = document.getElementById('signupNotice');
+  if (_sgErrTimer) clearTimeout(_sgErrTimer);
+  notice.style.color = '#e07070';
+  notice.textContent = '⚠ ' + msg;
+  _sgErrTimer = setTimeout(() => {
+    notice.style.color = '';
+    notice.textContent = TX[lang].sgNotice;
+    _sgErrTimer = null;
+  }, 3500);
+}
+
+async function submitSignup() {
+  const s    = TX[lang];
+  const name = document.getElementById('fName').value.trim();
+  const email = document.getElementById('fEmail').value.trim();
+  const year  = document.getElementById('fYear').value.trim();
+  const mon   = document.getElementById('fMonth').value;
+  const day   = document.getElementById('fDay').value.trim();
+  // 선택 정보는 마이페이지에서 입력
+  const phone = ''; const hour = ''; const region = '';
+
+  // 필수 항목 검사
+  if (!name || !email || !year || !mon || !day) {
+    const msg = {ko:'이름, 이메일, 생년월일을 입력해 주세요.', en:'Please fill in name, email, and date of birth.',
+                 zh:'请填写姓名、邮箱和出生日期。', ja:'お名前、メールアドレス、生年月日を入力してください。'};
+    showSignupError(msg[lang] || msg.ko); return;
+  }
+  // 이메일 형식 간단 검사
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const msg = {ko:'올바른 이메일 주소를 입력해 주세요.', en:'Please enter a valid email address.',
+                 zh:'请输入有效的电子邮件地址。', ja:'正しいメールアドレスを入力してください。'};
+    showSignupError(msg[lang] || msg.ko); return;
+  }
+  // 생년 범위 검사
+  const yearNum = parseInt(year, 10);
+  if (yearNum < 1900 || yearNum > new Date().getFullYear()) {
+    const msg = {ko:'올바른 생년을 입력해 주세요.', en:'Please enter a valid birth year.',
+                 zh:'请输入有效的出生年份。', ja:'正しい生年を入力してください。'};
+    showSignupError(msg[lang] || msg.ko); return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = {ko:'저장 중…', en:'Saving…', zh:'保存中…', ja:'保存中…'}[lang] || '…';
+
+  const payload = {
+    timestamp: new Date().toISOString(),
+    name, email, phone, birthYear: year, birthMonth: mon, birthDay: day,
+    birthHour: hour, gender: selGender, region, lang, source: 'signup'
+  };
+
+  try {
+    if (SHEETS_EP) {
+      await fetch(SHEETS_EP, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+    localStorage.setItem('myan_user', JSON.stringify({
+      name, email, phone,
+      birthYear: year, birthMonth: mon, birthDay: day,
+      birthHour: hour, gender: selGender, region,
+      tokens: 3   // 신규 가입 무료 토큰
+    }));
+    localStorage.setItem('myan_logged_in', 'true');
+    document.getElementById('signup-form-wrap').style.display = 'none';
+    document.getElementById('signup-success').style.display   = 'flex';
+  } catch(e) {
+    showSignupError(s.sgErr);
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+/* ── 마이페이지 ── */
+function updateUserBtn(user) {
+  const btn = document.getElementById('userBtn');
+  if (!btn) return; // 엘리먼트가 없으면 안전하게 리턴 (크래시 방지)
+  if (!user) { btn.style.display = 'none'; return; }
+  btn.textContent = TX[lang].mpLink || '마이페이지';
+  btn.style.display = 'flex';
+}
+
+// ── Change 1: 무료 토큰 배너 표시 (비로그인 시에만) ──
+function updateFreeBanner() {
+  const banner = document.getElementById('freeBanner');
+  if (!banner) return;
+  const loggedIn = isLoggedIn();
+  banner.style.display = loggedIn ? 'none' : 'flex';
+}
+
+function openMyPage() {
+  // 비로그인 유저 진입 차단 — 로그인 완료 후 마이페이지로 돌아오도록 예약
+  const u = getUser();
+  if (!u || !isLoggedIn()) {
+    pendingMode = '_token';
+    showLogin();
+    return;
+  }
+
+  document.getElementById('screen-mode').style.display   = 'none';
+  document.getElementById('screen-chat').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-mypage').style.display = 'flex';
+  document.getElementById('backBtn').style.display       = 'flex';
+  const _ub = document.getElementById('userBtn');
+  if (_ub) _ub.style.display = 'none';
+  renderMyPage();
+}
+
+function closeMyPage() {
+  document.getElementById('screen-mypage').style.display = 'none';
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('backBtn').style.display       = 'none';
+  // 로그인 상태에 맞게 userBtn / signupLinkBtn 복원
+  const u = getUser();
+  const _userBtn = document.getElementById('userBtn');
+  if (u && isLoggedIn()) {
+    updateUserBtn(u);
+    document.getElementById('signupLinkBtn').style.display = 'none';
+  } else {
+    if (_userBtn) _userBtn.style.display = 'none';
+    document.getElementById('signupLinkBtn').style.display = u ? 'none' : '';
+  }
+}
+
+function buildMypageDropdowns() {
+  const t    = TX[lang];
+  const mSel = document.getElementById('mpMonth');
+  const hSel = document.getElementById('mpHour');
+  const mSuf = {ko:'월', en:'', zh:'月', ja:'月'}[lang] || '';
+  // mpMonth가 select일 때만 옵션 생성 (input type="number"로 교체된 경우 건너뜀)
+  if (mSel && mSel.tagName === 'SELECT') {
+    mSel.innerHTML = '<option value=""></option>';
+    for (let i = 1; i <= 12; i++) {
+      const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
+    }
+  }
+  const hrs = [['子','23-01'],['丑','01-03'],['寅','03-05'],['卯','05-07'],
+               ['辰','07-09'],['巳','09-11'],['午','11-13'],['未','13-15'],
+               ['申','15-17'],['酉','17-19'],['戌','19-21'],['亥','21-23']];
+  hSel.innerHTML = `<option value="">${t.sgUnknown}</option>`;
+  hrs.forEach(([c, r]) => {
+    const o = document.createElement('option'); o.value = c; o.textContent = `${c}時 (${r})`; hSel.appendChild(o);
+  });
+}
+
+function renderMyPage() {
+  const t    = TX[lang];
+  const user = (() => { try { return JSON.parse(localStorage.getItem('myan_user')); } catch { return null; } })();
+  if (!user) return;
+
+  buildMypageDropdowns();
+
+  // 프로필 표시
+  document.getElementById('mypageAvatar').textContent   = (user.name || '?').charAt(0);
+  document.getElementById('mypageNameDisp').textContent  = user.name  || '';
+  document.getElementById('mypageEmailDisp').textContent = user.email || '';
+  document.getElementById('mypageSectionLabel').textContent  = t.mpSection;
+  document.getElementById('mypageDetailLabel').textContent   = t.mpDetailSection;
+  document.getElementById('mypageDetailNotice').textContent  = t.mpDetailNotice;
+
+  // 라벨
+  document.getElementById('mpLblYear').textContent    = t.sgYear;
+  document.getElementById('mpLblMonth').textContent   = t.sgMonth;
+  document.getElementById('mpLblDay').textContent     = t.sgDay;
+  document.getElementById('mpLblHour').innerHTML      = t.sgHour + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpLblGender').innerHTML    = t.sgGender + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpLblPhone').innerHTML     = t.sgPhone + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpLblRegion').innerHTML    = t.sgRegion + ` <span style="opacity:.4;font-size:.6rem">${t.sgOpt}</span>`;
+  document.getElementById('mpGbM').textContent        = t.sgM;
+  document.getElementById('mpGbF').textContent        = t.sgF;
+  document.getElementById('mypageSaveBtn').textContent    = t.mpSave;
+  document.getElementById('mypageNotice').textContent     = '';
+  document.getElementById('mypageSupportBtn').textContent = t.mpSupport || '✉ 고객센터';
+  document.getElementById('mypageLogoutBtn').textContent  = t.mpLogout;
+  document.getElementById('mypageWithdrawBtn').textContent = t.mpWithdraw;
+  // 알림 버튼 현재 상태 반영
+  const notifBtn = document.getElementById('notifToggleBtn');
+  if (notifBtn) {
+    const notifOn = localStorage.getItem('myan_notif_enabled') === 'true';
+    notifBtn.textContent = notifOn ? '알림 끄기 🔕' : '알림 켜기 🔔';
+    notifBtn.classList.toggle('notif-on', notifOn);
+  }
+
+  // 저장된 값 채우기
+  document.getElementById('mpYear').value  = user.birthYear  || '';
+  document.getElementById('mpMonth').value = user.birthMonth || '';
+  document.getElementById('mpDay').value   = user.birthDay   || '';
+  document.getElementById('mpHour').value  = user.birthHour  || '';
+  document.getElementById('mpPhone').value = user.phone      || '';
+  document.getElementById('mpRegion').value = user.region    || '';
+  document.getElementById('mpRegion').placeholder = t.sgRegion;
+
+  // 성별 버튼
+  selGenderMp = user.gender || '';
+  document.getElementById('mpGbM').classList.toggle('active', selGenderMp === 'M');
+  document.getElementById('mpGbF').classList.toggle('active', selGenderMp === 'F');
+
+  // ── 토큰 섹션 ──
+  document.getElementById('tkSectionLbl').textContent      = t.tkSection;
+  document.getElementById('mypageTokenUnitLbl').textContent = t.tkUnit;
+  document.getElementById('mypageTokenNum').textContent    = getTokens();
+  document.getElementById('pkgBadge0').textContent         = t.tkPkgS;
+  document.getElementById('pkgBadge1').textContent         = t.tkPkgM;
+  document.getElementById('pkgBadge2').textContent         = t.tkPkgL;
+  document.getElementById('pkgBtn0').textContent           = t.tkPayBtn;
+  document.getElementById('pkgBtn1').textContent           = t.tkPayBtn;
+  document.getElementById('pkgBtn2').textContent           = t.tkPayBtn;
+
+  // 오행 분포 게이지 — AI 정밀 분석 데이터 우선, 없으면 JS 계산 값 표시
+  const _savedOhaeng = (() => {
+    try { const s = localStorage.getItem('myan_ohaeng'); return s ? JSON.parse(s) : null; } catch { return null; }
+  })();
+  if (_savedOhaeng) _renderSajuGaugeFromGemini(_savedOhaeng);
+  else _renderSajuGauge(user);
+}
+
+function setGenderMp(g) {
+  selGenderMp = g;
+  document.getElementById('mpGbM').classList.toggle('active', g === 'M');
+  document.getElementById('mpGbF').classList.toggle('active', g === 'F');
+}
+
+async function saveMyPage() {
+  const user = (() => { try { return JSON.parse(localStorage.getItem('myan_user')); } catch { return null; } })();
+  if (!user) return;
+
+  const year   = document.getElementById('mpYear').value.trim();
+  const mon    = document.getElementById('mpMonth').value;
+  const day    = document.getElementById('mpDay').value.trim();
+  const hour   = document.getElementById('mpHour').value;
+  const phone  = document.getElementById('mpPhone').value.trim();
+  const region = document.getElementById('mpRegion').value.trim();
+
+  // 생년 범위 검사
+  if (year) {
+    const y = parseInt(year, 10);
+    if (y < 1900 || y > new Date().getFullYear()) {
+      const notice = document.getElementById('mypageNotice');
+      notice.style.color = '#e07070';
+      notice.textContent = {ko:'올바른 생년을 입력해 주세요.', en:'Enter a valid birth year.',
+                            zh:'请输入有效出生年份。', ja:'正しい生年を入力してください。'}[lang] || '';
+      setTimeout(() => { notice.style.color = ''; notice.textContent = ''; }, 3000);
+      return;
+    }
+  }
+
+  const updated = {
+    ...user,
+    phone, birthYear: year, birthMonth: mon, birthDay: day,
+    birthHour: hour, gender: selGenderMp, region,
+  };
+  localStorage.setItem('myan_user', JSON.stringify(updated));
+
+  if (SHEETS_EP) {
+    fetch(SHEETS_EP, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({...updated, timestamp: new Date().toISOString(), lang, source: 'mypage_update'})
+    });
+  }
+
+  const btn = document.getElementById('mypageSaveBtn');
+  btn.textContent = TX[lang].mpSaved;
+  btn.style.background = 'rgba(75,200,122,0.25)';
+  setTimeout(() => {
+    btn.textContent = TX[lang].mpSave;
+    btn.style.background = '';
+  }, 2200);
+}
+
+function _signOut() {
+  // 로그아웃: 모든 세션 및 유저 정보 삭제 + Google 자동 재로그인 차단
+  localStorage.removeItem('myan_logged_in');
+  localStorage.removeItem('myan_user');      // 유저 정보도 함께 삭제하여 오작동 방지
+  localStorage.removeItem('myan_id_token');
+  localStorage.setItem('myan_signed_out', 'true'); // 자동 재로그인 방지 플래그
+  _googleIdToken = ''; _googleIdTokenExp = 0;
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+  try { google.accounts.id.cancel(); } catch(e) {}
+  selGender = ''; selGenderMp = '';
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+  const _userBtnSO = document.getElementById('userBtn');
+  if (_userBtnSO) _userBtnSO.style.display = 'none';
+  document.getElementById('signupLinkBtn').style.display = ''; // 로그아웃 후 가입/로그인 링크 표시
+  closeMyPage();
+}
+
+function _withdrawAccount() {
+  // 탈퇴: 세션, 유저 정보, 구글 토큰까지 완전히 청소 + 자동 재로그인 확실히 차단
+  localStorage.removeItem('myan_logged_in');
+  localStorage.removeItem('myan_user');
+  localStorage.removeItem('myan_id_token');         // 탈퇴 시 구글 ID 토큰도 반드시 함께 제거
+  localStorage.setItem('myan_signed_out', 'true');  // 구글 원탭 자동 로그인 방지
+  _googleIdToken = ''; _googleIdTokenExp = 0;
+  try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+  try { google.accounts.id.cancel(); } catch(e) {}
+  selGender = ''; selGenderMp = '';
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+  const _userBtnWD = document.getElementById('userBtn');
+  if (_userBtnWD) _userBtnWD.style.display = 'none';
+  document.getElementById('signupLinkBtn').style.display = ''; // 가입 링크 표시
+  closeMyPage();
+}
+
+function _confirmAction(btnId, confirmText, action) {
+  const btn = document.getElementById(btnId);
+  if (btn.dataset.confirm === '1') { action(); return; }
+  btn.dataset.confirm = '1';
+  const orig = btn.textContent;
+  const origColor = btn.style.color;
+  btn.textContent = confirmText;
+  btn.style.color = '#e07070';
+  btn.style.borderColor = 'rgba(224,112,112,0.4)';
+  setTimeout(() => {
+    if (btn.dataset.confirm === '1') {
+      btn.dataset.confirm = '';
+      btn.textContent = orig;
+      btn.style.color = origColor;
+      btn.style.borderColor = '';
+    }
+  }, 3000);
+}
+
+function openTokenModal() {
+  document.getElementById('token-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  renderMyPage(); // 잔액 및 패키지 레이아웃 최신화
+}
+
+function closeTokenModal() {
+  document.getElementById('token-modal').style.display = 'none';
+}
+
+function openSupport() {
+  const user = getUser();
+  const subject = encodeURIComponent({
+    ko: 'M;Y 安 1:1 문의',
+    en: 'M;Y 安 Support',
+    zh: 'M;Y 安 客服',
+    ja: 'M;Y 安 サポート'
+  }[lang] || 'M;Y 安 문의');
+
+  const body = encodeURIComponent(user
+    ? `이름: ${user.name}\n이메일: ${user.email}\n\n문의 내용:\n`
+    : '문의 내용:\n'
+  );
+
+  // ✅ [버그 픽스] window.open 대신 window.location.href를 사용하여
+  // PWA/모바일 환경에서 고스트 흰 화면(새 창) 없이 이메일 앱만 깔끔하게 깨웁니다.
+  window.location.href = `mailto:riger7070@naver.com?subject=${subject}&body=${body}`;
+}
+
+function logout() {
+  _confirmAction('mypageLogoutBtn', TX[lang].mpLogoutQ, _signOut);
+}
+
+/* ── 법적 모달 ── */
+const LEGAL_CONTENT = {
+  privacy: {
+    ko: {
+      title: '개인정보처리방침',
+      body: `
+<h3>제1조 (개인정보의 처리 목적)</h3>
+<p><b>M;Y 安 (마이안)</b>(이하 "회사")은 이용자의 사주 기운 리딩 서비스 제공, 맞춤형 처방 솔루션 매칭, 회원 식별 및 서비스 개선, 유료 콘텐츠(토큰) 정산 및 결제 관리 목적으로 최소한의 개인정보를 처리합니다.</p>
+
+<h3>제2조 (처리하는 개인정보 항목)</h3>
+<p>• 필수항목: 이름(성함), 생년월일, 성별, 이메일 주소 (구글 OAuth 2.0 연동 식별 데이터 포함)</p>
+<p>• 선택항목: 태어난 시간(생시), 거주지역, 전화번호, 결제 및 거래 이력</p>
+
+<h3>제3조 (개인정보의 보유 및 이용 기간)</h3>
+<p>이용자의 개인정보는 원칙적으로 <b>회원 탈퇴 시 즉시 파기</b>됩니다. 단, 전자상거래 등에서의 소비자보호에 관한 법률 등 관계 법령의 규정에 의하여 보존할 필요가 있는 경우, 회사는 아래와 같이 일정 기간 회원 정보를 보관합니다.</p>
+<p>• 계약 또는 청약철회 등에 관한 기록: 5년 (전자상거래법)</p>
+<p>• 대금결제 및 재화 등의 공급에 관한 기록: 5년 (전자상거래법)</p>
+<p>• 소비자의 불만 또는 분쟁처리에 관한 기록: 3년 (전자상거래법)</p>
+
+<h3>제4조 (개인정보의 제3자 제공 및 위탁)</h3>
+<p>회사는 이용자의 개인정보를 명시한 목적 범위 내에서만 처리하며, 이용자의 사전 동의 없이는 원칙적으로 외부에 제공하지 않습니다. 다만, 법령에 따른 구체적 요청이 있는 경우 등 예외적인 법적 의무가 발생할 때에 한하여 제공될 수 있습니다.</p>
+
+<h3>제5조 (개인정보 국외 이전 및 클라우드 인프라 위탁)</h3>
+<p>회사는 안정적인 전산 인프라 및 보안 시스템 운영을 위해 아래와 같이 글로벌 전문 클라우드 법인에 데이터 관리를 위탁하며, 이는 개인정보보호법에 따른 안전 조치를 준수합니다.</p>
+<table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:0.85rem;">
+<tr style="border-bottom:1px solid rgba(201,169,110,0.2); text-align:left;"><th style="padding:8px; color:var(--gold);">이전받는 자</th><td style="padding:8px;">Google LLC (미국) 및 Cloudflare, Inc. (미국)</td></tr>
+<tr style="border-bottom:1px solid rgba(201,169,110,0.2); text-align:left;"><th style="padding:8px; color:var(--gold);">이전 목적</th><td style="padding:8px;">OAuth 2.0 보안 인증 및 전산 데이터베이스(D1) 클라우드 시스템 운영·백업</td></tr>
+<tr style="border-bottom:1px solid rgba(201,169,110,0.2); text-align:left;"><th style="padding:8px; color:var(--gold);">이전 항목</th><td style="padding:8px;">이름, 이메일 주소, 생년월일시 등 서비스 가입·이용 정보</td></tr>
+<tr style="border-bottom:1px solid rgba(201,169,110,0.2); text-align:left;"><th style="padding:8px; color:var(--gold);">보유 기간</th><td style="padding:8px;">회원 탈퇴 시 또는 서비스 종료 시까지</td></tr>
+</table>
+
+<h3>제6조 (이용자의 권리와 그 행사방법)</h3>
+<p>이용자는 언제든지 마이페이지 내 전산 시스템을 통해 본인의 개인정보를 열람, 정정할 수 있으며 회원 탈퇴(동의 철회)를 통해 즉시 삭제를 요청할 수 있습니다.</p>
+
+<h3>제7조 (개인정보 보호책임자 및 사업자 정보)</h3>
+<p>회사는 개인정보 처리에 관한 업무를 총괄해서 책임지고, 이용자의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보 보호책임자 및 사업자 신원을 지정하고 있습니다.</p>
+<div style="background:rgba(255,255,255,0.02); padding:16px; border-radius:12px; border:1px solid rgba(201,169,110,0.15); line-height:2; margin-top:12px;">
+  • 상호(서비스명): M;Y 安 (마이안)<br>
+  • 대표자 성명: <b>안태현</b><br>
+  • 사업자등록번호: <b>501-33-63980</b><br>
+  • 주소: <b>부산광역시 수영구 망미동 현대한누리타운 101-1101</b><br>
+  • 개인정보 보호책임자: <b>안태현</b><br>
+  • 연락처/이메일: riger7070@naver.com
+</div>
+
+<h3>제8조 (개인정보처리방침 변경)</h3>
+<p>본 개인정보처리방침은 시행일로부터 적용되며, 법령 및 방침에 따른 변경 내용의 추가, 삭제 및 정정이 있는 경우에는 변경사항의 시행 7일 전부터 웹 화면을 통해 고지할 것입니다.</p>
+<p style="margin-top:12px; color:var(--text-dim);">• 공고일자: 2026년 5월 21일 / 시행일자: 2026년 5월 21일</p>
+`
+    }
+  },
+  refund: {
+    ko: {
+      title: '환불정책',
+      body: `
+<h3>제1조 (환불의 기본 원칙)</h3>
+<p>사용자는 구매한 충전형 토큰 중 <b>미사용 잔여 분</b>에 대하여 전자상거래 등에서의 소비자보호에 관한 법률 제17조에 의거하여 청약철회 및 환불을 요청할 수 있습니다.</p>
+
+<h3>제2조 (청약철회 및 환불 조건)</h3>
+<p>• 사용자는 유료 결제일로부터 <b>7일 이내</b>에 미사용된 토큰 전체 또는 일부에 대해 환불 신청이 가능합니다.</p>
+<p>• 환불 금액은 사용자가 실제 결제한 금액을 기준으로 하며, 패키지 할인 상품의 경우 기 사용된 토큰의 단가를 정상가 기준으로 역산하여 제외한 후 잔액을 정산합니다.</p>
+
+<h3>제3조 (청약철회 및 환불의 제한)</h3>
+<p>다음 각 호에 해당하는 경우 환불이 제한될 수 있습니다.</p>
+<p>• 유료 결제 후 7일을 초과하여 청약철회 기간이 경과한 경우</p>
+<p>• 결제를 통해 지급된 토큰을 이미 대화 및 기운 리딩 서비스에 소비하여 사용이 완료된 경우 (디지털 콘텐츠의 개시)</p>
+<p>• 이벤트, 프로모션, 회원가입 보너스 등 서비스 내에서 무상으로 지급된 토큰(무료 대화권)</p>
+
+<h3>제4조 (자동 환불 및 정산 예외 보장 시스템)</h3>
+<p>AI 통신 서버의 일시적 장애, 구글 API 네트워크 단절, 혹은 시스템 세이프티 필터 작동으로 인하여 사용자의 질문에 대하여 <b>AI의 리딩 답변 문장이 정상적으로 도출되지 않고 공백으로 종료된 경우</b>, 선차감되었던 토큰 1개는 데이터베이스 전산 트랜잭션에 의해 사용되지 않은 것으로 판정되어 <b>실시간으로 즉시 복구(자동 환불)</b> 처리되며 과금되지 않습니다.</p>
+
+<h3>제5조 (환불 신청 절차)</h3>
+<p>환불을 원하시는 사용자는 1:1 고객센터 이메일(riger7070@naver.com)을 통해 결제 일시, 결제 ID, 가입 이메일 주소를 기재하여 신청해 주셔야 합니다. 전산망 대조 확인 후 영업일 기준 3~5일 이내에 지정하신 계좌로 대금이 반환됩니다.</p>
+`
+    }
+  },
+  terms: {
+    ko: {
+      title: '이용약관',
+      body: `
+<h3>제1조 (목적)</h3>
+<p>본 약관은 <b>M;Y 安 (마이안)</b>(이하 "회사")이 운영하는 AI 오행 기운 리딩 플랫폼 웹사이트 및 프로그레시브 웹앱(PWA) 서비스(이하 "서비스")의 이용 조건, 절차 및 회사와 회원 간의 권리, 의무, 책임 사항을 규정함을 목적으로 합니다.</p>
+
+<h3>제2조 (서비스의 명리 이론적 면책 선언)</h3>
+<p>• 본 서비스는 전통 명리학(四柱命理學) 이론 및 오행 데이터베이스를 현대적 소프트웨어로 알고리즘화하여 구현한 <b>문화·힐링 체험 콘텐츠</b>입니다.</p>
+<p>• 대화형 AI(Gemini API)를 통해 도출되는 기운 분석, 조화(궁합) 풀이, 음료 처방 매칭 등의 모든 결과물은 절대적인 미래 예측이나 결정론적 운명을 의미하지 않으며, 사용자의 일상 속 마음가짐을 위한 <b>단순 참고용 데이터</b>입니다.</p>
+<p>• 본 서비스의 결과물은 전문적인 의료적 진단, 법률적 자문, 금융 및 투자 조언을 절대 대체할 수 없으며, 이를 근거로 사용자가 행한 모든 주관적 결정 및 행동에 대한 책임은 이용자 본인에게 있습니다.</p>
+
+<h3>제3조 (회원 가입 및 계정 관리)</h3>
+<p>• 사용자는 회사가 정한 양식에 따라 사주 정보(이름, 생년월일시, 성별)를 입력하거나 구글 간편 인증을 통해 회원이 될 수 있습니다.</p>
+<p>• 이용자는 본인의 고유 이메일 및 로그인 세션을 안전하게 관리해야 하며, 타인의 명의나 개인정보를 도용하여 전산망을 무단 교란하는 행위를 엄격히 금지합니다.</p>
+
+<h3>제4조 (유료 서비스 및 토큰 이용 규정)</h3>
+<p>• 본 서비스는 가상 재화인 '토큰(Token)' 차감제로 운영됩니다. 질문 1회당 정상 답변이 완결될 때 1토큰이 차감됩니다.</p>
+<p>• 유료 토큰의 가격, 지급 수량 및 정산 방식은 회사가 홈페이지 결제 창에 고지한 내용을 따르며, 회사는 투명한 거래를 위해 모든 결제 요청의 로그를 관계형 데이터베이스(D1)에 영구 기록합니다.</p>
+
+<h3>제5조 (서비스의 중단 및 제한)</h3>
+<p>회사는 시스템 점검, 서버 증설, AI 공급처(Google)의 기술적 장애 등 불가항력적인 사유가 발생한 경우 서비스의 전부 또는 일부를 일시적으로 제한하거나 중단할 수 있습니다. 다만, 이 과정에서 전산 오류로 소실된 유료 토큰은 회사의 관리자 기능을 통해 즉시 재지급 보상 처리됩니다.</p>
+
+<h3>제6조 (관할 법원)</h3>
+<p>본 약관의 해석 및 회사와 회원 간에 발생한 분쟁에 대한 소송은 회사의 본점 소재지를 관할하는 법원을 전속 관할 법원으로 합니다.</p>
+
+<p style="margin-top:24px; font-size:0.75rem; color:var(--text-dim);">• 시행일자: 2026년 5월 21일</p>
+`
+    }
+  }
+};
+
+function openLegal(type) {
+  const data = LEGAL_CONTENT[type]?.ko;
+  if (!data) return;
+  document.getElementById('legalModalTitle').textContent = data.title;
+  document.getElementById('legalModalBody').innerHTML = data.body;
+  document.getElementById('legal-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLegal() {
+  document.getElementById('legal-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function withdraw() {
+  _confirmAction('mypageWithdrawBtn', TX[lang].mpWithdrawQ, _withdrawAccount);
+}
+
+/* ── 로그인 시스템 ── */
+async function hashPassword(password, salt) {
+  const enc  = new TextEncoder();
+  const data = enc.encode(salt + password);
+  const buf  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function isLoggedIn() {
+  return localStorage.getItem('myan_logged_in') === 'true';
+}
+
+function getUser() {
+  try { return JSON.parse(localStorage.getItem('myan_user')); } catch { return null; }
+}
+
+function togglePwVis(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
+  else                         { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+function renderLogin() {
+  const t = TX[lang];
+  document.getElementById('loginTitle').textContent      = t.loginTitle;
+  document.getElementById('lblLoginId').textContent      = t.loginId;
+  document.getElementById('lblLoginPw').textContent      = t.loginPw;
+  document.getElementById('loginSubmitBtn').textContent  = t.loginBtn;
+  document.getElementById('loginErr').textContent        = '';
+  document.getElementById('loginOrText').textContent     = t.sgOr;
+}
+
+function showLogin() {
+  document.getElementById('screen-mode').style.display   = 'none';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'flex';
+  document.getElementById('backBtn').style.display       = 'flex';
+  renderLogin();
+  // Google 버튼 초기화 (로그인용)
+  const tryInit = (attempts) => {
+    if (typeof google !== 'undefined' && GOOGLE_CID) {
+      initGoogleLoginBtn();
+    } else if (!GOOGLE_CID) {
+      document.getElementById('loginGoogleBtnWrap').style.display = 'none';
+      document.getElementById('loginOrDivider').style.display     = 'none';
+    } else if (attempts > 0) {
+      setTimeout(() => tryInit(attempts - 1), 300);
+    }
+  };
+  tryInit(10);
+}
+
+function initGoogleLoginBtn() {
+  const wrap = document.getElementById('loginGoogleBtnEl');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  _ensureGisInit();
+  const localeMap = { ko:'ko', en:'en', zh:'zh-CN', ja:'ja' };
+  google.accounts.id.renderButton(wrap, {
+    type: 'standard', theme: 'filled_black', size: 'large',
+    text: 'signin_with', shape: 'rectangular',
+    width: Math.min(Math.max(window.innerWidth - 64, 280), 480),
+    locale: localeMap[lang] || 'ko',
+  });
+}
+
+function goBackFromLogin() {
+  pendingMode = null;
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-mode').style.display  = 'flex';
+  document.getElementById('backBtn').style.display      = 'none';
+}
+
+async function doLogin() {
+  const id    = (document.getElementById('loginIdInp').value || '').trim();
+  const pw    = (document.getElementById('loginPwInp').value || '');
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+
+  const user = getUser();
+  if (!user || !user.passwordHash || !user.salt) {
+    errEl.textContent = TX[lang].loginFail;
+    return;
+  }
+  if (user.username !== id) {
+    errEl.textContent = TX[lang].loginFail;
+    return;
+  }
+
+  const hash = await hashPassword(pw, user.salt);
+  if (hash !== user.passwordHash) {
+    errEl.textContent = TX[lang].loginFail;
+    return;
+  }
+
+  // 로그인 성공
+  localStorage.setItem('myan_logged_in', 'true');
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('backBtn').style.display      = 'none';
+  updateUserBtn(user);
+  document.getElementById('signupLinkBtn').style.display = 'none';
+  _checkAdminBadge();
+
+  // 로그인 전 클릭했던 모드가 있으면 바로 진입
+  if (pendingMode) {
+    const m = pendingMode; pendingMode = null;
+    _enterMode(m, user);
+  } else {
+    document.getElementById('screen-mode').style.display = 'flex';
+  }
+}
+
+/* ── 인증 게이트 ── 항상 모드 화면 먼저 */
+function checkAuth() {
+  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('screen-signup').style.display = 'none';
+  document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-mypage').style.display = 'none';
+  document.getElementById('backBtn').style.display       = 'none';
+
+  const user = getUser();
+  const loggedIn = isLoggedIn();
+
+  const _userBtnCA = document.getElementById('userBtn');
+  if (user && loggedIn) {
+    document.getElementById('signupLinkBtn').style.display = 'none';
+    updateUserBtn(user);
+  }
+  else if (user && !loggedIn) {
+    document.getElementById('signupLinkBtn').style.display = 'none';
+    if (_userBtnCA) _userBtnCA.style.display = 'none';
+  }
+  else {
+    document.getElementById('signupLinkBtn').style.display = '';
+    if (_userBtnCA) _userBtnCA.style.display = 'none';
+  }
+
+  if (user && loggedIn) _checkAdminBadge();
+}
+
+function goToApp() {
+  localStorage.setItem('myan_logged_in', 'true');
+  document.getElementById('screen-signup').style.display   = 'none';
+  document.getElementById('signup-form-wrap').style.display = '';
+  document.getElementById('signup-success').style.display  = 'none';
+  document.getElementById('backBtn').style.display         = 'none';
+  selGender = '';
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+
+  const u = getUser();
+  updateUserBtn(u);
+  document.getElementById('signupLinkBtn').style.display = u ? 'none' : '';
+  _checkAdminBadge();
+
+  if (pendingMode) {
+    const m = pendingMode; pendingMode = null;
+    _enterMode(m, u);
+  } else {
+    document.getElementById('screen-mode').style.display = 'flex';
+  }
+}
+
+render();
+schedMidnightRefresh();
+checkAuth();
+refreshTokens();
+
+// ── PWA 뒤로가기 처리 — 앱이 꺼지는 대신 이전 화면으로 이동 ──
+(function initAppHistory() {
+  history.replaceState({ screen: 'home' }, '');
+
+  // 각 화면 진입 함수에 직접 pushState 연결 (startMode는 제외 — 내부에서 goSignup/showLogin으로 분기됨)
+  const _origGoSignup = goSignup;
+  goSignup = function() {
+    history.pushState({ screen: 'signup' }, '');
+    _origGoSignup();
+  };
+
+  const _origShowLogin = showLogin;
+  showLogin = function() {
+    history.pushState({ screen: 'login' }, '');
+    _origShowLogin();
+  };
+
+  const _origOpenMyPage = openMyPage;
+  openMyPage = function() {
+    history.pushState({ screen: 'mypage' }, '');
+    _origOpenMyPage();
+  };
+
+  // _enterMode (채팅 화면 진입) 에서만 chat pushState
+  const _origEnterMode = _enterMode;
+  _enterMode = function(m, user) {
+    if (m !== '_token') history.pushState({ screen: 'chat', mode: m }, '');
+    _origEnterMode(m, user);
+  };
+
+  // 브라우저/OS 뒤로가기 버튼 가로채기
+  window.addEventListener('popstate', () => {
+    // 모달 우선 닫기
+    if (document.getElementById('admin-panel')?.style.display !== 'none') {
+      closeAdminPanel(); history.pushState({ screen: 'mypage' }, ''); return;
+    }
+    if (document.getElementById('pay-modal')?.style.display !== 'none') {
+      closePayModal(); return;
+    }
+    if (document.getElementById('guide-modal')?.style.display !== 'none') {
+      closeGuideModal(); return;
+    }
+    // 화면별 뒤로가기
+    if (document.getElementById('screen-mypage').style.display === 'flex') {
+      closeMyPage(); return;
+    }
+    if (document.getElementById('screen-chat').style.display === 'flex') {
+      goBack(); return;
+    }
+    if (document.getElementById('screen-signup').style.display === 'flex') {
+      goBackFromSignup(); return;
+    }
+    if (document.getElementById('screen-login').style.display === 'flex') {
+      goBackFromLogin(); return;
+    }
+    // 홈에서 뒤로가기 → OS 기본 동작 (앱 종료) 허용
+  });
+})();
+
+// 페이지 로드 시 미완료 결제 자동 복구 (창 닫아도 승인 시 지급)
+(async function resumePendingPayment() {
+  const pendingId = localStorage.getItem('myan_pending_pay_id');
+  if (!pendingId || !EP) return;
+  try {
+    const res  = await fetch(`${EP}payment-status?id=${pendingId}`);
+    const data = await res.json();
+    if (data.status === 'approved') {
+      await refreshTokens();  // 서버에서 새 잔액 가져오기
+      localStorage.removeItem('myan_pending_pay_id');
+      
+      // UX 개선: 복구 성공 시 사용자에게 알림 띄우기
+      setTimeout(() => {
+        alert(TX[lang]?.tkRedeemOk ? TX[lang].tkRedeemOk(data.tokens || 0) : '결제하신 토큰이 정상 지급되었습니다.');
+      }, 1000);
+    }
+  } catch {}
+})();
+
+// ══════════════════════════════════════
+// ── 사이드 드로어 메뉴 ──
+// ══════════════════════════════════════
+function openDrawer() {
+  _syncDrawerState();
+  document.getElementById('menu-overlay').classList.add('open');
+  document.getElementById('side-drawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer() {
+  document.getElementById('menu-overlay').classList.remove('open');
+  document.getElementById('side-drawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// 드로어 열릴 때 현재 상태 동기화
+function _syncDrawerState() {
+  const user = getUser();
+  const loggedIn = isLoggedIn();
+
+  // 프로필
+  if (user && loggedIn) {
+    document.getElementById('drawerProfile').style.display = 'flex';
+    document.getElementById('drawerLoginPrompt').style.display = 'none';
+    document.getElementById('drawerAvatar').textContent = (user.name || '?').charAt(0);
+    document.getElementById('drawerName').textContent   = user.name  || '—';
+    document.getElementById('drawerEmail').textContent  = user.email || '—';
+    document.getElementById('drawerTokens').textContent = _tokenCache;
+    document.getElementById('drawerMypageBtn').style.display = 'flex';
+    document.getElementById('drawerCalBtn').style.display    = 'flex';
+    document.getElementById('drawerAccountSection').style.display = 'block';
+  } else {
+    document.getElementById('drawerProfile').style.display = 'none';
+    document.getElementById('drawerLoginPrompt').style.display = 'block';
+    document.getElementById('drawerMypageBtn').style.display = 'none';
+    document.getElementById('drawerCalBtn').style.display    = 'none';
+    document.getElementById('drawerAccountSection').style.display = 'none';
+  }
+
+  _syncDrawerLangs();
+  _syncDrawerTheme();
+}
+
+function _syncDrawerLangs() {
+  ['ko','en','zh','ja'].forEach(l => {
+    document.getElementById('dlb-' + l)?.classList.toggle('on', lang === l);
+  });
+  // 기존 헤더 lang 버튼도 동기화
+  document.querySelectorAll('.lb').forEach(b => b.classList.remove('on'));
+  const hBtn = document.querySelector(`.lb[onclick="setLang('${lang}')"]`);
+  if (hBtn) hBtn.classList.add('on');
+}
+
+function _syncDrawerTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  document.getElementById('drawerThemeDark')?.classList.toggle('on', !isLight);
+  document.getElementById('drawerThemeLight')?.classList.toggle('on', isLight);
+  // 기존 테마 버튼 아이콘 동기화
+  const themeBtn = document.getElementById('themeToggleBtn');
+  if (themeBtn) themeBtn.textContent = isLight ? '☀️' : '🌙';
+}
+
+// 홈으로 이동 (채팅/마이페이지에서도 동작)
+function _goHome() {
+  if (document.getElementById('screen-chat').style.display === 'flex') goBack();
+  else if (document.getElementById('screen-mypage').style.display === 'flex') closeMyPage();
+  else if (document.getElementById('screen-signup').style.display === 'flex') goBackFromSignup();
+  else if (document.getElementById('screen-login').style.display === 'flex') goBackFromLogin();
+}
+
+// ESC 키로 드로어도 닫기
+// ESC 키로 모달/드로어 닫기
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('side-drawer').classList.contains('open')) { closeDrawer(); return; }
+    const payModal    = document.getElementById('pay-modal');
+    const tokenModal  = document.getElementById('token-modal');
+    const calModal    = document.getElementById('cal-modal');
+    const adminPanel  = document.getElementById('admin-panel');
+    if (adminPanel   && adminPanel.style.display   !== 'none') { closeAdminPanel(); return; }
+    if (calModal     && calModal.style.display     !== 'none') { closeCalModal(); return; }
+    if (tokenModal   && tokenModal.style.display   !== 'none') { closeTokenModal(); return; }
+    if (payModal     && payModal.style.display     !== 'none') {
+      if (document.getElementById('payStateWaiting').style.display === 'none') closePayModal();
+    }
+  }
+});
+
+// ══════════════════════════════════════════════
+// ── PWA · 앱 기능 ──
+// ══════════════════════════════════════════════
+
+// ── 1. 스플래시 화면 ──
+window.addEventListener('load', () => {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  // 폰트 + 리소스 로딩 후 1.2초 뒤 페이드아웃
+  setTimeout(() => {
+    splash.classList.add('fade-out');
+    setTimeout(() => splash.remove(), 650);
+  }, 1200);
+});
+
+// ── 2. Service Worker 등록 ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => {}).catch(() => {});
+  });
+}
+
+// ── 3. 햅틱 피드백 ──
+function haptic(type = 'light') {
+  if (!navigator.vibrate) return;
+  const patterns = {
+    light:   [20],
+    medium:  [40],
+    heavy:   [60],
+    success: [20, 30, 20],
+    error:   [50, 30, 50],
+  };
+  navigator.vibrate(patterns[type] || [20]);
+}
+
+// 모든 버튼/카드 클릭에 햅틱 적용
+document.addEventListener('click', e => {
+  const target = e.target.closest('button, .card, .quick-box, .pkg-card, .lb');
+  if (!target) return;
+  if (target.classList.contains('card') || target.classList.contains('quick-box')) {
+    haptic('medium');
+  } else {
+    haptic('light');
+  }
+}, { passive: true });
+
+// ── 4. 푸시 알림 권한 요청 ──
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') {
+    // 환영 알림
+    new Notification('M;Y 安', {
+      body: '일진 알림이 설정되었습니다. 매일 기운을 전해드릴게요.',
+      icon: '/icon-pwa-192-192.png',
+      badge: '/icon-pwa-192-192.png',
+      tag: 'myan-welcome',
+    });
+    scheduleLocalNotification();
+    return true;
+  }
+  return false;
+}
+
+// 로컬 알림 스케줄링 (오전 8시 알림)
+function scheduleLocalNotification() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const now  = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  const delay = next - now;
+
+  // 기존 타이머 클리어
+  if (window._notifTimer) clearTimeout(window._notifTimer);
+
+  window._notifTimer = setTimeout(() => {
+    new Notification('M;Y 安 · 오늘의 기운', {
+      body: '오늘의 일진과 오행 기운을 확인해 보세요.',
+      icon:  '/icon-pwa-192-192.png',
+      badge: '/icon-pwa-192-192.png',
+      tag: 'myan-daily',
+      renotify: true,
+    });
+    scheduleLocalNotification(); // 내일도 반복
+  }, delay);
+
+  localStorage.setItem('myan_notif_enabled', 'true');
+}
+
+// 앱 진입 시 알림 재스케줄
+if (localStorage.getItem('myan_notif_enabled') === 'true') {
+  scheduleLocalNotification();
+}
+
+// ── 5. 알림 설정 버튼 (마이페이지에서 호출) ──
+async function toggleNotification() {
+  const btn = document.getElementById('notifToggleBtn');
+  if (!btn) return;
+  const enabled = localStorage.getItem('myan_notif_enabled') === 'true';
+
+  if (enabled) {
+    // 알림 끄기
+    if (window._notifTimer) clearTimeout(window._notifTimer);
+    localStorage.removeItem('myan_notif_enabled');
+    btn.textContent = '알림 켜기 🔔';
+    btn.classList.remove('notif-on');
+  } else {
+    // 알림 켜기 — 권한 허용 후 저장소·스케줄러 동기화
+    const ok = await requestNotificationPermission();
+    if (ok) {
+      localStorage.setItem('myan_notif_enabled', 'true');
+      scheduleLocalNotification();
+      btn.textContent = '알림 끄기 🔕';
+      btn.classList.add('notif-on');
+    }
+  }
+}
+window.addEventListener('load', () => {
+  const btn = document.getElementById('notifToggleBtn');
+  if (btn && localStorage.getItem('myan_notif_enabled') === 'true') {
+    btn.textContent = '알림 끄기 🔕';
+    btn.classList.add('notif-on');
+  }
+});
+
+// ── 6. theme-color 메타 태그 동기화 ──
+function syncThemeColorMeta() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const meta = document.getElementById('metaThemeColor');
+  if (meta) meta.setAttribute('content', isLight ? '#f5f0e8' : '#c9a96e');
+}
+
+// ── 7. 앱 설치 배너 (A2HS) ──
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  // 3초 뒤 설치 배너 표시
+  setTimeout(showInstallBanner, 3000);
+});
+
+function showInstallBanner() {
+  if (!_deferredInstallPrompt) return;
+  if (localStorage.getItem('myan_install_dismissed')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.style.cssText = `
+    position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%;
+    transform:translateX(-50%); z-index:8000;
+    background:rgba(20,18,14,0.97); border:1px solid rgba(201,169,110,0.4);
+    border-radius:16px; padding:14px 20px; display:flex; align-items:center;
+    gap:14px; box-shadow:0 8px 32px rgba(0,0,0,0.6); max-width:340px; width:90%;
+    animation:pop .35s ease;
+  `;
+  banner.innerHTML = `
+    <img src="/icon-pwa-192-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0">
+    <div style="flex:1">
+      <div style="color:#c9a96e;font-size:0.9rem;font-weight:600">M;Y 安 앱 설치</div>
+      <div style="color:#999;font-size:0.75rem;margin-top:2px">홈 화면에 추가하면 더 편리해요</div>
+    </div>
+    <button onclick="installApp()" style="background:rgba(201,169,110,0.15);border:1px solid rgba(201,169,110,0.4);color:#c9a96e;border-radius:8px;padding:6px 12px;font-size:0.8rem;cursor:pointer;white-space:nowrap">설치</button>
+    <button onclick="dismissInstallBanner()" style="background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer;padding:0 4px;line-height:1">×</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+async function installApp() {
+  if (!_deferredInstallPrompt) return;
+  _deferredInstallPrompt.prompt();
+  const { outcome } = await _deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    localStorage.setItem('myan_install_dismissed', 'true');
+  }
+  _deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.remove();
+}
+
+function dismissInstallBanner() {
+  localStorage.setItem('myan_install_dismissed', 'true');
+  document.getElementById('install-banner')?.remove();
+}
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.remove();
+  localStorage.setItem('myan_install_dismissed', 'true');
+});

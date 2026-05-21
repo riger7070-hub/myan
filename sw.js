@@ -1,5 +1,5 @@
-// M;Y 安 — Service Worker v2.1
-const CACHE_NAME = 'myan-v2';
+// M;Y 安 — Service Worker v2.2
+const CACHE_NAME = 'myan-v3';
 const OFFLINE_URL = '/index.html';
 
 // 캐시할 파일 목록
@@ -7,6 +7,11 @@ const CACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/css/style.css',
+  '/js/constants.js',
+  '/js/locales.js',
+  '/js/saju-engine.js',
+  '/js/app.js',
   '/icon-pwa-192-192.png',
   '/icon-pwa-512-512.png',
 ];
