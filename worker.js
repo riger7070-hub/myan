@@ -98,7 +98,9 @@ async function ensureDB(env) {
       status      TEXT    NOT NULL DEFAULT 'pending',
       created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
       approved_at INTEGER
-    )
+    );
+    CREATE INDEX IF NOT EXISTS idx_pr_email_status ON payment_requests (user_email, status);
+    CREATE INDEX IF NOT EXISTS idx_pr_created ON payment_requests (created_at DESC);
   `).catch(() => {});
   _dbReady = true;
 }
@@ -155,15 +157,6 @@ async function handleGeminiChat(request, env) {
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않거나 만료된 토큰입니다.' } }), 401);
     if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스가 연결되지 않았습니다.' } }), 500);
 
-    const balanceRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) as total FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-
-    const currentBalance = balanceRow?.total || 0;
-    if (currentBalance < 1) {
-      return cors(JSON.stringify({ error: { message: '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.' } }), 403);
-    }
-
     // 1차: 인메모리 빠른 거부 (3초 이내 연속 요청 차단)
     if (!checkRateLimit(`chat:${email}`, 3000)) {
       return cors(JSON.stringify({ error: { message: '요청이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' } }), 429);
@@ -181,17 +174,29 @@ async function handleGeminiChat(request, env) {
     }
     const { mode, lang, contents } = body;
 
-    // contents 기본 검증 (과대 payload 방지)
+    // contents 검증: 개수 + 총 텍스트 크기 (과대 payload 방지, max 32KB)
     if (!Array.isArray(contents) || contents.length > 50) {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 요청 형식입니다.' } }), 400);
     }
+    const totalChars = contents.reduce((s, c) =>
+      s + (c?.parts?.reduce((ps, p) => ps + (typeof p?.text === 'string' ? p.text.length : 0), 0) || 0), 0);
+    if (totalChars > 32768) {
+      return cors(JSON.stringify({ error: { message: '요청 내용이 너무 깁니다.' } }), 400);
+    }
 
-    // 선차감 행 진행
+    // ── 원자적 토큰 차감 (Race Condition 방지) ──
+    // Conditional INSERT: 잔액 >= 1 일 때만 -1 행이 삽입됨 (SQLite 원자 연산)
     const useId = `use_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    await env.DB.prepare(
+    const deductResult = await env.DB.prepare(
       `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       VALUES (?, ?, 'gemini_use', 0, -1, 'approved', unixepoch())`
-    ).bind(useId, email).run();
+       SELECT ?, ?, 'gemini_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+
+    // rows_written === 0 이면 잔액 부족 (원자적으로 검증됨)
+    if (!deductResult.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.' } }), 403);
+    }
 
     const il = ilchin();
     const on = ON[lang || 'ko'];
@@ -280,9 +285,9 @@ async function handleGeminiChat(request, env) {
           }
         } catch {
           // fallback: regex로 JSON 블록만 추출 (LLM이 마크다운 감쌌을 때)
-          const m = rawText.match(/\{"ohaeng"\s*:\s*\{[^}]+\}\}/);
+          const m = rawText.match(/"ohaeng"\s*:\s*(\{[^}]+\})/);
           if (m) {
-            try { const p = JSON.parse(m[0]); if (p.ohaeng) data._ohaeng = p.ohaeng; } catch {}
+            try { data._ohaeng = JSON.parse(m[1]); } catch {}
           }
           data.candidates[0].content.parts[0].text = rawText
             .replace(/\n?\{"ohaeng"\s*:\s*\{[^}]+\}\}/, '').trim();

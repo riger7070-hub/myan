@@ -414,9 +414,27 @@ function render() {
   if (document.getElementById('screen-signup').style.display === 'flex') renderSignup();
   if (document.getElementById('screen-login').style.display  === 'flex') renderLogin();
   if (document.getElementById('screen-mypage').style.display === 'flex') renderMyPage();
+  if (document.getElementById('token-modal')?.style.display  !== 'none') _renderTokenModal();
   // 마이페이지 버튼 텍스트 다국어 갱신
   const userBtn = document.getElementById('userBtn');
   if (userBtn && userBtn.style.display !== 'none') userBtn.textContent = t.mpLink;
+}
+
+// ── token-modal 라벨 다국어 렌더 ──
+function _renderTokenModal() {
+  const t = TX[lang] || TX.ko;
+  const _s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  _s('tmTitle',      t.tkSection || '토큰 충전');
+  _s('tmBalanceLbl', t.tkUnit    || 'TOKENS');
+  _s('tmBadge0',     t.tkPkgS   || '소');
+  _s('tmBadge1',     t.tkPkgM   || '중');
+  _s('tmBadge2',     t.tkPkgL   || '대');
+  _s('tmBtn0',       t.tkPayBtn || 'Toss로 결제하기');
+  _s('tmBtn1',       t.tkPayBtn || 'Toss로 결제하기');
+  _s('tmBtn2',       t.tkPayBtn || 'Toss로 결제하기');
+  const noteEl = document.getElementById('tmNote');
+  if (noteEl) noteEl.innerHTML = (t.tmNote || '').replace(/
+/g, '<br>');
 }
 
 /* 자정 자동 갱신 */
@@ -625,6 +643,12 @@ function submitFirstForm() {
 
   let msg = `${name}, ${yearV}년 ${monV}월 ${dayV}일생`;
   if (time) msg += `, ${time}`;
+  // 입력 필드 초기화 (재진입 시 이전 값 잔류 방지)
+  document.getElementById('fifName').value  = '';
+  document.getElementById('fifYear').value  = '';
+  document.getElementById('fifMonth').value = '';
+  document.getElementById('fifDay').value   = '';
+  document.getElementById('fifTime').value  = '';
   showNormalInput();
   document.getElementById('inp').value = msg;
   send();

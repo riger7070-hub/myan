@@ -272,6 +272,10 @@ function _saveCalEntry(element) {
   let cal = {};
   try { cal = JSON.parse(localStorage.getItem('myan_cal') || '{}'); } catch {}
   cal[today] = element;
+  // 365일 이상된 항목 정리 (localStorage 무한 증가 방지)
+  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  Object.keys(cal).forEach(k => { if (k < cutoffStr) delete cal[k]; });
   localStorage.setItem('myan_cal', JSON.stringify(cal));
 }
 
@@ -699,8 +703,7 @@ async function buyToken(pkg) {
     const result = await res.json();
     if (result.success) {
       alert(`✦ ${selected.tokens}토큰이 충전되었습니다!`);
-      if (typeof _onUserUpdated === 'function') _onUserUpdated();
-      closeTokenModal();
+        closeTokenModal();
     } else {
       alert(`결제 검증 실패: ${result.error?.message || '고객센터로 문의해 주세요.'}`);
     }
@@ -819,9 +822,18 @@ try {
     console.warn('payment-request failed, will still poll', e);
   }
 
-  // 5초 간격 폴링
+  // 5초 간격 폴링 (최대 30분 = 360회)
+  let _pollCount = 0;
   clearInterval(_payPollTimer);
-  _payPollTimer = setInterval(_pollPaymentStatus, 5000);
+  _payPollTimer = setInterval(() => {
+    _pollCount++;
+    if (_pollCount > 360) {
+      clearInterval(_payPollTimer);
+      _setPayState('qr');
+      return;
+    }
+    _pollPaymentStatus();
+  }, 5000);
 }
 
 async function _pollPaymentStatus() {
@@ -954,21 +966,33 @@ function _renderAdminList() {
 
   const PKG_NAME = { small:'소 (30토큰)', medium:'중 (100토큰)', large:'대 (300토큰)' };
 
-  listEl.innerHTML = filtered.map(p => {
+  // innerHTML에 직접 사용자 데이터 삽입 방지 — DOM 빌더 방식으로 교체
+  listEl.innerHTML = '';
+  filtered.forEach(p => {
     const d = new Date(p.created_at * 1000);
     const timeStr = d.toLocaleDateString('ko-KR') + ' ' + d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
     const approved = p.status === 'approved';
-    return `<div class="admin-card">
-      <div class="admin-card-info">
-        <div class="admin-card-email">${p.user_email}</div>
-        <div class="admin-card-detail">${PKG_NAME[p.pkg] || p.pkg} · ${(p.amount||'').toLocaleString()}원</div>
-        <div class="admin-card-time">${timeStr}</div>
-      </div>
-      ${approved
-        ? '<span class="admin-approved-tag">✓ 완료</span>'
-        : `<button class="admin-approve-btn" onclick="approvePayment('${p.id}',this)">승인</button>`}
-    </div>`;
-  }).join('');
+    const card = document.createElement('div'); card.className = 'admin-card';
+    const info = document.createElement('div'); info.className = 'admin-card-info';
+    const emailEl = document.createElement('div'); emailEl.className = 'admin-card-email';
+    emailEl.textContent = p.user_email;
+    const detail = document.createElement('div'); detail.className = 'admin-card-detail';
+    detail.textContent = (PKG_NAME[p.pkg] || p.pkg) + ' · ' + (p.amount || 0).toLocaleString() + '원';
+    const timeEl = document.createElement('div'); timeEl.className = 'admin-card-time';
+    timeEl.textContent = timeStr;
+    info.append(emailEl, detail, timeEl);
+    card.appendChild(info);
+    if (approved) {
+      const tag = document.createElement('span'); tag.className = 'admin-approved-tag';
+      tag.textContent = '✓ 완료'; card.appendChild(tag);
+    } else {
+      const btn = document.createElement('button'); btn.className = 'admin-approve-btn';
+      btn.textContent = '승인';
+      btn.onclick = () => approvePayment(p.id, btn);
+      card.appendChild(btn);
+    }
+    listEl.appendChild(card);
+  });
 }
 
 async function approvePayment(id, btn) {
@@ -1511,7 +1535,8 @@ function _confirmAction(btnId, confirmText, action) {
 function openTokenModal() {
   document.getElementById('token-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  renderMyPage(); // 잔액 및 패키지 레이아웃 최신화
+  updateAllTokenDisplays(); // 잔액 최신화
+  if (typeof _renderTokenModal === 'function') _renderTokenModal(); // 다국어 라벨 갱신
 }
 
 function closeTokenModal() {
