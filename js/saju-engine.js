@@ -65,10 +65,10 @@ function _renderSajuGauge(user) {
 }
 
 // AI 정밀 분석 오행 분포 게이지 렌더 (Gemini _ohaeng 데이터 기반)
-function _renderSajuGaugeFromGemini(ohaeng) {
+// revealDelay > 0 이면 클리프행어 연출: 지정 ms 후 페이드인 + 바 애니메이션
+function _renderSajuGaugeFromGemini(ohaeng, revealDelay = 0) {
   const section = document.getElementById('saju-gauge-section');
   const divider = document.getElementById('sajuGaugeDivider');
-  section.style.display = ''; if (divider) divider.style.display = '';
   const lbl = {ko:'내 사주 오행 분포 ✦ AI 정밀 분석', en:'My Five Elements ✦ AI Analysis', zh:'五行分布 ✦ AI精析', ja:'五行分布 ✦ AI精析'};
   document.getElementById('sajuGaugeLbl').textContent = lbl[lang] || lbl.ko;
   const nameMap = {ko:{木:'목(木)',火:'화(火)',土:'토(土)',金:'금(金)',水:'수(水)'}, en:{木:'Wood',火:'Fire',土:'Earth',金:'Metal',水:'Water'}, zh:{木:'木',火:'火',土:'土',金:'金',水:'水'}, ja:{木:'木気',火:'火気',土:'土気',金:'金気',水:'水気'}};
@@ -82,9 +82,33 @@ function _renderSajuGaugeFromGemini(ohaeng) {
       <div class="saju-gauge-pct">${pct}%</div>
     </div>`;
   }).join('');
-  requestAnimationFrame(() => {
-    wrap.querySelectorAll('.saju-gauge-bar').forEach(bar => {
-      bar.style.width = bar.dataset.pct + '%';
+
+  if (revealDelay > 0) {
+    // 클리프행어 연출: 먼저 숨기고, revealDelay 후 페이드인
+    section.style.display = '';
+    if (divider) divider.style.display = '';
+    section.style.opacity = '0';
+    section.style.transform = 'translateY(14px)';
+    section.style.transition = 'opacity 0.7s ease, transform 0.7s ease';
+    setTimeout(() => {
+      section.style.opacity = '1';
+      section.style.transform = 'translateY(0)';
+      requestAnimationFrame(() => {
+        wrap.querySelectorAll('.saju-gauge-bar').forEach(bar => {
+          bar.style.width = bar.dataset.pct + '%';
+        });
+      });
+    }, revealDelay);
+  } else {
+    section.style.display = '';
+    if (divider) divider.style.display = '';
+    section.style.opacity = '';
+    section.style.transform = '';
+    section.style.transition = '';
+    requestAnimationFrame(() => {
+      wrap.querySelectorAll('.saju-gauge-bar').forEach(bar => {
+        bar.style.width = bar.dataset.pct + '%';
+      });
     });
-  });
+  }
 }

@@ -67,15 +67,19 @@ async function autoAnalyze() {
     hist.push({ role: 'model', parts: [{ text: raw }] });
     const clean = raw.replace(/#[木火土金水]\s*/g, '').replace(/\*\*/g, '').trim();
     addBubble(clean, 'ai');
-    
+
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#' + k));
     if (tag) addRxCard(tag);
-    // solo 모드: AI 오행 분석 게이지 업데이트
+
+    // solo 모드: 클리프행어 연출 — 타이핑 시간 + 여유 500ms 후 게이지 페이드인
     if (mode === 'solo' && data._ohaeng) {
       try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
-      _renderSajuGaugeFromGemini(data._ohaeng);
+      const revealMs = clean.length <= 300
+        ? clean.length * 22 + 500   // 타이핑 완료 직후 리빌
+        : 1800;                      // 긴 텍스트는 즉시 표시 후 1.8초 딜레이
+      _renderSajuGaugeFromGemini(data._ohaeng, revealMs);
     }
-    showSuggestChips(); // 응답 후 추천 칩 다시 표시
+    showSuggestChips();
 
   } catch(e) {
     // 2. 에러 발생 시 토큰 복구 및 즉시 화면 동기화
@@ -206,15 +210,71 @@ function _copyBubble(btn, text) {
   }).catch(() => {});
 }
 
+// ── 로딩 문구 사이클 (AI 분석 중 심리적 몰입 유도) ──
+const _LOAD_MSGS = {
+  ko: [
+    '사주의 흐름을 읽는 중입니다…',
+    '오행의 기운을 탐색하고 있습니다…',
+    '일진과 사주의 조화를 분석하는 중입니다…',
+    '부족한 오행 에너지를 계산하는 중입니다…',
+    '최적의 처방을 구성하는 중입니다…',
+  ],
+  en: [
+    'Reading your Saju flow…',
+    'Exploring your Five Elements…',
+    'Analyzing the Ilchin harmony…',
+    'Calculating deficient energies…',
+    'Composing your energy prescription…',
+  ],
+  zh: [
+    '正在解读您的四柱流动…',
+    '探索五行气运中…',
+    '分析日辰与四柱的调和…',
+    '构建最佳能量处方中…',
+  ],
+  ja: [
+    '四柱の流れを読み取っています…',
+    '五行の気運を探索しています…',
+    '日辰との調和を分析しています…',
+    '最適な処方を構成しています…',
+  ],
+};
+
 function addLoader() {
   const d = document.createElement('div');
-  d.className = 'bubble bubble-ai loading';
-  d.innerHTML = '<span></span><span></span><span></span>';
-  cw().appendChild(d); cw().scrollTop = 99999;
+  d.className = 'bubble bubble-ai loading-msg';
+
+  const msgs = _LOAD_MSGS[lang] || _LOAD_MSGS.ko;
+  let idx = 0;
+  const span = document.createElement('span');
+  span.className = 'loader-text';
+  span.textContent = msgs[0];
+  d.appendChild(span);
+
+  // 1.8초마다 문구 교체 (loader.remove() 시 자동 정리)
+  d._msgTimer = setInterval(() => {
+    idx = (idx + 1) % msgs.length;
+    span.style.opacity = '0';
+    setTimeout(() => {
+      span.textContent = msgs[idx];
+      span.style.opacity = '1';
+    }, 250);
+  }, 1800);
+
+  cw().appendChild(d);
+  cw().scrollTop = 99999;
+
+  // 원본 remove 래핑 — 타이머도 함께 정리
+  const _origRemove = d.remove.bind(d);
+  d.remove = () => { clearInterval(d._msgTimer); _origRemove(); };
+
   return d;
 }
 
 function addRxCard(o) {
+  // 처방 카드 등장 시 해당 오행 파티클 버스트
+  window.M_Effect?.spawnParticles('chat-window', o);
+
   const dk  = DK[lang][o];
   const col = OC[o];
   const bg  = OBG[o];
@@ -381,12 +441,13 @@ async function send() {
     addBubble(clean, 'ai');
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#'+k));
     if (tag) addRxCard(tag);
-    // solo 모드: AI 오행 분석 게이지 업데이트
+    // solo 모드: 클리프행어 연출
     if (mode === 'solo' && data._ohaeng) {
       try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
-      _renderSajuGaugeFromGemini(data._ohaeng);
+      const revealMs = clean.length <= 300 ? clean.length * 22 + 500 : 1800;
+      _renderSajuGaugeFromGemini(data._ohaeng, revealMs);
     }
-    showSuggestChips(); // 응답 후 추천 칩 다시 표시
+    showSuggestChips();
  } catch(e) {
     // ✨ 에러 발생 시 사용자가 썼던 텍스트를 입력창에 복구
     inp.value = txt;
@@ -2262,95 +2323,6 @@ window.addEventListener('appinstalled', () => {
 });
 
 // ── 오행 파티클 필드 ──────────────────────────────────────────────
-class ParticleField {
-  // 오행 색상 (木火土金水)
-  static COLORS = ['#4bc87a','#e05a4a','#d4a040','#a0aab4','#5aa8e0'];
-
-  constructor(canvasId) {
-    this.canvas = document.getElementById(canvasId);
-    if (!this.canvas) return;
-    this.ctx    = this.canvas.getContext('2d');
-    this.particles = [];
-    this._raf   = null;
-    this._resize = this._resize.bind(this);
-    window.addEventListener('resize', this._resize);
-    this._resize();
-    this._populate();
-    this._animate();
-  }
-
-  _resize() {
-    if (!this.canvas) return;
-    this.canvas.width  = window.innerWidth;
-    this.canvas.height = window.innerHeight;
-  }
-
-  _populate() {
-    const count = window.innerWidth < 480 ? 28 : 50; // 모바일 성능 배려
-    this.particles = Array.from({ length: count }, () => ({
-      x:    Math.random() * this.canvas.width,
-      y:    Math.random() * this.canvas.height,
-      vx:   (Math.random() - 0.5) * 1.2,
-      vy:   (Math.random() - 0.5) * 1.2,
-      r:    Math.random() * 1.8 + 0.8,          // 반지름 0.8~2.6px
-      alpha:Math.random() * 0.5 + 0.25,         // 불투명도 0.25~0.75
-      color:ParticleField.COLORS[Math.floor(Math.random() * 5)],
-    }));
-  }
-
-  _animate() {
-    const { ctx, canvas, particles } = this;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const p of particles) {
-      p.x += p.vx; p.y += p.vy;
-      if (p.x < 0 || p.x > canvas.width)  p.vx *= -1;
-      if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-      ctx.globalAlpha = p.alpha;
-      ctx.fillStyle   = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    this._raf = requestAnimationFrame(() => this._animate());
-  }
-
-  destroy() {
-    cancelAnimationFrame(this._raf);
-    window.removeEventListener('resize', this._resize);
-  }
-}
-
-// 페이지 로드 후 파티클 시작
-window.addEventListener('DOMContentLoaded', () => {
-  new ParticleField('bg-canvas');
-});
-
-// ── AI 답변 타이핑 효과 ──────────────────────────────────────────
-let _typingAbort = null; // 이전 타이핑 중단 플래그
-
-async function _typeIntoNode(textNode, text, speed = 22) {
-  // 300자 초과 시 즉시 표시 (긴 사주 리딩 배려)
-  if (text.length > 300) { textNode.nodeValue = text; return; }
-  const ctrl = new AbortController();
-  _typingAbort = ctrl;
-  textNode.nodeValue = '';
-  for (let i = 0; i < text.length; i++) {
-    if (ctrl.signal.aborted) { textNode.nodeValue = text; break; } // 중단 시 전체 표시
-    await new Promise(r => setTimeout(r, speed));
-    textNode.nodeValue = text.slice(0, i + 1);
-    cw().scrollTop = cw().scrollHeight;
-  }
-}
-  localStorage.setItem('myan_install_dismissed', 'true');
-  document.getElementById('install-banner')?.remove();
-}
-
-window.addEventListener('appinstalled', () => {
-  _deferredInstallPrompt = null;
-  document.getElementById('install-banner')?.remove();
-  localStorage.setItem('myan_install_dismissed', 'true');
-});
 
 // ── 오행 파티클 필드 ──────────────────────────────────────────────
 class ParticleField {
@@ -2428,16 +2400,5 @@ async function _typeIntoNode(textNode, text, speed = 22) {
     await new Promise(r => setTimeout(r, speed));
     textNode.nodeValue = text.slice(0, i + 1);
     cw().scrollTop = cw().scrollHeight;
-  }
-}
-  textNode.nodeValue = '';
-  for (let i = 0; i < text.length; i++) {
-    if (ctrl.signal.aborted) { textNode.nodeValue = text; break; }
-    await new Promise(r => setTimeout(r, speed));
-    textNode.nodeValue = text.slice(0, i + 1);
-    cw().scrollTop = cw().scrollHeight;
-  }
-}
- = cw().scrollHeight;
   }
 }
