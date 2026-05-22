@@ -1563,10 +1563,14 @@ async function saveMyPage() {
 }
 
 function _signOut() {
-  // 로그아웃: 세션 키만 제거 — myan_user(프로필/생년월일)는 유지
+  // 로그아웃: 세션 키 + 채팅 캐시 제거 — myan_user(프로필/생년월일)는 유지
   // 다음 로그인 시 기존 프로필을 그대로 복원하기 위함
   localStorage.removeItem('myan_logged_in');
   localStorage.removeItem('myan_id_token');
+  // 채팅 캐시 제거 → 재로그인 시 이전 대화가 다시 뜨는 현상 방지
+  localStorage.removeItem('myan_chat_html');
+  localStorage.removeItem('myan_chat_hist');
+  localStorage.removeItem('myan_chat_mode');
   localStorage.setItem('myan_signed_out', 'true'); // Google One-Tap 자동 재로그인 차단
   _googleIdToken = ''; _googleIdTokenExp = 0;
   _tokenCache = 0;
