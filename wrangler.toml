@@ -13,12 +13,12 @@ database_id = "ef511379-fa0b-45c7-b14e-6ccb842c719f"
 
 # ── Cloudflare Workers Rate Limiting (분산 제한 — 전 세계 인스턴스에 적용) ──
 
-# /chat: 이메일당 분당 10회 (AI 호출 제한)
+# /chat: 이메일당 분당 30회 (AI 호출 제한)
 [[unsafe.bindings]]
 name = "RL_CHAT"
 type = "ratelimit"
 namespace_id = "1001"
-simple = { limit = 10, period = 60 }
+simple = { limit = 30, period = 60 }
 
 # /api/payment/verify: 이메일당 분당 5회 (결제 검증 제한)
 [[unsafe.bindings]]

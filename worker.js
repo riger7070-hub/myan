@@ -128,6 +128,7 @@ export default {
     if (path === '/admin/grant-tokens' && method === 'POST') return handleAdminGrantTokens(request, env);
     if (path === '/chat' && method === 'POST') return handleGeminiChat(request, env);
     if (path === '/api/payment/verify' && method === 'POST') return handlePaymentVerify(request, env);
+    if (path === '/withdraw' && method === 'DELETE') return handleWithdraw(request, env);
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
     if (method === 'GET') {
@@ -279,25 +280,41 @@ async function handleGeminiChat(request, env) {
       if (mode === 'solo' && rawText) {
         let extracted = false;
         try {
-          const parsed = JSON.parse(rawText);
-          if (parsed.reading && parsed.ohaeng) {
+          // 마크다운 코드블록 제거 후 파싱
+          const jsonStr = rawText.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
+          const parsed = JSON.parse(jsonStr);
+          // ohaeng 객체 추출 (필수)
+          if (parsed.ohaeng && typeof parsed.ohaeng === 'object') {
             data._ohaeng = parsed.ohaeng;
-            data.candidates[0].content.parts[0].text = parsed.reading;
-            extracted = true;
+            // reading 키 다양한 이름 허용 (LLM이 key명을 바꾸는 경우 대응)
+            const reading = parsed.reading || parsed.message || parsed.content
+              || parsed.text || parsed.result
+              || Object.entries(parsed)
+                  .filter(([k]) => k !== 'ohaeng')
+                  .map(([, v]) => v)
+                  .find(v => typeof v === 'string' && v.length > 10)
+              || '';
+            if (reading) {
+              data.candidates[0].content.parts[0].text = reading;
+              extracted = true;
+            }
           }
         } catch { /* not valid JSON — fall through to regex */ }
 
         if (!extracted) {
-          // fallback: regex로 ohaeng 블록 추출 (LLM이 마크다운으로 감쌌거나 키 불일치 시)
+          // fallback: regex로 ohaeng 블록 추출
           const m = rawText.match(/"ohaeng"\s*:\s*(\{[^}]+\})/);
           if (m) {
             try { data._ohaeng = JSON.parse(m[1]); } catch {}
           }
           // JSON 전체 블록 제거 후 reading 텍스트만 남김
-          data.candidates[0].content.parts[0].text = rawText
+          // 빈 문자열이 되면 원본 rawText 유지 (최소한 어떤 텍스트라도 표시)
+          const stripped = rawText
+            .replace(/^```json\s*/gi, '').replace(/\s*```\s*$/g, '')
             .replace(/^\s*\{[\s\S]*?"ohaeng"\s*:\s*\{[^}]+\}\s*\}\s*$/m, '')
             .replace(/\{[^{}]*"ohaeng"\s*:\s*\{[^}]+\}[^{}]*\}/g, '')
             .trim();
+          data.candidates[0].content.parts[0].text = stripped || rawText;
         }
       }
     }
@@ -787,7 +804,7 @@ function cors(body, status = 200) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': 'https://myan.riger7070.workers.dev',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-admin-secret, Authorization',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
@@ -795,4 +812,28 @@ function cors(body, status = 200) {
       'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
   });
+}
+
+// ════════════════════════════
+//  회원탈퇴 핸들러
+// ════════════════════════════
+async function handleWithdraw(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스가 연결되지 않았습니다.' } }), 500);
+
+    // 해당 이메일의 모든 결제/토큰 기록 삭제
+    await env.DB.prepare(
+      'DELETE FROM payment_requests WHERE user_email = ?'
+    ).bind(email).run();
+
+    return cors(JSON.stringify({ success: true, message: '회원 탈퇴가 완료되었습니다.' }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '탈퇴 처리 중 오류가 발생했습니다.' } }), 500);
+  }
 }

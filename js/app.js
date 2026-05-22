@@ -25,11 +25,13 @@ async function callGemini(contents) {
     throw { refund: false, noLogin: true };
   }
 
-  // 속도 제한 → 1회 재시도
-  if (res.status === 429 || data?.error?.code === 429) {
-    await new Promise(r => setTimeout(r, 3000));
+  // 속도 제한 → 1회 재시도 (3초 대기)
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 3500));
     res  = await doFetch();
     data = await res.json();
+    // 재시도 후에도 429이면 rate-limit 전용 에러 (토큰 미차감이므로 refund: true로 잔액 동기화)
+    if (res.status === 429) throw { refund: true, rateLimited: true };
   }
 
   if (data?.error) throw { refund: true, code: data.error.code, msg: data.error.message };
@@ -93,6 +95,13 @@ async function autoAnalyze() {
         await refreshTokens();
         updateAllTokenDisplays();
         addBubble(TX[lang].noToken, 'ai');
+        return;
+    }
+    if (e?.rateLimited) {
+        await refreshTokens();
+        updateAllTokenDisplays();
+        addBubble({ko:'요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',en:'Too many requests. Please try again shortly.',zh:'请求过于频繁，请稍后再试。',ja:'リクエストが多すぎます。しばらくしてから再試行してください。'}[lang]||'잠시 후 다시 시도해 주세요.', 'ai');
+        showSuggestChips();
         return;
     }
     if (e?.refund) {
@@ -454,6 +463,11 @@ async function send() {
 
     if (e?.noLogin) { addTokens(1); updateAllTokenDisplays(); showLogin(); return; }
     if (e?.noToken) { await refreshTokens(); updateAllTokenDisplays(); addBubble(TX[lang].noToken, 'ai'); return; }
+    if (e?.rateLimited) {
+      await refreshTokens(); updateAllTokenDisplays();
+      addBubble({ko:'요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',en:'Too many requests. Please try again shortly.',zh:'请求过于频繁，请稍后再试。',ja:'リクエストが多すぎます。しばらくしてから再試行してください。'}[lang]||'잠시 후 다시 시도해 주세요.', 'ai');
+      hist.pop(); showSuggestChips(); return;
+    }
     if (e?.refund)  { addTokens(1); updateAllTokenDisplays(); }
     const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
     addBubble(msg, 'ai');
@@ -1549,14 +1563,18 @@ async function saveMyPage() {
 }
 
 function _signOut() {
-  // 로그아웃: 모든 세션 및 유저 정보 삭제 + Google 자동 재로그인 차단
+  // 로그아웃: 세션 키만 제거 — myan_user(프로필/생년월일)는 유지
+  // 다음 로그인 시 기존 프로필을 그대로 복원하기 위함
   localStorage.removeItem('myan_logged_in');
-  localStorage.removeItem('myan_user');      // 유저 정보도 함께 삭제하여 오작동 방지
   localStorage.removeItem('myan_id_token');
-  localStorage.setItem('myan_signed_out', 'true'); // 자동 재로그인 방지 플래그
+  localStorage.setItem('myan_signed_out', 'true'); // Google One-Tap 자동 재로그인 차단
   _googleIdToken = ''; _googleIdTokenExp = 0;
+  _tokenCache = 0;
+  updateAllTokenDisplays();
   try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   try { google.accounts.id.cancel(); } catch(e) {}
+  // GIS 초기화 상태 리셋 — 다음 로그인 시 auto_select:false로 재초기화
+  _gisInited = false;
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnSO = document.getElementById('userBtn');
@@ -1565,15 +1583,35 @@ function _signOut() {
   closeMyPage();
 }
 
-function _withdrawAccount() {
-  // 탈퇴: 세션, 유저 정보, 구글 토큰까지 완전히 청소 + 자동 재로그인 확실히 차단
-  localStorage.removeItem('myan_logged_in');
-  localStorage.removeItem('myan_user');
-  localStorage.removeItem('myan_id_token');         // 탈퇴 시 구글 ID 토큰도 반드시 함께 제거
-  localStorage.setItem('myan_signed_out', 'true');  // 구글 원탭 자동 로그인 방지
+async function _withdrawAccount() {
+  // 회원탈퇴: 서버 DB 삭제 + 모든 localStorage 완전 청소
+  const token = getGoogleIdToken();
+  if (token) {
+    try {
+      await fetch(EP + 'withdraw', {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+    } catch(e) {
+      console.warn('서버 탈퇴 처리 실패 (로컬 정리는 계속 진행):', e);
+    }
+  }
+
+  // 모든 myan_ 관련 localStorage 키 완전 삭제
+  [
+    'myan_logged_in', 'myan_user', 'myan_id_token',
+    'myan_ohaeng', 'myan_chat_html', 'myan_chat_hist', 'myan_chat_mode',
+    'myan_cal', 'myan_adm_key', 'myan_notif_enabled',
+    'myan_pending_pay_id', 'myan_signed_out',
+  ].forEach(k => localStorage.removeItem(k));
+
+  localStorage.setItem('myan_signed_out', 'true'); // 구글 원탭 자동 로그인 방지
   _googleIdToken = ''; _googleIdTokenExp = 0;
+  _tokenCache = 0;
+  updateAllTokenDisplays();
   try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   try { google.accounts.id.cancel(); } catch(e) {}
+  _gisInited = false;
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnWD = document.getElementById('userBtn');
@@ -2397,7 +2435,6 @@ async function _typeIntoNode(textNode, text, speed = 22) {
   textNode.nodeValue = '';
 
   for (let i = 0; i < text.length; i++) {
-    // 중단 요청 시 전체 텍스트 즉시 표시
     if (ctrl.signal.aborted) { textNode.nodeValue = text; return; }
     await new Promise(r => setTimeout(r, speed));
     if (ctrl.signal.aborted) { textNode.nodeValue = text; return; }
