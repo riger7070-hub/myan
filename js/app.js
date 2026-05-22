@@ -653,21 +653,9 @@ function authHeaders(extra) {
   return h;
 }
 
-// 어드민 전용 헤더 (x-admin-secret 포함)
+// 어드민 전용 헤더 — Google ID 토큰만으로 인증 (서버에서 Google 서버 검증)
 function adminAuthHeaders(extra) {
-  const h = authHeaders(extra);
-  const secret = localStorage.getItem('myan_adm_key') || '';
-  if (secret) h['x-admin-secret'] = secret;
-  return h;
-}
-
-// 어드민 시크릿 초기화 (최초 1회 입력)
-function _ensureAdminSecret() {
-  if (localStorage.getItem('myan_adm_key')) return true;
-  const s = prompt('관리자 인증키를 입력하세요:');
-  if (!s) return false;
-  localStorage.setItem('myan_adm_key', s.trim());
-  return true;
+  return authHeaders(extra);
 }
 
 const PAY_INFO = {
@@ -1002,7 +990,6 @@ async function adminGrantTokens() {
   msgEl.style.color = '#888';
   msgEl.textContent = '처리 중...';
 
-  if (!_ensureAdminSecret()) return;
   try {
     const res = await fetch(EP + 'admin/grant-tokens', {
       method: 'POST',
@@ -1024,7 +1011,6 @@ async function adminGrantTokens() {
 async function renderAdminPanel() {
   const listEl = document.getElementById('adminPaymentList');
   listEl.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
-  if (!_ensureAdminSecret()) { listEl.innerHTML = '<div class="admin-empty">인증 취소됨</div>'; return; }
   try {
     const res = await fetch(EP + 'admin/payments', {
       headers: adminAuthHeaders(),

@@ -522,14 +522,10 @@ async function handlePaymentStatus(request, env) {
 const ADMIN_EMAIL = 'riger7070@gmail.com';
 
 async function isAdmin(request, env) {
+  // Google ID 토큰을 Google 서버에서 직접 검증 → 이메일 일치 확인
+  // x-admin-secret 헤더 의존 제거 (브라우저에 공유 비밀키 저장 = 보안 취약)
   const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
   if (!idToken) return false;
-
-  // 이중 잠금: 관리자 비밀키 헤더 검증
-  const clientSecret = request.headers.get('x-admin-secret');
-  if (!clientSecret || clientSecret !== env.ADMIN_SECRET) return false;
-
-  // 이메일 일치 검증
   const email = await getEmailFromToken(idToken, env);
   return email === ADMIN_EMAIL;
 }
