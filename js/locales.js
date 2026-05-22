@@ -368,7 +368,7 @@ const DK = {
     木:{icon:'🌿',name:'Morning Walk',desc:'Step outside early and breathe the fresh air. Wood energy opens new beginnings for the day.'},
     火:{icon:'🕯️',name:'Connect & Share',desc:'Have a warm conversation with someone close. Fire energy brightens every bond it touches.'},
     土:{icon:'🪴',name:'Regular Meals',desc:'Eat on time and take a quiet break. Earth energy centers and steadies your whole day.'},
-    金:{icon:'✨',name:'Tidy & Plan',desc:'Clear your space and write tomorrow's goals. Metal energy sharpens focus and brings clarity.'},
+    金:{icon:'✨',name:'Tidy & Plan',desc:'Clear your space and write tomorrow\'s goals. Metal energy sharpens focus and brings clarity.'},
     水:{icon:'🌙',name:'Rest Well',desc:'Take it easy and sleep early tonight. Water energy replenishes wisdom and vitality for tomorrow.'},
   },
   zh:{
