@@ -52,7 +52,7 @@ function _renderSajuGauge(user) {
     const pct = total > 0 ? Math.round((count[e] / total) * 100) : 0;
     return `<div class="saju-gauge-row">
       <div class="saju-gauge-label">${names[e]}</div>
-      <div class="saju-gauge-bar-bg"><div class="saju-gauge-bar" data-pct="${pct}" style="width:0;background:${OC[e]}"></div></div>
+      <div class="saju-gauge-bar-bg"><div class="saju-gauge-bar" data-pct="${pct}" style="width:0;background:${OC[e]};--glow-color:${OC[e]}"></div></div>
       <div class="saju-gauge-pct">${pct}%</div>
     </div>`;
   }).join('');
@@ -78,7 +78,7 @@ function _renderSajuGaugeFromGemini(ohaeng, revealDelay = 0) {
     const pct = ohaeng[e] || 0;
     return `<div class="saju-gauge-row">
       <div class="saju-gauge-label">${names[e]}</div>
-      <div class="saju-gauge-bar-bg"><div class="saju-gauge-bar" data-pct="${pct}" style="width:0;background:${OC[e]}"></div></div>
+      <div class="saju-gauge-bar-bg"><div class="saju-gauge-bar" data-pct="${pct}" style="width:0;background:${OC[e]};--glow-color:${OC[e]}"></div></div>
       <div class="saju-gauge-pct">${pct}%</div>
     </div>`;
   }).join('');
