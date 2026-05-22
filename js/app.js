@@ -288,23 +288,27 @@ function addRxCard(o) {
   const col = OC[o];
   const bg  = OBG[o];
   const t   = TX[lang];
-  const c   = document.createElement('div');
-  c.className = 'rx-card';
-  c.style.background = `linear-gradient(135deg, #0e0e0e, #080808)`;
-  const _shareData = JSON.stringify({ o, name: dk.name, desc: dk.desc });
-  c.innerHTML = `
-    <div class="rx-top" style="background:${bg}">
-      <div class="rx-icon" style="background:rgba(0,0,0,.3);border-color:${col}30">${dk.icon}</div>
-      <div class="rx-info">
-        <div class="rx-label" style="color:${col}">${t.rxlbl(o)}</div>
-        <div class="rx-name" style="color:${col}">${dk.name}</div>
-        <div class="rx-desc">${dk.desc}</div>
-      </div>
+
+  // 오행 한자 + 한국명 (예: 木 / 목(木))
+  const hanja   = o;                      // 木 火 土 金 水
+  const kiName  = ON[lang][o];            // 목(木) / Wood / 木气 / 木(もく)
+
+  const wrap = document.createElement('div');
+  wrap.className = 'rx-duo';
+  wrap.innerHTML = `
+    <div class="rx-ki-card" style="border-color:${col}50">
+      <div class="rx-ki-eyebrow">${t.kiLabel || '오늘의 강한 기운'}</div>
+      <div class="rx-ki-hanja" style="color:${col}">${hanja}</div>
+      <div class="rx-ki-name" style="color:${col}">${kiName}</div>
     </div>
-    <div class="rx-bottom">${t.revisit}</div>
-    <button class="rx-share-btn" onclick='_shareRxCard(${_shareData})'>🌟 오늘의 처방 공유하기</button>`;
-  cw().appendChild(c);
-  setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
+    <div class="rx-act-card" style="border-color:${col}30;background:${bg}">
+      <div class="rx-act-eyebrow">${t.actLabel || '오늘 하면 좋은 것'}</div>
+      <div class="rx-act-icon">${dk.icon}</div>
+      <div class="rx-act-name" style="color:${col}">${dk.name}</div>
+      <div class="rx-act-desc">${dk.desc}</div>
+    </div>`;
+  cw().appendChild(wrap);
+  setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
   _setOrbTheme(o);
   _saveCalEntry(o); // 오늘 기운 캘린더에 저장
 }
