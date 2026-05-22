@@ -170,23 +170,31 @@ const cw = () => document.getElementById('chat-window');
 function addBubble(text, who) {
   const d = document.createElement('div');
   d.className = `bubble bubble-${who}`;
-  d.textContent = text;
   if (who === 'ai') {
+    // 텍스트 노드를 별도 관리 → 타이핑 효과 적용 & 복사 버튼 충돌 방지
+    const tn = document.createTextNode('');
+    d.appendChild(tn);
     const btn = document.createElement('button');
     btn.className = 'bubble-copy-btn';
     btn.title = '복사';
     btn.textContent = '⎘';
     btn.onclick = () => _copyBubble(btn, text);
-    // 모바일: 탭 후 2초간 버튼 표시
     d.addEventListener('click', () => {
       btn.classList.add('visible');
       clearTimeout(btn._hideTimer);
       btn._hideTimer = setTimeout(() => btn.classList.remove('visible'), 2500);
     });
     d.appendChild(btn);
+    cw().appendChild(d);
+    cw().scrollTop = 99999;
+    // 이전 타이핑 중단 후 새 타이핑 시작
+    if (_typingAbort) _typingAbort.abort();
+    _typeIntoNode(tn, text, 22);
+  } else {
+    d.textContent = text;
+    cw().appendChild(d);
+    cw().scrollTop = 99999;
   }
-  cw().appendChild(d);
-  cw().scrollTop = 99999;
   return d;
 }
 
@@ -2252,3 +2260,184 @@ window.addEventListener('appinstalled', () => {
   document.getElementById('install-banner')?.remove();
   localStorage.setItem('myan_install_dismissed', 'true');
 });
+
+// ── 오행 파티클 필드 ──────────────────────────────────────────────
+class ParticleField {
+  // 오행 색상 (木火土金水)
+  static COLORS = ['#4bc87a','#e05a4a','#d4a040','#a0aab4','#5aa8e0'];
+
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    if (!this.canvas) return;
+    this.ctx    = this.canvas.getContext('2d');
+    this.particles = [];
+    this._raf   = null;
+    this._resize = this._resize.bind(this);
+    window.addEventListener('resize', this._resize);
+    this._resize();
+    this._populate();
+    this._animate();
+  }
+
+  _resize() {
+    if (!this.canvas) return;
+    this.canvas.width  = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+  }
+
+  _populate() {
+    const count = window.innerWidth < 480 ? 28 : 50; // 모바일 성능 배려
+    this.particles = Array.from({ length: count }, () => ({
+      x:    Math.random() * this.canvas.width,
+      y:    Math.random() * this.canvas.height,
+      vx:   (Math.random() - 0.5) * 1.2,
+      vy:   (Math.random() - 0.5) * 1.2,
+      r:    Math.random() * 1.8 + 0.8,          // 반지름 0.8~2.6px
+      alpha:Math.random() * 0.5 + 0.25,         // 불투명도 0.25~0.75
+      color:ParticleField.COLORS[Math.floor(Math.random() * 5)],
+    }));
+  }
+
+  _animate() {
+    const { ctx, canvas, particles } = this;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > canvas.width)  p.vx *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle   = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    this._raf = requestAnimationFrame(() => this._animate());
+  }
+
+  destroy() {
+    cancelAnimationFrame(this._raf);
+    window.removeEventListener('resize', this._resize);
+  }
+}
+
+// 페이지 로드 후 파티클 시작
+window.addEventListener('DOMContentLoaded', () => {
+  new ParticleField('bg-canvas');
+});
+
+// ── AI 답변 타이핑 효과 ──────────────────────────────────────────
+let _typingAbort = null; // 이전 타이핑 중단 플래그
+
+async function _typeIntoNode(textNode, text, speed = 22) {
+  // 300자 초과 시 즉시 표시 (긴 사주 리딩 배려)
+  if (text.length > 300) { textNode.nodeValue = text; return; }
+  const ctrl = new AbortController();
+  _typingAbort = ctrl;
+  textNode.nodeValue = '';
+  for (let i = 0; i < text.length; i++) {
+    if (ctrl.signal.aborted) { textNode.nodeValue = text; break; } // 중단 시 전체 표시
+    await new Promise(r => setTimeout(r, speed));
+    textNode.nodeValue = text.slice(0, i + 1);
+    cw().scrollTop = cw().scrollHeight;
+  }
+}
+  localStorage.setItem('myan_install_dismissed', 'true');
+  document.getElementById('install-banner')?.remove();
+}
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.remove();
+  localStorage.setItem('myan_install_dismissed', 'true');
+});
+
+// ── 오행 파티클 필드 ──────────────────────────────────────────────
+class ParticleField {
+  static COLORS = ['#4bc87a','#e05a4a','#d4a040','#a0aab4','#5aa8e0'];
+
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    if (!this.canvas) return;
+    this.ctx    = this.canvas.getContext('2d');
+    this.particles = [];
+    this._raf   = null;
+    this._resize = this._resize.bind(this);
+    window.addEventListener('resize', this._resize);
+    this._resize();
+    this._populate();
+    this._animate();
+  }
+
+  _resize() {
+    if (!this.canvas) return;
+    this.canvas.width  = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+  }
+
+  _populate() {
+    const count = window.innerWidth < 480 ? 28 : 50;
+    this.particles = Array.from({ length: count }, () => ({
+      x:    Math.random() * this.canvas.width,
+      y:    Math.random() * this.canvas.height,
+      vx:   (Math.random() - 0.5) * 1.2,
+      vy:   (Math.random() - 0.5) * 1.2,
+      r:    Math.random() * 1.8 + 0.8,
+      alpha:Math.random() * 0.5 + 0.25,
+      color:ParticleField.COLORS[Math.floor(Math.random() * 5)],
+    }));
+  }
+
+  _animate() {
+    const { ctx, canvas, particles } = this;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > canvas.width)  p.vx *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle   = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    this._raf = requestAnimationFrame(() => this._animate());
+  }
+
+  destroy() {
+    cancelAnimationFrame(this._raf);
+    window.removeEventListener('resize', this._resize);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  new ParticleField('bg-canvas');
+});
+
+// ── AI 답변 타이핑 효과 ──────────────────────────────────────────
+let _typingAbort = null;
+
+async function _typeIntoNode(textNode, text, speed = 22) {
+  if (text.length > 300) { textNode.nodeValue = text; return; }
+  const ctrl = new AbortController();
+  _typingAbort = ctrl;
+  textNode.nodeValue = '';
+  for (let i = 0; i < text.length; i++) {
+    if (ctrl.signal.aborted) { textNode.nodeValue = text; break; }
+    await new Promise(r => setTimeout(r, speed));
+    textNode.nodeValue = text.slice(0, i + 1);
+    cw().scrollTop = cw().scrollHeight;
+  }
+}
+  textNode.nodeValue = '';
+  for (let i = 0; i < text.length; i++) {
+    if (ctrl.signal.aborted) { textNode.nodeValue = text; break; }
+    await new Promise(r => setTimeout(r, speed));
+    textNode.nodeValue = text.slice(0, i + 1);
+    cw().scrollTop = cw().scrollHeight;
+  }
+}
+ = cw().scrollHeight;
+  }
+}

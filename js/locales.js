@@ -433,8 +433,7 @@ function _renderTokenModal() {
   _s('tmBtn1',       t.tkPayBtn || 'Toss로 결제하기');
   _s('tmBtn2',       t.tkPayBtn || 'Toss로 결제하기');
   const noteEl = document.getElementById('tmNote');
-  if (noteEl) noteEl.innerHTML = (t.tmNote || '').replace(/
-/g, '<br>');
+  if (noteEl) noteEl.innerHTML = (t.tmNote || '').replace(/\n/g, '<br>');
 }
 
 /* 자정 자동 갱신 */
