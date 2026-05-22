@@ -1,18 +1,26 @@
-// M;Y 安 — effect.js  (오행 파티클 버스트)
+// M;Y 安 — effect.js  (오행 파티클 버스트 · 강화판)
 // ────────────────────────────────────────────────────────────
-// 버그 수정 내역 (원본 대비):
-//   1. position:'absolute' → 'fixed'  (스크롤해도 화면 전체 커버)
-//   2. 종료 조건: particles[0].alpha > 0 → 전체 파티클 alive 체크
-//   3. targetElementId 실제 좌표에서 파티클 spawn (미사용 파라미터 수정)
-//   4. zIndex: '9998' 추가 (UI 위에 렌더)
-//   5. canvas.width/height를 style이 아닌 attribute로 설정 (해상도 불일치 방지)
+// v2 변경사항:
+//   - 파티클 120개 (기존 40개)
+//   - shadowBlur 글로우 효과
+//   - 중력(gravity) + 공기저항(drag) 물리 적용
+//   - 원형 + 별(sparkle) 혼합 형태
+//   - 초기 방사형 플래시 연출
+//   - 크기·속도·수명 랜덤 분산 강화
 
 const OHAENG_COLORS = {
   '木': '#4bc87a',
   '火': '#e05a4a',
   '土': '#d4a040',
-  '金': '#a0aab4',
+  '金': '#c8d4e0',
   '水': '#5aa8e0',
+};
+const OHAENG_GLOW = {
+  '木': 'rgba(75,200,122,',
+  '火': 'rgba(224,90,74,',
+  '土': 'rgba(212,160,64,',
+  '金': 'rgba(200,212,224,',
+  '水': 'rgba(90,168,224,',
 };
 
 window.M_Effect = {
@@ -23,21 +31,27 @@ window.M_Effect = {
   spawnParticles(targetElementId, ohaengType) {
     const canvas = document.createElement('canvas');
     Object.assign(canvas.style, {
-      position:      'fixed',   // ✅ fixed: 스크롤 위치 무관하게 전체 화면 커버
+      position:      'fixed',
       top:           '0',
       left:          '0',
       width:         '100%',
       height:        '100%',
       pointerEvents: 'none',
-      zIndex:        '9998',    // ✅ UI 최상단 위
+      zIndex:        '9998',
     });
-    canvas.width  = window.innerWidth;   // ✅ attribute로 설정 (해상도 정확)
-    canvas.height = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = window.innerWidth  * dpr;
+    canvas.height = window.innerHeight * dpr;
     document.body.appendChild(canvas);
 
-    // ✅ targetElementId 실제로 사용 — 요소 중심을 spawn 위치로
-    let ox = canvas.width / 2;
-    let oy = canvas.height / 2;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+
+    // 스폰 기준점
+    let ox = W / 2, oy = H / 2;
     if (targetElementId) {
       const el = document.getElementById(targetElementId);
       if (el) {
@@ -47,38 +61,101 @@ window.M_Effect = {
       }
     }
 
-    const color = OHAENG_COLORS[ohaengType] || '#c9a96e';
-    const particles = Array.from({ length: 40 }, () => ({
-      x:     ox,
-      y:     oy,
-      vx:    (Math.random() - 0.5) * 12,
-      vy:    (Math.random() - 0.5) * 12,
-      r:     Math.random() * 2.5 + 1,
-      alpha: 1,
-    }));
+    const color    = OHAENG_COLORS[ohaengType] || '#c9a96e';
+    const glowBase = OHAENG_GLOW[ohaengType]   || 'rgba(201,169,110,';
 
-    const ctx = canvas.getContext('2d');
+    // ── 초기 방사형 플래시 ──
+    let flashAlpha = 0.55;
+    function drawFlash() {
+      if (flashAlpha <= 0) return;
+      const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, 180);
+      grad.addColorStop(0,   glowBase + flashAlpha + ')');
+      grad.addColorStop(0.4, glowBase + (flashAlpha * 0.3) + ')');
+      grad.addColorStop(1,   glowBase + '0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      flashAlpha -= 0.045;
+    }
 
+    // ── 파티클 생성 ──
+    function mkParticle(i) {
+      const isStar    = Math.random() < 0.3;          // 30%는 별 모양
+      const speed     = Math.random() * 18 + 6;       // 6~24
+      const angle     = Math.random() * Math.PI * 2;
+      const lifespan  = Math.random() * 0.4 + 0.6;   // 0.6~1.0 (수명 배율)
+      return {
+        x:       ox,
+        y:       oy,
+        vx:      Math.cos(angle) * speed,
+        vy:      Math.sin(angle) * speed - (Math.random() * 4), // 위쪽 편향
+        r:       isStar ? Math.random() * 3 + 2 : Math.random() * 5 + 1.5,
+        alpha:   1,
+        decay:   (0.008 + Math.random() * 0.01) / lifespan,
+        gravity: 0.18 + Math.random() * 0.12,
+        drag:    0.97 - Math.random() * 0.02,
+        isStar,
+        spin:    (Math.random() - 0.5) * 0.3,
+        angle:   Math.random() * Math.PI * 2,
+      };
+    }
+    const particles = Array.from({ length: 120 }, mkParticle);
+
+    // ── 별(sparkle) 그리기 ──
+    function drawStar(ctx, x, y, r, angle) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const a = (Math.PI / 2) * i;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * r * 2.2, Math.sin(a) * r * 2.2);
+      }
+      ctx.lineWidth   = r * 0.7;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ── 메인 루프 ──
     function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      let alive = false;                 // ✅ 전체 파티클 생존 여부 추적
+      ctx.clearRect(0, 0, W, H);
+      drawFlash();
+
+      let alive = false;
+
       for (const p of particles) {
+        p.vx    *= p.drag;
+        p.vy    *= p.drag;
+        p.vy    += p.gravity;
         p.x     += p.vx;
         p.y     += p.vy;
-        p.alpha -= 0.018;
+        p.alpha -= p.decay;
+        p.angle += p.spin;
         if (p.alpha <= 0) continue;
         alive = true;
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle   = color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fill();
+
+        ctx.globalAlpha  = p.alpha;
+        ctx.shadowColor  = color;
+        ctx.shadowBlur   = p.r * 5;
+
+        if (p.isStar) {
+          drawStar(ctx, p.x, p.y, p.r, p.angle);
+        } else {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
+
       ctx.globalAlpha = 1;
-      if (alive) {
+      ctx.shadowBlur  = 0;
+
+      if (alive || flashAlpha > 0) {
         requestAnimationFrame(draw);
       } else {
-        canvas.remove();                 // ✅ 모든 파티클 소멸 시 canvas 정리
+        canvas.remove();
       }
     }
     draw();
