@@ -227,7 +227,7 @@ async function handleGeminiChat(request, env) {
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
       ],
-      generationConfig: { temperature: 0.75, maxOutputTokens: 3000, topP: 0.95, ...(mode === 'solo' ? { responseMimeType: 'application/json' } : {}) },
+      generationConfig: { temperature: 0.75, maxOutputTokens: mode === 'solo' ? 8192 : 4096, topP: 0.95, ...(mode === 'solo' ? { responseMimeType: 'application/json' } : {}) },
     };
 
     const res = await fetch(
@@ -302,7 +302,25 @@ async function handleGeminiChat(request, env) {
         } catch { /* not valid JSON — fall through to regex */ }
 
         if (!extracted) {
-          // fallback: regex로 ohaeng 블록 추출
+          // fallback 1: JSON이 잘렸어도 "reading" 키에서 텍스트 추출 시도
+          // (maxOutputTokens 초과로 JSON 미완성 시 reading 내용만 꺼내 표시)
+          const readingMatch = rawText.match(/"reading"\s*:\s*"([\s\S]+)/);
+          if (readingMatch) {
+            let rt = readingMatch[1];
+            // 닫히는 따옴표+쉼표(ohaeng으로 이어지는 경우) 또는 닫힘 따옴표+괄호 찾아 잘라냄
+            const closeIdx = rt.search(/",\s*"ohaeng"|"\s*\}/);
+            if (closeIdx > 0) rt = rt.slice(0, closeIdx);
+            // JSON 이스케이프 복원
+            rt = rt.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+                   .replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            if (rt.trim().length > 20) {
+              data.candidates[0].content.parts[0].text = rt.trim();
+              extracted = true;
+            }
+          }
+        }
+        if (!extracted) {
+          // fallback 2: regex로 ohaeng 블록 추출
           const m = rawText.match(/"ohaeng"\s*:\s*(\{[^}]+\})/);
           if (m) {
             try { data._ohaeng = JSON.parse(m[1]); } catch {}
