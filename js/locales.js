@@ -350,32 +350,32 @@ const TX = {
 
 const DK = {
   ko:{
-    木:{icon:'🌱',name:'청몽 채움 에이드',desc:'청포도·매실·민트의 생동감. 목(木) 기운을 깨워 새로운 시작과 성장의 에너지를 북돋웁니다.'},
-    火:{icon:'🔥',name:'태양의 안식 티',desc:'히비스커스·자몽·생강의 정화. 화(火) 기운을 다스려 열정 속 고요함을 선사합니다.'},
-    土:{icon:'⛰️',name:'대지의 단잠 라떼',desc:'단호박·현미·귀리의 포근함. 토(土) 기운으로 흔들리는 중심을 잡아 안정감을 드립니다.'},
-    金:{icon:'💎',name:'순백의 정화 밀크',desc:'코코넛·리치·백련의 투명함. 금(金) 기운으로 흐릿해진 감각을 맑게 정화합니다.'},
-    水:{icon:'🌊',name:'심연의 고요 라떼',desc:'흑임자·흑미·아마씨의 깊이. 수(水) 기운으로 지친 몸과 마음에 진정한 휴식을 드립니다.'},
+    木:{icon:'🌱',name:'새벽 산책 처방',desc:'이른 아침 푸른 기운 속을 걸으세요. 목(木)의 생동감이 몸과 마음에 새로운 시작의 에너지를 불어넣어 줍니다.'},
+    火:{icon:'🔥',name:'붉은 노을 명상',desc:'저녁 노을을 바라보며 깊게 호흡하세요. 화(火)의 열정을 고요히 다스려 내면의 중심을 되찾습니다.'},
+    土:{icon:'⛰️',name:'황토 맨발 걷기',desc:'흙과 직접 닿는 시간을 가져보세요. 토(土)의 대지 기운이 흔들리는 중심을 잡아 깊은 안정감을 줍니다.'},
+    金:{icon:'💎',name:'백색 정화 호흡',desc:'조용한 공간에서 천천히 숨을 고르세요. 금(金)의 맑은 기운이 흐릿해진 감각을 깨끗하게 정화합니다.'},
+    水:{icon:'🌊',name:'달빛 수면 의식',desc:'취침 전 조명을 낮추고 고요히 쉬세요. 수(水)의 깊은 기운이 지친 몸과 마음에 진정한 회복을 선사합니다.'},
   },
   en:{
-    木:{icon:'🌱',name:'Azure Dream Ade',desc:'Green grape, plum & mint. Awakens Wood energy to nurture new beginnings and growth.'},
-    火:{icon:'🔥',name:'Solar Repose Tea',desc:'Hibiscus, grapefruit & ginger. Soothes Fire energy to find stillness within passion.'},
-    土:{icon:'⛰️',name:"Earth's Slumber Latte",desc:'Pumpkin, brown rice & oat. Grounds Earth energy to restore deep stability.'},
-    金:{icon:'💎',name:'Pure Clarity Milk',desc:'Coconut, lychee & lotus. Purifies Metal energy to sharpen and brighten the senses.'},
-    水:{icon:'🌊',name:'Deep Stillness Latte',desc:'Black sesame, black rice & flaxseed. Channels Water energy for true rest.'},
+    木:{icon:'🌱',name:'Dawn Walk Rx',desc:'Take an early morning walk among greenery. Wood energy awakens the body and seeds new beginnings.'},
+    火:{icon:'🔥',name:'Sunset Meditation Rx',desc:'Breathe deeply as you watch the evening sky. Channel Fire energy inward to find stillness within passion.'},
+    土:{icon:'⛰️',name:'Barefoot Grounding Rx',desc:'Walk on earth or grass with bare feet. Earth energy stabilizes your center and restores calm.'},
+    金:{icon:'💎',name:'White Breath Ritual Rx',desc:'Sit in silence and breathe slowly. Metal energy clears clouded senses and sharpens clarity.'},
+    水:{icon:'🌊',name:'Moonlight Rest Rx',desc:'Dim the lights before sleep and rest quietly. Water energy offers deep recovery to the tired body and mind.'},
   },
   zh:{
-    木:{icon:'🌱',name:'青梦补气饮',desc:'青葡萄、梅子与薄荷。唤醒木气，滋养新的开始与成长。'},
-    火:{icon:'🔥',name:'太阳安息茶',desc:'木槿、西柚与生姜。调和火气，在热情中寻得内心宁静。'},
-    土:{icon:'⛰️',name:'大地安眠拿铁',desc:'南瓜、糙米与燕麦。稳固土气，恢复深层安定感。'},
-    金:{icon:'💎',name:'纯白净化奶',desc:'椰子、荔枝与白莲。净化金气，使感官清晰明亮。'},
-    水:{icon:'🌊',name:'深渊宁静拿铁',desc:'黑芝麻、黑米与亚麻籽。引导水气，赐予真正的休憩。'},
+    木:{icon:'🌱',name:'晨曦散步处方',desc:'清晨在绿意中漫步。木气唤醒身心，播下新开始的种子。'},
+    火:{icon:'🔥',name:'夕阳冥想处方',desc:'凝视晚霞，深呼吸。将火气引向内心，在热情中寻得宁静。'},
+    土:{icon:'⛰️',name:'赤足接地处方',desc:'赤脚踏在泥土或草地上。土气稳固中心，恢复深层安定。'},
+    金:{icon:'💎',name:'白息净化处方',desc:'静坐，缓慢呼吸。金气净化感官，带来清晰与明亮。'},
+    水:{icon:'🌊',name:'月光休息处方',desc:'入睡前调暗灯光，静静休憩。水气为疲惫的身心带来深度恢复。'},
   },
   ja:{
-    木:{icon:'🌱',name:'青夢の満ちるエード',desc:'青葡萄・梅・ミントの生命力。木の気を呼び覚まし、新たな始まりと成長のエネルギーを高めます。'},
-    火:{icon:'🔥',name:'太陽の安息ティー',desc:'ハイビスカス・グレープフルーツ・生姜の浄化。火の気を整え、情熱の中に静けさをもたらします。'},
-    土:{icon:'⛰️',name:'大地のうたた寝ラテ',desc:'かぼちゃ・玄米・オーツの温もり。土の気で揺れる心の軸を整え、深い安定感をもたらします。'},
-    金:{icon:'💎',name:'純白の浄化ミルク',desc:'ココナッツ・ライチ・白蓮の透明感。金の気で曇った感覚を澄み渡らせます。'},
-    水:{icon:'🌊',name:'深淵の静寂ラテ',desc:'黒ごま・黒米・アマニの深み。水の気で疲れた身体と心に真の休息をもたらします。'},
+    木:{icon:'🌱',name:'夜明けの散歩処方',desc:'早朝、緑の中を歩きましょう。木の気が心身を目覚めさせ、新たな始まりのエネルギーを宿します。'},
+    火:{icon:'🔥',name:'夕焼け瞑想処方',desc:'夕空を眺めながら深く呼吸しましょう。火の気を内へ向け、情熱の中に静けさを見つけます。'},
+    土:{icon:'⛰️',name:'裸足アース処方',desc:'土や草の上を素足で歩きましょう。土の気が軸を整え、深い安定感をもたらします。'},
+    金:{icon:'💎',name:'白息浄化処方',desc:'静かな場所でゆっくり呼吸しましょう。金の気が曇った感覚を澄み渡らせます。'},
+    水:{icon:'🌊',name:'月光睡眠処方',desc:'就寝前に照明を落とし、静かに休みましょう。水の気が疲れた心身に真の回復をもたらします。'},
   },
 };
 
@@ -697,8 +697,6 @@ function buildUserProfile(u) {
 const MAX_HIST = 16;
 function trimmedHist() {
   if (hist.length <= MAX_HIST) return hist;
-  // 첫 번째 user 메시지(프로필)는 항상 보존
-  const first = hist[0];
-  const rest  = hist.slice(-(MAX_HIST - 1));
-  return [first, ...rest];
+  // 첫 2개(인사) 보존 + 최신 (MAX_HIST-2)개
+  return [...hist.slice(0, 2), ...hist.slice(-(MAX_HIST - 2))];
 }

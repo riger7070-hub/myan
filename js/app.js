@@ -2395,10 +2395,18 @@ async function _typeIntoNode(textNode, text, speed = 22) {
   const ctrl = new AbortController();
   _typingAbort = ctrl;
   textNode.nodeValue = '';
+
   for (let i = 0; i < text.length; i++) {
-    if (ctrl.signal.aborted) { textNode.nodeValue = text; break; }
+    // 중단 요청 시 전체 텍스트 즉시 표시
+    if (ctrl.signal.aborted) { textNode.nodeValue = text; return; }
     await new Promise(r => setTimeout(r, speed));
+    if (ctrl.signal.aborted) { textNode.nodeValue = text; return; }
     textNode.nodeValue = text.slice(0, i + 1);
-    cw().scrollTop = cw().scrollHeight;
+    try { const w = cw(); if (w) w.scrollTop = w.scrollHeight; } catch {}
   }
 }
+
+// 페이지가 백그라운드로 가면 진행 중인 타이핑 즉시 완료
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && _typingAbort) _typingAbort.abort();
+});

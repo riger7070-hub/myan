@@ -277,20 +277,27 @@ async function handleGeminiChat(request, env) {
 
       // solo 모드: JSON 응답 파싱 → reading/ohaeng 분리
       if (mode === 'solo' && rawText) {
+        let extracted = false;
         try {
           const parsed = JSON.parse(rawText);
           if (parsed.reading && parsed.ohaeng) {
             data._ohaeng = parsed.ohaeng;
             data.candidates[0].content.parts[0].text = parsed.reading;
+            extracted = true;
           }
-        } catch {
-          // fallback: regex로 JSON 블록만 추출 (LLM이 마크다운 감쌌을 때)
+        } catch { /* not valid JSON — fall through to regex */ }
+
+        if (!extracted) {
+          // fallback: regex로 ohaeng 블록 추출 (LLM이 마크다운으로 감쌌거나 키 불일치 시)
           const m = rawText.match(/"ohaeng"\s*:\s*(\{[^}]+\})/);
           if (m) {
             try { data._ohaeng = JSON.parse(m[1]); } catch {}
           }
+          // JSON 전체 블록 제거 후 reading 텍스트만 남김
           data.candidates[0].content.parts[0].text = rawText
-            .replace(/\n?\{"ohaeng"\s*:\s*\{[^}]+\}\}/, '').trim();
+            .replace(/^\s*\{[\s\S]*?"ohaeng"\s*:\s*\{[^}]+\}\s*\}\s*$/m, '')
+            .replace(/\{[^{}]*"ohaeng"\s*:\s*\{[^}]+\}[^{}]*\}/g, '')
+            .trim();
         }
       }
     }
