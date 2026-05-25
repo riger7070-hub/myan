@@ -725,6 +725,26 @@ const PAY_TX = {
 
 function _pt(key) { return (PAY_TX[lang] || PAY_TX.ko)[key] || ''; }
 
+// ── 포트원 모바일 리다이렉트 후 결제 검증 ──
+async function _verifyMobilePayment(paymentId) {
+  try {
+    const res = await fetch(`${EP}api/payment/verify`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ paymentId })
+    });
+    const result = await res.json();
+    if (result.success) {
+      await refreshTokens();
+      alert('✦ 토큰이 충전되었습니다!');
+    } else {
+      alert(`결제 검증 실패: ${result.error?.message || '고객센터(riger7070@naver.com)로 문의해 주세요.'}`);
+    }
+  } catch {
+    alert('결제 확인 중 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
+  }
+}
+
 // ── 포트원 V2 PG 결제창 호출 ──
 async function buyToken(pkg) {
   const user = getUser();
@@ -743,12 +763,13 @@ async function buyToken(pkg) {
   try {
     const response = await PortOne.requestPayment({
       storeId:    'store-2527e72d-c141-4d7e-8ade-7d430f27d088',
-      channelKey: 'channel-key-a9bbeff3-fe3b-4c88-8e25-c6cf75f7a86c',
+      channelKey: 'channel-key-4acf8df4-d5a7-499d-b637-5a2b28c3adae',
       paymentId:  paymentId,
       orderName:  selected.name,
       totalAmount: selected.amount,
       currency:   'KRW',
       payMethod:  'CARD',
+      redirectUrl: 'https://myan.riger7070.workers.dev/',
       customer: {
         email:    user.email,
         fullName: user.name,
@@ -1229,6 +1250,13 @@ function handleGoogleCredential(response) {
       _enterMode(m, profile);
     } else {
       document.getElementById('screen-mode').style.display = 'flex';
+    }
+
+    // 모바일 포트원 리다이렉트 후 로그인이 늦게 된 경우 → pending 결제 검증
+    const _pendingPid = sessionStorage.getItem('myan_pending_payment');
+    if (_pendingPid) {
+      sessionStorage.removeItem('myan_pending_payment');
+      setTimeout(() => _verifyMobilePayment(_pendingPid), 600);
     }
   } catch(e) {
     console.error('Google 자격증명 파싱 오류:', e);
@@ -2417,6 +2445,34 @@ class ParticleField {
 
 window.addEventListener('DOMContentLoaded', () => {
   new ParticleField('bg-canvas');
+
+  // ── 포트원 모바일 리다이렉트 처리 ──
+  // 모바일 결제 후 redirectUrl(현재 앱)으로 돌아올 때 URL에 paymentId가 붙어옴
+  const _rsp = new URLSearchParams(window.location.search);
+  const _rid = _rsp.get('paymentId');
+  if (_rid) {
+    // URL 파라미터 즉시 제거 (뒤로가기 등으로 재처리 방지)
+    history.replaceState({}, '', window.location.pathname);
+
+    const _rcode = _rsp.get('code');
+    const _rmsg  = _rsp.get('message') || '결제가 취소되었습니다.';
+
+    if (_rcode) {
+      // 오류 또는 취소
+      if (_rcode !== 'USER_CANCEL') {
+        setTimeout(() => alert(`결제 실패: ${_rmsg}`), 800);
+      }
+    } else {
+      // 결제 성공 — 인증 토큰이 있으면 즉시 검증, 없으면 sessionStorage에 저장 후 로그인 후 처리
+      setTimeout(async () => {
+        if (getGoogleIdToken()) {
+          await _verifyMobilePayment(_rid);
+        } else {
+          sessionStorage.setItem('myan_pending_payment', _rid);
+        }
+      }, 1000);
+    }
+  }
 });
 
 // ── AI 답변 타이핑 효과 ──────────────────────────────────────────
