@@ -806,14 +806,13 @@ body {
   color: var(--text);
   border-radius: 12px;
   padding: 14px 18px;
-  color: #e8e8e8;
   font-size: 0.95rem;
   font-family: 'Pretendard', sans-serif;
   outline: none;
   transition: border-color .2s, background .2s;
 }
-#inp::placeholder { color: rgba(255,255,255,0.28); }
-#inp:focus { border-color: rgba(201,169,110,0.6); background: rgba(255,255,255,0.1); }
+#inp::placeholder { color: var(--text-dim); opacity: 0.6; }
+#inp:focus { border-color: rgba(201,169,110,0.6); }
 #inp:disabled { opacity: .3; }
 
 #send {
@@ -894,24 +893,23 @@ body {
   text-transform: uppercase;
 }
 .field input, .field select {
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(201,169,110,0.28);
+  background: var(--input-bg);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 13px 16px;
-  color: #e8e8e8;
+  color: var(--text);
   font-size: 0.92rem;
   font-family: 'Pretendard', sans-serif;
   outline: none;
   transition: border-color .2s, background .2s;
   width: 100%;
 }
-.field input::placeholder { color: rgba(255,255,255,0.28); }
+.field input::placeholder { color: var(--text-dim); opacity: 0.6; }
 .field input:focus, .field select:focus {
   border-color: rgba(201,169,110,0.6);
-  background: rgba(255,255,255,0.1);
 }
-.field select { cursor: pointer; appearance: none; color: #e8e8e8; }
-.field select option { background: #1a1410 !important; color: #e8d8b0 !important; }
+.field select { cursor: pointer; appearance: none; color: var(--text); }
+.field select option { background: var(--bg); color: var(--text); }
 
 .gender-row { display: flex; gap: 10px; }
 .gender-btn {
@@ -1331,10 +1329,15 @@ body {
 
 /* ── 퀵액세스 바 (메인 화면 하단) ── */
 .quick-access-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 16px;
   width: 100%;
+}
+.quick-access-row .quick-box {
+  width: 100%;
+  max-width: 480px;
 }
 @media (min-width: 600px) {
   .quick-access-row {
@@ -1714,9 +1717,9 @@ select.fif-input {
   background-position: right 10px center;
   padding-right: 28px;
   cursor: pointer;
-  color: #e8d8b0;
+  color: var(--text);
 }
-select.fif-input option { background: #1a1410 !important; color: #e8d8b0 !important; }
+select.fif-input option { background: var(--bg); color: var(--text); }
 .fif-submit {
   width: 100%;
   padding: 11px;
