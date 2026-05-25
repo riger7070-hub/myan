@@ -1613,7 +1613,7 @@ body {
   box-shadow: 0 0 20px rgba(201,169,110,0.08), inset 0 0 30px rgba(201,169,110,0.03);
 }
 .pkg-best-badge {
-  display: inline-block;
+  display: block;
   background: var(--gold);
   color: #060608;
   font-size: 0.6rem;
@@ -1621,8 +1621,9 @@ body {
   letter-spacing: 1px;
   padding: 2px 7px;
   border-radius: 999px;
-  margin-bottom: 6px;
+  margin-top: 10px;
   text-transform: uppercase;
+  text-align: center;
 }
 .pkg-unit-price {
   font-size: 0.65rem;

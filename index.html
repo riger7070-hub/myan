@@ -150,14 +150,6 @@
         </div>
         <div class="quick-arrow">›</div>
       </div>
-      <div class="quick-box support-box" onclick="openSupport()">
-        <div class="quick-icon">💬</div>
-        <div class="quick-body">
-          <div class="quick-title" id="quickSupportTitle">1대1 상담</div>
-          <div class="quick-desc" id="quickSupportDesc">이메일로 문의하기</div>
-        </div>
-        <div class="quick-arrow">›</div>
-      </div>
     </div>
 
     <div class="main-lang-row">
@@ -409,7 +401,7 @@
 
       <!-- 하단 상담·충전 박스 -->
       <div class="mp-bottom-cards">
-        <div class="mp-bottom-card" onclick="buyToken('M')">
+        <div class="mp-bottom-card" onclick="openTokenModal()">
           <div class="mp-bc-icon">✦</div>
           <div class="mp-bc-body">
             <div class="mp-bc-title" id="mpBotChargeTitle">토큰 충전</div>
@@ -600,12 +592,12 @@
         <button class="pkg-btn" id="tmBtn0"></button>
       </div>
       <div class="pkg-card best-card" onclick="buyToken('M')">
-        <div class="pkg-best-badge">가장 인기</div>
         <div class="pkg-badge" id="tmBadge1"></div>
         <div class="pkg-tokens">100</div>
         <div class="pkg-price">12,900원</div>
         <div class="pkg-unit-price">약 129원 / 토큰</div>
         <button class="pkg-btn" id="tmBtn1"></button>
+        <div class="pkg-best-badge">가장 인기</div>
       </div>
       <div class="pkg-card" onclick="buyToken('L')">
         <div class="pkg-badge" id="tmBadge2"></div>
