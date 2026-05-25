@@ -687,7 +687,7 @@ function htmlPage(title, desc) {
 }
 
 // ════════════════════════════
-//  포트원 V2 결제 검증 핸들러
+//  토스페이먼츠 직접 결제 검증 + 승인 핸들러
 // ════════════════════════════
 async function handlePaymentVerify(request, env) {
   try {
@@ -700,61 +700,85 @@ async function handlePaymentVerify(request, env) {
       return cors(JSON.stringify({ error: { message: '결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' } }), 429);
     }
 
-    // paymentId만 클라이언트에서 수신 — pkg/amount/tokens는 서버에서 결정
+    // 1. 클라이언트에서 paymentKey, orderId, amount 수신
     let body;
     try { body = await request.json(); } catch {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400);
     }
-    const { paymentId } = body;
-    if (!paymentId || typeof paymentId !== 'string' || paymentId.length > 200) {
-      return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 ID입니다.' } }), 400);
+    const { paymentKey, orderId, amount } = body;
+    if (!paymentKey || typeof paymentKey !== 'string' || paymentKey.length > 300) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 키입니다.' } }), 400);
+    }
+    if (!orderId || typeof orderId !== 'string' || orderId.length > 200) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 주문 ID입니다.' } }), 400);
+    }
+    if (!Number.isInteger(amount) || amount <= 0) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 금액입니다.' } }), 400);
     }
 
-    // 1. 포트원 V2 API로 결제 단독 조회 (위변조 방지)
-    const verifyRes = await fetch(
-      `https://api.portone.io/payments/${encodeURIComponent(paymentId)}`,
-      { headers: { Authorization: `PortOne ${env.PORTONE_SECRET}` } }
-    );
-    if (!verifyRes.ok) {
-      return cors(JSON.stringify({ error: { message: '포트원 결제 조회 실패' } }), 400);
-    }
-    const payment = await verifyRes.json();
-
-    // 2. 결제 상태 확인
-    if (payment.status !== 'PAID') {
-      return cors(JSON.stringify({ error: { message: '결제가 완료되지 않았습니다.' } }), 400);
-    }
-
-    // 3. 서버 PKG_TABLE로 금액 → pkg/tokens 결정 (클라이언트 조작 원천 차단)
+    // 2. 금액 → pkg/tokens 매핑 (서버에서 결정 — 클라이언트 조작 원천 차단)
     const VERIFY_PKG_TABLE = {
       4900:  { pkg: 'small',  tokens: 30  },
       12900: { pkg: 'medium', tokens: 100 },
       29900: { pkg: 'large',  tokens: 300 },
     };
-    const paidAmount = payment.amount?.total;
-    const pkgEntry = VERIFY_PKG_TABLE[paidAmount];
+    const pkgEntry = VERIFY_PKG_TABLE[amount];
     if (!pkgEntry) {
       return cors(JSON.stringify({ error: { message: '유효하지 않은 결제 금액입니다.' } }), 400);
     }
     const { pkg: serverPkg, tokens: serverTokens } = pkgEntry;
 
-    // 4. 중복 결제 방지 확인
+    // 3. 중복 결제 방지 (orderId 기준)
+    if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
     const dupCheck = await env.DB.prepare(
       'SELECT id FROM payment_requests WHERE id = ?'
-    ).bind(paymentId).first();
+    ).bind(orderId).first();
     if (dupCheck) {
       return cors(JSON.stringify({ error: { message: '이미 처리된 결제입니다.' } }), 409);
     }
 
-    // 5. 검증 통과 → D1 DB에 approved 상태로 기록 (서버 계산값 사용)
+    // 4. 토스페이먼츠 서버에 결제 승인 요청 (위변조 방지 — amount 불일치 시 Toss가 거절)
+    if (!env.TOSS_SECRET_KEY) {
+      return cors(JSON.stringify({ error: { message: '결제 서버 설정 오류' } }), 500);
+    }
+    const tossCredential = btoa(env.TOSS_SECRET_KEY + ':');
+    const tossRes = await fetch('https://api.tosspayments.com/v1/payments/confirm', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${tossCredential}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ paymentKey, orderId, amount }),
+    });
+
+    if (!tossRes.ok) {
+      let errMsg = '결제 승인 실패';
+      try {
+        const tossErr = await tossRes.json();
+        errMsg = tossErr.message || errMsg;
+      } catch {}
+      return cors(JSON.stringify({ error: { message: errMsg } }), 400);
+    }
+
+    const tossPayment = await tossRes.json();
+
+    // 5. 토스 응답 검증 — 실제 결제 금액·상태 재확인
+    if (tossPayment.status !== 'DONE') {
+      return cors(JSON.stringify({ error: { message: '결제가 완료되지 않았습니다.' } }), 400);
+    }
+    if (tossPayment.totalAmount !== amount) {
+      return cors(JSON.stringify({ error: { message: '결제 금액 불일치 — 보안 거부' } }), 400);
+    }
+
+    // 6. 승인 통과 → D1 DB에 approved 상태로 기록
     const now = Math.floor(Date.now() / 1000);
     await env.DB.prepare(`
       INSERT INTO payment_requests
         (id, user_email, pkg, amount, tokens, status, created_at, approved_at)
       VALUES (?, ?, ?, ?, ?, 'approved', ?, ?)
-    `).bind(paymentId, email, serverPkg, paidAmount, serverTokens, now, now).run();
+    `).bind(orderId, email, serverPkg, amount, serverTokens, now, now).run();
 
-    // 6. 최신 잔액 계산 후 반환
+    // 7. 최신 잔액 계산 후 반환
     const balRes = await env.DB.prepare(`
       SELECT COALESCE(SUM(tokens), 0) AS balance
       FROM payment_requests
@@ -763,6 +787,7 @@ async function handlePaymentVerify(request, env) {
 
     return cors(JSON.stringify({
       success: true,
+      tokens:  serverTokens,
       balance: balRes ? balRes.balance : serverTokens
     }));
 
@@ -795,18 +820,18 @@ function addSecurityHeaders(response) {
   // Content-Security-Policy (XSS 브라우저 차단)
   h.set('Content-Security-Policy', [
     "default-src 'self'",
-    // 구글 로그인 + PortOne + QR 라이브러리 스크립트
-    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdnjs.cloudflare.com https://cdn.portone.io",
+    // 구글 로그인 + 토스페이먼츠 + QR 라이브러리 스크립트
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdnjs.cloudflare.com https://js.tosspayments.com",
     // 인라인 스타일 + 구글 폰트
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     // 구글 폰트 파일
     "font-src 'self' https://fonts.gstatic.com",
     // 이미지: self, data URI
     "img-src 'self' data: https:",
-    // API 통신 허용 출처
-    "connect-src 'self' https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.portone.io https://script.google.com",
-    // 구글 로그인 팝업 허용
-    "frame-src https://accounts.google.com",
+    // API 통신 허용 출처 (토스페이먼츠 API 추가)
+    "connect-src 'self' https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.tosspayments.com https://script.google.com",
+    // 구글 로그인 팝업 + 토스 결제 페이지 iframe 허용
+    "frame-src https://accounts.google.com https://tosspayments.com https://*.tosspayments.com",
   ].join('; '));
 
   return new Response(response.body, { status: response.status, headers: h });

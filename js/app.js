@@ -725,13 +725,13 @@ const PAY_TX = {
 
 function _pt(key) { return (PAY_TX[lang] || PAY_TX.ko)[key] || ''; }
 
-// ── 포트원 모바일 리다이렉트 후 결제 검증 ──
-async function _verifyMobilePayment(paymentId) {
+// ── 토스페이먼츠 결제 확인 (백엔드 승인 요청) ──
+async function _confirmTossPayment({ paymentKey, orderId, amount }) {
   try {
     const res = await fetch(`${EP}api/payment/verify`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ paymentId })
+      body: JSON.stringify({ paymentKey, orderId, amount: Number(amount) })
     });
     const result = await res.json();
     if (result.success) {
@@ -745,65 +745,42 @@ async function _verifyMobilePayment(paymentId) {
   }
 }
 
-// ── 포트원 V2 PG 결제창 호출 ──
+// ── 토스페이먼츠 직접 결제창 호출 ──
+const TOSS_CLIENT_KEY = 'test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb';
+
 async function buyToken(pkg) {
   const user = getUser();
   if (!user || !isLoggedIn()) { showLogin(); return; }
 
   const pkgs = {
-    'S': { name: '마이안 토큰 30개',  amount: 4900,  tokens: 30 },
-    'M': { name: '마이안 토큰 100개', amount: 12900, tokens: 100 },
-    'L': { name: '마이안 토큰 300개', amount: 29900, tokens: 300 }
+    'S': { name: '마이안 토큰 30개',  amount: 4900  },
+    'M': { name: '마이안 토큰 100개', amount: 12900 },
+    'L': { name: '마이안 토큰 300개', amount: 29900 }
   };
   const selected = pkgs[pkg];
   if (!selected) return;
 
-  const paymentId = `myan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+  const orderId = `myan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
 
   try {
-    const response = await PortOne.requestPayment({
-      storeId:    'store-2527e72d-c141-4d7e-8ade-7d430f27d088',
-      channelKey: 'channel-key-4acf8df4-d5a7-499d-b637-5a2b28c3adae',
-      paymentId:  paymentId,
-      orderName:  selected.name,
-      totalAmount: selected.amount,
-      currency:   'KRW',
-      payMethod:  'CARD',
-      redirectUrl: 'https://myan.riger7070.workers.dev/',
-      customer: {
-        email:    user.email,
-        fullName: user.name,
-      },
-    });
+    const tossPayments = TossPayments(TOSS_CLIENT_KEY);
+    const payment = tossPayments.payment({ customerKey: user.email });
 
-    // 사용자 취소 또는 오류
-    if (response?.code !== undefined) {
-      if (response.code !== 'USER_CANCEL') {
-        alert(`결제 실패: ${response.message}`);
-      }
-      return;
-    }
-
-    // 결제 성공 → 백엔드 위변조 검증 및 토큰 적재
-    const res = await fetch(`${EP}api/payment/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({
-        paymentId,
-        pkg,
-        email:  user.email,
-        amount: selected.amount,
-        tokens: selected.tokens,
-      })
+    await payment.requestPayment({
+      method: 'CARD',
+      amount: { currency: 'KRW', value: selected.amount },
+      orderId,
+      orderName:     selected.name,
+      customerEmail: user.email,
+      customerName:  user.name || '고객',
+      // 결제 후 돌아올 URL — 토스가 ?paymentKey=&orderId=&amount= 를 자동으로 붙여줌
+      successUrl: 'https://myan.riger7070.workers.dev/',
+      failUrl:    'https://myan.riger7070.workers.dev/?payFailed=1',
     });
-    const result = await res.json();
-    if (result.success) {
-      alert(`✦ ${selected.tokens}토큰이 충전되었습니다!`);
-        closeTokenModal();
-    } else {
-      alert(`결제 검증 실패: ${result.error?.message || '고객센터로 문의해 주세요.'}`);
-    }
+    // requestPayment는 항상 페이지 이동 — 아래 코드는 실행되지 않음
   } catch (err) {
+    if (err?.code === 'USER_CANCEL') return;
+    console.error('[buyToken]', err);
     alert('결제 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
   }
 }
@@ -1252,11 +1229,14 @@ function handleGoogleCredential(response) {
       document.getElementById('screen-mode').style.display = 'flex';
     }
 
-    // 모바일 포트원 리다이렉트 후 로그인이 늦게 된 경우 → pending 결제 검증
-    const _pendingPid = sessionStorage.getItem('myan_pending_payment');
-    if (_pendingPid) {
-      sessionStorage.removeItem('myan_pending_payment');
-      setTimeout(() => _verifyMobilePayment(_pendingPid), 600);
+    // 토스 결제 후 리다이렉트 시 로그인이 늦은 경우 → pending 결제 확인
+    const _pendingToss = sessionStorage.getItem('myan_pending_toss_payment');
+    if (_pendingToss) {
+      sessionStorage.removeItem('myan_pending_toss_payment');
+      try {
+        const _td = JSON.parse(_pendingToss);
+        setTimeout(() => _confirmTossPayment(_td), 600);
+      } catch {}
     }
   } catch(e) {
     console.error('Google 자격증명 파싱 오류:', e);
@@ -2446,32 +2426,32 @@ class ParticleField {
 window.addEventListener('DOMContentLoaded', () => {
   new ParticleField('bg-canvas');
 
-  // ── 포트원 모바일 리다이렉트 처리 ──
-  // 모바일 결제 후 redirectUrl(현재 앱)으로 돌아올 때 URL에 paymentId가 붙어옴
+  // ── 토스페이먼츠 결제 후 리다이렉트 처리 ──
+  // 결제 성공: ?paymentKey=xxx&orderId=yyy&amount=4900
+  // 결제 실패: ?payFailed=1&orderId=yyy  (또는 Toss 자체 failUrl)
   const _rsp = new URLSearchParams(window.location.search);
-  const _rid = _rsp.get('paymentId');
-  if (_rid) {
-    // URL 파라미터 즉시 제거 (뒤로가기 등으로 재처리 방지)
+  const _paymentKey = _rsp.get('paymentKey');
+  const _orderId    = _rsp.get('orderId');
+  const _amount     = _rsp.get('amount');
+  const _payFailed  = _rsp.get('payFailed');
+
+  if (_paymentKey && _orderId && _amount) {
+    // ✅ 결제 성공 리다이렉트
     history.replaceState({}, '', window.location.pathname);
+    const _tossData = { paymentKey: _paymentKey, orderId: _orderId, amount: Number(_amount) };
 
-    const _rcode = _rsp.get('code');
-    const _rmsg  = _rsp.get('message') || '결제가 취소되었습니다.';
-
-    if (_rcode) {
-      // 오류 또는 취소
-      if (_rcode !== 'USER_CANCEL') {
-        setTimeout(() => alert(`결제 실패: ${_rmsg}`), 800);
+    setTimeout(async () => {
+      if (getGoogleIdToken()) {
+        await _confirmTossPayment(_tossData);
+      } else {
+        // 로그인 토큰 아직 없으면 sessionStorage에 보관 → 로그인 후 처리
+        sessionStorage.setItem('myan_pending_toss_payment', JSON.stringify(_tossData));
       }
-    } else {
-      // 결제 성공 — 인증 토큰이 있으면 즉시 검증, 없으면 sessionStorage에 저장 후 로그인 후 처리
-      setTimeout(async () => {
-        if (getGoogleIdToken()) {
-          await _verifyMobilePayment(_rid);
-        } else {
-          sessionStorage.setItem('myan_pending_payment', _rid);
-        }
-      }, 1000);
-    }
+    }, 800);
+
+  } else if (_payFailed) {
+    // ❌ 결제 실패 or 취소 (별도 안내 없이 URL만 정리)
+    history.replaceState({}, '', window.location.pathname);
   }
 });
 
