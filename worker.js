@@ -135,7 +135,9 @@ export default {
     if (path === '/chat' && method === 'POST') return handleGeminiChat(request, env);
     if (path === '/api/payment/verify' && method === 'POST') return handlePaymentVerify(request, env);
     if (path === '/withdraw' && method === 'DELETE') return handleWithdraw(request, env);
-    if (path === '/delete-account' && method === 'GET') return handleDeleteAccountPage();
+    if (path === '/delete-account'  && method === 'GET') return handleDeleteAccountPage();
+    if (path === '/privacy-policy'  && method === 'GET') return handlePrivacyPage();
+    if (path === '/terms'           && method === 'GET') return handleTermsPage();
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
     if (method === 'GET') {
@@ -773,6 +775,187 @@ function cors(body, status = 200) {
       'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
   });
+}
+
+// ════════════════════════════
+//  공통 법적 페이지 스타일
+// ════════════════════════════
+function legalPageWrapper(title, bodyHtml) {
+  return new Response(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${escapeHtml(title)} — M;Y 安</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,'Pretendard',sans-serif;background:#060608;color:#c9a96e;
+         min-height:100vh;padding:40px 20px 80px}
+    .wrap{max-width:680px;margin:0 auto}
+    .brand{font-size:0.7rem;letter-spacing:4px;color:rgba(201,169,110,0.4);margin-bottom:8px}
+    h1{font-size:1.4rem;font-weight:400;letter-spacing:2px;margin-bottom:6px}
+    .date{font-size:0.75rem;color:rgba(201,169,110,0.35);margin-bottom:40px}
+    h2{font-size:0.95rem;color:#c9a96e;font-weight:500;margin:32px 0 10px;letter-spacing:1px}
+    p,li{font-size:0.88rem;color:#9e9590;line-height:1.9}
+    ul,ol{padding-left:20px;margin-bottom:8px}
+    li{margin-bottom:4px}
+    .box{background:rgba(201,169,110,0.05);border:1px solid rgba(201,169,110,0.15);
+         border-radius:10px;padding:18px 20px;margin:12px 0}
+    .box p{color:#aaa}
+    a{color:#c9a96e}
+    hr{border:none;border-top:1px solid rgba(201,169,110,0.1);margin:32px 0}
+    .back{display:inline-block;margin-bottom:32px;color:rgba(201,169,110,0.5);
+          font-size:0.8rem;text-decoration:none;letter-spacing:1px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← 홈으로</a>
+  <div class="brand">M ; Y 安</div>
+  ${bodyHtml}
+</div>
+</body>
+</html>`, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=86400' },
+  });
+}
+
+// ════════════════════════════
+//  개인정보처리방침
+// ════════════════════════════
+function handlePrivacyPage() {
+  return legalPageWrapper('개인정보처리방침', `
+<h1>개인정보처리방침</h1>
+<div class="date">시행일: 2026년 1월 1일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 26일</div>
+
+<p>마이안(M;Y 安, 이하 "회사")은 이용자의 개인정보를 소중히 여기며, 「개인정보 보호법」 및 관련 법령을 준수합니다.</p>
+
+<h2>1. 수집하는 개인정보</h2>
+<div class="box">
+  <p><strong>Google 로그인 시 수집:</strong></p>
+  <ul>
+    <li>이메일 주소 (서비스 식별 및 토큰 관리)</li>
+    <li>이름 (리딩 서비스 제공)</li>
+    <li>프로필 사진 (선택, 화면 표시용)</li>
+  </ul>
+  <p style="margin-top:10px"><strong>서비스 이용 중 수집:</strong></p>
+  <ul>
+    <li>생년월일 (사주 풀이 서비스 제공, 기기에만 저장)</li>
+    <li>성별·거주지역 (선택, 정밀 풀이 목적, 기기에만 저장)</li>
+    <li>결제 기록 (토큰 잔액 관리, 서버 저장)</li>
+  </ul>
+</div>
+
+<h2>2. 개인정보 이용 목적</h2>
+<ul>
+  <li>AI 사주 리딩 서비스 제공</li>
+  <li>토큰 잔액 관리 및 결제 처리</li>
+  <li>서비스 이용 내역 관리 및 오류 대응</li>
+  <li>법령상 의무 이행</li>
+</ul>
+
+<h2>3. 개인정보 보유 및 파기</h2>
+<p>회원 탈퇴 시 서버에 저장된 모든 데이터(이메일, 토큰 잔액, 결제 기록)를 즉시 파기합니다. 생년월일 등 기기 로컬 데이터는 앱 삭제 또는 회원 탈퇴 시 파기됩니다.</p>
+
+<h2>4. 개인정보 제3자 제공</h2>
+<p>회사는 이용자의 동의 없이 개인정보를 제3자에게 제공하지 않습니다. 단, 법령에 의한 요청이 있는 경우는 예외로 합니다.</p>
+
+<h2>5. 개인정보 처리 위탁</h2>
+<div class="box">
+  <p><strong>Cloudflare, Inc.</strong> — 서버 인프라 및 데이터 저장 (미국)</p>
+  <p><strong>Google LLC</strong> — 소셜 로그인 인증 (미국)</p>
+  <p><strong>Google LLC (Gemini API)</strong> — AI 리딩 서비스 제공 (미국)</p>
+</div>
+
+<h2>6. 이용자의 권리</h2>
+<ul>
+  <li>개인정보 열람, 정정, 삭제 요청 가능</li>
+  <li>앱 내 마이페이지 → 회원 탈퇴로 즉시 삭제 가능</li>
+  <li>이메일 요청 시 영업일 3일 이내 처리: <a href="mailto:riger7070@naver.com">riger7070@naver.com</a></li>
+</ul>
+
+<h2>7. 개인정보 보호책임자</h2>
+<div class="box">
+  <p>성명: 안태현 &nbsp;|&nbsp; 이메일: <a href="mailto:riger7070@naver.com">riger7070@naver.com</a></p>
+  <p>전화: 010-6466-5717</p>
+</div>
+
+<h2>8. 국제 데이터 이전</h2>
+<p>서비스 제공을 위해 일부 데이터가 미국(Cloudflare, Google)에 저장될 수 있으며, 해당 국가의 법령에 따라 보호됩니다.</p>
+
+<h2>9. 쿠키 및 추적</h2>
+<p>본 서비스는 광고 목적의 쿠키나 행동 추적을 사용하지 않습니다. 로그인 상태 유지를 위한 필수 로컬 저장소만 사용합니다.</p>
+
+<hr>
+<p style="font-size:0.8rem;color:rgba(201,169,110,0.35)">문의: 마이안 &nbsp;·&nbsp; riger7070@naver.com &nbsp;·&nbsp; 010-6466-5717</p>
+`);
+}
+
+// ════════════════════════════
+//  이용약관
+// ════════════════════════════
+function handleTermsPage() {
+  return legalPageWrapper('이용약관', `
+<h1>이용약관</h1>
+<div class="date">시행일: 2026년 1월 1일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 26일</div>
+
+<h2>제1조 (목적)</h2>
+<p>본 약관은 마이안(M;Y 安, 이하 "회사")이 제공하는 AI 사주 리딩 서비스(이하 "서비스")의 이용 조건 및 절차에 관한 사항을 규정함을 목적으로 합니다.</p>
+
+<h2>제2조 (서비스 내용)</h2>
+<ul>
+  <li>명리학 기반 AI 사주·일진 리딩 서비스</li>
+  <li>나만의 리딩 (1인 사주 분석)</li>
+  <li>우리의 조화 (2인 궁합·관계 분석)</li>
+  <li>위 서비스는 토큰(이용권)을 소비하여 이용합니다</li>
+</ul>
+
+<h2>제3조 (회원가입 및 로그인)</h2>
+<p>본 서비스는 Google 소셜 로그인을 통해 가입 및 이용이 가능합니다. 가입 시 신규 이용자에게 무료 토큰이 지급됩니다.</p>
+
+<h2>제4조 (토큰 및 결제)</h2>
+<div class="box">
+  <ul>
+    <li>토큰은 AI 리딩 서비스 이용에 사용되는 디지털 이용권입니다</li>
+    <li>결제 완료 즉시 토큰이 지급됩니다</li>
+    <li>토큰은 현금으로 환급되지 않습니다</li>
+    <li>미사용 토큰은 회원 탈퇴 시 소멸됩니다</li>
+  </ul>
+</div>
+
+<h2>제5조 (환불 정책)</h2>
+<ul>
+  <li>결제 후 7일 이내, 미사용 토큰에 한해 환불 가능합니다</li>
+  <li>토큰을 1개 이상 사용한 경우 부분 환불이 적용될 수 있습니다</li>
+  <li>환불 요청: <a href="mailto:riger7070@naver.com">riger7070@naver.com</a> 또는 010-6466-5717</li>
+  <li>「콘텐츠산업진흥법」 및 「전자상거래법」에 따라 처리됩니다</li>
+</ul>
+
+<h2>제6조 (면책사항)</h2>
+<div class="box">
+  <p>본 서비스는 명리학 이론 기반의 체험형 콘텐츠입니다.<br>
+  의학적·법적·재정적 조언을 대체하지 않으며, 모든 풀이 결과는 참고용으로만 활용하시기 바랍니다.<br>
+  서비스 이용으로 발생한 직접적·간접적 손해에 대해 회사는 책임을 지지 않습니다.</p>
+</div>
+
+<h2>제7조 (금지 행위)</h2>
+<ul>
+  <li>서비스의 무단 크롤링, 자동화 이용</li>
+  <li>타인의 계정 도용 또는 허위 정보 입력</li>
+  <li>서비스 운영을 방해하는 행위</li>
+</ul>
+
+<h2>제8조 (서비스 변경 및 중단)</h2>
+<p>회사는 서비스 내용 변경, 일시 중단, 종료 시 사전 고지합니다. 단, 불가피한 경우 사후 고지할 수 있습니다.</p>
+
+<h2>제9조 (준거법 및 분쟁 해결)</h2>
+<p>본 약관은 대한민국 법령에 따르며, 분쟁 발생 시 부산지방법원을 관할법원으로 합니다.</p>
+
+<hr>
+<p style="font-size:0.8rem;color:rgba(201,169,110,0.35)">사업자: 마이안 &nbsp;·&nbsp; 대표: 안태현 &nbsp;·&nbsp; 사업자등록번호: 501-33-63980<br>
+부산광역시 수영구 망미동 현대한누리타운 101-1101 &nbsp;·&nbsp; riger7070@naver.com</p>
+`);
 }
 
 // ════════════════════════════
