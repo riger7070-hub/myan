@@ -135,6 +135,7 @@ export default {
     if (path === '/chat' && method === 'POST') return handleGeminiChat(request, env);
     if (path === '/api/payment/verify' && method === 'POST') return handlePaymentVerify(request, env);
     if (path === '/withdraw' && method === 'DELETE') return handleWithdraw(request, env);
+    if (path === '/delete-account' && method === 'GET') return handleDeleteAccountPage();
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
     if (method === 'GET') {
@@ -770,6 +771,84 @@ function cors(body, status = 200) {
       'X-Frame-Options': 'DENY',
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
+    },
+  });
+}
+
+// ════════════════════════════
+//  계정 삭제 안내 페이지 (Play Store / App Store 정책 요구사항)
+// ════════════════════════════
+function handleDeleteAccountPage() {
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>계정 삭제 요청 — M;Y 安</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,'Pretendard',sans-serif;background:#060608;color:#c9a96e;
+         min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{max-width:480px;width:100%;border:1px solid rgba(201,169,110,0.2);border-radius:20px;
+          background:rgba(255,255,255,0.02);padding:48px 36px}
+    h1{font-size:1.4rem;font-weight:400;letter-spacing:2px;margin-bottom:8px}
+    .brand{font-size:0.75rem;letter-spacing:4px;color:rgba(201,169,110,0.5);margin-bottom:32px}
+    h2{font-size:1rem;font-weight:500;color:#d4c5a9;margin:28px 0 10px}
+    p{color:#888;font-size:0.9rem;line-height:1.8}
+    ol{color:#888;font-size:0.9rem;line-height:2;padding-left:20px}
+    .box{background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.15);
+         border-radius:12px;padding:20px;margin:20px 0}
+    .box p{color:#aaa}
+    a{color:#c9a96e;text-decoration:underline}
+    .note{margin-top:32px;padding-top:24px;border-top:1px solid rgba(201,169,110,0.1)}
+    .note p{font-size:0.8rem;color:#555;line-height:1.7}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">M ; Y 安</div>
+    <h1>계정 및 데이터 삭제</h1>
+    <p style="margin-top:12px">Account &amp; Data Deletion Request</p>
+
+    <h2>앱에서 직접 삭제 (권장)</h2>
+    <ol>
+      <li>앱 실행 후 로그인</li>
+      <li>우측 상단 메뉴(☰) → 마이페이지</li>
+      <li>하단 <strong>회원 탈퇴</strong> 버튼 클릭</li>
+      <li>확인 후 즉시 삭제 처리됩니다</li>
+    </ol>
+
+    <h2>이메일로 요청</h2>
+    <div class="box">
+      <p>앱 접근이 어려운 경우 아래 이메일로 연락해 주세요.<br>
+      가입하신 이메일 주소와 함께 삭제 요청을 보내주시면<br>
+      <strong>영업일 기준 3일 이내</strong> 처리해 드립니다.</p>
+      <p style="margin-top:12px">
+        📧 <a href="mailto:riger7070@gmail.com">riger7070@gmail.com</a>
+      </p>
+    </div>
+
+    <h2>삭제되는 데이터</h2>
+    <ol>
+      <li>서버에 저장된 토큰 잔액 및 결제 기록</li>
+      <li>사용자 식별 이메일 정보</li>
+      <li>앱 내 로컬 저장 데이터 (이름, 생년월일 등)</li>
+    </ol>
+
+    <div class="note">
+      <p>※ Google 계정 자체는 삭제되지 않습니다. Google 계정 관리는 <a href="https://myaccount.google.com" target="_blank">myaccount.google.com</a>에서 하실 수 있습니다.</p>
+      <p style="margin-top:8px">※ This page is also available in English. For deletion requests in English, please email <a href="mailto:riger7070@gmail.com">riger7070@gmail.com</a> with your registered email address.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=UTF-8',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=86400',
     },
   });
 }
