@@ -1348,20 +1348,32 @@ function _signOut() {
 }
 
 async function _withdrawAccount() {
-  // 회원탈퇴: 서버 DB 삭제 + 모든 localStorage 완전 청소
+  // ① 세션 토큰 확인 — 만료됐으면 서버 삭제 불가하므로 중단
   const token = getGoogleIdToken();
-  if (token) {
-    try {
-      await fetch(EP + 'withdraw', {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-    } catch(e) {
-      console.warn('서버 탈퇴 처리 실패 (로컬 정리는 계속 진행):', e);
-    }
+  if (!token) {
+    const t = TX[lang] || TX.ko;
+    alert(t.wdSessionExpired || '세션이 만료됐습니다. 다시 로그인 후 탈퇴해 주세요.');
+    return;
   }
 
-  // 모든 myan_ 관련 localStorage 키 완전 삭제
+  // ② 서버 DB 완전 삭제 — 실패 시 localStorage도 건드리지 않고 중단
+  try {
+    const res = await fetch(EP + 'withdraw', {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      let msg = '탈퇴 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      try { const d = await res.json(); msg = d.error?.message || msg; } catch {}
+      alert(msg);
+      return;
+    }
+  } catch(e) {
+    alert('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
+
+  // ③ 서버 삭제 성공 후에만 로컬 데이터 전체 정리
   [
     'myan_logged_in', 'myan_user', 'myan_id_token',
     'myan_ohaeng', 'myan_chat_html', 'myan_chat_hist', 'myan_chat_mode',
@@ -1380,7 +1392,7 @@ async function _withdrawAccount() {
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnWD = document.getElementById('userBtn');
   if (_userBtnWD) _userBtnWD.style.display = 'none';
-  document.getElementById('signupLinkBtn').style.display = ''; // 가입 링크 표시
+  document.getElementById('signupLinkBtn').style.display = '';
   closeMyPage();
 }
 
