@@ -1033,8 +1033,13 @@ function handleGoogleCredential(response) {
 
     if (pendingMode) {
       const m = pendingMode; pendingMode = null;
-      _enterMode(m, profile);
+      _enterMode(m, profile); // 채팅 복귀 시 _enterMode 내부에서 저장된 대화 자동 복원
     } else {
+      // 어느 화면도 남아있지 않도록 전부 정리 후 홈 표시
+      ['screen-chat', 'screen-signup', 'screen-mypage'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
       document.getElementById('screen-mode').style.display = 'flex';
     }
 
@@ -1667,8 +1672,16 @@ function renderLogin() {
 }
 
 function showLogin() {
-  document.getElementById('screen-mode').style.display   = 'none';
-  document.getElementById('screen-signup').style.display = 'none';
+  // 채팅 중 토큰 만료로 재로그인이 필요한 경우 → 대화 보존 + 재로그인 후 채팅으로 복귀
+  if (document.getElementById('screen-chat').style.display === 'flex' && mode) {
+    saveChatState();   // 대화 내용 localStorage에 저장
+    pendingMode = mode; // 로그인 완료 후 _enterMode()가 채팅 복원
+  }
+  // 모든 화면 숨기고 로그인 화면만 표시
+  ['screen-chat', 'screen-mypage', 'screen-signup', 'screen-mode'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
   document.getElementById('screen-login').style.display  = 'flex';
   document.getElementById('backBtn').style.display       = 'flex';
   renderLogin();
@@ -1703,6 +1716,7 @@ function initGoogleLoginBtn() {
 function goBackFromLogin() {
   pendingMode = null;
   document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-chat').style.display  = 'none'; // 채팅 중 취소 시 채팅 화면도 정리
   document.getElementById('screen-mode').style.display  = 'flex';
   document.getElementById('backBtn').style.display      = 'none';
 }
