@@ -53,10 +53,18 @@ async function hmacSign(secret, data) {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-// HMAC-SHA256 서명 검증
+// HMAC-SHA256 서명 검증 (타이밍 공격 방지: 상수시간 비교)
 async function hmacVerify(secret, data, signature) {
-  const expected = await hmacSign(secret, data);
-  return expected === signature;
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+  );
+  let sigBytes;
+  try {
+    sigBytes = new Uint8Array(signature.match(/.{2}/g).map(b => parseInt(b, 16)));
+  } catch { return false; }
+  const dataBytes = new TextEncoder().encode(data);
+  return crypto.subtle.verify('HMAC', key, sigBytes, dataBytes);
 }
 
 // 인메모리 속도 제한 (isolate당, 1차 빠른 거부용)
@@ -120,8 +128,6 @@ export default {
     if (path === '/user-tokens' && method === 'GET') return handleUserTokens(request, env);
     if (path === '/migrate-tokens' && method === 'POST') return handleMigrateTokens(request, env);
     if (path === '/signup-grant' && method === 'POST') return handleSignupGrant(request, env);
-    if (path === '/payment-request' && method === 'POST') return handlePaymentRequest(request, env);
-    if (path === '/payment-status' && method === 'GET') return handlePaymentStatus(request, env);
     if (path === '/admin/payments' && method === 'GET') return handleAdminPayments(request, env);
     if (path === '/admin/approve' && method === 'POST') return handleAdminApprove(request, env);
     if (path === '/admin/telegram-approve' && method === 'GET') return handleTelegramApprove(request, env);
@@ -456,66 +462,6 @@ async function handleSignupGrant(request, env) {
 }
 
 // ════════════════════════════
-//  결제 핸들러
-// ════════════════════════════
-
-async function handlePaymentRequest(request, env) {
-  const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
-  if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-  const email = await getEmailFromToken(idToken, env);
-  if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 유저 세션입니다.' } }), 401);
-  if (!await cfRateLimit(env.RL_API, email)) {
-    return cors(JSON.stringify({ error: { message: '요청 한도를 초과했습니다.' } }), 429);
-  }
-
-  let body;
-  try { body = await request.json(); } catch { return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); }
-
-  const { id, pkg } = body;
-  if (!id || !pkg) return cors(JSON.stringify({ error: { message: '필수 요청 파라미터가 누락되었습니다.' } }), 400);
-  if (typeof id !== 'string' || id.length > 200) return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 ID입니다.' } }), 400);
-  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
-
-  const PKG_TABLE = {
-    small:  { amount: 4900,  tokens: 30  },
-    medium: { amount: 12900, tokens: 100 },
-    large:  { amount: 29900, tokens: 300 },
-  };
-  const pkgInfo = PKG_TABLE[pkg];
-  if (!pkgInfo) return cors(JSON.stringify({ error: { message: '유효하지 않은 결제 패키지입니다.' } }), 400);
-
-  const existing = await env.DB.prepare(
-    'SELECT id FROM payment_requests WHERE id = ?'
-  ).bind(id).first();
-  if (existing) return cors(JSON.stringify({ ok: true, duplicate: true }));
-
-  await env.DB.prepare(
-    'INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(id, email, pkg, pkgInfo.amount, pkgInfo.tokens, 'pending').run();
-
-  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-    const workerBase = new URL(request.url).origin;
-    await sendTelegramNotification(env, workerBase, { id, email, pkg, ...pkgInfo });
-  }
-
-  return cors(JSON.stringify({ ok: true, id }));
-}
-
-async function handlePaymentStatus(request, env) {
-  const url = new URL(request.url);
-  const id  = url.searchParams.get('id');
-  if (!id) return cors(JSON.stringify({ error: { message: '결제 ID가 누락되었습니다.' } }), 400);
-  if (!env.DB) return cors('{"status":"not_found"}');
-
-  const row = await env.DB.prepare(
-    'SELECT status, tokens FROM payment_requests WHERE id = ?'
-  ).bind(id).first();
-
-  if (!row) return cors('{"status":"not_found"}');
-  return cors(JSON.stringify({ status: row.status, tokens: row.tokens }));
-}
-
-// ════════════════════════════
 //  관리자 기능 구성
 // ════════════════════════════
 
@@ -575,7 +521,7 @@ async function handleAdminGrantTokens(request, env) {
   const { email, tokens, note } = body;
   
   const tokenCount = parseInt(tokens, 10);
-  if (!email || isNaN(tokenCount) || tokenCount <= 0) {
+  if (!email || isNaN(tokenCount) || tokenCount <= 0 || tokenCount > 9999) {
     return cors(JSON.stringify({ error: { message: '올바른 이메일과 1개 이상의 토큰 수량을 입력해주세요.' } }), 400);
   }
 
@@ -608,7 +554,6 @@ async function handleTelegramApprove(request, env) {
   if (!id || !token || !await hmacVerify(env.ADMIN_SECRET, id, token)) {
     return htmlPage('❌ 인증 실패', '올바르지 않은 접근입니다.');
   }
-  if (!id) return htmlPage('❌ 오류', '결제 ID가 없습니다.');
   if (!env.DB) return htmlPage('❌ 오류', 'DB가 연결되지 않았습니다.');
 
   const row = await env.DB.prepare(
@@ -636,30 +581,6 @@ async function handleTelegramApprove(request, env) {
   }
 
   return htmlPage('✅ 승인 완료!', `${row.user_email} 님께 ${row.tokens}토큰이 지급됩니다.`);
-}
-
-async function sendTelegramNotification(env, workerBase, { id, email, pkg, amount, tokens }) {
-  const PKG_LABEL = { small:'소 (30토큰)', medium:'중 (100토큰)', large:'대 (300토큰)' };
-  // HMAC 서명으로 승인 URL 생성 — ADMIN_SECRET을 URL에 직접 노출하지 않음
-  const token = await hmacSign(env.ADMIN_SECRET, id);
-  const approveUrl = `${workerBase}/admin/telegram-approve?id=${id}&token=${token}`;
-
-  const text =
-    `💰 새 결제 요청\n\n` +
-    `👤 ${email}\n` +
-    `📦 ${PKG_LABEL[pkg] || pkg}  |  ${Number(amount).toLocaleString()}원\n` +
-    `🎁 지급 예정: ${tokens}토큰\n\n` +
-    `입금 확인 후 아래 버튼을 눌러 승인해 주세요.`;
-
-  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: env.TELEGRAM_CHAT_ID,
-      text,
-      reply_markup: { inline_keyboard: [[{ text: '✅ 승인하기', url: approveUrl }]] },
-    }),
-  }).catch(() => {});
 }
 
 function htmlPage(title, desc) {
@@ -709,7 +630,7 @@ async function handlePaymentVerify(request, env) {
     if (!paymentKey || typeof paymentKey !== 'string' || paymentKey.length > 300) {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 결제 키입니다.' } }), 400);
     }
-    if (!orderId || typeof orderId !== 'string' || orderId.length > 200) {
+    if (!orderId || typeof orderId !== 'string' || orderId.length > 200 || !/^myan_\d+_[a-z0-9]+$/.test(orderId)) {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 주문 ID입니다.' } }), 400);
     }
     if (!Number.isInteger(amount) || amount <= 0) {
@@ -844,7 +765,7 @@ function cors(body, status = 200) {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': 'https://myan.riger7070.workers.dev',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-admin-secret, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',

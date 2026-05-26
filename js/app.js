@@ -392,9 +392,12 @@ function _renderCalendar() {
   const grid = document.getElementById('calGrid');
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell empty"></div>';
+  const VALID_OHAENG = new Set(['木','火','土','金','水']);
   for (let d = 1; d <= daysInMonth; d++) {
     const key = `${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const elem = cal[key];
+    const rawElem = cal[key];
+    // XSS 방지: 알려진 오행 값만 허용
+    const elem = VALID_OHAENG.has(rawElem) ? rawElem : null;
     const isToday = key === today;
     const bg = elem ? `background:${OC[elem]}33` : 'background:rgba(255,255,255,0.03)';
     const border = elem ? `border:1.5px solid ${OC[elem]}66` : 'border:1px solid rgba(255,255,255,0.06)';
@@ -498,13 +501,6 @@ document.getElementById('backBtn').addEventListener('click', () => {
 const SHEETS_EP  = 'https://script.google.com/macros/s/AKfycbyJEDLW1Ohx9rQYrkSxFUNNl8LmRtUK-WkXg4sgtLBLfpPJcYfpXMJXQH9Ya2k36j3l/exec';
 const GOOGLE_CID = '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com';
 
-// ── Toss 결제 링크 ── 토스 대시보드에서 결제 링크 만든 후 여기에 붙여넣으세요
-const TOSS_LINKS = {
-  small:  'supertoss://send?amount=4900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
-  medium: 'supertoss://send?amount=12900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
-  large:  'supertoss://send?amount=29900&bank=IBK%EA%B8%B0%EC%97%85%EC%9D%80%ED%96%89&accountNo=97903424101013&origin=qr',
-};
-
 
 let selGender = '';
 let selGenderMp = '';
@@ -599,12 +595,6 @@ function updateAllTokenDisplays() {
   }
 }
 
-// ── 결제 모달 상태 ──
-let _payCurrentLink = '';
-let _payCurrentPkg  = '';
-let _payRequestId   = '';
-let _payPollTimer   = null;
-let _payDoneTimer   = null;
 let _adminTab       = 'pending';
 let _adminPayments  = [];
 
@@ -658,72 +648,6 @@ function adminAuthHeaders(extra) {
   return authHeaders(extra);
 }
 
-const PAY_INFO = {
-  small:  { tokens: 30,  prices: { ko:'4,900원',  en:'₩4,900',  zh:'₩4,900',  ja:'₩4,900'  } },
-  medium: { tokens: 100, prices: { ko:'12,900원', en:'₩12,900', zh:'₩12,900', ja:'₩12,900' } },
-  large:  { tokens: 300, prices: { ko:'29,900원', en:'₩29,900', zh:'₩29,900', ja:'₩29,900' } },
-};
-
-const PAY_TX = {
-  ko: {
-    title:      '토스로 결제하기',
-    qrHint:     'QR코드를 스캔하거나 아래 버튼으로 토스 앱을 여세요',
-    or:         '또는',
-    openApp:    '토스 앱 열기',
-    doneBtn:    '✓  결제 완료했어요',
-    waitTitle:  '결제를 확인하고 있습니다',
-    waitSub:    '잠시만 기다려 주세요.\n보통 1~2분 내로 충전됩니다.',
-    successTitle: '토큰이 충전됐습니다!',
-    successSub:   '토큰이 지급되었습니다. 지금 바로 사용해 보세요.',
-    successClose: '확인',
-    noLink:     '결제 링크가 준비 중입니다. 잠시 후 다시 시도해 주세요.',
-    noUser:     '로그인 후 결제해 주세요.',
-  },
-  en: {
-    title:      'Pay via Toss',
-    qrHint:     'Scan the QR code or tap the button below to open Toss',
-    or:         'OR',
-    openApp:    'Open Toss App',
-    doneBtn:    '✓  I completed the payment',
-    waitTitle:  'Verifying your payment',
-    waitSub:    'Please wait a moment.\nTokens are usually credited within 1–2 minutes.',
-    successTitle: 'Tokens added!',
-    successSub:   'Your tokens have been credited. Start using them now.',
-    successClose: 'Done',
-    noLink:     'Payment link not ready. Please try again shortly.',
-    noUser:     'Please log in to make a payment.',
-  },
-  zh: {
-    title:      '通过 Toss 付款',
-    qrHint:     '扫描二维码或点击下方按钮打开 Toss',
-    or:         '或者',
-    openApp:    '打开 Toss App',
-    doneBtn:    '✓  我已完成付款',
-    waitTitle:  '正在确认您的付款',
-    waitSub:    '请稍等片刻。\n通常在1~2分钟内完成充值。',
-    successTitle: '代币已充值！',
-    successSub:   '您的代币已到账，立即开始使用吧。',
-    successClose: '确认',
-    noLink:     '支付链接尚未准备好，请稍后再试。',
-    noUser:     '请先登录再进行付款。',
-  },
-  ja: {
-    title:      'Tossで決済',
-    qrHint:     'QRコードをスキャンするか下のボタンからTossを開いてください',
-    or:         'または',
-    openApp:    'Toss アプリを開く',
-    doneBtn:    '✓  決済を完了しました',
-    waitTitle:  '決済を確認しています',
-    waitSub:    'しばらくお待ちください。\n通常1〜2分以内にチャージされます。',
-    successTitle: 'トークンがチャージされました！',
-    successSub:   'トークンが付与されました。今すぐご利用ください。',
-    successClose: '確認',
-    noLink:     '決済リンクはまだ準備中です。しばらくしてから再試行してください。',
-    noUser:     'ログイン後に決済してください。',
-  },
-};
-
-function _pt(key) { return (PAY_TX[lang] || PAY_TX.ko)[key] || ''; }
 
 // ── 토스페이먼츠 결제 확인 (백엔드 승인 요청) ──
 async function _confirmTossPayment({ paymentKey, orderId, amount }) {
@@ -783,168 +707,6 @@ async function buyToken(pkg) {
     console.error('[buyToken]', err);
     alert('결제 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
   }
-}
-
-function openTossPay(pkg) {
-  const link = TOSS_LINKS[pkg];
-  if (!link) {
-    const msgEl = document.getElementById('voucherMsg');
-    if (msgEl) {
-      msgEl.style.color = '#e07070';
-      msgEl.textContent = _pt('noLink');
-      setTimeout(() => { if (msgEl) { msgEl.style.color=''; msgEl.textContent=''; } }, 4000);
-    }
-    return;
-  }
-
-  // 로그인 확인
-  const user = getUser();
-  if (!user || !isLoggedIn()) {
-    const msgEl = document.getElementById('voucherMsg');
-    if (msgEl) {
-      msgEl.style.color = '#e07070';
-      msgEl.textContent = _pt('noUser');
-      setTimeout(() => { if (msgEl) { msgEl.style.color=''; msgEl.textContent=''; } }, 4000);
-    }
-    return;
-  }
-
-  _payCurrentLink = link;
-  _payCurrentPkg  = pkg;
-  _payRequestId   = '';
-
-  const info = PAY_INFO[pkg] || {};
-
-  // QR 상태로 초기화
-  _setPayState('qr');
-
-  document.getElementById('payModalTitle').textContent    = _pt('title');
-  document.getElementById('payModalPrice').textContent    = (info.prices && info.prices[lang]) || '';
-  document.getElementById('payModalHint').textContent     = _pt('qrHint');
-  document.getElementById('payDivider').textContent       = _pt('or');
-  document.getElementById('payModalBtnText').textContent  = _pt('openApp');
-  document.getElementById('payDoneBtnText').textContent   = _pt('doneBtn');
-
-  // QR 코드 생성
-  const qrEl = document.getElementById('payModalQr');
-  qrEl.innerHTML = '';
-  try {
-    new QRCode(qrEl, {
-      text: link,
-      width: 148, height: 148,
-      colorDark: '#000000',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M,
-    });
-  } catch(e) {
-    qrEl.textContent = '⚠ QR 생성 오류';
-  }
-
-  // 3초 후 "결제 완료했어요" 버튼 표시
-  const doneBtn = document.getElementById('payDoneBtn');
-  doneBtn.classList.remove('visible');
-  clearTimeout(_payDoneTimer);
-  _payDoneTimer = setTimeout(() => doneBtn.classList.add('visible'), 3000);
-
-  document.getElementById('pay-modal').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-
-function _setPayState(state) {
-  document.getElementById('payStateQr').style.display      = state === 'qr'      ? '' : 'none';
-  document.getElementById('payStateWaiting').style.display = state === 'waiting' ? '' : 'none';
-  document.getElementById('payStateSuccess').style.display = state === 'success' ? '' : 'none';
-  // 대기 중일 때 X 버튼 숨김 (실수로 닫는 것 방지)
-  document.querySelector('#pay-modal .pay-close').style.display = state === 'waiting' ? 'none' : '';
-}
-
-function openTossApp() {
-  if (_payCurrentLink) window.location.href = _payCurrentLink;
-}
-
-async function submitPaymentDone() {
-  const user = getUser();
-  if (!user) return;
-
-  const pkg  = _payCurrentPkg;
-  const info = PAY_INFO[pkg];
-  if (!info) return;
-
-  // 고유 요청 ID 생성
-  _payRequestId = 'pr_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-  // 창이 닫혀도 재접속 시 복구할 수 있도록 localStorage에 저장
-  localStorage.setItem('myan_pending_pay_id', _payRequestId);
-
-  _setPayState('waiting');
-  document.getElementById('payWaitTitle').textContent = _pt('waitTitle');
-  document.getElementById('payWaitSub').innerHTML = _pt('waitSub').replace('\n','<br>');
-
-try {
-    if (!getGoogleIdToken()) throw new Error('not logged in');
-    const res = await fetch(EP + 'payment-request', {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        id:  _payRequestId,
-        pkg: pkg,
-        // email/amount/tokens는 서버가 ID Token과 PKG_TABLE로 결정
-      }),
-    });
-    if (!res.ok) throw new Error('server error');
-  } catch(e) {
-    console.warn('payment-request failed, will still poll', e);
-  }
-
-  // 5초 간격 폴링 (최대 30분 = 360회)
-  let _pollCount = 0;
-  clearInterval(_payPollTimer);
-  _payPollTimer = setInterval(() => {
-    _pollCount++;
-    if (_pollCount > 360) {
-      clearInterval(_payPollTimer);
-      _setPayState('qr');
-      return;
-    }
-    _pollPaymentStatus();
-  }, 5000);
-}
-
-async function _pollPaymentStatus() {
-  if (!_payRequestId) return;
-  try {
-    const res = await fetch(EP + 'payment-status?id=' + _payRequestId);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.status === 'approved') {
-      clearInterval(_payPollTimer);
-      _onPaymentApproved(data.tokens);
-    }
-  } catch(e) { /* 네트워크 오류 무시 */ }
-}
-
-async function _onPaymentApproved(tokens) {
-  const granted = parseInt(tokens, 10) || (PAY_INFO[_payCurrentPkg] || {}).tokens || 0;
-  await refreshTokens();  // 서버에서 새 잔액 가져오기
-  localStorage.removeItem('myan_pending_pay_id');
-
-  _setPayState('success');
-  document.getElementById('paySuccessTitle').textContent  = _pt('successTitle');
-  document.getElementById('paySuccessAmount').textContent = '+' + granted + ' 토큰';
-  document.getElementById('paySuccessSub').textContent    = _pt('successSub');
-  document.getElementById('paySuccessCloseBtn').textContent = _pt('successClose');
-
-  const num = document.getElementById('mypageTokenNum');
-  if (num) num.textContent = _tokenCache;
-}  // _onPaymentApproved 닫기
-
-function closePayModal() {
-  clearInterval(_payPollTimer);
-  clearTimeout(_payDoneTimer);
-  document.getElementById('pay-modal').style.display = 'none';
-  document.body.style.overflow = '';
-  _payCurrentLink = '';
-  _payCurrentPkg  = '';
-  _payRequestId   = '';
 }
 
 // ── 관리자 패널 ──
@@ -1990,9 +1752,6 @@ refreshTokens();
     if (document.getElementById('admin-panel')?.style.display !== 'none') {
       closeAdminPanel(); history.pushState({ screen: 'mypage' }, ''); return;
     }
-    if (document.getElementById('pay-modal')?.style.display !== 'none') {
-      closePayModal(); return;
-    }
     if (document.getElementById('guide-modal')?.style.display !== 'none') {
       closeGuideModal(); return;
     }
@@ -2155,16 +1914,12 @@ function _goHome() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (document.getElementById('side-drawer').classList.contains('open')) { closeDrawer(); return; }
-    const payModal    = document.getElementById('pay-modal');
     const tokenModal  = document.getElementById('token-modal');
     const calModal    = document.getElementById('cal-modal');
     const adminPanel  = document.getElementById('admin-panel');
     if (adminPanel   && adminPanel.style.display   !== 'none') { closeAdminPanel(); return; }
     if (calModal     && calModal.style.display     !== 'none') { closeCalModal(); return; }
     if (tokenModal   && tokenModal.style.display   !== 'none') { closeTokenModal(); return; }
-    if (payModal     && payModal.style.display     !== 'none') {
-      if (document.getElementById('payStateWaiting').style.display === 'none') closePayModal();
-    }
   }
 });
 
