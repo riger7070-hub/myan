@@ -541,7 +541,19 @@ async function addTokens(_amount) {
 }
 
 async function refreshTokens() {
-  if (!getGoogleIdToken()) { _tokenCache = 0; updateAllTokenDisplays(); return 0; }
+  if (!getGoogleIdToken()) {
+    // 세션 토큰 만료. 실제 로그아웃과 구별:
+    // myan_logged_in이 남아있으면 → 만료된 것이므로 조용히 silent refresh 시도, 캐시 유지
+    // myan_logged_in이 없으면 → 실제 로그아웃 상태이므로 0으로 초기화
+    if (isLoggedIn()) {
+      _silentTokenRefresh();       // 새 ID 토큰 백그라운드 발급 시도
+      updateAllTokenDisplays();    // 기존 캐시 값 그대로 표시 (0으로 안 만듦)
+      return _tokenCache;
+    }
+    _tokenCache = 0;
+    updateAllTokenDisplays();
+    return 0;
+  }
   try {
     const res = await fetch(EP + 'user-tokens', { headers: authHeaders() });
     if (!res.ok) { updateAllTokenDisplays(); return _tokenCache; }
@@ -604,6 +616,39 @@ const ADMIN_EMAIL  = 'riger7070@gmail.com';
 /* ── Google ID Token 관리 ── */
 let _googleIdToken = '';
 let _googleIdTokenExp = 0;
+
+// ── Silent Token Refresh ──
+// Google ID 토큰은 1시간 유효. 만료 전 자동 재발급하여 토큰이 0이 되는 현상 방지.
+let _silentRefreshTimer  = null;
+let _silentRefreshActive = false;
+
+function _scheduleTokenRefresh() {
+  if (_silentRefreshTimer) clearTimeout(_silentRefreshTimer);
+  if (!_googleIdTokenExp) return;
+  // 만료 10분 전에 silent refresh 실행 (50분 후)
+  const delay = _googleIdTokenExp - Date.now() - 10 * 60 * 1000;
+  if (delay <= 0) { _silentTokenRefresh(); return; }
+  _silentRefreshTimer = setTimeout(_silentTokenRefresh, delay);
+}
+
+function _silentTokenRefresh() {
+  // 명시적 로그아웃/비로그인 상태면 갱신하지 않음
+  if (localStorage.getItem('myan_signed_out') === 'true') return;
+  if (!isLoggedIn()) return;
+  if (_silentRefreshActive) return;
+  _silentRefreshActive = true;
+  try {
+    _ensureGisInit(); // GIS 초기화 보장
+    google.accounts.id.prompt(notification => {
+      _silentRefreshActive = false;
+      // 'skipped' / 'dismissed': 자동 갱신 불가 (사용자가 구글에서 로그아웃한 경우 등)
+      // 이 경우도 기존 캐시를 유지하고, 다음 채팅 요청 시 서버가 401 반환하면 로그인 유도
+    });
+  } catch(e) {
+    _silentRefreshActive = false;
+  }
+}
+
 function setGoogleIdToken(token) {
   _googleIdToken = token;
   try {
@@ -612,6 +657,7 @@ function setGoogleIdToken(token) {
     const payload = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/') + pad));
     _googleIdTokenExp = (payload.exp || 0) * 1000;
     localStorage.setItem('myan_id_token', token);
+    _scheduleTokenRefresh(); // 만료 10분 전 자동 재발급 예약
   } catch {}
 }
 function getGoogleIdToken() {
@@ -632,6 +678,7 @@ function getGoogleIdToken() {
       if (Date.now() > _googleIdTokenExp - 5*60*1000) {
         _googleIdToken = ''; localStorage.removeItem('myan_id_token'); return '';
       }
+      _scheduleTokenRefresh(); // 새로고침 후 복원된 토큰에도 타이머 예약
     } catch {}
   }
   return _googleIdToken;
