@@ -1391,7 +1391,17 @@ function _signOut() {
   const _userBtnSO = document.getElementById('userBtn');
   if (_userBtnSO) _userBtnSO.style.display = 'none';
   document.getElementById('signupLinkBtn').style.display = ''; // 로그아웃 후 가입/로그인 링크 표시
-  closeMyPage();
+  // 사이런트 리프레시 타이머 즉시 취소
+  if (_silentRefreshTimer) { clearTimeout(_silentRefreshTimer); _silentRefreshTimer = null; }
+  // 어떤 화면에서 로그아웃해도 홈(모드 선택)으로 복귀 — closeMyPage()는 screen-chat을 숨기지 않음
+  ['screen-chat', 'screen-mypage', 'screen-signup', 'screen-login'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('screen-mode').style.display = 'flex';
+  document.getElementById('backBtn').style.display = 'none';
+  mode = null; hist = [];
+  history.replaceState({ screen: 'home' }, '');
 }
 
 async function _withdrawAccount() {
@@ -1440,7 +1450,15 @@ async function _withdrawAccount() {
   const _userBtnWD = document.getElementById('userBtn');
   if (_userBtnWD) _userBtnWD.style.display = 'none';
   document.getElementById('signupLinkBtn').style.display = '';
-  closeMyPage();
+  if (_silentRefreshTimer) { clearTimeout(_silentRefreshTimer); _silentRefreshTimer = null; }
+  ['screen-chat', 'screen-mypage', 'screen-signup', 'screen-login'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('screen-mode').style.display = 'flex';
+  document.getElementById('backBtn').style.display = 'none';
+  mode = null; hist = [];
+  history.replaceState({ screen: 'home' }, '');
 }
 
 function _confirmAction(btnId, confirmText, action) {
