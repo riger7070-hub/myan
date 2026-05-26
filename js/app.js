@@ -960,8 +960,8 @@ function handleGoogleCredential(response) {
     localStorage.setItem('myan_user', JSON.stringify(profile));
     localStorage.setItem('myan_logged_in', 'true');
 
-    // Sheets 저장
-    if (SHEETS_EP) {
+    // Sheets 저장 — 신규 가입 시만 저장 (재로그인·로그아웃 후 재로그인은 스킵)
+    if (SHEETS_EP && !isReturning) {
       fetch(SHEETS_EP, {
         method: 'POST', mode: 'no-cors',
         headers: {'Content-Type':'application/json'},
@@ -1421,6 +1421,14 @@ function openSupport() {
 
 function logout() {
   _confirmAction('mypageLogoutBtn', TX[lang].mpLogoutQ, _signOut);
+}
+
+// 드로어 메뉴에서 로그아웃 — 별도 확인 후 직접 실행 (_confirmAction은 마이페이지 전용)
+function drawerLogout() {
+  closeDrawer();
+  const q = (TX[lang] || TX.ko).mpLogoutQ || '로그아웃 할까요?';
+  if (!window.confirm(q)) return;
+  _signOut();
 }
 
 /* ── 법적 모달 ── */
