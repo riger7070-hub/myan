@@ -591,7 +591,8 @@ function _enterMode(m, user) {
     // 프로필 있는 경우: 구조화 폼 불필요
     // (사주 정보는 첫 send() 시 질문과 결합하여 1개의 turn으로 전송 — Gemini 교대 규칙 준수)
     showNormalInput();
-    hideSuggestChips();
+    showSuggestChips(); // 프로필 있으면 추천 칩 표시 — 첫 질문 유도
+    document.getElementById('inp').focus();
     addBubble(TX[lang].g1_auto(il, user), 'ai');
   } else {
     const greet = m === 'solo' ? TX[lang].g1(il) : TX[lang].g2(il);
