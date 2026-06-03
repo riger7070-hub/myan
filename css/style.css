@@ -68,6 +68,12 @@ html {
   overflow: hidden;
   position: fixed; /* 모바일 주소창 숨김 */
   overscroll-behavior: none; /* 바운스 효과 제거 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE, Edge */
+}
+
+html::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
 }
 
 body {
@@ -89,6 +95,13 @@ body {
   -webkit-tap-highlight-color: transparent;
   /* 버튼은 선택 불가, 텍스트는 선택 가능 */
   -webkit-touch-callout: default;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE, Edge */
+}
+
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
 }
 
 /* 스플래시 화면 */

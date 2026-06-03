@@ -765,25 +765,17 @@
 </div>
 
 <script>
-// Service Worker 강제 업데이트 (v4.0)
+// Service Worker 강제 업데이트 (v4.0) - 무한 리로드 방지
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    console.log('[SW] Force update check - found', regs.length, 'registrations');
-    regs.forEach(reg => {
-      reg.update().then(() => console.log('[SW] Updated:', reg.scope));
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'activated') {
-              console.log('[SW] New version activated - reloading page');
-              window.location.reload();
-            }
-          });
-        }
-      });
+  const swVersion = '4.0';
+  const lastVersion = sessionStorage.getItem('sw-version');
+
+  if (lastVersion !== swVersion) {
+    sessionStorage.setItem('sw-version', swVersion);
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.update());
     });
-  });
+  }
 }
 </script>
 
