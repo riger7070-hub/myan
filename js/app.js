@@ -2459,7 +2459,6 @@ class ParticleField {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  render(); // 페이지 로드 시 다국어 렌더링
   new ParticleField('bg-canvas');
   _restoreOhaengIndicator();
   // ?promo= URL 파라미터 감지
