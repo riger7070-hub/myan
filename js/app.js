@@ -840,7 +840,7 @@ async function _confirmTossPayment({ paymentKey, orderId, amount }) {
 }
 
 // ── 토스페이먼츠 직접 결제창 호출 ──
-const TOSS_CLIENT_KEY = 'test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb';
+const TOSS_CLIENT_KEY = window.ENV?.TOSS_CLIENT_KEY || 'test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb';
 
 async function buyToken(pkg) {
   const user = getUser();

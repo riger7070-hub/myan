@@ -225,9 +225,39 @@ export default {
     if (path === '/api/referral/claim'    && method === 'POST') { await ensureDBExt(env); return handleReferralClaim(request, env); }
     if (path === '/api/referral'          && method === 'GET')  { await ensureDBExt(env); return handleGetReferral(request, env); }
 
-    // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
+    // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
       const res = await env.ASSETS.fetch(request);
+
+      // HTML 파일인 경우 ENV 주입
+      const contentType = res.headers.get('content-type') || '';
+      if (path === '/' || path === '/index.html' || contentType.includes('text/html')) {
+        try {
+          let html = await res.text();
+
+          // 환경변수 주입 스크립트 추가 (</head> 앞에 삽입)
+          const envScript = `
+<script>
+  window.ENV = {
+    GOOGLE_CLIENT_ID: ${JSON.stringify(env.GOOGLE_CLIENT_ID || '')},
+    ADMIN_EMAIL: ${JSON.stringify(env.ADMIN_EMAIL || '')},
+    TOSS_CLIENT_KEY: ${JSON.stringify(env.TOSS_CLIENT_KEY || '')}
+  };
+</script>`;
+
+          html = html.replace('</head>', envScript + '</head>');
+
+          return addSecurityHeaders(new Response(html, {
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers
+          }));
+        } catch (e) {
+          // 파싱 실패 시 원본 반환
+          return addSecurityHeaders(res);
+        }
+      }
+
       return addSecurityHeaders(res);
     }
 

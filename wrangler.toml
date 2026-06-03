@@ -42,6 +42,7 @@ simple = { limit = 30, period = 60 }
 [vars]
 GOOGLE_CLIENT_ID = "806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com"
 ADMIN_EMAIL = "riger7070@gmail.com"
+TOSS_CLIENT_KEY = "test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb"
 
 # 비밀 값들은 wrangler secret put 명령어로 설정:
 # wrangler secret put GEMINI_API_KEY
