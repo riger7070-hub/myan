@@ -1,6 +1,34 @@
 // M;Y 安 — app.js  (API·채팅·결제·마이페이지 메인 로직)
 
 // ══════════════════════════════════════════════════════════════════════
+//  유틸리티 함수
+// ══════════════════════════════════════════════════════════════════════
+
+function showToast(message, duration = 3000) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(201, 169, 110, 0.95);
+    color: #060608;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'fadeOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+// ══════════════════════════════════════════════════════════════════════
 //  화면 전환 통합 관리 시스템
 // ══════════════════════════════════════════════════════════════════════
 
