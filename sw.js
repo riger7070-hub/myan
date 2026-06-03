@@ -1,8 +1,8 @@
-// M;Y 安 — Service Worker v3.1 (Enhanced Caching Strategy)
-const VERSION = '3.1';
-const CACHE_NAME = `myan-v6-${VERSION}`;
-const CACHE_IMAGES = `myan-images-v2`;
-const CACHE_STATIC = `myan-static-v2`;
+// M;Y 安 — Service Worker v3.2 (Enhanced Caching Strategy)
+const VERSION = '3.2';
+const CACHE_NAME = `myan-v7-${VERSION}`;
+const CACHE_IMAGES = `myan-images-v3`;
+const CACHE_STATIC = `myan-static-v3`;
 const OFFLINE_URL = '/index.html';
 
 // 즉시 캐시할 핵심 리소스
