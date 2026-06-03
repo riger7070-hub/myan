@@ -530,6 +530,8 @@ let selGenderMp = '';
 
 /* ── 토큰 시스템 (서버 기반) ── */
 let _tokenCache = 0;
+let _tokenCacheExpiry = 0;
+const TOKEN_CACHE_TTL = 30000; // 30초
 
 function getTokens() { return _tokenCache; }
 
@@ -560,10 +562,16 @@ function _spawnTokenPop() {
 
 // 결제 승인·환불 후 서버 잔액으로 다시 맞추기
 async function addTokens(_amount) {
+  _tokenCacheExpiry = 0; // 캐시 무효화 (토큰 변경됨)
   await refreshTokens();
 }
 
 async function refreshTokens() {
+  // 캐시가 유효하면 재사용
+  if (Date.now() < _tokenCacheExpiry && _tokenCache >= 0) {
+    return _tokenCache;
+  }
+
   if (!getGoogleIdToken()) {
     // 세션 토큰 만료. 실제 로그아웃과 구별:
     // myan_logged_in이 남아있으면 -> 만료된 것이므로 조용히 silent refresh 시도, 캐시 유지
@@ -574,6 +582,7 @@ async function refreshTokens() {
       return _tokenCache;
     }
     _tokenCache = 0;
+    _tokenCacheExpiry = 0;
     updateAllTokenDisplays();
     return 0;
   }
@@ -582,6 +591,8 @@ async function refreshTokens() {
     if (!res.ok) { updateAllTokenDisplays(); return _tokenCache; }
     const data = await res.json();
     _tokenCache = parseInt(data.tokens, 10) || 0;
+    _tokenCacheExpiry = Date.now() + TOKEN_CACHE_TTL; // 30초 후 만료
+
     // localStorage 표시값 동기화 (옛 코드 호환)
     try {
       const u = JSON.parse(localStorage.getItem('myan_user') || 'null');
