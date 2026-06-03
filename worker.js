@@ -1806,8 +1806,19 @@ async function handleGuestChat(request, env) {
   ).bind(ip, today).first();
 
   if (usage && usage.used_count >= 1) {
+    // 다음날 자정(KST) 계산
+    const resetDate = new Date(today);
+    resetDate.setDate(resetDate.getDate() + 1);
+    resetDate.setHours(0, 0, 0, 0);
+    const hoursUntilReset = Math.ceil((resetDate - Date.now()) / 3600000);
+
     return cors(JSON.stringify({
-      error: { message: 'already_used', code: 'GUEST_LIMIT' }
+      error: {
+        message: 'already_used',
+        code: 'GUEST_LIMIT',
+        resetIn: hoursUntilReset,
+        resetAt: resetDate.toISOString()
+      }
     }), 429);
   }
 

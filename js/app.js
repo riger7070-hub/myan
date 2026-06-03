@@ -421,6 +421,17 @@ async function send() {
   // 토큰 차감
   if (!checkAndDeductToken()) {
     addBubble(TX[lang].noToken, 'ai');
+    // 3초 후 마이페이지 충전 섹션으로 이동
+    setTimeout(() => {
+      if (confirm('마이페이지에서 토큰을 충전하시겠어요?')) {
+        openMyPage();
+        // 토큰 섹션으로 스크롤
+        setTimeout(() => {
+          const tokenSection = document.querySelector('.mypage-token-display');
+          if (tokenSection) tokenSection.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
+    }, 3000);
     return;
   }
 
@@ -3093,7 +3104,14 @@ async function submitGuestReading() {
 
     if (res.status === 429) {
       if (data.error?.code === 'GUEST_LIMIT') {
-        errDiv.innerHTML = '오늘의 무료 체험은 이미 사용하셨습니다.<br>회원가입하면 더 많은 풀이를 받을 수 있어요!';
+        const resetHours = data.error.resetIn || 24;
+        errDiv.innerHTML = `
+          오늘의 무료 체험은 이미 사용하셨습니다.<br>
+          <strong>${resetHours}시간 후</strong> 다시 이용 가능합니다.<br>
+          <span style="color: var(--gold); margin-top: 8px; display: inline-block;">
+            💡 회원가입하면 무제한 이용 가능!
+          </span>
+        `;
         errDiv.style.display = 'block';
         submitBtn.disabled = false;
         submitBtn.textContent = 'AI 풀이 받기';
