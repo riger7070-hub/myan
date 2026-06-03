@@ -37,3 +37,18 @@ name = "RL_API"
 type = "ratelimit"
 namespace_id = "1003"
 simple = { limit = 30, period = 60 }
+
+# 환경변수 (공개 가능한 값들)
+[vars]
+GOOGLE_CLIENT_ID = "806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com"
+ADMIN_EMAIL = "riger7070@gmail.com"
+
+# 비밀 값들은 wrangler secret put 명령어로 설정:
+# wrangler secret put GEMINI_API_KEY
+# wrangler secret put TOSS_SECRET_KEY
+# wrangler secret put ADMIN_SECRET
+# wrangler secret put VAPID_PRIVATE_KEY
+# wrangler secret put VAPID_PUBLIC_KEY
+# wrangler secret put VAPID_EMAIL
+# wrangler secret put TELEGRAM_BOT_TOKEN
+# wrangler secret put TELEGRAM_CHAT_ID

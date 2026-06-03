@@ -236,6 +236,14 @@ function addLoader() {
   span.textContent = msgs[0];
   d.appendChild(span);
 
+  // 프로그레스 바 추가
+  const progressWrap = document.createElement('div');
+  progressWrap.className = 'loader-progress';
+  const progressBar = document.createElement('div');
+  progressBar.className = 'loader-progress-bar';
+  progressWrap.appendChild(progressBar);
+  d.appendChild(progressWrap);
+
   // 1.8초마다 문구 교체 (loader.remove() 시 자동 정리)
   d._msgTimer = setInterval(() => {
     idx = (idx + 1) % msgs.length;
@@ -512,8 +520,9 @@ document.getElementById('backBtn').addEventListener('click', () => {
 });
 
 /* ── 회원가입 ── */
-const SHEETS_EP  = 'https://script.google.com/macros/s/AKfycbyJEDLW1Ohx9rQYrkSxFUNNl8LmRtUK-WkXg4sgtLBLfpPJcYfpXMJXQH9Ya2k36j3l/exec';
-const GOOGLE_CID = '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com';
+// 환경변수 또는 wrangler.toml의 vars에서 가져옴
+const SHEETS_EP  = window.ENV?.SHEETS_ENDPOINT || 'https://script.google.com/macros/s/AKfycbyJEDLW1Ohx9rQYrkSxFUNNl8LmRtUK-WkXg4sgtLBLfpPJcYfpXMJXQH9Ya2k36j3l/exec';
+const GOOGLE_CID = window.ENV?.GOOGLE_CLIENT_ID || '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com';
 
 
 let selGender = '';
@@ -625,7 +634,7 @@ let _adminTab       = 'pending';
 let _adminPayments  = [];
 
 // 관리자 인증: 구글 로그인 이메일이 ADMIN_EMAIL과 일치하면 허용 (서버에서 검증)
-const ADMIN_EMAIL  = 'riger7070@gmail.com';
+const ADMIN_EMAIL = window.ENV?.ADMIN_EMAIL || 'riger7070@gmail.com';
 
 /* ── Google ID Token 관리 ── */
 let _googleIdToken = '';
