@@ -739,7 +739,6 @@ function _silentTokenRefresh() {
     // Google API 로드 체크
     if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
       _silentRefreshActive = false;
-      console.warn('Google Identity Services not loaded yet');
       return;
     }
     google.accounts.id.prompt(notification => {
@@ -747,11 +746,9 @@ function _silentTokenRefresh() {
       // 'skipped' / 'dismissed': 자동 갱신 불가 (사용자가 구글에서 로그아웃한 경우 등)
       // 이 경우도 기존 캐시를 유지하고, 다음 채팅 요청 시 서버가 401 반환하면 로그인 유도
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        console.warn('Silent token refresh failed:', notification.getNotDisplayedReason());
       }
     });
   } catch(e) {
-    console.error('Silent token refresh error:', e);
     _silentRefreshActive = false;
   }
 }
@@ -1060,7 +1057,6 @@ function goSignup() {
       setTimeout(() => tryInit(attempts - 1), 300);
     } else {
       // 타임아웃 후에도 로드 안 됨 - 폴백 표시
-      console.warn('Google Sign-In failed to load after retries');
       const wrap = document.getElementById('googleBtnEl');
       if (wrap) _renderGoogleFallbackBtn(wrap);
     }
@@ -2241,7 +2237,6 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
-        console.log('[App] Service Worker registered');
 
         // 업데이트 감지
         registration.addEventListener('updatefound', () => {
@@ -2263,7 +2258,7 @@ if ('serviceWorker' in navigator) {
           registration.update();
         }, 60 * 60 * 1000);
       })
-      .catch(err => console.error('[App] Service Worker registration failed:', err));
+      .catch(() => {});
   });
 
   // Service Worker 제어권 변경 시 새로고침
@@ -2761,7 +2756,7 @@ async function _openDetailReading(date, ohaeng) {
         // 최근 10개만 보관
         if (saved.length > 10) saved.splice(10);
         localStorage.setItem('myan_detail_readings', JSON.stringify(saved));
-      } catch(e) { console.error('Failed to save detail reading:', e); }
+      } catch(e) { /* Ignore save error */ }
     } else if (data.error) {
       if (loadEl) loadEl.textContent = data.error.message;
     }
@@ -2895,14 +2890,12 @@ async function togglePushNotif(btn) {
 
       const vr = await fetch('/api/push/vapid-key');
       if (!vr.ok) {
-        console.error('VAPID key fetch failed:', vr.status);
         showToast('알림 설정에 실패했습니다. 잠시 후 다시 시도해 주세요.');
         return;
       }
 
       const { publicKey } = await vr.json();
       if (!publicKey) {
-        console.error('VAPID publicKey is empty');
         showToast('알림 키 설정에 문제가 있습니다.');
         return;
       }
@@ -2915,14 +2908,13 @@ async function togglePushNotif(btn) {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ subscription: sub, lang: userLang })
-        }).catch(err => console.error('Push subscribe error:', err));
+        }).catch(() => {});
       }
 
       _updateBtn(true);
       showToast(t.notifEnabled || '알림이 설정되었습니다! 🌟');
     } catch (err) {
-      console.error('togglePushNotif error:', err);
-      showToast('알림 설정 중 오류가 발생했습니다: ' + err.message);
+      showToast('알림 설정 중 오류가 발생했습니다.');
     }
   }
 }

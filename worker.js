@@ -1833,17 +1833,13 @@ async function handleGuestChat(request, env) {
 
     // DB 체크
     if (!env.DB) {
-      console.error('[Guest Chat] DB not available');
       return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
     }
 
     // IP당 하루 1회 제한 확인
     const usage = await env.DB.prepare(
       `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
-    ).bind(ip, today).first().catch(err => {
-      console.error('[Guest Chat] DB query error:', err);
-      return null;
-    });
+    ).bind(ip, today).first().catch(() => null);
 
   if (usage && usage.used_count >= 1) {
     // 다음날 자정(KST) 계산
@@ -1862,12 +1858,8 @@ async function handleGuestChat(request, env) {
     }), 429);
   }
 
-    const { birth, lang = 'ko' } = await request.json().catch(err => {
-      console.error('[Guest Chat] JSON parse error:', err);
-      return {};
-    });
+    const { birth, lang = 'ko' } = await request.json().catch(() => ({}));
     if (!birth) {
-      console.error('[Guest Chat] Missing birth parameter');
       return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
     }
 
@@ -1905,9 +1897,8 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
 
     if (!resp.ok) {
       const errorText = await resp.text();
-      console.error('[Guest Chat] Gemini API error:', resp.status, errorText);
       return cors(JSON.stringify({
-        error: { message: `Gemini API 오류 (${resp.status})`, details: errorText.slice(0, 200) }
+        error: { message: `Gemini API 오류 (${resp.status})` }
       }), 500);
     }
 
@@ -1917,19 +1908,14 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
     try {
       result = JSON.parse(raw);
     } catch (parseError) {
-      console.error('[Guest Chat] JSON parse error:', parseError);
-      console.error('[Guest Chat] Raw response:', raw);
-      console.error('[Guest Chat] Full data:', JSON.stringify(data));
+      return cors(JSON.stringify({
+        error: { message: 'AI 응답 파싱 오류' }
+      }), 500);
     }
 
-    if (!result.reading) {
-      console.error('[Guest Chat] Missing reading field. Result:', JSON.stringify(result));
-      console.error('[Guest Chat] Raw text:', raw);
+    if (!result.reading || !result.ohaeng) {
       return cors(JSON.stringify({
-        error: {
-          message: 'AI 응답 형식 오류',
-          debug: { hasReading: !!result.reading, rawLength: raw.length, resultKeys: Object.keys(result) }
-        }
+        error: { message: 'AI 응답 형식 오류' }
       }), 500);
     }
 
@@ -1942,21 +1928,13 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
     return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
 
   } catch(e) {
-    console.error('[handleGuestChat] Inner error:', e);
     return cors(JSON.stringify({
-      error: {
-        message: 'Server error: ' + (e.message || 'Unknown error'),
-        stack: e.stack?.slice(0, 500)
-      }
+      error: { message: '서버 오류가 발생했습니다.' }
     }), 500);
   }
   } catch(outerErr) {
-    console.error('[handleGuestChat] Outer error:', outerErr);
     return cors(JSON.stringify({
-      error: {
-        message: 'Critical error: ' + (outerErr.message || 'Unknown'),
-        stack: outerErr.stack?.slice(0, 500)
-      }
+      error: { message: '시스템 오류가 발생했습니다.' }
     }), 500);
   }
 }

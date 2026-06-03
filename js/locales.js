@@ -30,6 +30,15 @@ const TX = {
     sgLink:'✦ 회원가입하고 더 섬세한 기운 받기 →',
     guestName:'체험해보기',
     guestDesc:'로그인 없이 1회 무료 체험',
+    guestTitle:'M;Y 安 체험하기',
+    guestSubtitle:'생년월일을 입력하시면 오늘의 기운을 간단히 확인해 드립니다.',
+    guestBirthPlaceholder:'예: 1990-01-01',
+    guestSubmitBtn:'AI 풀이 받기',
+    guestLimitTitle:'오늘의 체험 완료',
+    guestLimitMsg:'게스트 체험은 하루 1회만 가능합니다.',
+    guestLimitReset:'다음 체험까지:',
+    guestResultTitle:'체험 결과',
+    guestLoading:'AI가 분석 중입니다...',
     sgName:'이름', sgEmail:'이메일', sgPhone:'전화번호', sgYear:'생년', sgMonth:'생월', sgDay:'생일',
     sgHour:'생시', sgGender:'성별', sgM:'남성', sgF:'여성', sgOpt:'(선택)', sgRegion:'거주지역',
     sgSubmit:'가입하기',
@@ -144,6 +153,15 @@ const TX = {
     sgLink:'✦ Sign up for a more refined reading →',
     guestName:'Try Guest Mode',
     guestDesc:'One free reading without login',
+    guestTitle:'Try M;Y 安',
+    guestSubtitle:'Enter your birth date to receive today\'s energy reading.',
+    guestBirthPlaceholder:'e.g., 1990-01-01',
+    guestSubmitBtn:'Get AI Reading',
+    guestLimitTitle:'Today\'s Trial Complete',
+    guestLimitMsg:'Guest mode is limited to once per day.',
+    guestLimitReset:'Next trial available in:',
+    guestResultTitle:'Your Reading',
+    guestLoading:'AI is analyzing...',
     sgName:'Name', sgEmail:'Email', sgPhone:'Phone', sgYear:'Birth Year', sgMonth:'Month', sgDay:'Day',
     sgHour:'Birth Hour', sgGender:'Gender', sgM:'Male', sgF:'Female', sgOpt:'(optional)', sgRegion:'Region',
     sgSubmit:'Sign Up',
@@ -258,6 +276,15 @@ const TX = {
     sgLink:'✦ 注册，获取更精准的气运解读 →',
     guestName:'免费体验',
     guestDesc:'无需登录，免费体验1次',
+    guestTitle:'M;Y 安 体验',
+    guestSubtitle:'输入您的出生日期，获取今日运势解读。',
+    guestBirthPlaceholder:'例如：1990-01-01',
+    guestSubmitBtn:'获取AI解读',
+    guestLimitTitle:'今日体验已完成',
+    guestLimitMsg:'访客模式每天限用一次。',
+    guestLimitReset:'下次体验时间：',
+    guestResultTitle:'解读结果',
+    guestLoading:'AI正在分析中...',
     sgName:'姓名', sgEmail:'邮箱', sgPhone:'电话', sgYear:'出生年', sgMonth:'出生月', sgDay:'出生日',
     sgHour:'出生时辰', sgGender:'性别', sgM:'男', sgF:'女', sgOpt:'(选填)', sgRegion:'居住地区',
     sgSubmit:'立即注册',
@@ -372,6 +399,15 @@ const TX = {
     sgLink:'✦ 会員登録でより精密な気運リーディングを →',
     guestName:'無料体験',
     guestDesc:'ログインなしで1回無料',
+    guestTitle:'M;Y 安 体験',
+    guestSubtitle:'生年月日を入力すると、今日の運気を簡単に確認できます。',
+    guestBirthPlaceholder:'例：1990-01-01',
+    guestSubmitBtn:'AI診断を受ける',
+    guestLimitTitle:'本日の体験完了',
+    guestLimitMsg:'ゲストモードは1日1回限定です。',
+    guestLimitReset:'次回体験まで：',
+    guestResultTitle:'診断結果',
+    guestLoading:'AIが分析中です...',
     sgName:'お名前', sgEmail:'メールアドレス', sgPhone:'電話番号', sgYear:'生年', sgMonth:'生月', sgDay:'生日',
     sgHour:'生時', sgGender:'性別', sgM:'男性', sgF:'女性', sgOpt:'(任意)', sgRegion:'お住まいの地域',
     sgSubmit:'登録する',
@@ -506,6 +542,19 @@ function render() {
   document.getElementById('coupleDesc').textContent = t.d2;
   document.getElementById('guestName').textContent  = t.guestName;
   document.getElementById('guestDesc').textContent  = t.guestDesc;
+  // 게스트 화면 다국어
+  const guestTitleText = document.getElementById('guestTitleText');
+  const guestSubtitleText = document.getElementById('guestSubtitleText');
+  const guestBirthLabel = document.getElementById('guestBirthLabel');
+  const guestNameLabel = document.getElementById('guestNameLabel');
+  const guestSubmitBtn = document.getElementById('guestSubmitBtn');
+  const guestResultTitleText = document.getElementById('guestResultTitleText');
+  if (guestTitleText) guestTitleText.textContent = t.guestTitle || '🔓 체험해보기';
+  if (guestSubtitleText) guestSubtitleText.textContent = t.guestSubtitle || '로그인 없이 AI 사주 풀이를 무료로 1회 체험해보세요';
+  if (guestBirthLabel) guestBirthLabel.textContent = (lang === 'ko' ? '생년월일 *' : lang === 'en' ? 'Birth Date *' : lang === 'zh' ? '出生日期 *' : '生年月日 *');
+  if (guestNameLabel) guestNameLabel.textContent = (lang === 'ko' ? '이름 (선택)' : lang === 'en' ? 'Name (optional)' : lang === 'zh' ? '姓名（可选）' : '名前（任意）');
+  if (guestSubmitBtn) guestSubmitBtn.textContent = t.guestSubmitBtn || 'AI 풀이 받기';
+  if (guestResultTitleText) guestResultTitleText.textContent = t.guestResultTitle || '✨ AI 풀이 결과';
   document.getElementById('disclaimer').textContent = t.note;
   document.getElementById('inp').placeholder        = t.ph;
   document.getElementById('ilchinDate').textContent = dateStr;
