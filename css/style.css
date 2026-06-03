@@ -334,8 +334,6 @@ body {
 
 /* 뒤로 버튼 */
 .back {
-  position: absolute;
-  top: 18px; left: 16px;
   font-size: 0.7rem;
   color: var(--text-dim);
   cursor: pointer;
@@ -1951,14 +1949,17 @@ select.fif-input option { background: var(--bg); color: var(--text); }
     min-height: 32px;
   }
 
-  /* 뒤로 버튼 — hd-right 행의 좌측에 absolute */
+  /* 뒤로 버튼 — hd-left 컨테이너 안에 위치 */
   .back {
-    position: absolute;
-    top: 10px;
-    left: 12px;
     font-size: 0.68rem;
     padding: 3px 8px;
-    z-index: 5;
+  }
+
+  /* hd-left 모바일 조정 */
+  .hd-left {
+    top: 10px;
+    left: 12px;
+    transform: none;
   }
 
   /* 로고 */
