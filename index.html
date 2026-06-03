@@ -44,6 +44,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://js.tosspayments.com/v2/standard"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -111,11 +112,11 @@
       </div>
       <div class="section-desc" id="subdesc"></div>
       <div class="ohaeng-chips">
-        <span class="chip" style="color:#4bc87a">木</span>
-        <span class="chip" style="color:#e05a4a">火</span>
-        <span class="chip" style="color:#d4a040">土</span>
-        <span class="chip" style="color:#a0aab4">金</span>
-        <span class="chip" style="color:#5aa8e0">水</span>
+        <span class="chip" id="chip-木" data-o="木" style="color:#4bc87a">木</span>
+        <span class="chip" id="chip-火" data-o="火" style="color:#e05a4a">火</span>
+        <span class="chip" id="chip-土" data-o="土" style="color:#d4a040">土</span>
+        <span class="chip" id="chip-金" data-o="金" style="color:#a0aab4">金</span>
+        <span class="chip" id="chip-水" data-o="水" style="color:#5aa8e0">水</span>
       </div>
       <div class="disclaimer" id="disclaimer"></div>
     </div>
@@ -129,7 +130,7 @@
         </div>
         <div class="card-arrow">›</div>
       </div>
-      <div class="card" onclick="startMode('couple')">
+      <div class="card" onclick="startMode('duo')">
         <div class="card-icon">∞</div>
         <div class="card-body">
           <div class="card-name" id="coupleName"></div>
@@ -151,6 +152,10 @@
         <div class="quick-arrow">›</div>
       </div>
     </div>
+
+    <!-- 스트릭 배지 -->
+    <div id="streak-badge-home" style="margin:6px 0 4px;display:none;"></div>
+
 
     <div class="main-lang-row">
       <button class="main-lb" id="mlb-ko" onclick="setLang('ko');_syncDrawerLangs()">한국어</button>
@@ -384,7 +389,7 @@
       <div class="signup-notice" id="mypageNotice"></div>
 
       <div class="mypage-actions">
-        <button class="mypage-action-btn" id="notifToggleBtn" onclick="toggleNotification()">알림 켜기 🔔</button>
+        <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
         <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
       </div>
@@ -399,6 +404,20 @@
 
       <!-- 토큰 0 안내 -->
       <div id="mpZeroNote" style="display:none" class="mp-zero-note"></div>
+
+      <div class="mypage-divider" style="margin:16px 0 14px"></div>
+
+      <!-- 스트릭 섹션 -->
+      <div id="streak-section" class="streak-section" style="display:none"></div>
+
+      <!-- 오행 히트맵 -->
+      <div id="heatmap-section" class="heatmap-section" style="display:none"></div>
+
+      <!-- 레퍼럴 섹션 -->
+      <div id="referral-section" class="referral-section" style="display:none"></div>
+
+      <!-- 프로필 이미지 저장 버튼 -->
+      <button class="referral-generate-btn" style="margin-bottom:0" onclick="_saveProfileImage()">📸 프로필 이미지 저장</button>
 
       <!-- 하단 상담·충전 박스 -->
       <div class="mp-bottom-cards">
@@ -420,6 +439,30 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- 프로필 공유 모달 -->
+  <div id="profileShareModal" class="profile-share-overlay" style="display:none" onclick="if(event.target===this)_closeProfileShareModal()">
+    <div class="profile-share-card">
+      <button class="profile-share-close" onclick="_closeProfileShareModal()">✕</button>
+      <div class="profile-share-avatar">✦</div>
+      <div class="profile-share-name" id="profileShareName">M;Y 安</div>
+      <div class="profile-share-sub" id="profileShareSub">나의 오행 여정</div>
+      <div class="profile-share-stats">
+        <div>
+          <div class="profile-share-stat-num" id="profile-share-streak-num">0</div>
+          <div class="profile-share-stat-label">연속 일수</div>
+        </div>
+        <div>
+          <div class="profile-share-stat-num" id="profile-share-total-num">0</div>
+          <div class="profile-share-stat-label">총 출석</div>
+        </div>
+      </div>
+      <div class="profile-share-actions">
+        <button onclick="_closeProfileShareModal()">닫기</button>
+        <button class="primary" onclick="_shareProfileCard()">공유하기</button>
+      </div>
     </div>
   </div>
 
@@ -472,7 +515,7 @@
       </div>
       <div class="drawer-item-arrow">›</div>
     </button>
-    <button class="drawer-item" onclick="closeDrawer();startMode('couple')">
+    <button class="drawer-item" onclick="closeDrawer();startMode('duo')">
       <div class="drawer-item-icon">∞</div>
       <div class="drawer-item-text">
         <div id="drTxtCouple">우리의 조화</div>

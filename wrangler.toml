@@ -11,6 +11,10 @@ binding = "DB"
 database_name = "myan-db"
 database_id = "ef511379-fa0b-45c7-b14e-6ccb842c719f"
 
+# ── 일일 푸시 알림: 매일 오전 8시 KST = 23:00 UTC ──
+[triggers]
+crons = ["0 23 * * *"]
+
 # ── Cloudflare Workers Rate Limiting (분산 제한 — 전 세계 인스턴스에 적용) ──
 
 # /chat: 이메일당 분당 30회 (AI 호출 제한)

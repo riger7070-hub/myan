@@ -46,85 +46,6 @@ async function callGemini(contents) {
   return data;
 }
 
-async function autoAnalyze() {
-  // 1. 토큰 차감 전 잔액 확인
-  if (!checkAndDeductToken()) {
-    addBubble(TX[lang].noToken, 'ai');
-    return;
-  }
-  
-  const inp = document.getElementById('inp');
-  const btn = document.getElementById('send');
-  btn.disabled = true; inp.disabled = true;
-  const loader = addLoader();
-
-  try {
-    const data = await callGemini(trimmedHist());
-    const cand = data?.candidates?.[0];
-    const raw  = cand?.content?.parts?.[0]?.text;
-    
-    // 안전 필터 / 빈 응답 → 에러로 간주하여 throw
-    if (!raw) throw { refund: true, reason: cand?.finishReason };
-    
-    hist.push({ role: 'model', parts: [{ text: raw }] });
-    const clean = raw.replace(/#[木火土金水]\s*/g, '').replace(/\*\*/g, '').trim();
-    addBubble(clean, 'ai');
-
-    const tag = ['木','火','土','金','水'].find(k => raw.includes('#' + k));
-    if (tag) addRxCard(tag);
-
-    // solo 모드: 클리프행어 연출 — 타이핑 시간 + 여유 500ms 후 게이지 페이드인
-    if (mode === 'solo' && data._ohaeng) {
-      try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
-      const revealMs = clean.length <= 300
-        ? clean.length * 22 + 500   // 타이핑 완료 직후 리빌
-        : 1800;                      // 긴 텍스트는 즉시 표시 후 1.8초 딜레이
-      _renderSajuGaugeFromGemini(data._ohaeng, revealMs);
-    }
-    showSuggestChips();
-
-  } catch(e) {
-    // 2. 에러 발생 시 토큰 복구 및 즉시 화면 동기화
-    if (e?.noLogin) {
-        addTokens(1);
-        updateAllTokenDisplays();
-        showLogin();
-        return;
-    }
-    if (e?.noToken) {
-        await refreshTokens();
-        updateAllTokenDisplays();
-        addBubble(TX[lang].noToken, 'ai');
-        return;
-    }
-    if (e?.rateLimited) {
-        await refreshTokens();
-        updateAllTokenDisplays();
-        addBubble({ko:'요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',en:'Too many requests. Please try again shortly.',zh:'请求过于频繁，请稍后再试。',ja:'リクエストが多すぎます。しばらくしてから再試行してください。'}[lang]||'잠시 후 다시 시도해 주세요.', 'ai');
-        showSuggestChips();
-        return;
-    }
-    if (e?.refund) {
-        addTokens(1);
-        updateAllTokenDisplays();
-    }
-
-    // 3. 에러 메시지 세분화 (Safety 관련인지 여부)
-    const msg = (e?.blocked || e?.reason === 'SAFETY') ? TX[lang].errSafety : TX[lang].err;
-    addBubble(msg, 'ai');
-    showSuggestChips();
-
-    if (hist.length > 0 && hist[hist.length-1].role === 'model') hist.pop();
-    
-  } finally {
-    // 4. 로딩 제거 및 입력창 상태 복구
-    loader.remove(); 
-    btn.disabled = false; 
-    inp.disabled = false;
-    inp.focus(); 
-    cw().scrollTop = 99999;
-  }
-}
 
 function saveChatState() {
   if (!mode || !hist.length) return;
@@ -156,7 +77,7 @@ function goBack() {
   document.getElementById('screen-chat').style.display   = 'none';
   document.getElementById('screen-signup').style.display = 'none';
   document.getElementById('screen-login').style.display  = 'none';
-  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('screen-mode').style.display   = '';
   document.getElementById('backBtn').style.display       = 'none';
   mode = null; hist = [];
   // 모드 화면 복귀 시 userBtn / signupLinkBtn 복원
@@ -289,9 +210,9 @@ function addRxCard(o) {
   const bg  = OBG[o];
   const t   = TX[lang];
 
-  // 오행 한자 + 한국명 (예: 木 / 목(木))
-  const hanja   = o;                      // 木 火 土 金 水
-  const kiName  = ON[lang][o];            // 목(木) / Wood / 木气 / 木(もく)
+  // 오행 이름 — 한글 중심 표시
+  const hanja  = o;                 // 木 火 土 金 水
+  const kiName = ON[lang][o];        // 목(木) / Wood / 木气 / 木(もく)
 
   const wrap = document.createElement('div');
   wrap.className = 'rx-duo';
@@ -311,6 +232,31 @@ function addRxCard(o) {
   setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
   _setOrbTheme(o);
   _saveCalEntry(o); // 오늘 기운 캘린더에 저장
+
+  // 공유 / 상세풀이 버튼 행
+  const today = _todayKST ? _todayKST() : new Date().toISOString().slice(0,10);
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin:6px 0 2px;flex-wrap:wrap;';
+  btnRow.innerHTML = `
+    <button class="rx-detail-btn" onclick="_openDetailReading('${today}','${o}')">
+      🔍 ${t.detailTitle || '상세 풀이'}
+    </button>`;
+  cw().appendChild(btnRow);
+
+  // 피드백 행 제거됨
+
+  // 홈 프리뷰 / 행운 아이템 갱신
+  _refreshHomeExtras(o);
+
+  // 오행 히스토리 저장 (D1)
+  const _fbToken = getGoogleIdToken();
+  if (_fbToken) {
+    fetch('/api/ohaeng-history', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_fbToken}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ date: today, ohaeng: o })
+    }).catch(()=>{});
+  }
 }
 
 // 오행 오브 색상 팔레트 (각 오브별 강도 차등)
@@ -333,19 +279,6 @@ function _setOrbTheme(o) {
   }
 }
 function _resetOrbTheme() { _setOrbTheme(null); }
-
-// ── 처방 카드 공유 ──
-function _shareRxCard({ o, name, desc }) {
-  const text = `✦ M;Y 安 · 오늘의 오행 처방\n[${ON.ko[o] || o}] ${name}\n${desc}\n\nmyan.riger7070.workers.dev`;
-  if (navigator.share) {
-    navigator.share({ title: 'M;Y 安 · 오늘의 처방', text }).catch(() => {});
-  } else if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => {
-      const btn = document.querySelector('.rx-share-btn');
-      if (btn) { btn.textContent = '✓ 클립보드에 복사됨'; setTimeout(() => { btn.textContent = '🌟 오늘의 처방 공유하기'; }, 2000); }
-    });
-  }
-}
 
 // ── 캘린더 저장 ──
 function _saveCalEntry(element) {
@@ -954,17 +887,31 @@ function _ensureGisInit() {
 function initGoogleSignin() {
   const wrap = document.getElementById('googleBtnEl');
   if (!wrap) return;
-  wrap.innerHTML = ''; // 재렌더 시 초기화
+  wrap.innerHTML = '';
   _ensureGisInit();
   const localeMap = { ko:'ko', en:'en', zh:'zh-CN', ja:'ja' };
-  google.accounts.id.renderButton(wrap, {
-    type: 'standard',
-    theme: 'filled_black',
-    size: 'large',
-    text: 'signup_with',
-    shape: 'rectangular',
-    width: Math.min(Math.max(window.innerWidth - 64, 280), 480),
-    locale: localeMap[lang] || 'ko',
+
+  const parentW = wrap.parentElement?.getBoundingClientRect().width || window.innerWidth - 64;
+  const btnW = Math.min(Math.max(parentW, 280), 400);
+  wrap.style.width = btnW + 'px';
+
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      try {
+        google.accounts.id.renderButton(wrap, {
+          type: 'standard', theme: 'filled_black', size: 'large',
+          text: 'signup_with', shape: 'rectangular',
+          width: btnW, locale: localeMap[lang] || 'ko',
+        });
+        setTimeout(() => {
+          if (!wrap.querySelector('iframe') && !wrap.querySelector('div[role]')) {
+            _renderGoogleFallbackBtn(wrap);
+          }
+        }, 800);
+      } catch(e) {
+        _renderGoogleFallbackBtn(wrap);
+      }
+    }, 150);
   });
 }
 
@@ -1040,8 +987,13 @@ function handleGoogleCredential(response) {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
       });
-      document.getElementById('screen-mode').style.display = 'flex';
+      document.getElementById('screen-mode').style.display = '';
     }
+
+    // 로그인 완료 후 대기 중인 프로모 코드 처리
+    setTimeout(() => {
+      if (typeof _processPendingPromo === 'function') _processPendingPromo();
+    }, 800);
 
     // 토스 결제 후 리다이렉트 시 로그인이 늦은 경우 → pending 결제 확인
     const _pendingToss = sessionStorage.getItem('myan_pending_toss_payment');
@@ -1059,23 +1011,10 @@ function handleGoogleCredential(response) {
 
 function goBackFromSignup() {
   document.getElementById('screen-signup').style.display = 'none';
-  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('screen-mode').style.display   = '';
   document.getElementById('backBtn').style.display       = 'none';
   document.getElementById('signup-form-wrap').style.display = '';
   document.getElementById('signup-success').style.display   = 'none';
-}
-
-function setGender(g) {
-  selGender = g; // signup 폼에서 성별 선택은 제거됨 (My Page에서 입력)
-}
-
-function buildSignupDropdowns() {
-  const mSel = document.getElementById('fMonth');
-  const mSuf = {ko:'월', en:'', zh:'月', ja:'月'}[lang] || '';
-  mSel.innerHTML = '<option value=""></option>';
-  for (let i = 1; i <= 12; i++) {
-    const o = document.createElement('option'); o.value = i; o.textContent = i + mSuf; mSel.appendChild(o);
-  }
 }
 
 function renderSignup() {
@@ -1221,7 +1160,7 @@ function openMyPage() {
 
 function closeMyPage() {
   document.getElementById('screen-mypage').style.display = 'none';
-  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('screen-mode').style.display   = '';
   document.getElementById('backBtn').style.display       = 'none';
   // 로그인 상태에 맞게 userBtn / signupLinkBtn 복원
   const u = getUser();
@@ -1286,11 +1225,17 @@ function renderMyPage() {
   document.getElementById('mypageLogoutBtn').textContent  = t.mpLogout;
   document.getElementById('mypageWithdrawBtn').textContent = t.mpWithdraw;
   // 알림 버튼 현재 상태 반영
+  // 알림 버튼 상태: Web Push 구독 여부로 결정
   const notifBtn = document.getElementById('notifToggleBtn');
-  if (notifBtn) {
-    const notifOn = localStorage.getItem('myan_notif_enabled') === 'true';
-    notifBtn.textContent = notifOn ? '알림 끄기 🔕' : '알림 켜기 🔔';
-    notifBtn.classList.toggle('notif-on', notifOn);
+  if (notifBtn && 'serviceWorker' in navigator && 'PushManager' in window) {
+    navigator.serviceWorker.ready.then(sw => sw.pushManager.getSubscription()).then(sub => {
+      const on = !!sub;
+      const t2 = getT();
+      notifBtn.classList.toggle('active', on);
+      const spans = notifBtn.querySelectorAll('span');
+      if (spans[0]) spans[0].textContent = on ? '🔕' : '🔔';
+      if (spans[1]) spans[1].textContent = on ? (t2.notifOff2||'알림 끄기') : (t2.notifOn||'알림 켜기');
+    }).catch(()=>{});
   }
 
   // 저장된 값 채우기
@@ -1318,6 +1263,11 @@ function renderMyPage() {
   })();
   if (_savedOhaeng) _renderSajuGaugeFromGemini(_savedOhaeng);
   else _renderSajuGauge(user);
+
+  // ── 새 engagement 기능 ──
+  fetchStreak();
+  renderOhaengHeatmap();
+  renderReferralSection();
 }
 
 function setGenderMp(g) {
@@ -1403,7 +1353,7 @@ function _signOut() {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  document.getElementById('screen-mode').style.display = 'flex';
+  document.getElementById('screen-mode').style.display = '';
   document.getElementById('backBtn').style.display = 'none';
   mode = null; hist = [];
   history.replaceState({ screen: 'home' }, '');
@@ -1460,7 +1410,7 @@ async function _withdrawAccount() {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  document.getElementById('screen-mode').style.display = 'flex';
+  document.getElementById('screen-mode').style.display = '';
   document.getElementById('backBtn').style.display = 'none';
   mode = null; hist = [];
   history.replaceState({ screen: 'home' }, '');
@@ -1705,19 +1655,53 @@ function initGoogleLoginBtn() {
   wrap.innerHTML = '';
   _ensureGisInit();
   const localeMap = { ko:'ko', en:'en', zh:'zh-CN', ja:'ja' };
-  google.accounts.id.renderButton(wrap, {
-    type: 'standard', theme: 'filled_black', size: 'large',
-    text: 'signin_with', shape: 'rectangular',
-    width: Math.min(Math.max(window.innerWidth - 64, 280), 480),
-    locale: localeMap[lang] || 'ko',
+
+  const parentW = wrap.parentElement?.getBoundingClientRect().width || window.innerWidth - 64;
+  const btnW = Math.min(Math.max(parentW, 280), 400);
+  wrap.style.width = btnW + 'px';
+
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      try {
+        google.accounts.id.renderButton(wrap, {
+          type: 'standard', theme: 'filled_black', size: 'large',
+          text: 'signin_with', shape: 'rectangular',
+          width: btnW, locale: localeMap[lang] || 'ko',
+        });
+        setTimeout(() => {
+          if (!wrap.querySelector('iframe') && !wrap.querySelector('div[role]')) {
+            _renderGoogleFallbackBtn(wrap);
+          }
+        }, 800);
+      } catch(e) {
+        _renderGoogleFallbackBtn(wrap);
+      }
+    }, 150);
   });
+}
+
+function _renderGoogleFallbackBtn(wrap) {
+  const t = getT();
+  wrap.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.style.cssText = 'width:100%;max-width:480px;padding:14px 20px;border-radius:8px;' +
+    'background:#fff;color:#1f1f1f;border:1px solid #dadce0;font-size:0.95rem;font-weight:500;' +
+    'cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;';
+  btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.706c-.18-.54-.282-1.117-.282-1.706s.102-1.166.282-1.706V4.962H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/></svg>` +
+    `<span>Google로 로그인</span>`;
+  btn.onclick = () => {
+    try { google.accounts.id.prompt(); } catch(e) {
+      showToast('Google 로그인을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.');
+    }
+  };
+  wrap.appendChild(btn);
 }
 
 function goBackFromLogin() {
   pendingMode = null;
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-chat').style.display  = 'none'; // 채팅 중 취소 시 채팅 화면도 정리
-  document.getElementById('screen-mode').style.display  = 'flex';
+  document.getElementById('screen-mode').style.display  = '';
   document.getElementById('backBtn').style.display      = 'none';
 }
 
@@ -1756,13 +1740,13 @@ async function doLogin() {
     const m = pendingMode; pendingMode = null;
     _enterMode(m, user);
   } else {
-    document.getElementById('screen-mode').style.display = 'flex';
+    document.getElementById('screen-mode').style.display = '';
   }
 }
 
 /* ── 인증 게이트 ── 항상 모드 화면 먼저 */
 function checkAuth() {
-  document.getElementById('screen-mode').style.display   = 'flex';
+  document.getElementById('screen-mode').style.display   = '';
   document.getElementById('screen-signup').style.display = 'none';
   document.getElementById('screen-login').style.display  = 'none';
   document.getElementById('screen-mypage').style.display = 'none';
@@ -1806,7 +1790,7 @@ function goToApp() {
     const m = pendingMode; pendingMode = null;
     _enterMode(m, u);
   } else {
-    document.getElementById('screen-mode').style.display = 'flex';
+    document.getElementById('screen-mode').style.display = '';
   }
 }
 
@@ -2121,36 +2105,8 @@ if (localStorage.getItem('myan_notif_enabled') === 'true') {
   scheduleLocalNotification();
 }
 
-// ── 5. 알림 설정 버튼 (마이페이지에서 호출) ──
-async function toggleNotification() {
-  const btn = document.getElementById('notifToggleBtn');
-  if (!btn) return;
-  const enabled = localStorage.getItem('myan_notif_enabled') === 'true';
 
-  if (enabled) {
-    // 알림 끄기
-    if (window._notifTimer) clearTimeout(window._notifTimer);
-    localStorage.removeItem('myan_notif_enabled');
-    btn.textContent = '알림 켜기 🔔';
-    btn.classList.remove('notif-on');
-  } else {
-    // 알림 켜기 — 권한 허용 후 저장소·스케줄러 동기화
-    const ok = await requestNotificationPermission();
-    if (ok) {
-      localStorage.setItem('myan_notif_enabled', 'true');
-      scheduleLocalNotification();
-      btn.textContent = '알림 끄기 🔕';
-      btn.classList.add('notif-on');
-    }
-  }
-}
-window.addEventListener('load', () => {
-  const btn = document.getElementById('notifToggleBtn');
-  if (btn && localStorage.getItem('myan_notif_enabled') === 'true') {
-    btn.textContent = '알림 끄기 🔕';
-    btn.classList.add('notif-on');
-  }
-});
+// notifToggleBtn 초기 상태는 renderMyPage에서 처리됨
 
 // ── 6. theme-color 메타 태그 동기화 ──
 function syncThemeColorMeta() {
@@ -2279,6 +2235,9 @@ class ParticleField {
 
 window.addEventListener('DOMContentLoaded', () => {
   new ParticleField('bg-canvas');
+  _restoreOhaengIndicator();
+  // ?promo= URL 파라미터 감지
+  _checkPromoParam();
 
   // ── 토스페이먼츠 결제 후 리다이렉트 처리 ──
   // 결제 성공: ?paymentKey=xxx&orderId=yyy&amount=4900
@@ -2331,3 +2290,683 @@ async function _typeIntoNode(textNode, text, speed = 22) {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && _typingAbort) _typingAbort.abort();
 });
+
+
+// ════════════════════════════════════════════
+//  홈 프리뷰 + 행운 아이템 + 스트릭 배지
+// ════════════════════════════════════════════
+// ── 새 기능 헬퍼 ──
+function getT() { return TX[lang] || TX.ko; }
+function getLang() { return lang || 'ko'; }
+
+const HEATMAP_COLORS = {
+  '木': '#4caf7d', '火': '#e05a5a', '土': '#c8a06a',
+  '金': '#9e9e9e', '水': '#5b9bd5'
+};
+
+
+let _streakCache = null;
+
+
+function renderStreakBadge(current) {
+  const el = document.getElementById('streak-badge-home');
+  if (!el) return;
+  if (!current || current < 1) { el.style.display = 'none'; return; }
+  el.innerHTML = `<span class="streak-badge">🔥 ${current}일 연속</span>`;
+  el.style.display = '';
+}
+
+function _refreshHomeExtras(ohaeng) {
+  if (ohaeng) {
+    // renderLuckyItems 제거됨
+    renderOhaengIndicator(ohaeng);
+  }
+  if (_streakCache) renderStreakBadge(_streakCache.current);
+}
+
+
+// ════════════════════════════════════════════
+//  스트릭 UI
+// ════════════════════════════════════════════
+async function fetchStreak() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  try {
+    const r = await fetch('/api/streak', { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return;
+    _streakCache = await r.json();
+    renderStreakUI(_streakCache);
+    renderStreakBadge(_streakCache.current);
+  } catch {}
+}
+
+function renderStreakUI(data) {
+  const section = document.getElementById('streak-section');
+  if (!section) return;
+  section.style.display = '';
+  const t = getT();
+  const today = _todayKST();
+  const alreadyDone = data.lastCheckin === today;
+
+  section.innerHTML = `
+    <div class="streak-section-title">${t.streakTitle||'출석 스트릭'}</div>
+    <div class="streak-stats">
+      <div class="streak-stat">
+        <div class="streak-stat-num">🔥${data.current||0}</div>
+        <div class="streak-stat-label">${t.streakCurrent||'현재'}</div>
+      </div>
+      <div class="streak-stat">
+        <div class="streak-stat-num">🏆${data.max||0}</div>
+        <div class="streak-stat-label">${t.streakMax||'최고'}</div>
+      </div>
+      <div class="streak-stat">
+        <div class="streak-stat-num">📅${data.total||0}</div>
+        <div class="streak-stat-label">${t.streakTotal||'총 출석'}</div>
+      </div>
+    </div>
+    <button class="streak-checkin-btn" id="streak-checkin-btn" ${alreadyDone?'disabled':''} onclick="doCheckin()">
+      ${alreadyDone ? (t.streakDone||'오늘 출석 완료 ✓') : (t.streakCheckin||'오늘 출석 체크')}
+    </button>
+    <div class="streak-bonus-msg" id="streak-bonus-msg" style="display:none">${t.streakBonus||'🎉 7일 보너스! +5 토큰'}</div>`;
+}
+
+async function doCheckin() {
+  const token = getGoogleIdToken();
+  if (!token) return;
+  const btn = document.getElementById('streak-checkin-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const r = await fetch('/api/streak/checkin', { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
+    const d = await r.json();
+    _streakCache = d;
+    renderStreakUI(d);
+    renderStreakBadge(d.current);
+    if (d.bonus) {
+      const msg = document.getElementById('streak-bonus-msg');
+      if (msg) { msg.style.display = ''; setTimeout(()=>{ msg.style.display='none'; }, 3000); }
+    }
+  } catch {}
+}
+
+function _todayKST() {
+  return new Date(Date.now() + 9*3600000).toISOString().slice(0,10);
+}
+
+// ════════════════════════════════════════════
+//  오행 히트맵
+// ════════════════════════════════════════════
+async function renderOhaengHeatmap() {
+  const section = document.getElementById('heatmap-section');
+  if (!section) return;
+  const token = getGoogleIdToken();
+  if (!token) { section.style.display = 'none'; return; }
+  try {
+    const r = await fetch('/api/ohaeng-history', { headers:{ Authorization:`Bearer ${token}` } });
+    if (!r.ok) return;
+    const { history } = await r.json();
+    const t = getT();
+    const map = {};
+    for (const h of history) map[h.date] = h.ohaeng;
+    // 최근 90일 표시
+    const cells = [];
+    const today = _todayKST();
+    for (let i = 89; i >= 0; i--) {
+      const d = new Date(Date.now() + 9*3600000 - i*86400000).toISOString().slice(0,10);
+      const o = map[d];
+      const color = o ? HEATMAP_COLORS[o] : null;
+      cells.push(`<div class="heatmap-cell${o?'':' heatmap-empty'}" title="${d}${o?' ('+o+')':''}" style="${color?'background:'+color+';':''}"></div>`);
+    }
+    section.innerHTML = `<div class="heatmap-section-title">${t.heatmapTitle||'90일 오행 기록'}</div><div class="heatmap-grid">${cells.join('')}</div>`;
+    section.style.display = '';
+  } catch { section.style.display = 'none'; }
+}
+
+
+// ════════════════════════════════════════════
+//  레퍼럴 섹션
+// ════════════════════════════════════════════
+async function renderReferralSection() {
+  const section = document.getElementById('referral-section');
+  if (!section) return;
+  const token = getGoogleIdToken();
+  if (!token) { section.style.display = 'none'; return; }
+  try {
+    const r = await fetch('/api/referral', { headers:{ Authorization:`Bearer ${token}` } });
+    if (!r.ok) return;
+    const { myCode, used } = await r.json();
+    const t = getT();
+    section.innerHTML = `
+      <div class="referral-title">${t.referralTitle||'친구 초대'}</div>
+      <div class="referral-desc">${t.referralDesc||'친구가 코드를 입력하면 양쪽 모두 +3 토큰!'}</div>
+      ${myCode ? `
+        <div class="referral-code-row">
+          <div class="referral-code-box">${myCode}</div>
+          <button class="referral-copy-btn" onclick="_copyReferralCode('${myCode}')">${t.referralCopy||'복사'}</button>
+        </div>
+        <div class="referral-used-count">${(t.referralUsed||'초대 성공: {n}명').replace('{n}', used)}</div>
+      ` : `
+        <button class="referral-generate-btn" onclick="_generateReferralCode()">${t.referralGenerate||'내 초대 코드 생성'}</button>
+      `}
+      <div class="referral-claim-row">
+        <input class="referral-claim-input" id="referral-claim-input" placeholder="${t.referralInputPlaceholder||'초대 코드 입력'}">
+        <button class="referral-claim-btn" onclick="_claimReferral()">${t.referralClaimBtn||'적용'}</button>
+      </div>`;
+    section.style.display = '';
+  } catch { section.style.display = 'none'; }
+}
+
+async function _generateReferralCode() {
+  const token = getGoogleIdToken();
+  if (!token) return;
+  try {
+    const r = await fetch('/api/referral/generate', { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
+    if (r.ok) renderReferralSection();
+  } catch {}
+}
+
+function _copyReferralCode(code) {
+  navigator.clipboard.writeText(code).catch(()=>{});
+  const t = getT();
+  showToast(t.shareCopied || '복사되었습니다!');
+}
+
+async function _claimReferral() {
+  const token = getGoogleIdToken();
+  if (!token) return;
+  const input = document.getElementById('referral-claim-input');
+  const code = input?.value?.trim();
+  if (!code) return;
+  try {
+    const r = await fetch('/api/referral/claim', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const d = await r.json();
+    const t = getT();
+    if (d.success) {
+      showToast((t.referralClaimed||'🎉 코드 적용! +{n} 토큰').replace('{n}', d.bonus));
+      renderReferralSection();
+    } else {
+      showToast(d.error?.message || '오류가 발생했습니다.');
+    }
+  } catch {}
+}
+
+
+// ════════════════════════════════════════════
+//  상세 풀이 모달
+// ════════════════════════════════════════════
+async function _openDetailReading(date, ohaeng) {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+
+  // 모달 열기
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:28px 22px">
+      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
+      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${t.detailSub||date}</div>
+      <div id="detail-loading" style="text-align:center;padding:24px;color:var(--text-dim)">
+        ${t.detailLoading||'AI가 상세 분석 중... (약 10초)'}
+      </div>
+      <div id="detail-content" style="display:none"></div>
+      <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  try {
+    const r = await fetch('/chat-detail', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ date, ohaeng, lang })
+    });
+    const data = await r.json();
+    const loadEl = document.getElementById('detail-loading');
+    const contEl = document.getElementById('detail-content');
+    if (loadEl) loadEl.style.display = 'none';
+    if (contEl && data.detail) {
+      const areas = [
+        { key:'health',       icon:'🏥', label: t.detailCardTitle?.health        || '건강' },
+        { key:'wealth',       icon:'💰', label: t.detailCardTitle?.wealth        || '재물' },
+        { key:'relationships',icon:'💝', label: t.detailCardTitle?.relationships  || '관계' },
+        { key:'fortune',      icon:'🎯', label: t.detailCardTitle?.fortune       || '행운' }
+      ];
+      contEl.innerHTML = areas.map(a => `
+        <div class="detail-area-card">
+          <div class="detail-area-title">${a.icon} ${a.label}</div>
+          <div class="detail-area-body">${data.detail[a.key]||''}</div>
+        </div>`).join('');
+      if (data.remaining !== undefined) {
+        contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
+      }
+      contEl.style.display = '';
+    } else if (data.error) {
+      if (loadEl) loadEl.textContent = data.error.message;
+    }
+  } catch(e) {
+    const loadEl = document.getElementById('detail-loading');
+    if (loadEl) loadEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  푸시 알림 토글
+// ════════════════════════════════════════════
+async function togglePushNotif(btn) {
+  const t = getT();
+
+  // 브라우저 지원 확인
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast(t.notifDenied || '이 브라우저는 알림을 지원하지 않습니다.');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    showToast(t.notifDenied || '알림이 차단되어 있습니다. 브라우저 설정에서 허용해 주세요.');
+    return;
+  }
+
+  // 버튼 UI 업데이트
+  function _updateBtn(isOn) {
+    if (!btn) return;
+    const iconEl = btn.querySelector('.notif-icon');
+    const textEl = btn.querySelectorAll('span')[1] || btn.querySelector('span:last-child');
+    btn.classList.toggle('active', isOn);
+    if (iconEl) iconEl.textContent = isOn ? '🔕' : '🔔';
+    if (textEl) textEl.textContent = isOn ? (t.notifOff2 || '알림 끄기') : (t.notifOn || '알림 켜기');
+  }
+
+  // 서비스워커 준비 (5초 타임아웃)
+  let sw;
+  try {
+    sw = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('SW timeout')), 5000))
+    ]);
+  } catch {
+    showToast('페이지를 새로고침 후 다시 시도해 주세요.');
+    return;
+  }
+
+  const existing = await sw.pushManager.getSubscription();
+  const token = getGoogleIdToken();
+  const userLang = getLang();
+
+  if (existing) {
+    // 구독 해제
+    await existing.unsubscribe();
+    if (token) fetch('/api/push/unsubscribe', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: existing.endpoint })
+    }).catch(() => {});
+    _updateBtn(false);
+    showToast(t.notifOff || '알림이 해제되었습니다.');
+  } else {
+    // 권한 요청 → 구독
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { showToast(t.notifDenied || '알림 권한이 거부되었습니다.'); return; }
+    const vr = await fetch('/api/push/vapid-key');
+    const { publicKey } = await vr.json();
+    const appKey = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const sub = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+    if (token) fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub, lang: userLang })
+    }).catch(() => {});
+    _updateBtn(true);
+    showToast(t.notifEnabled || '알림이 설정되었습니다! 🌟');
+  }
+}
+
+// ════════════════════════════════════════════
+//  프로필 공유 모달
+// ════════════════════════════════════════════
+function _closeProfileShareModal() {
+  const el = document.getElementById('profileShareModal');
+  if (el) el.style.display = 'none';
+}
+
+function _shareProfileCard() {
+  // 프로필 카드 이미지로 저장
+  _saveProfileImage();
+}
+
+// ════════════════════════════════════════════
+//  프로필 이미지 저장 (html2canvas)
+// ════════════════════════════════════════════
+async function _saveProfileImage() {
+  const t = getT();
+  // 프로필 모달 열고 스탯 채우기
+  if (_streakCache) {
+    const numEl = document.getElementById('profile-share-streak-num');
+    if (numEl) numEl.textContent = _streakCache.current || 0;
+    const totEl = document.getElementById('profile-share-total-num');
+    if (totEl) totEl.textContent = _streakCache.total || 0;
+  }
+  const nameEl = document.getElementById('profileShareName');
+  if (nameEl && window._fbUser?.displayName) nameEl.textContent = window._fbUser.displayName;
+
+  // html2canvas 로드 확인
+  if (typeof html2canvas === 'undefined') {
+    showToast('이미지 저장 기능을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+
+  // 카드 요소 찾기
+  const modal = document.getElementById('profileShareModal');
+  const card = modal ? modal.querySelector('.profile-share-card') : null;
+  if (!card) { showToast(t.errorGeneric || '오류가 발생했습니다.'); return; }
+
+  // 카드 화면 밖에 렌더링 후 캡처
+  const wasHidden = modal.style.display === 'none';
+  if (wasHidden) {
+    modal.style.cssText += '; display:flex; position:fixed; left:-9999px; opacity:0; pointer-events:none;';
+  }
+
+  showToast(t.savingImage || '이미지 저장 중...');
+
+  try {
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); // 렌더 대기
+    const canvas = await html2canvas(card, {
+      backgroundColor: '#1a1610',
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      width: card.offsetWidth,
+      height: card.offsetHeight
+    });
+    // PNG 다운로드 (DOM에 추가해야 iOS 등에서 동작)
+    const link = document.createElement('a');
+    link.download = 'myan-profile.png';
+    link.href = canvas.toDataURL('image/png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(t.imageSaved || '이미지가 저장되었습니다! 📸');
+  } catch(e) {
+    console.error('html2canvas error:', e);
+    showToast(t.errorGeneric || '저장 중 오류가 발생했습니다.');
+  } finally {
+    if (wasHidden) {
+      modal.style.display = 'none';
+      modal.style.position = '';
+      modal.style.left = '';
+      modal.style.opacity = '';
+      modal.style.pointerEvents = '';
+    }
+  }
+}
+
+// ════════════════════════════════════════════
+//  오행 인디케이터 (메인화면)
+// ════════════════════════════════════════════
+function renderOhaengIndicator(activeO) {
+  ['木','火','土','金','水'].forEach(o => {
+    const el = document.getElementById('chip-' + o);
+    if (!el) return;
+    if (o === activeO) {
+      el.classList.add('chip-active');
+    } else {
+      el.classList.remove('chip-active');
+    }
+  });
+}
+
+// 앱 시작 시 로컬 캐시에서 오늘 오행 복원
+function _restoreOhaengIndicator() {
+  // 1) 일진 계산으로 오늘 오행 바로 활성화
+  try {
+    const todayO = ilchin().o;
+    if (todayO) renderOhaengIndicator(todayO);
+  } catch {}
+  // 2) localStorage 리딩 이력으로 덮어쓰기 (일진과 같으면 유지)
+  const today = _todayKST();
+  try {
+    const cal = JSON.parse(localStorage.getItem('myan_cal') || '{}');
+    if (cal[today]) renderOhaengIndicator(cal[today]);
+  } catch {}
+}
+
+
+function _doShareSNS(type, date, ohaeng) {
+  document.querySelector('.share-sheet-overlay')?.remove();
+  const t   = getT();
+  const url = location.origin;
+  const text = (t.shareMsg || '오늘({d})의 오행 기운은 {o}입니다! M;Y 安에서 확인하세요.')
+    .replace('{d}', date).replace('{o}', ohaeng);
+  const fullText = text + '\n' + url;
+  const enc  = encodeURIComponent;
+
+  switch (type) {
+    case 'kakao':
+      // 카카오링크 공유 (앱/웹 모두 작동)
+      // kakaotalk://send 딥링크 → 설치된 경우 앱으로 직접 공유
+      // 미설치/데스크탑 → 링크 복사 후 안내
+      (function() {
+        const copied = navigator.clipboard
+          ? navigator.clipboard.writeText(fullText).then(() => true).catch(() => false)
+          : Promise.resolve(false);
+        copied.then(() => {
+          // 카카오톡 딥링크 시도 (모바일)
+          if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            const t1 = Date.now();
+            try { window.location.href = 'kakaotalk://msg/send?text=' + enc(fullText); } catch(e) {}
+            setTimeout(() => {
+              if (Date.now() - t1 < 2000) {
+                // 앱 없으면 스토어로
+                showToast('링크가 복사됐어요! 카카오톡 앱에서 붙여넣기 하세요 💬');
+              }
+            }, 1500);
+          } else {
+            // 데스크탑: 링크 복사 + 카카오 오픈채팅 안내
+            showToast('링크가 복사됐어요! 카카오톡에서 붙여넣기해 공유하세요 💬');
+          }
+        });
+      })();
+      break;
+
+    case 'instagram':
+      // Instagram Web Share API 미지원 → 텍스트 복사 + 앱/웹 유도
+      navigator.clipboard.writeText(fullText).then(() => {
+        showToast(t.instaToast || '텍스트가 복사되었습니다! Instagram 앱에서 새 게시물에 붙여넣기 하세요 📸');
+        // 모바일 앱 딥링크 시도
+        setTimeout(() => {
+          try {
+            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+              window.location.href = 'instagram://';
+            } else {
+              window.open('https://www.instagram.com/', '_blank');
+            }
+          } catch {}
+        }, 600);
+      }).catch(() => {
+        window.open('https://www.instagram.com/', '_blank');
+      });
+      break;
+
+    case 'facebook':
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}&quote=${enc(text)}`, '_blank');
+      break;
+
+    case 'twitter':
+      window.open(`https://x.com/intent/tweet?text=${enc(text + ' ')}&url=${enc(url)}`, '_blank');
+      break;
+
+    case 'copy':
+      navigator.clipboard.writeText(fullText)
+        .then(() => showToast(t.shareCopied || '링크가 복사되었습니다! 📋'))
+        .catch(() => showToast(url));
+      break;
+
+    default:
+      if (navigator.share) {
+        navigator.share({ title: 'M;Y 安', text, url }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(fullText).then(() => showToast(t.shareCopied || '복사되었습니다!')).catch(() => {});
+      }
+  }
+}
+
+// ════════════════════════════════════════════
+//  프로모 QR 코드 클레임
+// ════════════════════════════════════════════
+function _checkPromoParam() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('promo');
+  const dynToken = params.get('promo_token');
+  if (!code && !dynToken) return;
+
+  history.replaceState({}, '', location.pathname);
+
+  setTimeout(() => {
+    if (isLoggedIn && isLoggedIn()) {
+      if (dynToken) _showDynamicPromoModal(dynToken);
+      else _showPromoModal(code.toUpperCase());
+    } else {
+      try {
+        if (dynToken) localStorage.setItem('myan_pending_promo_token', dynToken);
+        else localStorage.setItem('myan_pending_promo', code.toUpperCase());
+      } catch {}
+    }
+  }, 1200);
+}
+
+function _showPromoModal(code) {
+  // 기존 모달 제거
+  document.querySelector('#promo-modal')?.remove();
+
+  const t = getT();
+  const overlay = document.createElement('div');
+  overlay.id = 'promo-modal';
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '2000';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:360px;text-align:center;padding:32px 24px">
+      <div style="font-size:2.5rem;margin-bottom:12px">☕</div>
+      <div class="modal-title" style="margin-bottom:8px">M;Y 安 카페 혜택</div>
+      <div style="font-size:0.88rem;color:var(--text-dim);margin-bottom:20px;line-height:1.7">
+        방문해 주셔서 감사합니다!<br>
+        <strong style="color:var(--gold)">무료 토큰 3개</strong>를 드립니다.<br>
+        <span style="font-size:0.78rem;opacity:0.6">계정당 1회 사용 가능</span>
+      </div>
+      <button id="promo-claim-btn" style="width:100%;padding:14px;border-radius:12px;background:var(--gold);color:#1a1610;font-weight:700;font-size:1rem;border:none;cursor:pointer">
+        🎁 토큰 3개 받기
+      </button>
+      <button onclick="document.getElementById('promo-modal').remove()" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;font-size:0.85rem">
+        닫기
+      </button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  document.getElementById('promo-claim-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('promo-claim-btn');
+    btn.disabled = true;
+    btn.textContent = '처리 중...';
+
+    const token = getGoogleIdToken();
+    if (!token) {
+      showToast('로그인 후 이용해 주세요.');
+      overlay.remove();
+      return;
+    }
+
+    try {
+      const r = await fetch('/api/promo/claim', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await r.json();
+      overlay.remove();
+      if (data.success) {
+        showToast(`🎉 토큰 ${data.tokensGiven}개 지급! 잔여: ${data.remaining}개`);
+        if (typeof refreshTokens === 'function') refreshTokens();
+        if (typeof updateAllTokenDisplays === 'function') updateAllTokenDisplays();
+      } else {
+        showToast(data.error || '오류가 발생했습니다.');
+      }
+    } catch {
+      overlay.remove();
+      showToast('네트워크 오류가 발생했습니다.');
+    }
+  });
+}
+
+// 로그인 완료 후 대기 중인 프로모 코드 처리
+function _processPendingPromo() {
+  try {
+    const dynToken = localStorage.getItem('myan_pending_promo_token');
+    if (dynToken) {
+      localStorage.removeItem('myan_pending_promo_token');
+      setTimeout(() => _showDynamicPromoModal(dynToken), 800);
+      return;
+    }
+    const code = localStorage.getItem('myan_pending_promo');
+    if (code) {
+      localStorage.removeItem('myan_pending_promo');
+      setTimeout(() => _showPromoModal(code), 800);
+    }
+  } catch {}
+}
+function _showDynamicPromoModal(token) {
+  document.querySelector('#promo-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'promo-modal';
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '2000';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:360px;text-align:center;padding:32px 24px">
+      <div style="font-size:2.5rem;margin-bottom:12px">☕</div>
+      <div class="modal-title" style="margin-bottom:8px">M;Y 安 카페 혜택</div>
+      <div style="font-size:0.88rem;color:var(--text-dim);margin-bottom:20px;line-height:1.7">
+        방문해 주셔서 감사합니다!<br>
+        <strong style="color:var(--gold)">무료 토큰 3개</strong>를 드립니다.<br>
+        <span style="font-size:0.78rem;opacity:0.6">1회용 코드 · 계정당 1회</span>
+      </div>
+      <button id="promo-claim-btn" style="width:100%;padding:14px;border-radius:12px;background:var(--gold);color:#1a1610;font-weight:700;font-size:1rem;border:none;cursor:pointer">
+        🎁 토큰 5개 받기
+      </button>
+      <button onclick="document.getElementById('promo-modal').remove()" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;font-size:0.85rem">닫기</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  document.getElementById('promo-claim-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('promo-claim-btn');
+    btn.disabled = true; btn.textContent = '처리 중...';
+    const authToken = getGoogleIdToken();
+    if (!authToken) { showToast('로그인 후 이용해 주세요.'); overlay.remove(); return; }
+    try {
+      const r = await fetch('/api/promo/claim', {
+        method:'POST',
+        headers:{Authorization:`Bearer ${authToken}`,'Content-Type':'application/json'},
+        body: JSON.stringify({ promo_token: token })
+      });
+      const data = await r.json();
+      overlay.remove();
+      if (data.success) {
+        showToast(`🎉 토큰 ${data.tokensGiven}개 지급! 잔여: ${data.remaining}개`);
+        if (typeof refreshTokens === 'function') refreshTokens();
+        if (typeof updateAllTokenDisplays === 'function') updateAllTokenDisplays();
+      } else {
+        showToast(data.error || '오류가 발생했습니다.');
+      }
+    } catch { overlay.remove(); showToast('네트워크 오류가 발생했습니다.'); }
+  });
+}
+

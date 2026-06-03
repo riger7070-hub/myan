@@ -9,6 +9,9 @@ wrangler.toml
 .git/
 .wrangler/
 
+# React Native 앱 빌드 디렉터리 (Workers 배포 불필요)
+myan-native/
+
 # 문서/아카이브 (서빙 불필요)
 SECURITY.md
 icon-usage-guide.md

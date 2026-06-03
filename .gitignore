@@ -16,5 +16,12 @@ Thumbs.db
 # 노드 모듈
 node_modules/
 
+# 빌드 출력
+dist/
+
+# Lock 파일
+*.lock
+package-lock.json
+
 # 아카이브 (git에 불필요)
 myan-icons.zip

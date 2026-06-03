@@ -113,6 +113,67 @@ async function ensureDB(env) {
   _dbReady = true;
 }
 
+// ── ensureDB 확장: 신규 기능 테이블 ──
+let _dbExtReady = false;
+async function ensureDBExt(env) {
+  if (_dbExtReady || !env.DB) return;
+  await env.DB.exec(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'ko',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE TABLE IF NOT EXISTS user_streaks (
+      user_email TEXT PRIMARY KEY, current_streak INTEGER NOT NULL DEFAULT 0,
+      max_streak INTEGER NOT NULL DEFAULT 0, last_checkin TEXT,
+      total_checkins INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE TABLE IF NOT EXISTS ohaeng_history (
+      id TEXT PRIMARY KEY, user_email TEXT NOT NULL, date TEXT NOT NULL,
+      ohaeng TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_email, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_oh_email_date ON ohaeng_history (user_email, date DESC);
+    CREATE TABLE IF NOT EXISTS reading_feedback (
+      id TEXT PRIMARY KEY, user_email TEXT NOT NULL, date TEXT NOT NULL,
+      ohaeng TEXT NOT NULL, is_correct INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()), UNIQUE(user_email, date)
+    );
+    CREATE TABLE IF NOT EXISTS guest_uses (
+      ip TEXT NOT NULL,
+      used_date TEXT NOT NULL,
+      used_at INTEGER NOT NULL,
+      PRIMARY KEY (ip, used_date)
+    );
+    CREATE TABLE IF NOT EXISTS guest_usage (
+      ip TEXT NOT NULL,
+      used_date TEXT NOT NULL,
+      used_count INTEGER DEFAULT 1,
+      PRIMARY KEY (ip, used_date)
+    );
+    CREATE TABLE IF NOT EXISTS dynamic_promo_tokens (
+      token TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      used_at INTEGER,
+      used_by TEXT,
+      tokens_given INTEGER NOT NULL DEFAULT 5
+    );
+    CREATE TABLE IF NOT EXISTS promo_claims (
+      id TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      promo_code TEXT NOT NULL,
+      claimed_at INTEGER NOT NULL,
+      tokens_given INTEGER NOT NULL DEFAULT 5
+    );
+    CREATE TABLE IF NOT EXISTS referrals (
+      code TEXT PRIMARY KEY, referrer_email TEXT NOT NULL, referee_email TEXT,
+      rewarded_at INTEGER, created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_ref_referrer ON referrals (referrer_email);
+  `).catch(() => {});
+  _dbExtReady = true;
+}
+
 export default {
   async fetch(request, env) {
     const url    = new URL(request.url);
@@ -145,7 +206,36 @@ export default {
       return addSecurityHeaders(res);
     }
 
+    // ── 상세 풀이 ──
+    if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
+    // ── 푸시 알림 API ──
+    if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
+    if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }
+    if (path === '/api/push/unsubscribe' && method === 'POST') { await ensureDBExt(env); return handlePushUnsubscribe(request, env); }
+    // ── 스트릭 ──
+    if (path === '/api/streak/checkin'   && method === 'POST') { await ensureDBExt(env); return handleStreakCheckin(request, env); }
+    if (path === '/api/streak'           && method === 'GET')  { await ensureDBExt(env); return handleGetStreak(request, env); }
+    // ── 오행 히스토리 ──
+    if (path === '/api/ohaeng-history'   && method === 'GET')  { await ensureDBExt(env); return handleOhaengHistory(request, env); }
+    if (path === '/api/ohaeng-history'   && method === 'POST') { await ensureDBExt(env); return handleOhaengHistorySave(request, env); }
+    // ── 피드백 ──
+    if (path === '/chat-guest'           && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
+    if (path === '/api/promo/claim'       && method === 'POST') { await ensureDBExt(env); return handlePromoClaim(request, env); }
+    if (path === '/chat-guest'           && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
+    if (path === '/api/promo/generate'    && method === 'POST') { await ensureDBExt(env); return handlePromoGenerate(request, env); }
+    if (path === '/api/promo/current'     && method === 'GET')  { await ensureDBExt(env); return handlePromoCurrent(request, env); }
+    if (path === '/promo-display'         && method === 'GET')  { return handlePromoDisplay(request, env); }
+    if (path === '/api/feedback'         && method === 'POST') { await ensureDBExt(env); return handleFeedback(request, env); }
+    // ── 추천인 ──
+    if (path === '/api/referral/generate'&& method === 'POST') { await ensureDBExt(env); return handleReferralGenerate(request, env); }
+    if (path === '/api/referral/claim'   && method === 'POST') { await ensureDBExt(env); return handleReferralClaim(request, env); }
+    if (path === '/api/referral'         && method === 'GET')  { await ensureDBExt(env); return handleGetReferral(request, env); }
+
     return cors(JSON.stringify({ error: { message: 'Not Found' } }), 404);
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sendDailyPush(env));
   }
 };
 
@@ -194,18 +284,21 @@ async function handleGeminiChat(request, env) {
       return cors(JSON.stringify({ error: { message: '요청 내용이 너무 깁니다.' } }), 400);
     }
 
-    // ── 원자적 토큰 차감 (Race Condition 방지) ──
-    // Conditional INSERT: 잔액 >= 1 일 때만 -1 행이 삽입됨 (SQLite 원자 연산)
+    // ── 원자적 토큰 차감 (duo 모드 = 2토큰, solo = 1토큰) ──
+    const tokenCost = (mode === 'duo') ? 2 : 1;
     const useId = `use_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const deductResult = await env.DB.prepare(
       `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'gemini_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
+       SELECT ?, ?, 'gemini_use', 0, ?, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
+    ).bind(useId, email, -tokenCost, email, tokenCost).run();
 
     // rows_written === 0 이면 잔액 부족 (원자적으로 검증됨)
     if (!deductResult.meta?.rows_written) {
-      return cors(JSON.stringify({ error: { message: '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.' } }), 403);
+      const msg = (mode === 'duo')
+        ? '우리의 조화는 토큰 2개가 필요합니다. 잔액이 부족해요.'
+        : '보유하신 토큰이 부족합니다. 충전 후 이용해주세요.';
+      return cors(JSON.stringify({ error: { message: msg } }), 403);
     }
 
     const il = ilchin();
@@ -216,7 +309,7 @@ async function handleGeminiChat(request, env) {
     if (lang === 'zh') langInstruct = '请用简体中文回答。';
     if (lang === 'ja') langInstruct = '必ず日本語でお答えください。';
 
-    const basePrompt = `Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]} · Secondary: ${on[il.jo]}\n${langInstruct}\nRules: Use "energy reading / flow / prescription" — never "fortune-telling / fate / divination".\nNo definitive predictions. Frame negatives as areas for balance. No markdown bold. End with ONE tag: #木 #火 #土 #金 or #水`;
+    const basePrompt = `Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]} · Secondary: ${on[il.jo]}\n${langInstruct}\nRules: Use "energy reading / flow / prescription" — never "fortune-telling / fate / divination".\nNo definitive predictions. Frame negatives as areas for balance. No markdown bold. End with ONE tag: #木 #火 #土 #金 or #水\n\nHANJA RULE (CRITICAL): When writing the reading in Korean, if you use any Chinese character or difficult Sino-Korean term, you MUST immediately follow it with its meaning in plain Korean in parentheses. Examples: 甲木(갑목, 강한 나무 기운), 天干(천간, 하늘의 기운 10가지), 地支(지지, 땅의 기운 12가지), 庚寅(경인, 쇠와 호랑이의 기운), 相生(상생, 서로 도움), 相剋(상극, 서로 충돌). Simple everyday words do NOT need explanation. Speak warmly and naturally — like a kind friend, not an academic.`;
 
     const fallbackPrompt = `\nCritical Safe Guide: If the user asks general trivia, cooking, coding, or any topic completely unrelated to Saju, Ohaeng, and daily energy flow, DO NOT freeze or throw a safety block. Instead, kindly reply in the requested language that you are the Ohaeng Energy Master of M;Y 安, and gently guide them to ask about their spiritual energy reading or destiny elements.`;
 
@@ -224,8 +317,8 @@ async function handleGeminiChat(request, env) {
     const ohaengJsonInstruction = `\n\nOUTPUT FORMAT (MANDATORY): Return ONLY a valid JSON object — no markdown, no code block, no extra text. Use exactly this structure:\n{\"reading\":\"<your full warm poetic saju reading here, including the #tag>\",\"ohaeng\":{\"木\":N,\"火\":N,\"土\":N,\"金\":N,\"水\":N}}\nFor ohaeng: each N is an integer 0–100, all five must sum to exactly 100. Base on user's actual Saju pillars (year/month/day/hour stems and branches). If birth info is incomplete, estimate from available data.`;
 
     const sysText = (mode === 'solo')
-      ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm poetic long-form reading. (5) Give one specific advice for today.${ohaengJsonInstruction}`
-      : `You are the Ohaeng Harmony Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Each person's Saju Ohaeng. (2) Sangsaeng/Sangguk dynamics. (3) Today's Ilchin impact on the relationship. (4) How they complement each other. (5) Suggest shared activity or topic. Long-form, warm tone. NEVER say "compatibility is bad".`;
+      ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm, easy-to-read long-form reading in simple everyday language. (5) Give one specific, practical advice for today that anyone can act on.${ohaengJsonInstruction}`
+      : `You are the Ohaeng Harmony Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Each person's Saju Ohaeng in plain words. (2) Explain the relationship dynamics simply — how their energies work together or clash, using everyday metaphors. (3) Today's energy impact on the relationship. (4) How they complement each other in practical daily life. (5) Suggest a shared activity or topic. Long-form, warm, simple tone. NEVER say "compatibility is bad".`;
 
     const geminiReqBody = {
       systemInstruction: { parts: [{ text: sysText }] },
@@ -1057,5 +1150,796 @@ async function handleWithdraw(request, env) {
     return cors(JSON.stringify({ success: true, message: '회원 탈퇴가 완료되었습니다.' }), 200);
   } catch (e) {
     return cors(JSON.stringify({ error: { message: '탈퇴 처리 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+
+// ════════════════════════════
+//  상세 풀이 핸들러
+// ════════════════════════════
+async function handleDetailReading(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { date, ohaeng, lang = 'ko' } = await request.json().catch(() => ({}));
+    if (!date || !ohaeng) return cors(JSON.stringify({ error: { message: 'date, ohaeng 필수' } }), 400);
+
+    // 2토큰 차감 (atomic INSERT — 잔액 >= 2 일 때만 삽입)
+    const detailUseId = `detail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deductDetail = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'detail_use', 0, -2, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 2`
+    ).bind(detailUseId, email, email).run();
+    if (!deductDetail.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '상세 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    // 차감 후 잔여 토큰 계산
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 오늘(${date})의 기운은 "${ohaeng}"(${ohaeng==='木'?'나무':ohaeng==='火'?'불':ohaeng==='土'?'흙':ohaeng==='金'?'쇠':'물'} 기운)입니다.
+
+아래 4가지 영역에 대해 ${langLabel}로 조언해주세요.
+중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요. 따뜻하고 친근한 말투로, 각 영역 150자 이상.
+
+1. 🏥 건강: 오늘 몸과 마음을 어떻게 챙기면 좋을지 구체적인 행동 조언
+2. 💰 재물: 오늘 돈·일·사업과 관련해 주의할 점과 좋은 기회
+3. 💝 관계: 가족·친구·연인 관계에서 오늘 특히 신경 쓸 점과 좋은 기회
+4. 🎯 행운: 오늘 특히 좋은 시간대, 색깔, 숫자와 그 이유를 알기 쉽게
+
+JSON 형식으로 답하세요:
+{"health":"...","wealth":"...","relationships":"...","fortune":"..."}`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ responseMimeType:'application/json', temperature:0.8 } }) }
+    );
+    const data = await resp.json();
+    const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const detail = JSON.parse(raw);
+    return cors(JSON.stringify({ success:true, detail, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════
+//  Web Push 유틸
+// ════════════════════════════
+function _b64url(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function _vapidJwt(env, endpoint) {
+  const aud = new URL(endpoint).origin;
+  const now = Math.floor(Date.now()/1000);
+  const header = _b64url(new TextEncoder().encode(JSON.stringify({alg:'ES256',typ:'JWT'})));
+  const payload = _b64url(new TextEncoder().encode(JSON.stringify({
+    aud, exp: now+3600, sub:`mailto:${env.VAPID_EMAIL||'push@myan.app'}`
+  })));
+  const msg = `${header}.${payload}`;
+  const rawKey = atob(env.VAPID_PRIVATE_KEY.replace(/-/g,'+').replace(/_/g,'/'));
+  const keyBytes = Uint8Array.from(rawKey, c=>c.charCodeAt(0));
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', keyBytes, {name:'ECDSA',namedCurve:'P-256'}, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign(
+    {name:'ECDSA',hash:'SHA-256'}, cryptoKey, new TextEncoder().encode(msg)
+  );
+  return `${msg}.${_b64url(sig)}`;
+}
+
+function _endpointId(endpoint) {
+  return _b64url(new TextEncoder().encode(endpoint)).slice(0,64);
+}
+
+async function handlePushVapidKey(env) {
+  return cors(JSON.stringify({ publicKey: env.VAPID_PUBLIC_KEY || '' }), 200);
+}
+
+async function handlePushSubscribe(request, env) {
+  try {
+    const { subscription, lang='ko' } = await request.json().catch(()=>({}));
+    if (!subscription?.endpoint) return cors(JSON.stringify({error:{message:'subscription 필수'}}),400);
+    const id = _endpointId(subscription.endpoint);
+    await env.DB.prepare(
+      `INSERT INTO push_subscriptions (id,endpoint,p256dh,auth,lang)
+       VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET endpoint=excluded.endpoint,
+       p256dh=excluded.p256dh,auth=excluded.auth,lang=excluded.lang`
+    ).bind(id, subscription.endpoint, subscription.keys?.p256dh||'', subscription.keys?.auth||'', lang).run();
+    return cors(JSON.stringify({success:true}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+async function handlePushUnsubscribe(request, env) {
+  try {
+    const { endpoint } = await request.json().catch(()=>({}));
+    if (!endpoint) return cors(JSON.stringify({error:{message:'endpoint 필수'}}),400);
+    const id = _endpointId(endpoint);
+    await env.DB.prepare('DELETE FROM push_subscriptions WHERE id=?').bind(id).run();
+    return cors(JSON.stringify({success:true}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+async function _sendOnePush(env, sub, payload) {
+  try {
+    const jwt = await _vapidJwt(env, sub.endpoint);
+    await fetch(sub.endpoint, {
+      method:'POST',
+      headers:{
+        'Authorization':`vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`,
+        'Content-Type':'application/json',
+        'TTL':'86400'
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch(_) {}
+}
+
+async function sendDailyPush(env) {
+  await ensureDBExt(env);
+  const subs = await env.DB.prepare('SELECT * FROM push_subscriptions').all();
+  for (const sub of (subs.results||[])) {
+    const msg = { ko:'오늘의 오행 운세를 확인하세요! 🌟', en:"Check today's fortune! 🌟",
+                  zh:'查看今日五行运势！🌟', ja:'今日の五行運勢を確認！🌟' };
+    await _sendOnePush(env, sub, { title:'M;Y 安', body: msg[sub.lang]||msg.ko, url:'/' });
+  }
+}
+
+// ════════════════════════════
+//  스트릭 핸들러
+// ════════════════════════════
+function _todayKST() {
+  return new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+}
+
+async function handleStreakCheckin(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+
+    const today = _todayKST();
+    const row = await env.DB.prepare('SELECT * FROM user_streaks WHERE user_email=?').bind(email).first();
+
+    let current=1, max=1, total=1;
+    if (row) {
+      if (row.last_checkin === today) return cors(JSON.stringify({alreadyDone:true, current:row.current_streak, max:row.max_streak, total:row.total_checkins}),200);
+      const yesterday = new Date(Date.now()+9*3600000-86400000).toISOString().slice(0,10);
+      current = (row.last_checkin === yesterday) ? row.current_streak+1 : 1;
+      max = Math.max(current, row.max_streak||0);
+      total = (row.total_checkins||0)+1;
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO user_streaks (user_email,current_streak,max_streak,last_checkin,total_checkins,updated_at)
+       VALUES (?,?,?,?,?,unixepoch())
+       ON CONFLICT(user_email) DO UPDATE SET current_streak=excluded.current_streak,
+       max_streak=excluded.max_streak,last_checkin=excluded.last_checkin,
+       total_checkins=excluded.total_checkins,updated_at=excluded.updated_at`
+    ).bind(email,current,max,today,total).run();
+
+    // 7일 스트릭 보너스
+    if (current%7===0) {
+      await env.DB.prepare(
+        `UPDATE payment_requests SET token_count=token_count+5 WHERE user_email=?`
+      ).bind(email).run();
+    }
+
+    return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+async function handleGetStreak(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    const row = await env.DB.prepare('SELECT * FROM user_streaks WHERE user_email=?').bind(email).first();
+    if (!row) return cors(JSON.stringify({current:0,max:0,total:0,lastCheckin:null}),200);
+    return cors(JSON.stringify({current:row.current_streak,max:row.max_streak,total:row.total_checkins,lastCheckin:row.last_checkin}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  오행 히스토리 핸들러
+// ════════════════════════════
+async function handleOhaengHistory(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    const rows = await env.DB.prepare(
+      'SELECT date,ohaeng FROM ohaeng_history WHERE user_email=? ORDER BY date DESC LIMIT 90'
+    ).bind(email).all();
+    return cors(JSON.stringify({history: rows.results||[]}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  피드백 핸들러
+// ════════════════════════════
+async function handleFeedback(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    const { date, ohaeng, isCorrect } = await request.json().catch(()=>({}));
+    if (!date||!ohaeng) return cors(JSON.stringify({error:{message:'date,ohaeng 필수'}}),400);
+    const id = `${email}:${date}`;
+    await env.DB.prepare(
+      `INSERT INTO reading_feedback (id,user_email,date,ohaeng,is_correct)
+       VALUES (?,?,?,?,?) ON CONFLICT(user_email,date) DO UPDATE SET is_correct=excluded.is_correct`
+    ).bind(id,email,date,ohaeng,isCorrect?1:0).run();
+    return cors(JSON.stringify({success:true}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  레퍼럴 핸들러
+// ════════════════════════════
+async function handleReferralGenerate(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    // 기존 코드 확인
+    const existing = await env.DB.prepare('SELECT code FROM referrals WHERE referrer_email=? AND referee_email IS NULL LIMIT 1').bind(email).first();
+    if (existing) return cors(JSON.stringify({code:existing.code}),200);
+    // 새 코드 생성
+    const code = _b64url(crypto.getRandomValues(new Uint8Array(9))).slice(0,8).toUpperCase();
+    await env.DB.prepare('INSERT INTO referrals (code,referrer_email) VALUES (?,?)').bind(code,email).run();
+    return cors(JSON.stringify({code}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+async function handleReferralClaim(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    const { code } = await request.json().catch(()=>({}));
+    if (!code) return cors(JSON.stringify({error:{message:'code 필수'}}),400);
+    const ref = await env.DB.prepare('SELECT * FROM referrals WHERE code=?').bind(code.toUpperCase()).first();
+    if (!ref) return cors(JSON.stringify({error:{message:'유효하지 않은 코드'}}),404);
+    if (ref.referee_email) return cors(JSON.stringify({error:{message:'이미 사용된 코드'}}),409);
+    if (ref.referrer_email===email) return cors(JSON.stringify({error:{message:'본인 코드 사용 불가'}}),400);
+    // 보상: 양쪽 3토큰
+    await env.DB.prepare('UPDATE referrals SET referee_email=?,rewarded_at=unixepoch() WHERE code=?').bind(email,code.toUpperCase()).run();
+    await env.DB.prepare('UPDATE payment_requests SET token_count=token_count+3 WHERE user_email=?').bind(email).run();
+    await env.DB.prepare('UPDATE payment_requests SET token_count=token_count+3 WHERE user_email=?').bind(ref.referrer_email).run();
+    return cors(JSON.stringify({success:true,bonus:3}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+async function handleGetReferral(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    const refs = await env.DB.prepare('SELECT code,referee_email,rewarded_at FROM referrals WHERE referrer_email=?').bind(email).all();
+    const myCode = (refs.results||[]).find(r=>!r.referee_email);
+    return cors(JSON.stringify({
+      myCode: myCode?.code||null,
+      used: (refs.results||[]).filter(r=>r.referee_email).length
+    }),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+
+async function handleOhaengHistorySave(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    const { date, ohaeng } = await request.json().catch(()=>({}));
+    if (!date||!ohaeng) return cors(JSON.stringify({error:{message:'date,ohaeng 필수'}}),400);
+    const id = `${email}:${date}`;
+    await env.DB.prepare(
+      `INSERT INTO ohaeng_history (id,user_email,date,ohaeng) VALUES (?,?,?,?)
+       ON CONFLICT(user_email,date) DO UPDATE SET ohaeng=excluded.ohaeng`
+    ).bind(id,email,date,ohaeng).run();
+    return cors(JSON.stringify({success:true}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+
+// ════════════════════════════════════════════
+//  프로모 QR 코드 클레임 핸들러
+// ════════════════════════════════════════════
+// 카페 직원 PIN — 변경하려면 이 숫자를 수정 후 재배포
+const CAFE_STAFF_PIN = '7777';
+
+const PROMO_CODES = {
+  'MYAN_CAFE': { tokens: 3, label: '카페 방문 혜택' },
+};
+
+async function handlePromoClaim(request, env) {
+  const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+  if (!token) return cors(JSON.stringify({ error: '로그인이 필요합니다.' }), 401);
+
+  let email;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    email = payload.email;
+    if (!email) throw new Error('no email');
+  } catch {
+    return cors(JSON.stringify({ error: '인증 오류입니다.' }), 401);
+  }
+
+  const { code, pin, promo_token } = await request.json().catch(() => ({}));
+
+  // 다이나믹 1회용 토큰 처리
+  if (promo_token) {
+    return handleDynamicPromoClaim(request, env, email, promo_token);
+  }
+
+  const promo = PROMO_CODES[code?.toUpperCase()];
+  if (!promo) return cors(JSON.stringify({ error: '유효하지 않은 코드입니다.' }), 400);
+
+  // PIN 검증 (브루트포스 방지: 입력값 길이 제한)
+  if (promo.requirePin) {
+    if (!pin || String(pin).length > 8) {
+      return cors(JSON.stringify({ error: '직원 확인 PIN을 입력해 주세요.' }), 400);
+    }
+    if (String(pin) !== CAFE_STAFF_PIN) {
+      return cors(JSON.stringify({ error: 'PIN이 올바르지 않습니다. 직원에게 다시 확인해 주세요.' }), 403);
+    }
+  }
+
+  // 중복 클레임 확인
+  const existing = await env.DB.prepare(
+    `SELECT id FROM promo_claims WHERE user_email = ? AND promo_code = ?`
+  ).bind(email, code.toUpperCase()).first();
+
+  if (existing) {
+    return cors(JSON.stringify({ error: '이미 사용된 코드입니다. 계정당 1회만 사용 가능합니다.' }), 409);
+  }
+
+  // 토큰 지급
+  const claimId = `promo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await env.DB.prepare(
+    `INSERT INTO promo_claims (id, user_email, promo_code, claimed_at, tokens_given) VALUES (?, ?, ?, unixepoch(), ?)`
+  ).bind(claimId, email, code.toUpperCase(), promo.tokens).run();
+
+  await env.DB.prepare(
+    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+     VALUES (?, ?, 'promo', 0, ?, 'approved', unixepoch())`
+  ).bind(`grant_${claimId}`, email, promo.tokens).run();
+
+  // 잔여 토큰 반환
+  const bal = await env.DB.prepare(
+    `SELECT COALESCE(SUM(tokens), 0) AS t FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+  ).bind(email).first();
+
+  return cors(JSON.stringify({
+    success: true,
+    tokensGiven: promo.tokens,
+    remaining: bal?.t ?? 0,
+    label: promo.label
+  }), 200);
+}
+
+
+// ════════════════════════════════════════════
+//  다이나믹 QR 프로모 (1회용 토큰 시스템)
+// ════════════════════════════════════════════
+const PROMO_ADMIN_PIN = '9999'; // 카운터 태블릿용 관리자 PIN (변경 가능)
+const PROMO_TOKEN_TTL = 600;   // 토큰 유효시간: 10분 (초)
+const PROMO_TOKENS_REWARD = 3; // 지급 토큰 수
+
+// 랜덤 토큰 생성
+function _genToken() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+// [관리자] 새 1회용 토큰 생성 (카운터 태블릿에서 호출)
+async function handlePromoGenerate(request, env) {
+  const { adminPin } = await request.json().catch(() => ({}));
+  if (adminPin !== PROMO_ADMIN_PIN) {
+    return cors(JSON.stringify({ error: '관리자 PIN이 올바르지 않습니다.' }), 403);
+  }
+  // 기존 미사용 토큰 무효화
+  await env.DB.prepare(
+    `UPDATE dynamic_promo_tokens SET used_at = unixepoch(), used_by = 'expired'
+     WHERE used_at IS NULL AND created_at < unixepoch() - ?`
+  ).bind(PROMO_TOKEN_TTL).run();
+
+  const token = _genToken();
+  await env.DB.prepare(
+    `INSERT INTO dynamic_promo_tokens (token, created_at, tokens_given) VALUES (?, unixepoch(), ?)`
+  ).bind(token, PROMO_TOKENS_REWARD).run();
+
+  const url = `https://myan.riger7070.workers.dev/?promo_token=${token}`;
+  return cors(JSON.stringify({ success: true, token, url, ttl: PROMO_TOKEN_TTL }), 200);
+}
+
+// [관리자] 현재 유효한 토큰 조회
+async function handlePromoCurrent(request, env) {
+  const adminPin = new URL(request.url).searchParams.get('pin');
+  if (adminPin !== PROMO_ADMIN_PIN) {
+    return cors(JSON.stringify({ error: '인증 오류' }), 403);
+  }
+  const row = await env.DB.prepare(
+    `SELECT token, created_at, (unixepoch() - created_at) AS age
+     FROM dynamic_promo_tokens
+     WHERE used_at IS NULL AND created_at > unixepoch() - ?
+     ORDER BY created_at DESC LIMIT 1`
+  ).bind(PROMO_TOKEN_TTL).first();
+
+  if (!row) return cors(JSON.stringify({ token: null }), 200);
+  const remaining = PROMO_TOKEN_TTL - row.age;
+  const url = `https://myan.riger7070.workers.dev/?promo_token=${row.token}`;
+  return cors(JSON.stringify({ token: row.token, url, remaining }), 200);
+}
+
+// [손님] 1회용 토큰으로 클레임
+async function handleDynamicPromoClaim(request, env, email, token) {
+  // 토큰 유효성 확인
+  const tokenRow = await env.DB.prepare(
+    `SELECT token, tokens_given, used_at FROM dynamic_promo_tokens
+     WHERE token = ? AND used_at IS NULL AND created_at > unixepoch() - ?`
+  ).bind(token, PROMO_TOKEN_TTL).first();
+
+  if (!tokenRow) {
+    return cors(JSON.stringify({ error: '이 코드는 이미 사용됐거나 만료되었습니다. 직원에게 새 코드를 요청해 주세요.' }), 410);
+  }
+
+  // 중복 사용 방지
+  const already = await env.DB.prepare(
+    `SELECT id FROM promo_claims WHERE user_email = ? AND promo_code = 'DYNAMIC'`
+  ).bind(email).first();
+  if (already) {
+    return cors(JSON.stringify({ error: '이미 프로모 혜택을 사용하셨습니다. (계정당 1회)' }), 409);
+  }
+
+  // 토큰 소비 처리
+  await env.DB.prepare(
+    `UPDATE dynamic_promo_tokens SET used_at = unixepoch(), used_by = ? WHERE token = ?`
+  ).bind(email, token).run();
+
+  const claimId = `dyn_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  await env.DB.prepare(
+    `INSERT INTO promo_claims (id, user_email, promo_code, claimed_at, tokens_given) VALUES (?, ?, 'DYNAMIC', unixepoch(), ?)`
+  ).bind(claimId, email, tokenRow.tokens_given).run();
+
+  await env.DB.prepare(
+    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+     VALUES (?, ?, 'promo_dynamic', 0, ?, 'approved', unixepoch())`
+  ).bind(`grant_${claimId}`, email, tokenRow.tokens_given).run();
+
+  const bal = await env.DB.prepare(
+    `SELECT COALESCE(SUM(tokens), 0) AS t FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+  ).bind(email).first();
+
+  return cors(JSON.stringify({
+    success: true, tokensGiven: tokenRow.tokens_given, remaining: bal?.t ?? 0
+  }), 200);
+}
+
+// [카운터 태블릿] QR 표시 화면
+async function handlePromoDisplay(request, env) {
+  const url = new URL(request.url);
+  const pin = url.searchParams.get('pin') || '';
+  const authed = pin === PROMO_ADMIN_PIN;
+
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M;Y 安 · 카운터 QR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  body { margin:0; background:#1a1610; color:#c9a96e; font-family:'Apple SD Gothic Neo',sans-serif;
+         display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+  h1 { font-size:1.4rem; letter-spacing:4px; margin-bottom:4px; }
+  .sub { font-size:0.8rem; opacity:0.5; margin-bottom:28px; }
+  #qr-box { background:#fff; padding:16px; border-radius:12px; margin-bottom:20px; }
+  .status { font-size:0.85rem; opacity:0.6; margin-bottom:12px; }
+  .token-disp { font-size:1.6rem; font-weight:700; letter-spacing:8px; margin-bottom:20px; color:#e0c07a; }
+  .btn { background:#c9a96e; color:#1a1610; border:none; padding:14px 32px; border-radius:10px;
+         font-size:1rem; font-weight:700; cursor:pointer; margin:6px; }
+  .btn-sm { background:transparent; border:1px solid #c9a96e; color:#c9a96e; padding:10px 20px;
+            border-radius:8px; font-size:0.85rem; cursor:pointer; }
+  .pin-form { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  input { padding:14px; border-radius:10px; border:1px solid #c9a96e; background:#2a2010;
+          color:#c9a96e; font-size:1.2rem; text-align:center; letter-spacing:6px; width:160px; }
+  #timer { font-size:0.78rem; color:#888; margin-top:8px; }
+  #used-badge { display:none; color:#e05a4a; font-size:0.9rem; margin-top:8px; }
+</style>
+</head>
+<body>
+${authed ? `
+<h1>M;Y 安</h1>
+<div class="sub">카운터 QR · 고객용</div>
+<div id="qr-box"><div id="qr"></div></div>
+<div class="token-disp" id="token-text">─ ─ ─ ─ ─</div>
+<div class="status" id="status">새 QR을 생성하세요</div>
+<div id="timer"></div>
+<div id="used-badge">✓ 사용됨 — 새 QR을 생성해 주세요</div>
+<br>
+<button class="btn" onclick="genQR()">🔄 새 QR 생성</button>
+<button class="btn-sm" onclick="location.reload()">새로고침</button>
+<script>
+const PIN = '${pin}';
+let currentToken = null;
+let pollInterval = null;
+let timerInterval = null;
+let expiresAt = null;
+
+async function genQR() {
+  document.getElementById('used-badge').style.display = 'none';
+  document.getElementById('status').textContent = '생성 중...';
+  const r = await fetch('/api/promo/generate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({adminPin: PIN})
+  });
+  const d = await r.json();
+  if (!d.success) { alert(d.error); return; }
+  currentToken = d.token;
+  expiresAt = Date.now() + d.ttl * 1000;
+  showQR(d.url, d.token);
+  startPoll();
+  startTimer(d.ttl);
+}
+
+function showQR(url, token) {
+  document.getElementById('qr').innerHTML = '';
+  new QRCode(document.getElementById('qr'), {
+    text: url, width:220, height:220,
+    colorDark:'#1a1610', colorLight:'#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  });
+  document.getElementById('token-text').textContent = token;
+  document.getElementById('status').textContent = '손님이 스캔하면 자동으로 새 QR이 생성됩니다';
+}
+
+function startPoll() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const r = await fetch('/api/promo/current?pin=' + PIN);
+    const d = await r.json();
+    if (!d.token || d.token !== currentToken) {
+      clearInterval(pollInterval);
+      clearInterval(timerInterval);
+      document.getElementById('timer').textContent = '';
+      document.getElementById('used-badge').style.display = 'block';
+      document.getElementById('status').textContent = '사용 완료!';
+      // 2초 후 자동으로 새 QR 생성
+      setTimeout(genQR, 2000);
+    }
+  }, 2000);
+}
+
+function startTimer(ttl) {
+  if (timerInterval) clearInterval(timerInterval);
+  const el = document.getElementById('timer');
+  timerInterval = setInterval(() => {
+    const left = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+    el.textContent = left > 0 ? '유효시간: ' + left + '초' : '만료됨';
+    if (left === 0) { clearInterval(timerInterval); clearInterval(pollInterval); }
+  }, 1000);
+}
+
+// 페이지 로드 시 현재 유효한 토큰 확인
+(async () => {
+  const r = await fetch('/api/promo/current?pin=' + PIN);
+  const d = await r.json();
+  if (d.token) {
+    currentToken = d.token;
+    expiresAt = Date.now() + d.remaining * 1000;
+    showQR(d.url, d.token);
+    startPoll();
+    startTimer(d.remaining);
+  }
+})();
+</script>
+` : `
+<h1>M;Y 安 · 카운터</h1>
+<div class="sub">관리자 로그인</div>
+<div class="pin-form">
+  <input type="password" id="pin-in" placeholder="PIN" maxlength="8" inputmode="numeric">
+  <button class="btn" onclick="location.href='/promo-display?pin='+document.getElementById('pin-in').value">
+    입장
+  </button>
+</div>
+`}
+</body>
+</html>`;
+  return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+}
+
+
+// ════════════════════════════════════════════
+//  게스트 체험 (비로그인 1회 무료 풀이)
+// ════════════════════════════════════════════
+async function handleGuestChat(request, env) {
+  // IP 기반 하루 1회 제한
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const today = new Date().toISOString().slice(0, 10); // KST 근사값
+
+  try {
+    // 이미 사용했는지 확인
+    const existing = await env.DB.prepare(
+      `SELECT ip FROM guest_uses WHERE ip = ? AND used_date = ?`
+    ).bind(ip, today).first();
+
+    if (existing) {
+      return cors(JSON.stringify({
+        error: { message: '오늘의 무료 체험은 이미 사용하셨습니다. 회원가입하면 더 많은 풀이를 받을 수 있어요!' }
+      }), 429);
+    }
+  } catch {}
+
+  const body = await request.json().catch(() => ({}));
+  const { birth, lang = 'ko' } = body;
+  if (!birth) return cors(JSON.stringify({ error: { message: '생년월일을 입력해주세요.' } }), 400);
+
+  const API_KEY = env.GEMINI_API_KEY;
+  if (!API_KEY) return cors(JSON.stringify({ error: { message: 'API 오류' } }), 500);
+
+  const il = ilchin();
+  const on = ON[lang] || ON.ko;
+
+  let langInstruct = '한국어로 답변해 주세요.';
+  if (lang === 'en') langInstruct = 'Please respond in English.';
+  if (lang === 'zh') langInstruct = '请用简体中文回答。';
+  if (lang === 'ja') langInstruct = '必ず日本語でお答えください。';
+
+  const sysText = `You are the Ohaeng Energy Master of M;Y 安. Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]}.
+${langInstruct}
+Rules: Use plain, warm everyday language. If you use any Chinese characters or difficult terms, immediately add their Korean meaning in parentheses.
+No definitive predictions. Frame negatives as areas for balance. No markdown bold.
+OUTPUT FORMAT (MANDATORY): Return ONLY valid JSON — no markdown, no code block:
+{"reading":"<warm short reading 200-300 chars>","ohaeng":{"木":N,"火":N,"土":N,"金":N,"水":N}}
+For ohaeng: integers 0–100, sum = 100. End reading with one of: #木 #火 #土 #金 #水`;
+
+  const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
+${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: sysText }] },
+          contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+          generationConfig: { temperature: 0.75, maxOutputTokens: 1024, responseMimeType: 'application/json' }
+        })
+      }
+    );
+    const data = await resp.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let result = {};
+    try { result = JSON.parse(rawText); } catch {}
+
+    if (!result.reading) return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 다시 시도해주세요.' } }), 500);
+
+    // 사용 기록 저장 (실패해도 결과 반환)
+    try {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO guest_uses (ip, used_date, used_at) VALUES (?, ?, unixepoch())`
+      ).bind(ip, today).run();
+    } catch {}
+
+    const tag = ['木','火','土','金','水'].find(k => result.reading?.includes('#' + k)) || il.o;
+    return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result._ohaeng || result.ohaeng, tag }), 200);
+
+  } catch(e) {
+    return cors(JSON.stringify({ error: { message: 'AI 연결에 실패했습니다.' } }), 500);
+  }
+}
+
+
+// ════════════════════════════════════════════
+//  게스트 체험 핸들러 (로그인 없이 1회 무료)
+// ════════════════════════════════════════════
+async function handleGuestChat(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
+
+  // IP당 하루 1회 제한 확인
+  const usage = await env.DB.prepare(
+    `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
+  ).bind(ip, today).first();
+
+  if (usage && usage.used_count >= 1) {
+    return cors(JSON.stringify({
+      error: { message: 'already_used', code: 'GUEST_LIMIT' }
+    }), 429);
+  }
+
+  const { birth, lang = 'ko' } = await request.json().catch(() => ({}));
+  if (!birth) return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
+
+  const il = ilchin();
+  const on = ON[lang] || ON.ko;
+
+  const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.
+${lang === 'ko' ? '한국어로 답변하세요.' : lang === 'en' ? 'Respond in English.' : lang === 'zh' ? '请用中文回答。' : '日本語で答えてください。'}
+HANJA RULE: When using Chinese characters, always add Korean meaning in parentheses.
+Write in warm, plain everyday language. Keep it concise (200-250 characters).
+OUTPUT: Return ONLY valid JSON: {"reading":"<warm short reading 200-300 chars>","ohaeng":{"木":N,"火":N,"土":N,"金":N,"水":N}}
+For ohaeng: integers 0–100, sum = 100. End reading with one of: #木 #火 #土 #金 #水`;
+
+  const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
+${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: sysText }] },
+          contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 1024, responseMimeType: 'application/json' }
+        })
+      }
+    );
+
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let result = {};
+    try { result = JSON.parse(raw); } catch {}
+
+    if (!result.reading) return cors(JSON.stringify({ error: { message: 'AI 응답 오류' } }), 500);
+
+    // 사용 기록 저장
+    await env.DB.prepare(
+      `INSERT INTO guest_usage (ip, used_date, used_count) VALUES (?, ?, 1)
+       ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
+    ).bind(ip, today).run();
+
+    return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
+
+  } catch(e) {
+    return cors(JSON.stringify({ error: { message: e.message } }), 500);
   }
 }

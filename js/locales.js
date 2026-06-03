@@ -3,7 +3,7 @@
 const TX = {
   ko:{
     tagline:'마음의 영양을 처방합니다',
-    ilchin: il=>`오늘의 일진 · ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일 · ${ON.ko[il.o]}`,
+    ilchin: il=>`오늘의 일진 · ${CG_K[il.ci]}${JJ_K[il.ji]}(${CG[il.ci]}${JJ[il.ji]})일 · ${ON.ko[il.o]}`,
     back:'처음으로',
     eyebrow:'오늘의 기운',
     headline:'어떤 리딩을\n받으시겠습니까',
@@ -21,8 +21,8 @@ const TX = {
     err:'잠시 기운이 엇갈렸습니다(시스템 오류). 토큰은 차감되지 않았으니 잠시 후 다시 시도해 주세요.',
     noLogin:'로그인이 필요합니다. 다시 로그인해 주세요.',
     errSafety:'질문이 기운 리딩의 범위를 벗어나 답변이 생성되지 않았습니다. 사주·오행·에너지 흐름에 관한 질문을 해주세요. (사용된 토큰은 차감되지 않고 안전하게 복구되었습니다.)',
-    g1: il=>`오늘의 기운을 함께 살펴볼게요. ✨\n오늘은 ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 은은하게 흐르고 있는 날이네요.\n\n성함과 생년월일을 알려주시면, 이 기운이 오늘 나에게 어떻게 닿는지 풀어드릴게요. 태어난 시간도 알고 계시다면 함께 적어주세요.`,
-    g2: il=>`두 분의 이야기를 함께 살펴볼게요. 🌿\n오늘은 ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 온화하게 머물고 있어요.\n\n두 분의 성함과 생년월일을 각각 알려주시면, 서로의 오행이 오늘 일진과 어떻게 어우러지는지 풀어드릴게요.`,
+    g1: il=>`오늘의 기운을 함께 살펴볼게요. ✨\n오늘은 ${CG_K[il.ci]}${JJ_K[il.ji]}(${CG[il.ci]}${JJ[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 은은하게 흐르고 있는 날이네요.\n\n성함과 생년월일을 알려주시면, 이 기운이 오늘 나에게 어떻게 닿는지 풀어드릴게요. 태어난 시간도 알고 계시다면 함께 적어주세요.`,
+    g2: il=>`두 분의 이야기를 함께 살펴볼게요. 🌿\n오늘은 ${CG_K[il.ci]}${JJ_K[il.ji]}(${CG[il.ci]}${JJ[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 온화하게 머물고 있어요.\n\n두 분의 성함과 생년월일을 각각 알려주시면, 서로의 오행이 오늘 일진과 어떻게 어우러지는지 풀어드릴게요.`,
     sys:'반드시 한국어로 답변해 주세요.',
     sgTitle:'회원가입',
     sgHeadline:'회원가입하고\n더 섬세한 기운을\n받으세요.',
@@ -33,13 +33,33 @@ const TX = {
     sgNotice:'수집된 정보는 기운 풀이 개선 및 맞춤 처방 목적으로만 사용되며 제3자에게 제공되지 않습니다.',
     sgSuccTitle:'가입이 완료되었습니다', sgSuccDesc:'소중한 기운이 기록되었습니다.\n내일 오시면 더욱 섬세한 처방을 받으실 수 있습니다.',
     sgBack:'처음으로 →', sgErr:'저장 중 오류가 발생했습니다. 다시 시도해 주세요.', sgUnknown:'모름', sgOr:'또는 직접 입력',
-    g1_auto: (il, u) => `${u.name}님, 다시 오셨네요. ☀️\n오늘은 ${CG[il.ci]}${JJ[il.ji]}(${CG_K[il.ci]}${JJ_K[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 흐르고 있어요.\n\n사주 정보가 준비되어 있으니 오늘 기운 흐름이나 궁금한 게 있으시면 편하게 말씀해 주세요.`,
+    g1_auto: (il, u) => `${u.name}님, 다시 오셨네요. ☀️\n오늘은 ${CG_K[il.ci]}${JJ_K[il.ji]}(${CG[il.ci]}${JJ[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 흐르고 있어요.\n\n사주 정보가 준비되어 있으니 오늘 기운 흐름이나 궁금한 게 있으시면 편하게 말씀해 주세요.`,
     mpLink:'마이페이지', mpTitle:'마이페이지', mpSection:'생년월일 수정',
     mpDetailSection:'상세 정보 입력',
     mpDetailNotice:'아래 정보를 추가하면 더욱 정밀한 사주 풀이를 받으실 수 있습니다. 모두 선택 사항입니다.',
     mpSave:'저장하기', mpSaved:'저장되었습니다 ✦',
     mpLogout:'로그아웃', mpWithdraw:'회원 탈퇴',
     mpLogoutQ:'다시 누르면 로그아웃됩니다', mpWithdrawQ:'다시 누르면 탈퇴됩니다',
+    shareBtn:'공유', shareCopied:'클립보드에 복사됨!',
+    shareTitle:'M;Y 安 오늘의 운세', shareMsg:'오늘({d})의 오행 기운은 {o}입니다! M;Y 安에서 확인하세요.',
+    previewLabel:'오늘의 운세', previewCta:'채팅으로 물어보기 →', previewSub:'지금 확인하기',
+    notifOn:'알림 켜기', notifOff:'알림 해제됨', notifOff2:'알림 끄기', savingImage:'이미지 저장 중...', imageSaved:'이미지가 저장되었습니다! 📸', notifEnabled:'알림이 설정되었습니다! 🌟', notifDenied:'알림 권한이 필요합니다.',
+    detailTitle:'상세 풀이', detailSub:'4가지 영역 AI 분석', detailLoading:'AI가 상세 분석 중... (약 10초)',
+    detailCardTitle:{health:'건강',wealth:'재물',relationships:'관계',fortune:'행운'},
+    tokenUnit:'잔여 토큰',
+    streakTitle:'출석 스트릭', streakCurrent:'현재', streakMax:'최고', streakTotal:'총 출석',
+    streakCheckin:'오늘 출석 체크', streakDone:'오늘 출석 완료 ✓', streakBonus:'🎉 7일 보너스! +5 토큰', streakDay:'일',
+    heatmapTitle:'90일 오행 기록',
+    luckyTitle:'오늘의 행운', luckyColor:'행운색', luckyNumber:'행운숫자', luckyDir:'행운방향', luckyStone:'행운석',
+    feedbackLabel:'이 운세가 맞았나요?', feedbackYes:'맞아요', feedbackNo:'달라요',
+    referralTitle:'친구 초대', referralGenerate:'내 초대 코드 생성', referralCopy:'복사',
+    referralDesc:'친구가 코드를 입력하면 양쪽 모두 +3 토큰!',
+    referralInputPlaceholder:'초대 코드 입력', referralClaimBtn:'적용',
+    referralUsed:'초대 성공: {n}명', referralClaimed:'🎉 코드 적용! +{n} 토큰',
+    profileShareText:'M;Y 安에서 {s}일 연속 운세 확인 중! (총 {t}회) myan.riger7070.workers.dev',
+    ohiLabel:'오늘의 기운', ohiActive:'오늘의 기운',
+    shareCancel:'취소', shareCopyBtn:'링크 복사',
+    instaToast:'텍스트 복사 완료! Instagram 앱에서 붙여넣기 하세요 📸',
     wdSessionExpired:'세션이 만료됐습니다. 다시 로그인 후 탈퇴해 주세요.',
     tkSection:'잔여 토큰', tkUnit:'TOKENS',
     noToken:'토큰이 부족합니다.\n마이페이지에서 충전 후 이용해 주세요.',
@@ -85,6 +105,7 @@ const TX = {
     fifNamePh:'홍길동',
     // 추천 칩
     suggestChips:['오늘 재물운','이직해도 될까요?','오늘 피해야 할 것','지금 연애운','오늘 하루 총운'],
+    suggestChipsDuo:['우리 궁합 어때요?','요즘 사이가 멀어진 것 같아요','언제 결혼하면 좋을까요?','싸움이 잦아요, 왜일까요?','서로 잘 맞는 부분이 있을까요?'],
     // 마이페이지 하단
     mpZeroNote:'토큰이 없습니다. 아래에서 충전하시면 리딩을 계속하실 수 있어요 ✦',
     mpBotCharge:'토큰 충전', mpBotChargeDesc:'잔여 토큰 충전하기',
@@ -130,6 +151,26 @@ const TX = {
     mpSave:'Save Changes', mpSaved:'Saved ✦',
     mpLogout:'Log Out', mpWithdraw:'Delete Account',
     mpLogoutQ:'Tap again to log out', mpWithdrawQ:'Tap again to delete account',
+    shareBtn:'Share', shareCopied:'Copied to clipboard!',
+    shareTitle:"M;Y 安 Today's Fortune", shareMsg:"Today({d})'s energy is {o}! Check it on M;Y 安.",
+    previewLabel:"Today's Fortune", previewCta:'Ask in chat →', previewSub:'Check now',
+    notifOn:'Enable Notifications', notifOff:'Notifications off', notifOff2:'Turn Off', savingImage:'Saving image...', imageSaved:'Image saved! 📸', notifEnabled:'Notifications enabled! 🌟', notifDenied:'Notification permission required.',
+    detailTitle:'Detailed Reading', detailSub:'AI Analysis of 4 Life Areas', detailLoading:'AI analyzing... (~10 sec)',
+    detailCardTitle:{health:'Health',wealth:'Wealth',relationships:'Relationships',fortune:'Fortune'},
+    tokenUnit:'Remaining Tokens',
+    streakTitle:'Attendance Streak', streakCurrent:'Current', streakMax:'Best', streakTotal:'Total',
+    streakCheckin:'Check In Today', streakDone:'Checked In ✓', streakBonus:'🎉 7-day bonus! +5 tokens', streakDay:'days',
+    heatmapTitle:'90-Day Energy Log',
+    luckyTitle:"Today's Lucky", luckyColor:'Lucky Color', luckyNumber:'Lucky Number', luckyDir:'Lucky Direction', luckyStone:'Lucky Stone',
+    feedbackLabel:'Was this accurate?', feedbackYes:'Yes!', feedbackNo:'Not quite',
+    referralTitle:'Invite Friends', referralGenerate:'Generate My Code', referralCopy:'Copy',
+    referralDesc:'Both you and your friend get +3 tokens when they use your code!',
+    referralInputPlaceholder:'Enter invite code', referralClaimBtn:'Apply',
+    referralUsed:'Successful invites: {n}', referralClaimed:'🎉 Code applied! +{n} tokens',
+    profileShareText:'On a {s}-day streak on M;Y 安! ({t} total check-ins) myan.riger7070.workers.dev',
+    ohiLabel:"Today's Energy", ohiActive:"Today's Energy",
+    shareCancel:'Cancel', shareCopyBtn:'Copy Link',
+    instaToast:'Text copied! Paste it in the Instagram app 📸',
     wdSessionExpired:'Your session has expired. Please log in again before deleting your account.',
     tkSection:'Remaining Tokens', tkUnit:'TOKENS',
     noToken:'Not enough tokens.\nPlease top up in My Page.',
@@ -175,6 +216,7 @@ const TX = {
     fifNamePh:'Jane Doe',
     // Suggest chips
     suggestChips:['Wealth today','Should I change jobs?','What to avoid today','Love fortune','Daily outlook'],
+    suggestChipsDuo:['How is our compatibility?','We feel distant lately','Best time to get married?','Why do we argue so often?','What do we have in common?'],
     // Mypage bottom
     mpZeroNote:'No tokens left. Charge below to continue your reading ✦',
     mpBotCharge:'Buy Tokens', mpBotChargeDesc:'Top up to continue readings',
@@ -220,6 +262,26 @@ const TX = {
     mpSave:'保存', mpSaved:'已保存 ✦',
     mpLogout:'退出登录', mpWithdraw:'注销账号',
     mpLogoutQ:'再次点击确认退出', mpWithdrawQ:'再次点击确认注销',
+    shareBtn:'分享', shareCopied:'已复制到剪贴板!',
+    shareTitle:'M;Y 安 今日运势', shareMsg:'今天({d})的五行之气是{o}！快来M;Y 安查看吧。',
+    previewLabel:'今日运势', previewCta:'在聊天中询问 →', previewSub:'立即查看',
+    notifOn:'开启通知', notifOff:'已关闭通知', notifOff2:'关闭通知', savingImage:'正在保存图片...', imageSaved:'图片已保存！📸', notifEnabled:'通知已设置！🌟', notifDenied:'需要通知权限。',
+    detailTitle:'详细解读', detailSub:'AI分析四大领域', detailLoading:'AI分析中...（约10秒）',
+    detailCardTitle:{health:'健康',wealth:'财富',relationships:'人际关系',fortune:'运气'},
+    tokenUnit:'剩余代币',
+    streakTitle:'出勤连续记录', streakCurrent:'当前', streakMax:'最高', streakTotal:'总计',
+    streakCheckin:'今日签到', streakDone:'今日已签到 ✓', streakBonus:'🎉 7天奖励！+5代币', streakDay:'天',
+    heatmapTitle:'90天五行记录',
+    luckyTitle:'今日幸运', luckyColor:'幸运色', luckyNumber:'幸运数字', luckyDir:'幸运方向', luckyStone:'幸运石',
+    feedbackLabel:'运势准确吗？', feedbackYes:'准确', feedbackNo:'不太准',
+    referralTitle:'邀请好友', referralGenerate:'生成我的邀请码', referralCopy:'复制',
+    referralDesc:'好友使用您的邀请码后，双方各得+3代币！',
+    referralInputPlaceholder:'输入邀请码', referralClaimBtn:'应用',
+    referralUsed:'成功邀请：{n}人', referralClaimed:'🎉 代码已应用！+{n}代币',
+    profileShareText:'在M;Y 安连续{s}天查看运势！（共{t}次）myan.riger7070.workers.dev',
+    ohiLabel:'今日气运', ohiActive:'今日气运',
+    shareCancel:'取消', shareCopyBtn:'复制链接',
+    instaToast:'文字已复制！请在Instagram应用中粘贴 📸',
     wdSessionExpired:'会话已过期，请重新登录后再注销账号。',
     tkSection:'剩余代币', tkUnit:'TOKENS',
     noToken:'代币不足。\n请前往个人页面充值。',
@@ -265,6 +327,7 @@ const TX = {
     fifNamePh:'张三',
     // 推荐话题
     suggestChips:['今日财运','可以换工作吗？','今日应避之事','爱情运势','今日总运'],
+    suggestChipsDuo:['我们的缘分如何？','最近感觉有些疏远','何时结婚比较好？','为什么我们经常吵架？','我们有哪些共同点？'],
     // 我的页面底部
     mpZeroNote:'代币不足，请在下方充值后继续解读 ✦',
     mpBotCharge:'充值代币', mpBotChargeDesc:'充值后继续解读',
@@ -310,6 +373,26 @@ const TX = {
     mpSave:'保存する', mpSaved:'保存しました ✦',
     mpLogout:'ログアウト', mpWithdraw:'退会する',
     mpLogoutQ:'もう一度でログアウト', mpWithdrawQ:'もう一度で退会します',
+    shareBtn:'シェア', shareCopied:'クリップボードにコピーしました!',
+    shareTitle:'M;Y 安 今日の運勢', shareMsg:'今日({d})の五行の気は{o}です！M;Y 安でチェック。',
+    previewLabel:'今日の運勢', previewCta:'チャットで聞く →', previewSub:'今すぐ確認',
+    notifOn:'通知をオンにする', notifOff:'通知をオフにしました', notifOff2:'通知をオフ', savingImage:'画像を保存中...', imageSaved:'画像が保存されました！📸', notifEnabled:'通知が設定されました！🌟', notifDenied:'通知の許可が必要です。',
+    detailTitle:'詳細リーディング', detailSub:'4分野AIアナリシス', detailLoading:'AI分析中...（約10秒）',
+    detailCardTitle:{health:'健康',wealth:'財運',relationships:'人間関係',fortune:'幸運'},
+    tokenUnit:'残りトークン',
+    streakTitle:'連続出席', streakCurrent:'現在', streakMax:'最高', streakTotal:'合計',
+    streakCheckin:'今日の出席チェック', streakDone:'本日出席済み ✓', streakBonus:'🎉 7日ボーナス！+5トークン', streakDay:'日',
+    heatmapTitle:'90日間の五行記録',
+    luckyTitle:'今日のラッキー', luckyColor:'ラッキーカラー', luckyNumber:'ラッキーナンバー', luckyDir:'ラッキー方向', luckyStone:'ラッキーストーン',
+    feedbackLabel:'この運勢は当たりましたか？', feedbackYes:'当たった', feedbackNo:'ちょっと違う',
+    referralTitle:'友達を招待', referralGenerate:'招待コードを生成', referralCopy:'コピー',
+    referralDesc:'友達がコードを入力すると、双方に+3トークン！',
+    referralInputPlaceholder:'招待コードを入力', referralClaimBtn:'適用',
+    referralUsed:'招待成功：{n}人', referralClaimed:'🎉 コード適用！+{n}トークン',
+    profileShareText:'M;Y 安で{s}日連続運勢チェック中！（計{t}回）myan.riger7070.workers.dev',
+    ohiLabel:'今日の気運', ohiActive:'今日の気運',
+    shareCancel:'キャンセル', shareCopyBtn:'リンクをコピー',
+    instaToast:'テキストをコピーしました！Instagramアプリに貼り付けてください 📸',
     wdSessionExpired:'セッションが期限切れです。再度ログインしてから退会してください。',
     tkSection:'残りトークン', tkUnit:'TOKENS',
     noToken:'トークンが不足しています。\nマイページでチャージしてください。',
@@ -353,6 +436,7 @@ const TX = {
     fifSubmitBtn:'リーディングを始める ›',
     fifNamePh:'山田太郎',
     suggestChips:['今日の金運','転職すべきか？','今日避けること','恋愛運','今日の総合運'],
+    suggestChipsDuo:['二人の相性はどうですか？','最近距離を感じます','いつ結婚するといいですか？','なぜよく喧嘩するのですか？','共通点はありますか？'],
     mpZeroNote:'トークンがありません。以下から充電してリーディングを続けましょう ✦',
     mpBotCharge:'トークン充電', mpBotChargeDesc:'続けるために充電する',
     mpBotSupport:'1:1 カカオ相談', mpBotSupportDesc:'いつでもお気軽にどうぞ',
@@ -523,6 +607,8 @@ function startMode(m) {
   }
 
   pendingMode = null;
+  // 대기 중인 프로모 코드 처리
+  if (typeof _processPendingPromo === 'function') _processPendingPromo();
   _enterMode(m, user);
 }
 
@@ -669,7 +755,15 @@ function submitFirstForm() {
 // ── Change 4: 추천 칩 토글 ──
 function showSuggestChips() {
   const el = document.getElementById('suggestChips');
-  if (el) el.style.display = 'flex';
+  if (!el) return;
+  // 모드에 따라 칩 내용 교체
+  const t = TX[lang] || TX.ko;
+  const chips = (mode === 'duo' ? t.suggestChipsDuo : t.suggestChips) || t.suggestChips || [];
+  const spanEls = el.querySelectorAll('.suggest-chip');
+  spanEls.forEach((span, i) => {
+    if (chips[i] !== undefined) span.textContent = chips[i];
+  });
+  el.style.display = 'flex';
 }
 function hideSuggestChips() {
   const el = document.getElementById('suggestChips');

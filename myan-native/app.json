@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "M;Y 安",
+    "slug": "myan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon-app-store-1024.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-1200.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#060608"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.myan.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "이 앱은 광고 추적을 사용하지 않습니다.",
+        "CFBundleLocalizations": [
+          "ko",
+          "en",
+          "zh-Hans",
+          "ja"
+        ],
+        "CFBundleDevelopmentRegion": "ko_KR"
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": []
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon-play-store-512.png",
+        "backgroundColor": "#060608"
+      },
+      "package": "com.myan.app",
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.WRITE_CALL_LOG",
+        "android.permission.READ_SMS",
+        "android.permission.SEND_SMS",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#060608",
+          "image": "./assets/splash-1200.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "scheme": "myan",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1929e268-b818-49fc-b0c4-3f26b1a104ac"
+      },
+      "router": {
+        "origin": false
+      }
+    },
+    "owner": "myansik"
+  }
+}
