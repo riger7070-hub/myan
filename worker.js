@@ -1881,9 +1881,13 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: sysText }] },
-          contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 1024, responseMimeType: 'application/json' }
+          contents: [
+            { role: 'user', parts: [{ text: sysText + '\n\n' + userMsg }] }
+          ],
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 1024
+          }
         })
       }
     );
