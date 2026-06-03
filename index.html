@@ -221,8 +221,13 @@
         <div class="fif-field">
           <label class="fif-label" id="fifLblDay">일</label>
           <input type="number" class="fif-input" id="fifDay"
-                 placeholder="1" min="1" max="31" inputmode="numeric">
+                 placeholder="1" min="1" max="31" inputmode="numeric" pattern="[0-9]*">
         </div>
+      </div>
+      <div class="fif-mobile-date" style="display:none">
+        <label class="fif-label">생년월일</label>
+        <input type="date" class="fif-input" id="fifBirthdateMobile"
+               max="2025-12-31" min="1920-01-01">
       </div>
       <div class="fif-row">
         <div class="fif-field">
