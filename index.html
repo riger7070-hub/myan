@@ -764,6 +764,29 @@
   </div>
 </div>
 
+<script>
+// Service Worker 강제 업데이트 (v4.0)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    console.log('[SW] Force update check - found', regs.length, 'registrations');
+    regs.forEach(reg => {
+      reg.update().then(() => console.log('[SW] Updated:', reg.scope));
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated') {
+              console.log('[SW] New version activated - reloading page');
+              window.location.reload();
+            }
+          });
+        }
+      });
+    });
+  });
+}
+</script>
+
 <script src="/js/constants.js"></script>
 <script src="/js/locales.js"></script>
 <script src="/js/saju-engine.js"></script>

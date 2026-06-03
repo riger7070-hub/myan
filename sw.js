@@ -1,8 +1,8 @@
-// M;Y 安 — Service Worker v3.4 (Cache Invalidation)
-const VERSION = '3.4';
-const CACHE_NAME = `myan-v8-${VERSION}`;
-const CACHE_IMAGES = `myan-images-v5`;
-const CACHE_STATIC = `myan-static-v5`;
+// M;Y 安 — Service Worker v4.0 (Force Cache Clear)
+const VERSION = '4.0';
+const CACHE_NAME = `myan-v9-${VERSION}`;
+const CACHE_IMAGES = `myan-images-v6`;
+const CACHE_STATIC = `myan-static-v6`;
 const OFFLINE_URL = '/index.html';
 
 // 즉시 캐시할 핵심 리소스
@@ -65,19 +65,23 @@ self.addEventListener('activate', event => {
   console.log('[SW] Activating version', VERSION);
 
   event.waitUntil(
-    // 오래된 캐시 정리
+    // 모든 캐시 강제 삭제 (v4.0 이전 캐시 완전 제거)
     caches.keys().then(cacheNames => {
-      const validCaches = [CACHE_NAME, CACHE_IMAGES, CACHE_STATIC];
+      console.log('[SW] Deleting ALL old caches:', cacheNames);
       return Promise.all(
-        cacheNames
-          .filter(name => !validCaches.includes(name))
-          .map(name => {
-            console.log('[SW] Deleting old cache:', name);
-            return caches.delete(name);
-          })
+        cacheNames.map(name => {
+          console.log('[SW] Deleting cache:', name);
+          return caches.delete(name);
+        })
       );
     }).then(() => {
-      console.log('[SW] Activation complete');
+      // 새 캐시 즉시 생성
+      return Promise.all([
+        caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_ASSETS)),
+        caches.open(CACHE_IMAGES).then(cache => cache.addAll(PRECACHE_IMAGES))
+      ]);
+    }).then(() => {
+      console.log('[SW] Activation complete - fresh cache installed');
       return self.clients.claim(); // 즉시 제어 시작
     })
   );
