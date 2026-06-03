@@ -1827,19 +1827,18 @@ function startTimer(ttl) {
 //  게스트 체험 핸들러 (로그인 없이 1회 무료)
 // ════════════════════════════════════════════
 async function handleGuestChat(request, env) {
-  try {
-    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-    const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
 
-    // DB 체크
-    if (!env.DB) {
-      return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
-    }
+  // DB 체크
+  if (!env.DB) {
+    return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
+  }
 
-    // IP당 하루 1회 제한 확인
-    const usage = await env.DB.prepare(
-      `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
-    ).bind(ip, today).first().catch(() => null);
+  // IP당 하루 1회 제한 확인
+  const usage = await env.DB.prepare(
+    `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
+  ).bind(ip, today).first().catch(() => null);
 
   if (usage && usage.used_count >= 1) {
     // 다음날 자정(KST) 계산
