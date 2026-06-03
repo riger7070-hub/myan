@@ -661,6 +661,12 @@ function _enterMode(m, user) {
     return;
   }
   mode = m; hist = [];
+
+  // 모드 선택 트래킹
+  if (typeof Analytics !== 'undefined') {
+    Analytics.trackModeSelect(m);
+  }
+
   document.getElementById('screen-mode').style.display = 'none';
   document.getElementById('screen-chat').style.display = 'flex';
   document.getElementById('backBtn').style.display = 'flex';

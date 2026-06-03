@@ -33,6 +33,11 @@ function showScreen(screenName, hideBack = false) {
   if (backBtn) {
     backBtn.style.display = hideBack ? 'none' : 'flex';
   }
+
+  // 페이지뷰 트래킹
+  if (typeof Analytics !== 'undefined') {
+    Analytics.trackPageView(screenName);
+  }
 }
 
 function getCurrentScreen() {
@@ -418,6 +423,11 @@ async function send() {
   const txt = inp.value.trim();
   if (!txt || btn.disabled) return;
 
+  // 채팅 전송 트래킹
+  if (typeof Analytics !== 'undefined') {
+    Analytics.trackChatSend(mode, txt.length, hist.length === 0);
+  }
+
   // solo 모드에서 사주 미입력 시 우회 차단
   const _sendUser = getUser();
   if (mode === 'solo' && !_sendUser?.birthYear && hist.length === 0 && !txt.includes('일생')) {
@@ -428,11 +438,17 @@ async function send() {
 
   // 토큰 차감
   if (!checkAndDeductToken()) {
+    // 토큰 부족 트래킹
+    if (typeof Analytics !== 'undefined') {
+      Analytics.trackToken('insufficient', getTokens());
+    }
+
     const bubble = document.createElement('div');
     bubble.className = 'bubble bubble-ai';
     bubble.innerHTML = `
       <div style="margin-bottom: 12px">${TX[lang].noToken}</div>
       <button onclick="(function(){
+        if (typeof Analytics !== 'undefined') Analytics.trackToken('charge_click');
         openMyPage();
         setTimeout(() => {
           const tokenSection = document.querySelector('.mypage-token-display');
@@ -766,11 +782,27 @@ async function _confirmTossPayment({ paymentKey, orderId, amount }) {
     const result = await res.json();
     if (result.success) {
       await refreshTokens();
+
+      // 결제 성공 트래킹
+      if (typeof Analytics !== 'undefined') {
+        Analytics.trackPayment('success', amount, result.tokensAdded);
+      }
+
       alert('✦ 토큰이 충전되었습니다!');
     } else {
+      // 결제 실패 트래킹
+      if (typeof Analytics !== 'undefined') {
+        Analytics.trackPayment('fail', amount, null, result.error?.message);
+      }
+
       alert(`결제 검증 실패: ${result.error?.message || '고객센터(riger7070@naver.com)로 문의해 주세요.'}`);
     }
-  } catch {
+  } catch (e) {
+    // 결제 에러 트래킹
+    if (typeof Analytics !== 'undefined') {
+      Analytics.trackPayment('fail', amount, null, e.message);
+    }
+
     alert('결제 확인 중 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
   }
 }
@@ -783,12 +815,17 @@ async function buyToken(pkg) {
   if (!user || !isLoggedIn()) { showLogin(); return; }
 
   const pkgs = {
-    'S': { name: '마이안 토큰 30개',  amount: 4900  },
-    'M': { name: '마이안 토큰 100개', amount: 12900 },
-    'L': { name: '마이안 토큰 300개', amount: 29900 }
+    'S': { name: '마이안 토큰 30개',  amount: 4900, tokens: 30  },
+    'M': { name: '마이안 토큰 100개', amount: 12900, tokens: 100 },
+    'L': { name: '마이안 토큰 300개', amount: 29900, tokens: 300 }
   };
   const selected = pkgs[pkg];
   if (!selected) return;
+
+  // 결제 시작 트래킹
+  if (typeof Analytics !== 'undefined') {
+    Analytics.trackPayment('start', selected.amount, selected.tokens);
+  }
 
   const orderId = `myan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
 
@@ -3105,6 +3142,11 @@ function _showDynamicPromoModal(token) {
 // ══════════════════════════════════════════════════════════════════════
 
 function startGuestMode() {
+  // 게스트 모드 시작 트래킹
+  if (typeof Analytics !== 'undefined') {
+    Analytics.trackGuest('start');
+  }
+
   showScreen('GUEST');
   const t = TX[lang];
   const backLabel = document.getElementById('backLabel');
@@ -3128,6 +3170,11 @@ async function submitGuestReading() {
   submitBtn.disabled = true;
   submitBtn.textContent = 'AI 분석 중...';
 
+  // 게스트 제출 트래킹
+  if (typeof Analytics !== 'undefined') {
+    Analytics.trackGuest('submit');
+  }
+
   try {
     const res = await fetch(EP + 'chat-guest', {
       method: 'POST',
@@ -3139,6 +3186,10 @@ async function submitGuestReading() {
 
     if (res.status === 429) {
       if (data.error?.code === 'GUEST_LIMIT') {
+        // 게스트 제한 도달 트래킹
+        if (typeof Analytics !== 'undefined') {
+          Analytics.trackGuest('limit');
+        }
         const resetHours = data.error.resetIn || 24;
         const now = new Date();
         const resetTime = new Date(now.getTime() + resetHours * 60 * 60 * 1000);
