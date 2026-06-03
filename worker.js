@@ -1876,7 +1876,7 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
 
   try {
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1888,12 +1888,35 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
       }
     );
 
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error('[Guest Chat] Gemini API error:', resp.status, errorText);
+      return cors(JSON.stringify({
+        error: { message: `Gemini API 오류 (${resp.status})`, details: errorText.slice(0, 200) }
+      }), 500);
+    }
+
     const data = await resp.json();
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     let result = {};
-    try { result = JSON.parse(raw); } catch {}
+    try {
+      result = JSON.parse(raw);
+    } catch (parseError) {
+      console.error('[Guest Chat] JSON parse error:', parseError);
+      console.error('[Guest Chat] Raw response:', raw);
+      console.error('[Guest Chat] Full data:', JSON.stringify(data));
+    }
 
-    if (!result.reading) return cors(JSON.stringify({ error: { message: 'AI 응답 오류' } }), 500);
+    if (!result.reading) {
+      console.error('[Guest Chat] Missing reading field. Result:', JSON.stringify(result));
+      console.error('[Guest Chat] Raw text:', raw);
+      return cors(JSON.stringify({
+        error: {
+          message: 'AI 응답 형식 오류',
+          debug: { hasReading: !!result.reading, rawLength: raw.length, resultKeys: Object.keys(result) }
+        }
+      }), 500);
+    }
 
     // 사용 기록 저장
     await env.DB.prepare(
