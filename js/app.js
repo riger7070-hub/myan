@@ -1471,6 +1471,22 @@ function renderMyPage() {
   fetchStreak();
   renderOhaengHeatmap();
   renderReferralSection();
+
+  // ── 알림 설정 버튼 이벤트 리스너 ──
+  const notifSettingsBtn = document.getElementById('notifSettingsBtn');
+  if (notifSettingsBtn) {
+    // 기존 리스너 제거 후 새로 추가 (중복 방지)
+    notifSettingsBtn.replaceWith(notifSettingsBtn.cloneNode(true));
+    const newBtn = document.getElementById('notifSettingsBtn');
+    newBtn.addEventListener('click', function() {
+      if (typeof Notifications !== 'undefined' && typeof Notifications.showNotificationSettingsModal === 'function') {
+        Notifications.showNotificationSettingsModal();
+      } else {
+        alert('알림 시간 설정 기능을 불러오는 중입니다.\n잠시 후 다시 시도해주세요.');
+        console.error('Notifications module not loaded:', typeof Notifications);
+      }
+    });
+  }
 }
 
 function setGenderMp(g) {

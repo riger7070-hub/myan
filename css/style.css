@@ -1097,7 +1097,7 @@ body {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden; /* 가로 스크롤 방지 */
-  padding: 40px 32px 48px;
+  padding: 60px 32px 48px; /* 상단 패딩 증가 40 → 60 */
   max-width: 100vw; /* 화면 너비 초과 방지 */
   box-sizing: border-box;
 }
@@ -1120,7 +1120,7 @@ body {
   }
 }
 @media (max-width: 540px) {
-  #screen-mypage { padding: 32px 20px 48px; }
+  #screen-mypage { padding: 50px 20px 48px; } /* 모바일도 상단 여백 증가 */
 }
 .mypage-profile {
   display: flex;
