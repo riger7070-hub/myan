@@ -2816,19 +2816,44 @@ async function togglePushNotif(btn) {
     showToast(t.notifOff || '알림이 해제되었습니다.');
   } else {
     // 권한 요청 → 구독
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { showToast(t.notifDenied || '알림 권한이 거부되었습니다.'); return; }
-    const vr = await fetch('/api/push/vapid-key');
-    const { publicKey } = await vr.json();
-    const appKey = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    const sub = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
-    if (token) fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub, lang: userLang })
-    }).catch(() => {});
-    _updateBtn(true);
-    showToast(t.notifEnabled || '알림이 설정되었습니다! 🌟');
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        showToast(t.notifDenied || '알림 권한이 거부되었습니다.');
+        return;
+      }
+
+      const vr = await fetch('/api/push/vapid-key');
+      if (!vr.ok) {
+        console.error('VAPID key fetch failed:', vr.status);
+        showToast('알림 설정에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+
+      const { publicKey } = await vr.json();
+      if (!publicKey) {
+        console.error('VAPID publicKey is empty');
+        showToast('알림 키 설정에 문제가 있습니다.');
+        return;
+      }
+
+      const appKey = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+      const sub = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+
+      if (token) {
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub, lang: userLang })
+        }).catch(err => console.error('Push subscribe error:', err));
+      }
+
+      _updateBtn(true);
+      showToast(t.notifEnabled || '알림이 설정되었습니다! 🌟');
+    } catch (err) {
+      console.error('togglePushNotif error:', err);
+      showToast('알림 설정 중 오류가 발생했습니다: ' + err.message);
+    }
   }
 }
 
