@@ -450,8 +450,8 @@ if (daysSinceLastVisit > 30) {
 ## 6. 우선순위 로드맵
 
 ### 🎯 1주차 (긴급)
-- [ ] **보안**: API 키 환경변수 분리
-- [ ] **보안**: 의존성 취약점 해결 (`npm audit fix`)
+- [x] **보안**: API 키 환경변수 분리
+- [ ] **보안**: 의존성 취약점 해결 (`npm audit fix`) - React Native 29개 취약점 (breaking changes 필요)
 - [x] **UX**: 토큰 부족 시 충전 페이지 바로가기
 - [x] **UX**: 게스트 제한 시 리셋 시간 표시
 
