@@ -1,4 +1,52 @@
 // M;Y 安 — app.js  (API·채팅·결제·마이페이지 메인 로직)
+
+// ══════════════════════════════════════════════════════════════════════
+//  화면 전환 통합 관리 시스템
+// ══════════════════════════════════════════════════════════════════════
+
+const SCREENS = {
+  MODE: 'screen-mode',
+  CHAT: 'screen-chat',
+  SIGNUP: 'screen-signup',
+  LOGIN: 'screen-login',
+  MYPAGE: 'screen-mypage',
+  GUEST: 'screen-guest',
+  GUEST_RESULT: 'screen-guest-result'
+};
+
+function hideAllScreens() {
+  Object.values(SCREENS).forEach(screenId => {
+    const el = document.getElementById(screenId);
+    if (el) el.style.display = 'none';
+  });
+}
+
+function showScreen(screenName, hideBack = false) {
+  hideAllScreens();
+  const screenId = SCREENS[screenName];
+  const el = document.getElementById(screenId);
+  if (el) {
+    el.style.display = screenName === 'MODE' ? '' : 'flex';
+  }
+
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) {
+    backBtn.style.display = hideBack ? 'none' : 'flex';
+  }
+}
+
+function getCurrentScreen() {
+  for (const [name, id] of Object.entries(SCREENS)) {
+    const el = document.getElementById(id);
+    if (el && el.style.display !== 'none' && el.style.display !== '') {
+      return name;
+    }
+  }
+  return 'MODE'; // 기본값
+}
+
+// ══════════════════════════════════════════════════════════════════════
+
 async function callGemini(contents) {
   if (!getGoogleIdToken()) throw { refund: false, noLogin: true };
 
@@ -72,28 +120,34 @@ function clearAndRestartChat() {
 }
 
 function goBack() {
-  saveChatState(); // 채팅 상태 저장
-  document.getElementById('screen-chat').style.display   = 'none';
-  document.getElementById('screen-signup').style.display = 'none';
-  document.getElementById('screen-login').style.display  = 'none';
-  document.getElementById('screen-guest').style.display  = 'none';
-  document.getElementById('screen-guest-result').style.display = 'none';
-  document.getElementById('screen-mode').style.display   = '';
-  document.getElementById('backBtn').style.display       = 'none';
-  mode = null; hist = [];
+  const currentScreen = getCurrentScreen();
+
+  // 채팅 상태 저장
+  if (currentScreen === 'CHAT') {
+    saveChatState();
+    mode = null;
+    hist = [];
+  }
+
+  // 홈 화면으로 복귀
+  showScreen('MODE', true);
+
   // 모드 화면 복귀 시 userBtn / signupLinkBtn 복원
   const u = getUser();
   const _userBtn = document.getElementById('userBtn');
+  const signupBtn = document.getElementById('signupLinkBtn');
+
   if (u && isLoggedIn()) {
     updateUserBtn(u);
-    document.getElementById('signupLinkBtn').style.display = 'none';
+    if (signupBtn) signupBtn.style.display = 'none';
   } else if (u && !isLoggedIn()) {
     if (_userBtn) _userBtn.style.display = 'none';
-    document.getElementById('signupLinkBtn').style.display = 'none';
+    if (signupBtn) signupBtn.style.display = 'none';
   } else {
     if (_userBtn) _userBtn.style.display = 'none';
-    document.getElementById('signupLinkBtn').style.display = '';
+    if (signupBtn) signupBtn.style.display = '';
   }
+
   // 무료 배너 상태 업데이트 + 오브 색상 초기화
   updateFreeBanner();
   _resetOrbTheme();
@@ -425,10 +479,25 @@ document.getElementById('inp').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 document.getElementById('backBtn').addEventListener('click', () => {
-  if      (document.getElementById('screen-mypage').style.display === 'flex') closeMyPage();
-  else if (document.getElementById('screen-signup').style.display === 'flex') goBackFromSignup();
-  else if (document.getElementById('screen-login').style.display  === 'flex') goBackFromLogin();
-  else goBack();
+  const currentScreen = getCurrentScreen();
+
+  switch (currentScreen) {
+    case 'MYPAGE':
+      closeMyPage();
+      break;
+    case 'SIGNUP':
+      goBackFromSignup();
+      break;
+    case 'LOGIN':
+      goBackFromLogin();
+      break;
+    case 'GUEST':
+    case 'GUEST_RESULT':
+      backToHome();
+      break;
+    default:
+      goBack();
+  }
 });
 
 /* ── 회원가입 ── */
@@ -863,9 +932,7 @@ async function _checkAdminBadge() {
 
 
 function goSignup() {
-  document.getElementById('screen-mode').style.display   = 'none';
-  document.getElementById('screen-signup').style.display = 'flex';
-  document.getElementById('backBtn').style.display       = 'flex';
+  showScreen('SIGNUP');
   renderSignup();
   // 구글 버튼 초기화 (스크립트 로드 대기)
   const tryInit = (attempts) => {
@@ -1035,11 +1102,11 @@ function handleGoogleCredential(response) {
 }
 
 function goBackFromSignup() {
-  document.getElementById('screen-signup').style.display = 'none';
-  document.getElementById('screen-mode').style.display   = '';
-  document.getElementById('backBtn').style.display       = 'none';
-  document.getElementById('signup-form-wrap').style.display = '';
-  document.getElementById('signup-success').style.display   = 'none';
+  showScreen('MODE', true);
+  const formWrap = document.getElementById('signup-form-wrap');
+  const successWrap = document.getElementById('signup-success');
+  if (formWrap) formWrap.style.display = '';
+  if (successWrap) successWrap.style.display = 'none';
 }
 
 function renderSignup() {
@@ -1172,30 +1239,26 @@ function openMyPage() {
     return;
   }
 
-  document.getElementById('screen-mode').style.display   = 'none';
-  document.getElementById('screen-chat').style.display   = 'none';
-  document.getElementById('screen-signup').style.display = 'none';
-  document.getElementById('screen-login').style.display  = 'none';
-  document.getElementById('screen-mypage').style.display = 'flex';
-  document.getElementById('backBtn').style.display       = 'flex';
+  showScreen('MYPAGE');
   const _ub = document.getElementById('userBtn');
   if (_ub) _ub.style.display = 'none';
   renderMyPage();
 }
 
 function closeMyPage() {
-  document.getElementById('screen-mypage').style.display = 'none';
-  document.getElementById('screen-mode').style.display   = '';
-  document.getElementById('backBtn').style.display       = 'none';
+  showScreen('MODE', true);
+
   // 로그인 상태에 맞게 userBtn / signupLinkBtn 복원
   const u = getUser();
   const _userBtn = document.getElementById('userBtn');
+  const signupBtn = document.getElementById('signupLinkBtn');
+
   if (u && isLoggedIn()) {
     updateUserBtn(u);
-    document.getElementById('signupLinkBtn').style.display = 'none';
+    if (signupBtn) signupBtn.style.display = 'none';
   } else {
     if (_userBtn) _userBtn.style.display = 'none';
-    document.getElementById('signupLinkBtn').style.display = u ? 'none' : '';
+    if (signupBtn) signupBtn.style.display = u ? 'none' : '';
   }
 }
 
@@ -1648,17 +1711,12 @@ function renderLogin() {
 
 function showLogin() {
   // 채팅 중 토큰 만료로 재로그인이 필요한 경우 → 대화 보존 + 재로그인 후 채팅으로 복귀
-  if (document.getElementById('screen-chat').style.display === 'flex' && mode) {
+  if (getCurrentScreen() === 'CHAT' && mode) {
     saveChatState();   // 대화 내용 localStorage에 저장
     pendingMode = mode; // 로그인 완료 후 _enterMode()가 채팅 복원
   }
-  // 모든 화면 숨기고 로그인 화면만 표시
-  ['screen-chat', 'screen-mypage', 'screen-signup', 'screen-mode'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  document.getElementById('screen-login').style.display  = 'flex';
-  document.getElementById('backBtn').style.display       = 'flex';
+
+  showScreen('LOGIN');
   renderLogin();
   // Google 버튼 초기화 (로그인용)
   const tryInit = (attempts) => {
@@ -1728,10 +1786,7 @@ function _renderGoogleFallbackBtn(wrap) {
 
 function goBackFromLogin() {
   pendingMode = null;
-  document.getElementById('screen-login').style.display = 'none';
-  document.getElementById('screen-chat').style.display  = 'none'; // 채팅 중 취소 시 채팅 화면도 정리
-  document.getElementById('screen-mode').style.display  = '';
-  document.getElementById('backBtn').style.display      = 'none';
+  showScreen('MODE', true);
 }
 
 async function doLogin() {
@@ -3004,11 +3059,10 @@ function _showDynamicPromoModal(token) {
 // ══════════════════════════════════════════════════════════════════════
 
 function startGuestMode() {
-  document.getElementById('screen-mode').style.display = 'none';
-  document.getElementById('screen-guest').style.display = '';
-  document.getElementById('backBtn').style.display = 'flex';
+  showScreen('GUEST');
   const t = TX[lang];
-  document.getElementById('backLabel').textContent = t.back || '뒤로';
+  const backLabel = document.getElementById('backLabel');
+  if (backLabel) backLabel.textContent = t.back || '뒤로';
 }
 
 async function submitGuestReading() {
@@ -3052,10 +3106,11 @@ async function submitGuestReading() {
     }
 
     // 결과 화면으로 전환
-    document.getElementById('screen-guest').style.display = 'none';
-    document.getElementById('screen-guest-result').style.display = '';
-    document.getElementById('guestReadingContent').textContent = data.reading || '풀이 결과를 가져오지 못했습니다.';
-    document.getElementById('backBtn').style.display = 'flex';
+    showScreen('GUEST_RESULT');
+    const readingContent = document.getElementById('guestReadingContent');
+    if (readingContent) {
+      readingContent.textContent = data.reading || '풀이 결과를 가져오지 못했습니다.';
+    }
 
   } catch (e) {
     errDiv.textContent = e.message || '오류가 발생했습니다. 다시 시도해주세요.';
@@ -3066,21 +3121,24 @@ async function submitGuestReading() {
 }
 
 function goSignupFromGuest() {
-  document.getElementById('screen-guest-result').style.display = 'none';
   goSignup();
 }
 
 function backToHome() {
-  document.getElementById('screen-guest-result').style.display = 'none';
-  document.getElementById('screen-guest').style.display = 'none';
-  document.getElementById('screen-mode').style.display = '';
-  document.getElementById('backBtn').style.display = 'none';
+  showScreen('MODE', true);
+
   // 입력 필드 초기화
-  document.getElementById('guestBirthInput').value = '';
-  document.getElementById('guestNameInput').value = '';
-  document.getElementById('guestErr').style.display = 'none';
+  const birthInput = document.getElementById('guestBirthInput');
+  const nameInput = document.getElementById('guestNameInput');
+  const errDiv = document.getElementById('guestErr');
   const submitBtn = document.getElementById('guestSubmitBtn');
-  submitBtn.disabled = false;
-  submitBtn.textContent = 'AI 풀이 받기';
+
+  if (birthInput) birthInput.value = '';
+  if (nameInput) nameInput.value = '';
+  if (errDiv) errDiv.style.display = 'none';
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'AI 풀이 받기';
+  }
 }
 
