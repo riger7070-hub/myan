@@ -6,6 +6,7 @@
     "convert-webp": "node convert-to-webp.js"
   },
   "devDependencies": {
+    "playwright": "^1.60.0",
     "sharp": "^0.33.0"
   }
 }

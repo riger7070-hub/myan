@@ -1,8 +1,8 @@
-// M;Y 安 — Service Worker v3.3 (Code Cleanup & Optimization)
-const VERSION = '3.3';
+// M;Y 安 — Service Worker v3.4 (Cache Invalidation)
+const VERSION = '3.4';
 const CACHE_NAME = `myan-v8-${VERSION}`;
-const CACHE_IMAGES = `myan-images-v4`;
-const CACHE_STATIC = `myan-static-v4`;
+const CACHE_IMAGES = `myan-images-v5`;
+const CACHE_STATIC = `myan-static-v5`;
 const OFFLINE_URL = '/index.html';
 
 // 즉시 캐시할 핵심 리소스
