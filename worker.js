@@ -1841,22 +1841,22 @@ async function handleGuestChat(request, env) {
       `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
     ).bind(ip, today).first().catch(() => null);
 
-  if (usage && usage.used_count >= 1) {
-    // 다음날 자정(KST) 계산
-    const resetDate = new Date(today);
-    resetDate.setDate(resetDate.getDate() + 1);
-    resetDate.setHours(0, 0, 0, 0);
-    const hoursUntilReset = Math.ceil((resetDate - Date.now()) / 3600000);
+    if (usage && usage.used_count >= 1) {
+      // 다음날 자정(KST) 계산
+      const resetDate = new Date(today);
+      resetDate.setDate(resetDate.getDate() + 1);
+      resetDate.setHours(0, 0, 0, 0);
+      const hoursUntilReset = Math.ceil((resetDate - Date.now()) / 3600000);
 
-    return cors(JSON.stringify({
-      error: {
-        message: 'already_used',
-        code: 'GUEST_LIMIT',
-        resetIn: hoursUntilReset,
-        resetAt: resetDate.toISOString()
-      }
-    }), 429);
-  }
+      return cors(JSON.stringify({
+        error: {
+          message: 'already_used',
+          code: 'GUEST_LIMIT',
+          resetIn: hoursUntilReset,
+          resetAt: resetDate.toISOString()
+        }
+      }), 429);
+    }
 
     const { birth, lang = 'ko' } = await request.json().catch(() => ({}));
     if (!birth) {
@@ -1866,72 +1866,72 @@ async function handleGuestChat(request, env) {
     const il = ilchin();
     const on = ON[lang] || ON.ko;
 
-  const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.
+    const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.
 ${lang === 'ko' ? '한국어로 답변하세요.' : lang === 'en' ? 'Respond in English.' : lang === 'zh' ? '请用中文回答。' : '日本語で答えてください。'}
 HANJA RULE: When using Chinese characters, always add Korean meaning in parentheses.
 Write in warm, plain everyday language. Keep it concise (200-250 characters).
 OUTPUT: Return ONLY valid JSON: {"reading":"<warm short reading 200-300 chars>","ohaeng":{"木":N,"火":N,"土":N,"金":N,"水":N}}
 For ohaeng: integers 0–100, sum = 100. End reading with one of: #木 #火 #土 #金 #水`;
 
-  const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
+    const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
 ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
 
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            { parts: [{ text: sysText + '\n\n' + userMsg }] }
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.8,
-            maxOutputTokens: 2048
-          }
-        })
-      }
-    );
-
-    if (!resp.ok) {
-      const errorText = await resp.text();
-      return cors(JSON.stringify({
-        error: { message: `Gemini API 오류 (${resp.status})` }
-      }), 500);
-    }
-
-    const data = await resp.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    let result = {};
     try {
-      result = JSON.parse(raw);
-    } catch (parseError) {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { parts: [{ text: sysText + '\n\n' + userMsg }] }
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.8,
+              maxOutputTokens: 2048
+            }
+          })
+        }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        return cors(JSON.stringify({
+          error: { message: `Gemini API 오류 (${resp.status})` }
+        }), 500);
+      }
+
+      const data = await resp.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      let result = {};
+      try {
+        result = JSON.parse(raw);
+      } catch (parseError) {
+        return cors(JSON.stringify({
+          error: { message: 'AI 응답 파싱 오류' }
+        }), 500);
+      }
+
+      if (!result.reading || !result.ohaeng) {
+        return cors(JSON.stringify({
+          error: { message: 'AI 응답 형식 오류' }
+        }), 500);
+      }
+
+      // 사용 기록 저장
+      await env.DB.prepare(
+        `INSERT INTO guest_usage (ip, used_date, used_count) VALUES (?, ?, 1)
+         ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
+      ).bind(ip, today).run();
+
+      return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
+
+    } catch(e) {
       return cors(JSON.stringify({
-        error: { message: 'AI 응답 파싱 오류' }
+        error: { message: '서버 오류가 발생했습니다.' }
       }), 500);
     }
-
-    if (!result.reading || !result.ohaeng) {
-      return cors(JSON.stringify({
-        error: { message: 'AI 응답 형식 오류' }
-      }), 500);
-    }
-
-    // 사용 기록 저장
-    await env.DB.prepare(
-      `INSERT INTO guest_usage (ip, used_date, used_count) VALUES (?, ?, 1)
-       ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
-    ).bind(ip, today).run();
-
-    return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
-
-  } catch(e) {
-    return cors(JSON.stringify({
-      error: { message: '서버 오류가 발생했습니다.' }
-    }), 500);
-  }
   } catch(outerErr) {
     return cors(JSON.stringify({
       error: { message: '시스템 오류가 발생했습니다.' }
