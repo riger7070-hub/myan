@@ -87,9 +87,8 @@ body {
   padding-right: env(safe-area-inset-right);
   /* 모바일 탭 하이라이트 제거 */
   -webkit-tap-highlight-color: transparent;
-  /* 텍스트 선택 조정 */
-  -webkit-touch-callout: none;
-  user-select: none;
+  /* 버튼은 선택 불가, 텍스트는 선택 가능 */
+  -webkit-touch-callout: default;
 }
 
 /* 스플래시 화면 */
@@ -555,6 +554,8 @@ body {
   flex-shrink: 0; /* 말풍선이 찌그러지는 것 방지 */
   will-change: transform, opacity; /* GPU 가속 */
   transform: translate3d(0, 0, 0); /* 하드웨어 가속 활성화 */
+  user-select: text;
+  -webkit-user-select: text;
 }
 .bubble-ai {
   align-self: flex-start;
@@ -1510,6 +1511,8 @@ body {
   animation: fadeIn .25s ease;
   will-change: transform, opacity;
   transform: translate3d(0, 0, 0);
+  user-select: text;
+  -webkit-user-select: text;
 }
 .modal-title {
   font-family: 'Noto Serif KR', serif;
@@ -1536,6 +1539,8 @@ body {
   font-size: 0.88rem;
   color: var(--text);
   line-height: 1.75;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .legal-modal-overlay {

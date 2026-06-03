@@ -2753,6 +2753,15 @@ async function _openDetailReading(date, ohaeng) {
         contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
       }
       contEl.style.display = '';
+
+      // 상세 풀이 저장 (나중에 다시 보기 위해)
+      try {
+        const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
+        saved.unshift({ date, ohaeng, detail: data.detail, timestamp: Date.now() });
+        // 최근 10개만 보관
+        if (saved.length > 10) saved.splice(10);
+        localStorage.setItem('myan_detail_readings', JSON.stringify(saved));
+      } catch(e) { console.error('Failed to save detail reading:', e); }
     } else if (data.error) {
       if (loadEl) loadEl.textContent = data.error.message;
     }
@@ -2760,6 +2769,67 @@ async function _openDetailReading(date, ohaeng) {
     const loadEl = document.getElementById('detail-loading');
     if (loadEl) loadEl.textContent = '오류가 발생했습니다.';
   }
+}
+
+// ════════════════════════════════════════════
+//  저장된 상세 풀이 다시 보기
+// ════════════════════════════════════════════
+function showSavedDetailReading(date, ohaeng, detail) {
+  const t = getT();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+
+  const areas = [
+    { key:'health',       icon:'🏥', label: t.detailCardTitle?.health        || '건강' },
+    { key:'wealth',       icon:'💰', label: t.detailCardTitle?.wealth        || '재물' },
+    { key:'relationships',icon:'💝', label: t.detailCardTitle?.relationships  || '관계' },
+    { key:'fortune',      icon:'🎯', label: t.detailCardTitle?.fortune       || '행운' }
+  ];
+
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:28px 22px">
+      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
+      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${date}</div>
+      <div id="detail-content">
+        ${areas.map(a => `
+          <div class="detail-area-card">
+            <div class="detail-area-title">${a.icon} ${a.label}</div>
+            <div class="detail-area-body">${detail[a.key]||''}</div>
+          </div>`).join('')}
+      </div>
+      <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function showDetailReadingHistory() {
+  const t = getT();
+  const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
+
+  if (saved.length === 0) {
+    showToast('저장된 상세 풀이가 없습니다.');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:28px 22px">
+      <div class="modal-title">📖 상세 풀이 기록</div>
+      <div style="max-height:400px;overflow-y:auto;margin:16px 0">
+        ${saved.map(item => `
+          <div onclick="showSavedDetailReading('${item.date}', '${item.ohaeng}', ${JSON.stringify(item.detail).replace(/"/g, '&quot;')}); this.closest('.modal-overlay').remove();"
+               style="padding:12px;margin-bottom:8px;border-radius:8px;background:var(--card);border:1px solid var(--border);cursor:pointer">
+            <div style="font-weight:600;color:var(--gold)">${item.ohaeng}</div>
+            <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">${item.date}</div>
+          </div>
+        `).join('')}
+      </div>
+      <button onclick="this.closest('.modal-overlay').remove()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 // ════════════════════════════════════════════
