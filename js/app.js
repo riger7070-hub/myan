@@ -1249,7 +1249,12 @@ function goBackFromSignup() {
 }
 
 function renderSignup() {
+  console.log('[SIGNUP] renderSignup() called', { lang, TX: !!TX, TXlang: !!TX[lang] });
   const s = TX[lang];
+  if (!s) {
+    console.error('[SIGNUP] TX[lang] is undefined!', { lang, TX });
+    return;
+  }
   buildSignupDropdowns();
   document.getElementById('signupHeadline').textContent  = s.sgHeadline;
   document.getElementById('signupSub').textContent       = s.sgSub;
@@ -1855,8 +1860,21 @@ function togglePwVis(inputId, btn) {
 }
 
 function renderLogin() {
+  console.log('[LOGIN] renderLogin() called', { lang, TX: !!TX, TXlang: !!TX[lang] });
   const t = TX[lang];
-  document.getElementById('loginTitle').textContent      = t.loginTitle;
+  if (!t) {
+    console.error('[LOGIN] TX[lang] is undefined!', { lang, TX });
+    return;
+  }
+
+  const loginTitle = document.getElementById('loginTitle');
+  console.log('[LOGIN] loginTitle element:', loginTitle);
+  if (!loginTitle) {
+    console.error('[LOGIN] loginTitle element not found!');
+    return;
+  }
+
+  loginTitle.textContent = t.loginTitle;
   document.getElementById('lblLoginId').textContent      = t.loginId;
   document.getElementById('lblLoginPw').textContent      = t.loginPw;
   document.getElementById('loginSubmitBtn').textContent  = t.loginBtn;

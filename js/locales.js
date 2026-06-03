@@ -525,13 +525,23 @@ const DK = {
 
 /* UI 렌더 */
 function render() {
-  const t   = TX[lang];
-  const il  = ilchin();
-  const col = OC[il.o];
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  console.log('[RENDER] Starting render()', { lang, TX: !!TX, TXlang: !!TX[lang] });
 
-  document.getElementById('tagline').textContent    = t.tagline;
+  try {
+    const t   = TX[lang];
+    const il  = ilchin();
+    const col = OC[il.o];
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+
+    console.log('[RENDER] Data ready', { tagline: t.tagline, ilchin: il });
+
+    const tagline = document.getElementById('tagline');
+    if (!tagline) {
+      console.error('[RENDER] tagline element not found!');
+      return;
+    }
+    tagline.textContent = t.tagline;
   document.getElementById('backLabel').textContent  = t.back;
   document.getElementById('eyebrow').textContent    = t.eyebrow;
   document.getElementById('headline').textContent   = t.headline;
@@ -577,6 +587,12 @@ function render() {
   // 마이페이지 버튼 텍스트 다국어 갱신
   const userBtn = document.getElementById('userBtn');
   if (userBtn && userBtn.style.display !== 'none') userBtn.textContent = t.mpLink;
+
+  console.log('[RENDER] Completed successfully');
+  } catch (error) {
+    console.error('[RENDER] Error:', error);
+    throw error;
+  }
 }
 
 // ── token-modal 라벨 다국어 렌더 ──
@@ -879,14 +895,19 @@ function trimmedHist() {
 
 // ── 초기화: 페이지 로드 시 render() 호출 ──
 (function initLocales() {
+  console.log('[LOCALES] Initializing, readyState:', document.readyState);
+
   // DOM이 준비되면 초기 렌더링 실행
   if (document.readyState === 'loading') {
+    console.log('[LOCALES] Waiting for DOMContentLoaded');
     document.addEventListener('DOMContentLoaded', () => {
+      console.log('[LOCALES] DOMContentLoaded fired');
       render();
       schedMidnightRefresh();
     });
   } else {
     // 이미 DOM이 로드된 경우 (지연 로드된 스크립트)
+    console.log('[LOCALES] DOM already loaded, rendering immediately');
     render();
     schedMidnightRefresh();
   }
