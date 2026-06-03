@@ -1897,7 +1897,7 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.8,
-            maxOutputTokens: 1024
+            maxOutputTokens: 2048
           }
         })
       }
