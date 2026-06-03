@@ -27,7 +27,10 @@ const TX = {
     sgTitle:'회원가입',
     sgHeadline:'회원가입하고\n더 섬세한 기운을\n받으세요.',
     sgSub:'한 번 등록하시면 매일 오실 때마다 더 정확하고 섬세한 기운 풀이를 받으실 수 있습니다.',
-    sgLink:'✦ 회원가입하고 더 섬세한 기운 받기 →', sgName:'이름', sgEmail:'이메일', sgPhone:'전화번호', sgYear:'생년', sgMonth:'생월', sgDay:'생일',
+    sgLink:'✦ 회원가입하고 더 섬세한 기운 받기 →',
+    guestName:'체험해보기',
+    guestDesc:'로그인 없이 1회 무료 체험',
+    sgName:'이름', sgEmail:'이메일', sgPhone:'전화번호', sgYear:'생년', sgMonth:'생월', sgDay:'생일',
     sgHour:'생시', sgGender:'성별', sgM:'남성', sgF:'여성', sgOpt:'(선택)', sgRegion:'거주지역',
     sgSubmit:'가입하기',
     sgNotice:'수집된 정보는 기운 풀이 개선 및 맞춤 처방 목적으로만 사용되며 제3자에게 제공되지 않습니다.',
@@ -138,7 +141,10 @@ const TX = {
     sgTitle:'Sign Up',
     sgHeadline:'Sign up and receive\na more refined\nenergy reading.',
     sgSub:'Register once to receive a more precise and personalised reading every day.',
-    sgLink:'✦ Sign up for a more refined reading →', sgName:'Name', sgEmail:'Email', sgPhone:'Phone', sgYear:'Birth Year', sgMonth:'Month', sgDay:'Day',
+    sgLink:'✦ Sign up for a more refined reading →',
+    guestName:'Try Guest Mode',
+    guestDesc:'One free reading without login',
+    sgName:'Name', sgEmail:'Email', sgPhone:'Phone', sgYear:'Birth Year', sgMonth:'Month', sgDay:'Day',
     sgHour:'Birth Hour', sgGender:'Gender', sgM:'Male', sgF:'Female', sgOpt:'(optional)', sgRegion:'Region',
     sgSubmit:'Sign Up',
     sgNotice:'Your information is used only to refine your readings and will not be shared with any third party.',
@@ -249,7 +255,10 @@ const TX = {
     sgTitle:'会员注册',
     sgHeadline:'注册，享受\n更精准的\n气运解读。',
     sgSub:'注册一次，即可每日享受更精准、更个性化的气运解读。',
-    sgLink:'✦ 注册，获取更精准的气运解读 →', sgName:'姓名', sgEmail:'邮箱', sgPhone:'电话', sgYear:'出生年', sgMonth:'出生月', sgDay:'出生日',
+    sgLink:'✦ 注册，获取更精准的气运解读 →',
+    guestName:'免费体验',
+    guestDesc:'无需登录，免费体验1次',
+    sgName:'姓名', sgEmail:'邮箱', sgPhone:'电话', sgYear:'出生年', sgMonth:'出生月', sgDay:'出生日',
     sgHour:'出生时辰', sgGender:'性别', sgM:'男', sgF:'女', sgOpt:'(选填)', sgRegion:'居住地区',
     sgSubmit:'立即注册',
     sgNotice:'您的信息仅用于改善气运解读及提供个性化处方，不会提供给第三方。',
@@ -360,7 +369,10 @@ const TX = {
     sgTitle:'会員登録',
     sgHeadline:'会員登録して\nより精密な気運\nリーディングを。',
     sgSub:'一度ご登録いただくと、毎日より精密でパーソナルな気運リーディングをお届けします。',
-    sgLink:'✦ 会員登録でより精密な気運リーディングを →', sgName:'お名前', sgEmail:'メールアドレス', sgPhone:'電話番号', sgYear:'生年', sgMonth:'生月', sgDay:'生日',
+    sgLink:'✦ 会員登録でより精密な気運リーディングを →',
+    guestName:'無料体験',
+    guestDesc:'ログインなしで1回無料',
+    sgName:'お名前', sgEmail:'メールアドレス', sgPhone:'電話番号', sgYear:'生年', sgMonth:'生月', sgDay:'生日',
     sgHour:'生時', sgGender:'性別', sgM:'男性', sgF:'女性', sgOpt:'(任意)', sgRegion:'お住まいの地域',
     sgSubmit:'登録する',
     sgNotice:'ご提供いただいた情報は気運リーディング改善及び処方目的のみに使用し、第三者には提供いたしません。',
@@ -492,6 +504,8 @@ function render() {
   document.getElementById('soloDesc').textContent   = t.d1;
   document.getElementById('coupleName').textContent = t.s2;
   document.getElementById('coupleDesc').textContent = t.d2;
+  document.getElementById('guestName').textContent  = t.guestName;
+  document.getElementById('guestDesc').textContent  = t.guestDesc;
   document.getElementById('disclaimer').textContent = t.note;
   document.getElementById('inp').placeholder        = t.ph;
   document.getElementById('ilchinDate').textContent = dateStr;

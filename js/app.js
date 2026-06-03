@@ -77,6 +77,8 @@ function goBack() {
   document.getElementById('screen-chat').style.display   = 'none';
   document.getElementById('screen-signup').style.display = 'none';
   document.getElementById('screen-login').style.display  = 'none';
+  document.getElementById('screen-guest').style.display  = 'none';
+  document.getElementById('screen-guest-result').style.display = 'none';
   document.getElementById('screen-mode').style.display   = '';
   document.getElementById('backBtn').style.display       = 'none';
   mode = null; hist = [];
@@ -2968,5 +2970,89 @@ function _showDynamicPromoModal(token) {
       }
     } catch { overlay.remove(); showToast('네트워크 오류가 발생했습니다.'); }
   });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  게스트 모드 함수
+// ══════════════════════════════════════════════════════════════════════
+
+function startGuestMode() {
+  document.getElementById('screen-mode').style.display = 'none';
+  document.getElementById('screen-guest').style.display = '';
+  document.getElementById('backBtn').style.display = '';
+  document.getElementById('backLabel').textContent = T.back || '뒤로';
+}
+
+async function submitGuestReading() {
+  const birthInput = document.getElementById('guestBirthInput');
+  const nameInput = document.getElementById('guestNameInput');
+  const submitBtn = document.getElementById('guestSubmitBtn');
+  const errDiv = document.getElementById('guestErr');
+
+  const birth = birthInput.value.trim();
+  if (!birth) {
+    errDiv.textContent = '생년월일을 입력해주세요.';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  errDiv.style.display = 'none';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'AI 분석 중...';
+
+  try {
+    const res = await fetch(EP + 'chat-guest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ birth, lang })
+    });
+
+    const data = await res.json();
+
+    if (res.status === 429) {
+      if (data.error?.code === 'GUEST_LIMIT') {
+        errDiv.innerHTML = '오늘의 무료 체험은 이미 사용하셨습니다.<br>회원가입하면 더 많은 풀이를 받을 수 있어요!';
+        errDiv.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'AI 풀이 받기';
+        return;
+      }
+    }
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error?.message || 'AI 연결 실패');
+    }
+
+    // 결과 화면으로 전환
+    document.getElementById('screen-guest').style.display = 'none';
+    document.getElementById('screen-guest-result').style.display = '';
+    document.getElementById('guestReadingContent').textContent = data.reading || '풀이 결과를 가져오지 못했습니다.';
+    document.getElementById('backBtn').style.display = '';
+
+  } catch (e) {
+    errDiv.textContent = e.message || '오류가 발생했습니다. 다시 시도해주세요.';
+    errDiv.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'AI 풀이 받기';
+  }
+}
+
+function goSignupFromGuest() {
+  document.getElementById('screen-guest-result').style.display = 'none';
+  goSignup();
+}
+
+function backToHome() {
+  document.getElementById('screen-guest-result').style.display = 'none';
+  document.getElementById('screen-guest').style.display = 'none';
+  document.getElementById('screen-mode').style.display = '';
+  document.getElementById('backBtn').style.display = 'none';
+  // 입력 필드 초기화
+  document.getElementById('guestBirthInput').value = '';
+  document.getElementById('guestNameInput').value = '';
+  document.getElementById('guestErr').style.display = 'none';
+  const submitBtn = document.getElementById('guestSubmitBtn');
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'AI 풀이 받기';
 }
 

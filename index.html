@@ -138,6 +138,14 @@
         </div>
         <div class="card-arrow">›</div>
       </div>
+      <div class="card card-guest" onclick="startGuestMode()">
+        <div class="card-icon">🔓</div>
+        <div class="card-body">
+          <div class="card-name" id="guestName">체험해보기</div>
+          <div class="card-desc" id="guestDesc">로그인 없이 1회 무료 체험</div>
+        </div>
+        <div class="card-arrow">›</div>
+      </div>
       <div class="signup-link" id="signupLinkBtn" onclick="goSignup()"><span id="signupLinkText"></span></div>
     </div>
 
@@ -265,6 +273,51 @@
       </div>
       <button class="submit-btn" id="loginSubmitBtn" onclick="doLogin()" style="display:none"></button>
       <div class="login-err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <div id="screen-guest" style="display:none">
+    <div class="guest-wrap">
+      <div class="guest-title">🔓 체험해보기</div>
+      <div class="guest-subtitle">로그인 없이 AI 사주 풀이를 무료로 1회 체험해보세요</div>
+
+      <div class="field full">
+        <label>생년월일 *</label>
+        <input type="date" id="guestBirthInput" max="2030-12-31">
+      </div>
+
+      <div class="field full" style="margin-top: 16px">
+        <label>이름 (선택)</label>
+        <input type="text" id="guestNameInput" placeholder="미입력 시 '손님'으로 표시">
+      </div>
+
+      <button class="submit-btn" id="guestSubmitBtn" onclick="submitGuestReading()">AI 풀이 받기</button>
+
+      <div class="guest-notice">
+        ℹ️ IP당 하루 1회만 이용 가능합니다<br>
+        회원가입하면 <strong>3토큰 무료</strong> + 상세 풀이 제공
+      </div>
+
+      <div class="guest-err" id="guestErr"></div>
+    </div>
+  </div>
+
+  <div id="screen-guest-result" style="display:none">
+    <div class="guest-result-wrap">
+      <div class="guest-result-title">✨ AI 풀이 결과</div>
+
+      <div id="guestReadingContent" class="bubble bubble-ai"></div>
+
+      <div class="guest-signup-cta">
+        <div class="cta-icon">🎁</div>
+        <div class="cta-body">
+          <div class="cta-title">더 많은 풀이를 받고 싶으신가요?</div>
+          <div class="cta-desc">회원가입하면 <strong>토큰 3개 무료</strong> + 상세 풀이까지!</div>
+        </div>
+        <button class="cta-btn" onclick="goSignupFromGuest()">지금 가입하기 →</button>
+      </div>
+
+      <button class="guest-back-btn" onclick="backToHome()">홈으로 돌아가기</button>
     </div>
   </div>
 
