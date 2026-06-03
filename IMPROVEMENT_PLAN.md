@@ -471,7 +471,7 @@ if (daysSinceLastVisit > 30) {
 - [ ] **비즈니스**: A/B 테스트 (가격, 무료 토큰 개수)
 - [ ] **DX**: TypeScript 또는 JSDoc 타입 추가
 - [ ] **비즈니스**: 리텐션 프로그램 (출석 보상 강화)
-- [ ] **성능**: Service Worker 캐싱 전략
+- [x] **성능**: Service Worker 캐싱 전략
 
 ---
 
