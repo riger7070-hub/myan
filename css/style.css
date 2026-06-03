@@ -55,13 +55,27 @@
 [data-theme="light"] label             { color: #3a2e24; }
 [data-theme="light"] ::placeholder     { color: #8a7868; }
 
-* { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: fixed; /* 모바일 주소창 숨김 */
+  overscroll-behavior: none; /* 바운스 효과 제거 */
+}
 
 body {
   background: var(--bg);
   font-family: 'Pretendard', sans-serif;
   color: var(--text);
   width: 100vw;
+  max-width: 100%;
   height: 100dvh;
   overflow: hidden;
   position: relative;
@@ -71,6 +85,11 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  /* 모바일 탭 하이라이트 제거 */
+  -webkit-tap-highlight-color: transparent;
+  /* 텍스트 선택 조정 */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 /* 스플래시 화면 */
