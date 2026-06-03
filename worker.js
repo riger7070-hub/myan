@@ -1936,12 +1936,8 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
     return cors(JSON.stringify({
       error: {
         message: 'Server error: ' + (e.message || 'Unknown error'),
-        stack: e.stack
+        stack: e.stack?.slice(0, 500)
       }
     }), 500);
-  }
-  } catch(outerError) {
-    console.error('[handleGuestChat] Outer catch:', outerError);
-    return cors(JSON.stringify({ error: { message: 'Critical error: ' + outerError.message } }), 500);
   }
 }
