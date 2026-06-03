@@ -874,12 +874,22 @@ body {
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 18px 16px;
+  max-width: 100%;
 }
 .form-grid .full  { grid-column: 1 / -1; }
-.form-grid .half  { grid-column: span 2; }
-.form-grid .third { grid-column: span 1; }
+.form-grid .half  { grid-column: 1 / -1; }
+.form-grid .third { grid-column: auto; }
+
+/* 넓은 화면에서만 3열 */
+@media (min-width: 600px) {
+  .form-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .form-grid .half { grid-column: span 2; }
+  .form-grid .third { grid-column: span 1; }
+}
 
 .field { display: flex; flex-direction: column; gap: 9px; }
 .field label {
@@ -1058,10 +1068,18 @@ body {
   display: none;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden; /* 가로 스크롤 방지 */
   padding: 40px 32px 48px;
+  max-width: 100vw; /* 화면 너비 초과 방지 */
+  box-sizing: border-box;
 }
 @media (min-width: 600px) {
-  #screen-mypage { padding: 52px 90px; justify-content: center; }
+  #screen-mypage {
+    padding: 52px 90px;
+    justify-content: center;
+    max-width: 800px; /* 최대 너비 제한 */
+    margin: 0 auto;
+  }
 }
 @media (max-width: 540px) {
   #screen-mypage { padding: 32px 20px 48px; }
