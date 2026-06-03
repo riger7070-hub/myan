@@ -46,7 +46,6 @@ async function callGemini(contents) {
   return data;
 }
 
-
 function saveChatState() {
   if (!mode || !hist.length) return;
   try {
@@ -478,8 +477,8 @@ async function addTokens(_amount) {
 async function refreshTokens() {
   if (!getGoogleIdToken()) {
     // 세션 토큰 만료. 실제 로그아웃과 구별:
-    // myan_logged_in이 남아있으면 → 만료된 것이므로 조용히 silent refresh 시도, 캐시 유지
-    // myan_logged_in이 없으면 → 실제 로그아웃 상태이므로 0으로 초기화
+    // myan_logged_in이 남아있으면 -> 만료된 것이므로 조용히 silent refresh 시도, 캐시 유지
+    // myan_logged_in이 없으면 -> 실제 로그아웃 상태이므로 0으로 초기화
     if (isLoggedIn()) {
       _silentTokenRefresh();       // 새 ID 토큰 백그라운드 발급 시도
       updateAllTokenDisplays();    // 기존 캐시 값 그대로 표시 (0으로 안 만듦)
@@ -574,12 +573,22 @@ function _silentTokenRefresh() {
   _silentRefreshActive = true;
   try {
     _ensureGisInit(); // GIS 초기화 보장
+    // Google API 로드 체크
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+      _silentRefreshActive = false;
+      console.warn('Google Identity Services not loaded yet');
+      return;
+    }
     google.accounts.id.prompt(notification => {
       _silentRefreshActive = false;
       // 'skipped' / 'dismissed': 자동 갱신 불가 (사용자가 구글에서 로그아웃한 경우 등)
       // 이 경우도 기존 캐시를 유지하고, 다음 채팅 요청 시 서버가 401 반환하면 로그인 유도
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        console.warn('Silent token refresh failed:', notification.getNotDisplayedReason());
+      }
     });
   } catch(e) {
+    console.error('Silent token refresh error:', e);
     _silentRefreshActive = false;
   }
 }
@@ -860,30 +869,44 @@ function goSignup() {
   renderSignup();
   // 구글 버튼 초기화 (스크립트 로드 대기)
   const tryInit = (attempts) => {
-    if (typeof google !== 'undefined' && GOOGLE_CID) {
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id && GOOGLE_CID) {
       initGoogleSignin();
     } else if (!GOOGLE_CID) {
       document.getElementById('googleBtnWrap').style.display = 'none';
       document.getElementById('orDivider').style.display     = 'none';
     } else if (attempts > 0) {
       setTimeout(() => tryInit(attempts - 1), 300);
+    } else {
+      // 타임아웃 후에도 로드 안 됨 - 폴백 표시
+      console.warn('Google Sign-In failed to load after retries');
+      const wrap = document.getElementById('googleBtnEl');
+      if (wrap) _renderGoogleFallbackBtn(wrap);
     }
   };
-  tryInit(10);
+  tryInit(15); // 더 많은 재시도 (모바일 느린 네트워크 대응)
 }
 
 /* ── 구글 로그인 ── */
 let _gisInited = false;
 function _ensureGisInit() {
   if (_gisInited) return;
+  // Google API 로드 체크
+  if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+    console.warn('Google Identity Services not available');
+    return;
+  }
   const wasSignedOut = localStorage.getItem('myan_signed_out') === 'true';
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CID,
-    callback: handleGoogleCredential,
-    auto_select: !wasSignedOut, // 명시적 로그아웃 후엔 자동 선택 차단
-    cancel_on_tap_outside: true,
-  });
-  _gisInited = true;
+  try {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CID,
+      callback: handleGoogleCredential,
+      auto_select: !wasSignedOut, // 명시적 로그아웃 후엔 자동 선택 차단
+      cancel_on_tap_outside: true,
+    });
+    _gisInited = true;
+  } catch(e) {
+    console.error('Failed to initialize Google Identity Services:', e);
+  }
 }
 
 function initGoogleSignin() {
@@ -1639,16 +1662,20 @@ function showLogin() {
   renderLogin();
   // Google 버튼 초기화 (로그인용)
   const tryInit = (attempts) => {
-    if (typeof google !== 'undefined' && GOOGLE_CID) {
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id && GOOGLE_CID) {
       initGoogleLoginBtn();
     } else if (!GOOGLE_CID) {
       document.getElementById('loginGoogleBtnWrap').style.display = 'none';
       document.getElementById('loginOrDivider').style.display     = 'none';
     } else if (attempts > 0) {
       setTimeout(() => tryInit(attempts - 1), 300);
+    } else {
+      console.warn('Google Login failed to load after retries');
+      const wrap = document.getElementById('loginGoogleBtnEl');
+      if (wrap) _renderGoogleFallbackBtn(wrap);
     }
   };
-  tryInit(10);
+  tryInit(15); // 더 많은 재시도 (모바일 대응)
 }
 
 function initGoogleLoginBtn() {
