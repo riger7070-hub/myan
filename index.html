@@ -72,8 +72,10 @@
 <div class="app">
 
   <div class="hd">
-    <span class="back" id="backBtn">← <span id="backLabel"></span></span>
-    <button id="newChatBtn" onclick="clearAndRestartChat()" style="display:none;background:none;border:1px solid rgba(201,169,110,0.25);border-radius:6px;color:rgba(201,169,110,0.6);font-size:0.7rem;padding:4px 8px;cursor:pointer;letter-spacing:0.5px">✦ 새 대화</button>
+    <div class="hd-left">
+      <span class="back" id="backBtn">← <span id="backLabel"></span></span>
+      <button id="newChatBtn" onclick="clearAndRestartChat()" style="display:none;background:none;border:1px solid rgba(201,169,110,0.25);border-radius:6px;color:rgba(201,169,110,0.6);font-size:0.7rem;padding:4px 8px;cursor:pointer;letter-spacing:0.5px;margin-left:12px">✦ 새 대화</button>
+    </div>
     <div class="hd-right">
       <button class="admin-hd-btn" id="adminHdBtn" onclick="openAdminPanel()" style="display:none" title="관리자">
         ⚙<span class="admin-hd-dot" id="adminHdDot"></span>

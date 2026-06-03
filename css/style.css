@@ -285,6 +285,17 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* 헤더 좌측 컨테이너 — 뒤로가기 + 새 대화 */
+.hd-left {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* 헤더 우측 컨테이너 — userBtn + 언어버튼 묶음 */
 .hd-right {
   position: absolute;
