@@ -2220,11 +2220,43 @@ window.addEventListener('load', () => {
   }, 1200);
 });
 
-// ── 2. Service Worker 등록 ──
+// ── 2. Service Worker 등록 (업데이트 감지) ──
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
-      .then(() => {}).catch(() => {});
+      .then(registration => {
+        console.log('[App] Service Worker registered');
+
+        // 업데이트 감지
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // 새 버전 발견 - 사용자에게 알림
+              if (confirm('새로운 버전이 있습니다. 페이지를 새로고침하시겠어요?')) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                window.location.reload();
+              }
+            }
+          });
+        });
+
+        // 주기적으로 업데이트 확인 (1시간마다)
+        setInterval(() => {
+          registration.update();
+        }, 60 * 60 * 1000);
+      })
+      .catch(err => console.error('[App] Service Worker registration failed:', err));
+  });
+
+  // Service Worker 제어권 변경 시 새로고침
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
   });
 }
 
