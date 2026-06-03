@@ -1827,18 +1827,23 @@ function startTimer(ttl) {
 //  게스트 체험 핸들러 (로그인 없이 1회 무료)
 // ════════════════════════════════════════════
 async function handleGuestChat(request, env) {
-  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-  const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
+  try {
+    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+    const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
 
-  // DB 체크
-  if (!env.DB) {
-    return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
-  }
+    // DB 체크
+    if (!env.DB) {
+      console.error('[Guest Chat] DB not available');
+      return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
+    }
 
-  // IP당 하루 1회 제한 확인
-  const usage = await env.DB.prepare(
-    `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
-  ).bind(ip, today).first().catch(() => null);
+    // IP당 하루 1회 제한 확인
+    const usage = await env.DB.prepare(
+      `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
+    ).bind(ip, today).first().catch(err => {
+      console.error('[Guest Chat] DB query error:', err);
+      return null;
+    });
 
   if (usage && usage.used_count >= 1) {
     // 다음날 자정(KST) 계산
@@ -1857,11 +1862,17 @@ async function handleGuestChat(request, env) {
     }), 429);
   }
 
-  const { birth, lang = 'ko' } = await request.json().catch(() => ({}));
-  if (!birth) return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
+    const { birth, lang = 'ko' } = await request.json().catch(err => {
+      console.error('[Guest Chat] JSON parse error:', err);
+      return {};
+    });
+    if (!birth) {
+      console.error('[Guest Chat] Missing birth parameter');
+      return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
+    }
 
-  const il = ilchin();
-  const on = ON[lang] || ON.ko;
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
 
   const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.
 ${lang === 'ko' ? '한국어로 답변하세요.' : lang === 'en' ? 'Respond in English.' : lang === 'zh' ? '请用中文回答。' : '日本語で答えてください。'}
@@ -1931,11 +1942,20 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
     return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
 
   } catch(e) {
-    console.error('[handleGuestChat] Error:', e);
+    console.error('[handleGuestChat] Inner error:', e);
     return cors(JSON.stringify({
       error: {
         message: 'Server error: ' + (e.message || 'Unknown error'),
         stack: e.stack?.slice(0, 500)
+      }
+    }), 500);
+  }
+  } catch(outerErr) {
+    console.error('[handleGuestChat] Outer error:', outerErr);
+    return cors(JSON.stringify({
+      error: {
+        message: 'Critical error: ' + (outerErr.message || 'Unknown'),
+        stack: outerErr.stack?.slice(0, 500)
       }
     }), 500);
   }
