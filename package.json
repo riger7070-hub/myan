@@ -1,0 +1,11 @@
+{
+  "name": "myan-web",
+  "version": "1.0.0",
+  "description": "M;Y 安 Web Application",
+  "scripts": {
+    "convert-webp": "node convert-to-webp.js"
+  },
+  "devDependencies": {
+    "sharp": "^0.33.0"
+  }
+}
