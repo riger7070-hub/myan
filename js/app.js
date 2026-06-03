@@ -2220,60 +2220,15 @@ document.addEventListener('click', e => {
   }
 }, { passive: true });
 
-// ── 4. 푸시 알림 권한 요청 ──
+// ── 4. 푸시 알림 — notifications.js 모듈로 이동됨 ──
+// 하위 호환성을 위한 래퍼 함수
 async function requestNotificationPermission() {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-
-  const permission = await Notification.requestPermission();
-  if (permission === 'granted') {
-    // 환영 알림
-    new Notification('M;Y 安', {
-      body: '일진 알림이 설정되었습니다. 매일 기운을 전해드릴게요.',
-      icon: '/icon-pwa-192-192.png',
-      badge: '/icon-pwa-192-192.png',
-      tag: 'myan-welcome',
-    });
-    scheduleLocalNotification();
-    return true;
-  }
-  return false;
+  return window.Notifications?.requestPermission() || false;
 }
 
-// 로컬 알림 스케줄링 (오전 8시 알림)
-function scheduleLocalNotification() {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-  const now  = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  const delay = next - now;
-
-  // 기존 타이머 클리어
-  if (window._notifTimer) clearTimeout(window._notifTimer);
-
-  window._notifTimer = setTimeout(() => {
-    new Notification('M;Y 安 · 오늘의 기운', {
-      body: '오늘의 일진과 오행 기운을 확인해 보세요.',
-      icon:  '/icon-pwa-192-192.png',
-      badge: '/icon-pwa-192-192.png',
-      tag: 'myan-daily',
-      renotify: true,
-    });
-    scheduleLocalNotification(); // 내일도 반복
-  }, delay);
-
-  localStorage.setItem('myan_notif_enabled', 'true');
+function scheduleLocalNotification(hour, minute) {
+  return window.Notifications?.scheduleDailyNotification(hour, minute);
 }
-
-// 앱 진입 시 알림 재스케줄
-if (localStorage.getItem('myan_notif_enabled') === 'true') {
-  scheduleLocalNotification();
-}
-
-
-// notifToggleBtn 초기 상태는 renderMyPage에서 처리됨
 
 // ── 6. theme-color 메타 태그 동기화 ──
 function syncThemeColorMeta() {

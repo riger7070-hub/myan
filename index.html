@@ -47,6 +47,7 @@
 <script src="https://js.tosspayments.com/v2/standard"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="/js/modules/analytics.js"></script>
+  <script src="/js/modules/notifications.js"></script>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -449,7 +450,10 @@
       <div class="signup-notice" id="mypageNotice"></div>
 
       <div class="mypage-actions">
-        <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
+        <div style="display: flex; gap: 8px;">
+          <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)" style="flex: 1;"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
+          <button class="notif-settings-btn" onclick="if (typeof Notifications !== 'undefined') Notifications.showNotificationSettingsModal()" style="padding: 11px 16px; background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.3); border-radius: 10px; color: var(--gold); cursor: pointer; font-size: 0.9rem;" title="알림 시간 설정">⚙️</button>
+        </div>
         <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
       </div>
