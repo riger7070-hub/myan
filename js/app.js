@@ -428,18 +428,33 @@ async function send() {
 
   // 토큰 차감
   if (!checkAndDeductToken()) {
-    addBubble(TX[lang].noToken, 'ai');
-    // 3초 후 마이페이지 충전 섹션으로 이동
-    setTimeout(() => {
-      if (confirm('마이페이지에서 토큰을 충전하시겠어요?')) {
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble bubble-ai';
+    bubble.innerHTML = `
+      <div style="margin-bottom: 12px">${TX[lang].noToken}</div>
+      <button onclick="(function(){
         openMyPage();
-        // 토큰 섹션으로 스크롤
         setTimeout(() => {
           const tokenSection = document.querySelector('.mypage-token-display');
-          if (tokenSection) tokenSection.scrollIntoView({ behavior: 'smooth' });
+          if (tokenSection) tokenSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 300);
-      }
-    }, 3000);
+      })()" style="
+        width: 100%;
+        padding: 12px;
+        background: linear-gradient(135deg, var(--gold), #d4a574);
+        color: var(--bg);
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: transform 0.2s;
+      " onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+        💰 토큰 충전하러 가기
+      </button>
+    `;
+    chats.appendChild(bubble);
+    chats.scrollTop = chats.scrollHeight;
     return;
   }
 
@@ -3125,9 +3140,21 @@ async function submitGuestReading() {
     if (res.status === 429) {
       if (data.error?.code === 'GUEST_LIMIT') {
         const resetHours = data.error.resetIn || 24;
+        const now = new Date();
+        const resetTime = new Date(now.getTime() + resetHours * 60 * 60 * 1000);
+        const resetStr = resetTime.toLocaleString('ko-KR', {
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
         errDiv.innerHTML = `
           오늘의 무료 체험은 이미 사용하셨습니다.<br>
-          <strong>${resetHours}시간 후</strong> 다시 이용 가능합니다.<br>
+          <strong style="color: var(--gold)">${resetStr}</strong>에 다시 이용 가능합니다.<br>
+          <span style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; display: inline-block;">
+            (약 ${resetHours}시간 후)
+          </span><br>
           <span style="color: var(--gold); margin-top: 8px; display: inline-block;">
             💡 회원가입하면 무제한 이용 가능!
           </span>
