@@ -1827,13 +1827,19 @@ function startTimer(ttl) {
 //  게스트 체험 핸들러 (로그인 없이 1회 무료)
 // ════════════════════════════════════════════
 async function handleGuestChat(request, env) {
-  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-  const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
+  try {
+    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+    const today = new Date().toISOString().slice(0, 10); // KST 근사치 (UTC+9)
 
-  // IP당 하루 1회 제한 확인
-  const usage = await env.DB.prepare(
-    `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
-  ).bind(ip, today).first();
+    // DB 체크
+    if (!env.DB) {
+      return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
+    }
+
+    // IP당 하루 1회 제한 확인
+    const usage = await env.DB.prepare(
+      `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
+    ).bind(ip, today).first().catch(() => null);
 
   if (usage && usage.used_count >= 1) {
     // 다음날 자정(KST) 계산
@@ -1898,6 +1904,16 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
     return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
 
   } catch(e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    console.error('[handleGuestChat] Error:', e);
+    return cors(JSON.stringify({
+      error: {
+        message: 'Server error: ' + (e.message || 'Unknown error'),
+        stack: e.stack
+      }
+    }), 500);
+  }
+  } catch(outerError) {
+    console.error('[handleGuestChat] Outer catch:', outerError);
+    return cors(JSON.stringify({ error: { message: 'Critical error: ' + outerError.message } }), 500);
   }
 }
