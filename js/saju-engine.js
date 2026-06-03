@@ -1,5 +1,17 @@
 // M;Y 安 — saju-engine.js  (사주 오행 계산·게이지 렌더)
+
+// 메모이제이션된 사주 계산 (같은 입력에 대해 캐시 사용)
+const _sajuCache = new Map();
+
 function calcSajuElements(user) {
+  // 캐시 키 생성
+  const cacheKey = `${user.birthYear}-${user.birthMonth}-${user.birthDay}-${user.birthHour || 'none'}`;
+
+  // 캐시에 있으면 바로 반환
+  if (_sajuCache.has(cacheKey)) {
+    return _sajuCache.get(cacheKey);
+  }
+
   const year  = parseInt(user.birthYear)  || 2000;
   const month = parseInt(user.birthMonth) || 1;
   const day   = parseInt(user.birthDay)   || 1;
@@ -34,7 +46,16 @@ function calcSajuElements(user) {
   [yBranch, mBranch, dBranch, ...(siBranch >= 0 ? [siBranch] : [])].forEach(b => count[JJO[b]]++);
 
   const total = Object.values(count).reduce((a, b) => a + b, 0);
-  return { count, total };
+  const result = { count, total };
+
+  // 캐시에 저장 (최대 50개 유지)
+  if (_sajuCache.size > 50) {
+    const firstKey = _sajuCache.keys().next().value;
+    _sajuCache.delete(firstKey);
+  }
+  _sajuCache.set(cacheKey, result);
+
+  return result;
 }
 
 function _renderSajuGauge(user) {

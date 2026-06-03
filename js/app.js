@@ -161,6 +161,27 @@ function goBack() {
 /* DOM 헬퍼 */
 const cw = () => document.getElementById('chat-window');
 
+// 스크롤 최적화 래퍼 (throttle 적용)
+const scrollToBottom = (() => {
+  let scheduled = false;
+  return (smooth = false) => {
+    if (scheduled) return;
+    scheduled = true;
+
+    requestAnimationFrame(() => {
+      scheduled = false;
+      const chatWindow = cw();
+      if (chatWindow) {
+        if (smooth) {
+          chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+        } else {
+          chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+      }
+    });
+  };
+})();
+
 function addBubble(text, who) {
   const d = document.createElement('div');
   d.className = `bubble bubble-${who}`;
@@ -180,14 +201,14 @@ function addBubble(text, who) {
     });
     d.appendChild(btn);
     cw().appendChild(d);
-    cw().scrollTop = 99999;
+    scrollToBottom();
     // 이전 타이핑 중단 후 새 타이핑 시작
     if (_typingAbort) _typingAbort.abort();
     _typeIntoNode(tn, text, 22);
   } else {
     d.textContent = text;
     cw().appendChild(d);
-    cw().scrollTop = 99999;
+    scrollToBottom();
   }
   return d;
 }
@@ -654,6 +675,17 @@ async function migrateLocalTokens() {
 }
 
 function updateAllTokenDisplays() {
+  // Performance 모듈의 최적화된 업데이트 사용
+  if (typeof Performance !== 'undefined' && Performance.scheduleTokenUpdate) {
+    Performance.scheduleTokenUpdate(_tokenCache);
+  } else {
+    // 폴백: 기존 방식
+    _updateTokenDisplaysLegacy();
+  }
+}
+
+// 레거시 업데이트 함수 (Performance 모듈 로드 실패 시 폴백)
+function _updateTokenDisplaysLegacy() {
   const t = _tokenCache;
   const count = document.getElementById('chatTokenCount');
   const chip  = document.getElementById('tokenChip');
