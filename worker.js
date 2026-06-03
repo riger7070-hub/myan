@@ -1874,21 +1874,18 @@ For ohaeng: integers 0–100, sum = 100. End reading with one of: #木 #火 #土
   const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
 ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
 
-  // Gemini API URL 로깅
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${env.GEMINI_API_KEY.slice(0, 10)}...`;
-  console.log('[Guest Chat] Calling Gemini API:', apiUrl);
-
   try {
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
-            { role: 'user', parts: [{ text: sysText + '\n\n' + userMsg }] }
+            { parts: [{ text: sysText + '\n\n' + userMsg }] }
           ],
           generationConfig: {
+            responseMimeType: 'application/json',
             temperature: 0.8,
             maxOutputTokens: 1024
           }
