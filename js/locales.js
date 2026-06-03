@@ -876,3 +876,18 @@ function trimmedHist() {
   // 첫 2개(인사) 보존 + 최신 (MAX_HIST-2)개
   return [...hist.slice(0, 2), ...hist.slice(-(MAX_HIST - 2))];
 }
+
+// ── 초기화: 페이지 로드 시 render() 호출 ──
+(function initLocales() {
+  // DOM이 준비되면 초기 렌더링 실행
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      render();
+      schedMidnightRefresh();
+    });
+  } else {
+    // 이미 DOM이 로드된 경우 (지연 로드된 스크립트)
+    render();
+    schedMidnightRefresh();
+  }
+})();
