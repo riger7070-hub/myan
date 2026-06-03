@@ -200,14 +200,10 @@ export default {
     if (path === '/privacy-policy'  && method === 'GET') return handlePrivacyPage();
     if (path === '/terms'           && method === 'GET') return handleTermsPage();
 
-    // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
-    if (method === 'GET') {
-      const res = await env.ASSETS.fetch(request);
-      return addSecurityHeaders(res);
-    }
-
     // ── 상세 풀이 ──
     if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
+    // ── 게스트 체험 ──
+    if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 푸시 알림 API ──
     if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
     if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }
@@ -218,18 +214,22 @@ export default {
     // ── 오행 히스토리 ──
     if (path === '/api/ohaeng-history'   && method === 'GET')  { await ensureDBExt(env); return handleOhaengHistory(request, env); }
     if (path === '/api/ohaeng-history'   && method === 'POST') { await ensureDBExt(env); return handleOhaengHistorySave(request, env); }
-    // ── 피드백 ──
-    if (path === '/chat-guest'           && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
-    if (path === '/api/promo/claim'       && method === 'POST') { await ensureDBExt(env); return handlePromoClaim(request, env); }
-    if (path === '/chat-guest'           && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
-    if (path === '/api/promo/generate'    && method === 'POST') { await ensureDBExt(env); return handlePromoGenerate(request, env); }
-    if (path === '/api/promo/current'     && method === 'GET')  { await ensureDBExt(env); return handlePromoCurrent(request, env); }
-    if (path === '/promo-display'         && method === 'GET')  { return handlePromoDisplay(request, env); }
+    // ── 프로모 & 피드백 ──
+    if (path === '/api/promo/claim'      && method === 'POST') { await ensureDBExt(env); return handlePromoClaim(request, env); }
+    if (path === '/api/promo/generate'   && method === 'POST') { await ensureDBExt(env); return handlePromoGenerate(request, env); }
+    if (path === '/api/promo/current'    && method === 'GET')  { await ensureDBExt(env); return handlePromoCurrent(request, env); }
+    if (path === '/promo-display'        && method === 'GET')  { return handlePromoDisplay(request, env); }
     if (path === '/api/feedback'         && method === 'POST') { await ensureDBExt(env); return handleFeedback(request, env); }
     // ── 추천인 ──
-    if (path === '/api/referral/generate'&& method === 'POST') { await ensureDBExt(env); return handleReferralGenerate(request, env); }
-    if (path === '/api/referral/claim'   && method === 'POST') { await ensureDBExt(env); return handleReferralClaim(request, env); }
-    if (path === '/api/referral'         && method === 'GET')  { await ensureDBExt(env); return handleGetReferral(request, env); }
+    if (path === '/api/referral/generate' && method === 'POST') { await ensureDBExt(env); return handleReferralGenerate(request, env); }
+    if (path === '/api/referral/claim'    && method === 'POST') { await ensureDBExt(env); return handleReferralClaim(request, env); }
+    if (path === '/api/referral'          && method === 'GET')  { await ensureDBExt(env); return handleGetReferral(request, env); }
+
+    // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입)
+    if (method === 'GET') {
+      const res = await env.ASSETS.fetch(request);
+      return addSecurityHeaders(res);
+    }
 
     return cors(JSON.stringify({ error: { message: 'Not Found' } }), 404);
   },

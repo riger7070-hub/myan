@@ -3006,8 +3006,9 @@ function _showDynamicPromoModal(token) {
 function startGuestMode() {
   document.getElementById('screen-mode').style.display = 'none';
   document.getElementById('screen-guest').style.display = '';
-  document.getElementById('backBtn').style.display = '';
-  document.getElementById('backLabel').textContent = T.back || '뒤로';
+  document.getElementById('backBtn').style.display = 'flex';
+  const t = TX[lang];
+  document.getElementById('backLabel').textContent = t.back || '뒤로';
 }
 
 async function submitGuestReading() {
@@ -3054,7 +3055,7 @@ async function submitGuestReading() {
     document.getElementById('screen-guest').style.display = 'none';
     document.getElementById('screen-guest-result').style.display = '';
     document.getElementById('guestReadingContent').textContent = data.reading || '풀이 결과를 가져오지 못했습니다.';
-    document.getElementById('backBtn').style.display = '';
+    document.getElementById('backBtn').style.display = 'flex';
 
   } catch (e) {
     errDiv.textContent = e.message || '오류가 발생했습니다. 다시 시도해주세요.';
