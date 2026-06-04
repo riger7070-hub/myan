@@ -1878,7 +1878,7 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
 
     try {
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${env.GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1928,13 +1928,15 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
       return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
 
     } catch(e) {
+      console.error('[GUEST CHAT] Gemini API Error:', e);
       return cors(JSON.stringify({
-        error: { message: '서버 오류가 발생했습니다.' }
+        error: { message: '서버 오류가 발생했습니다.', details: e.message }
       }), 500);
     }
   } catch(outerErr) {
+    console.error('[GUEST CHAT] Outer Error:', outerErr);
     return cors(JSON.stringify({
-      error: { message: '시스템 오류가 발생했습니다.' }
+      error: { message: '시스템 오류가 발생했습니다.', details: outerErr.message }
     }), 500);
   }
 }
