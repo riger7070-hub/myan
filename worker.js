@@ -1558,7 +1558,7 @@ async function handleUngiAdminLogin(request, env) {
 async function handleUngiGiveTokens(request, env) {
   try {
     const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-    const { pin, email, tokens } = await request.json().catch(() => ({}));
+    const { pin, googleToken, email, tokens } = await request.json().catch(() => ({}));
 
     // 방법 2: IP 화이트리스트 체크
     const whitelisted = await env.DB.prepare('SELECT * FROM ungi_admin_whitelist WHERE ip=?').bind(ip).first();
@@ -1576,16 +1576,37 @@ async function handleUngiGiveTokens(request, env) {
       return cors(JSON.stringify({ error: { message: '너무 많은 시도. 1시간 후 다시 시도하세요.' } }), 429);
     }
 
-    // PIN 인증 (환경변수에서 읽기)
-    const UNGI_PIN = env.UNGI_PIN || '5984'; // fallback
-    const pinMatch = pin === UNGI_PIN;
+    // 인증 방법 확인
+    let authenticated = false;
 
-    // 시도 기록
-    await env.DB.prepare('INSERT INTO ungi_admin_attempts (ip, attempt_at, success) VALUES (?, ?, ?)')
-      .bind(ip, Math.floor(Date.now() / 1000), pinMatch ? 1 : 0).run();
+    if (googleToken) {
+      // 방법 3: Google 로그인 인증
+      const googleEmail = await getEmailFromToken(googleToken, env);
+      const ADMIN_EMAIL = env.ADMIN_EMAIL || 'riger7070@gmail.com';
+      if (googleEmail === ADMIN_EMAIL) {
+        authenticated = true;
+        // 성공 기록
+        await env.DB.prepare('INSERT INTO ungi_admin_attempts (ip, attempt_at, success) VALUES (?, ?, 1)')
+          .bind(ip, Math.floor(Date.now() / 1000)).run();
+      } else {
+        return cors(JSON.stringify({ error: { message: '관리자 권한이 없습니다' } }), 403);
+      }
+    } else if (pin) {
+      // 방법 1: PIN 인증
+      const UNGI_PIN = env.UNGI_PIN || '5984'; // fallback
+      const pinMatch = pin === UNGI_PIN;
 
-    if (!pinMatch) {
-      return cors(JSON.stringify({ error: { message: '잘못된 PIN 번호' } }), 401);
+      // 시도 기록
+      await env.DB.prepare('INSERT INTO ungi_admin_attempts (ip, attempt_at, success) VALUES (?, ?, ?)')
+        .bind(ip, Math.floor(Date.now() / 1000), pinMatch ? 1 : 0).run();
+
+      if (pinMatch) {
+        authenticated = true;
+      }
+    }
+
+    if (!authenticated) {
+      return cors(JSON.stringify({ error: { message: '인증 실패' } }), 401);
     }
 
     if (!email || !tokens) {

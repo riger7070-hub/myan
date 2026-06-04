@@ -240,10 +240,11 @@
     // 지급 버튼
     document.getElementById('submitBtn').addEventListener('click', async () => {
       let pin = document.getElementById('pin').value.trim();
+      let useGoogle = false;
 
-      // Google 로그인 사용 시 PIN 무시
+      // Google 로그인 사용 시
       if (googleToken) {
-        pin = ''; // Google 토큰으로 인증됨
+        useGoogle = true;
       }
       const email = document.getElementById('email').value.trim();
       const messageEl = document.getElementById('message');
@@ -270,10 +271,14 @@
       submitBtn.textContent = '처리 중...';
 
       try {
+        const body = useGoogle
+          ? { googleToken, email, tokens: selectedTokens }
+          : { pin, email, tokens: selectedTokens };
+
         const res = await fetch(EP + 'api/admin/ungi/give-tokens', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin, email, tokens: selectedTokens })
+          body: JSON.stringify(body)
         });
 
         const data = await res.json();
