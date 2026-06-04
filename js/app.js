@@ -1248,6 +1248,22 @@ function goBackFromSignup() {
   if (successWrap) successWrap.style.display = 'none';
 }
 
+function buildSignupDropdowns() {
+  const monthSelect = document.getElementById('fMonth');
+  if (!monthSelect) return;
+
+  // 이미 채워져 있으면 스킵
+  if (monthSelect.options.length > 0) return;
+
+  // 1월~12월 옵션 추가
+  for (let i = 1; i <= 12; i++) {
+    const option = document.createElement('option');
+    option.value = i;
+    option.textContent = i + '월';
+    monthSelect.appendChild(option);
+  }
+}
+
 function renderSignup() {
   console.log('[SIGNUP] renderSignup() called', { lang, TX: !!TX, TXlang: !!TX[lang] });
   const s = TX[lang];
