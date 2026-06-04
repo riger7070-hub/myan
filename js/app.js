@@ -3404,8 +3404,12 @@ async function submitGuestReading() {
     }
 
     // 운기 푸딩 카드 표시
+    console.log('[UNGI] Response data:', { isUngi: data.isUngi, ohaeng: data.ohaeng });
     if (data.isUngi && data.ohaeng) {
+      console.log('[UNGI] Rendering pudding card');
       renderUngiPuddingCard(data.ohaeng);
+    } else {
+      console.log('[UNGI] Pudding card not shown:', { isUngi: data.isUngi, hasOhaeng: !!data.ohaeng });
     }
 
   } catch (e) {
@@ -3444,8 +3448,12 @@ function backToHome() {
 
 // 운기 푸딩 추천 카드 렌더링
 function renderUngiPuddingCard(ohaeng) {
+  console.log('[UNGI] renderUngiPuddingCard called with:', ohaeng);
   const card = document.getElementById('ungiPuddingCard');
-  if (!card) return;
+  if (!card) {
+    console.error('[UNGI] ungiPuddingCard element not found!');
+    return;
+  }
 
   // 가장 높은 오행 찾기
   const entries = Object.entries(ohaeng);
