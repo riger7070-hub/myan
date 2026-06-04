@@ -1520,7 +1520,7 @@ async function handleUngiGiveTokens(request, env) {
     const { pin, email, tokens } = await request.json().catch(() => ({}));
 
     // PIN 인증 (간단한 비밀번호)
-    const UNGI_PIN = '7070'; // 나중에 env 변수로 변경 가능
+    const UNGI_PIN = '5984'; // 나중에 env 변수로 변경 가능
     if (pin !== UNGI_PIN) {
       return cors(JSON.stringify({ error: { message: '잘못된 PIN 번호' } }), 401);
     }
