@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>운기 QR 코드 생성기</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    .logo {
+      font-size: 3rem;
+      margin-bottom: 10px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 1.5rem;
+    }
+    .subtitle {
+      color: #999;
+      font-size: 0.9rem;
+      margin-bottom: 30px;
+    }
+    #qr-container {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 16px;
+    }
+    .url {
+      background: #e9ecef;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #495057;
+      margin-top: 20px;
+      word-break: break-all;
+    }
+    .btn {
+      padding: 14px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 10px;
+      transition: all 0.3s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    }
+    .instructions {
+      margin-top: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      text-align: left;
+      font-size: 0.9rem;
+      line-height: 1.8;
+    }
+    .instructions h3 {
+      margin-bottom: 10px;
+      color: #667eea;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🍮</div>
+    <h1>운기 매장 QR 코드</h1>
+    <div class="subtitle">M;Y 安 × 운기 푸딩 콜라보</div>
+
+    <div id="qr-container"></div>
+
+    <div class="url">
+      https://myan.riger7070.workers.dev?ref=ungi
+    </div>
+
+    <button class="btn" onclick="downloadQR()">📥 QR 코드 다운로드</button>
+    <button class="btn" onclick="printQR()">🖨️ 인쇄</button>
+
+    <div class="instructions">
+      <h3>📌 사용 방법</h3>
+      <ol style="padding-left: 20px;">
+        <li>위 QR 코드를 다운로드하거나 인쇄하세요</li>
+        <li>운기 매장 벽면이나 테이블에 부착하세요</li>
+        <li>손님이 QR 스캔 → 생년월일 입력</li>
+        <li>결과 화면에 <strong>오행별 푸딩 2개 추천</strong> 자동 표시!</li>
+        <li>구매 후 직원용 페이지에서 토큰 지급</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // QR 코드 생성
+    new QRCode(document.getElementById("qr-container"), {
+      text: "https://myan.riger7070.workers.dev?ref=ungi",
+      width: 300,
+      height: 300,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    function downloadQR() {
+      const canvas = document.querySelector('#qr-container canvas');
+      const link = document.createElement('a');
+      link.download = '운기_QR코드.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+
+    function printQR() {
+      window.print();
+    }
+  </script>
+
+  <style media="print">
+    body { background: white; }
+    .container { box-shadow: none; }
+    .btn { display: none; }
+    .instructions { display: none; }
+  </style>
+</body>
+</html>
