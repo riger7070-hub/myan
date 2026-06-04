@@ -1830,31 +1830,20 @@ function startTimer(ttl) {
 //  게스트 체험 핸들러 (로그인 없이 1회 무료)
 // ════════════════════════════════════════════
 async function handleGuestChat(request, env) {
-  console.log('[GUEST CHAT] Function started');
   try {
     const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
     const today = new Date().toISOString().slice(0, 10);
-    console.log('[GUEST CHAT] IP:', ip, 'Date:', today);
 
-    // DB 체크
     if (!env.DB) {
-      console.error('[GUEST CHAT] DB not available!');
       return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
     }
-    console.log('[GUEST CHAT] DB check passed');
 
     // IP당 하루 1회 제한 확인
-    console.log('[GUEST CHAT] Checking usage limit...');
     const usage = await env.DB.prepare(
       `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
-    ).bind(ip, today).first().catch((err) => {
-      console.error('[GUEST CHAT] DB query error:', err);
-      return null;
-    });
-    console.log('[GUEST CHAT] Usage check result:', usage);
+    ).bind(ip, today).first().catch(() => null);
 
     if (usage && usage.used_count >= 1) {
-      console.log('[GUEST CHAT] Usage limit reached');
       // 다음날 자정(KST) 계산
       const resetDate = new Date(today);
       resetDate.setDate(resetDate.getDate() + 1);
@@ -1871,22 +1860,13 @@ async function handleGuestChat(request, env) {
       }), 429);
     }
 
-    console.log('[GUEST CHAT] Parsing request body...');
-    const { birth, lang = 'ko' } = await request.json().catch((err) => {
-      console.error('[GUEST CHAT] JSON parse error:', err);
-      return {};
-    });
-    console.log('[GUEST CHAT] Request data:', { birth, lang });
-
+    const { birth, lang = 'ko' } = await request.json().catch(() => ({}));
     if (!birth) {
-      console.error('[GUEST CHAT] Birth date missing');
       return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
     }
 
-    console.log('[GUEST CHAT] Calculating ilchin...');
     const il = ilchin();
     const on = ON[lang] || ON.ko;
-    console.log('[GUEST CHAT] Ilchin:', il, 'Language:', lang);
 
     const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.
 ${lang === 'ko' ? '한국어로 답변하세요.' : lang === 'en' ? 'Respond in English.' : lang === 'zh' ? '请用中文回答。' : '日本語で答えてください。'}
@@ -1899,12 +1879,6 @@ For ohaeng: integers 0–100, sum = 100. End reading with one of: #木 #火 #土
 ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
 
     try {
-      console.log('[GUEST CHAT] Calling Gemini API...');
-      if (!env.GEMINI_API_KEY) {
-        console.error('[GUEST CHAT] GEMINI_API_KEY not set!');
-        throw new Error('GEMINI_API_KEY not configured');
-      }
-
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
         {
@@ -1923,60 +1897,46 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
         }
       );
 
-      console.log('[GUEST CHAT] Gemini API response status:', resp.status);
-
       if (!resp.ok) {
         const errorText = await resp.text();
-        console.error('[GUEST CHAT] Gemini API error:', resp.status, errorText);
         return cors(JSON.stringify({
-          error: { message: `Gemini API 오류 (${resp.status})`, details: errorText }
+          error: { message: `Gemini API 오류 (${resp.status})` }
         }), 500);
       }
 
       const data = await resp.json();
-      console.log('[GUEST CHAT] Gemini API response received');
       const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      console.log('[GUEST CHAT] Raw AI response:', raw);
       let result = {};
       try {
         result = JSON.parse(raw);
-        console.log('[GUEST CHAT] Parsed AI response:', result);
       } catch (parseError) {
-        console.error('[GUEST CHAT] JSON parse error:', parseError, 'Raw:', raw);
         return cors(JSON.stringify({
-          error: { message: 'AI 응답 파싱 오류', details: raw }
+          error: { message: 'AI 응답 파싱 오류' }
         }), 500);
       }
 
       if (!result.reading || !result.ohaeng) {
-        console.error('[GUEST CHAT] Invalid AI response format:', result);
         return cors(JSON.stringify({
-          error: { message: 'AI 응답 형식 오류', details: JSON.stringify(result) }
+          error: { message: 'AI 응답 형식 오류' }
         }), 500);
       }
 
       // 사용 기록 저장
-      console.log('[GUEST CHAT] Saving usage record...');
       await env.DB.prepare(
         `INSERT INTO guest_usage (ip, used_date, used_count) VALUES (?, ?, 1)
          ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
-      ).bind(ip, today).run().catch((err) => {
-        console.error('[GUEST CHAT] DB save error:', err);
-      });
+      ).bind(ip, today).run();
 
-      console.log('[GUEST CHAT] Success! Returning result');
       return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
 
     } catch(e) {
-      console.error('[GUEST CHAT] Gemini API Error:', e);
       return cors(JSON.stringify({
-        error: { message: '서버 오류가 발생했습니다.', details: e.message }
+        error: { message: '서버 오류가 발생했습니다.' }
       }), 500);
     }
   } catch(outerErr) {
-    console.error('[GUEST CHAT] Outer Error:', outerErr);
     return cors(JSON.stringify({
-      error: { message: '시스템 오류가 발생했습니다.', details: outerErr.message }
+      error: { message: '시스템 오류가 발생했습니다.' }
     }), 500);
   }
 }
