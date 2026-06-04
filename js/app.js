@@ -1511,6 +1511,7 @@ function renderMyPage() {
   fetchStreak();
   renderOhaengHeatmap();
   renderReferralSection();
+  renderTokenHistory();
 
   // ── 알림 설정 버튼 이벤트 리스너 ──
   const notifSettingsBtn = document.getElementById('notifSettingsBtn');
