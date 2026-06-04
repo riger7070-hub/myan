@@ -157,6 +157,13 @@ async function ensureDBExt(env) {
       used_count INTEGER DEFAULT 1,
       PRIMARY KEY (ip, used_date)
     );
+    CREATE TABLE IF NOT EXISTS ungi_token_gifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_email TEXT NOT NULL,
+      tokens_given INTEGER NOT NULL,
+      gifted_by TEXT,
+      gifted_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
     CREATE TABLE IF NOT EXISTS dynamic_promo_tokens (
       token TEXT PRIMARY KEY,
       created_at INTEGER NOT NULL,
@@ -230,6 +237,8 @@ export default {
     if (path === '/api/referral/generate' && method === 'POST') { await ensureDBExt(env); return handleReferralGenerate(request, env); }
     if (path === '/api/referral/claim'    && method === 'POST') { await ensureDBExt(env); return handleReferralClaim(request, env); }
     if (path === '/api/referral'          && method === 'GET')  { await ensureDBExt(env); return handleGetReferral(request, env); }
+
+    if (path === '/api/admin/ungi/give-tokens' && method === 'POST') { await ensureDBExt(env); return handleUngiGiveTokens(request, env); }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
@@ -1500,6 +1509,47 @@ async function handleGetReferral(request, env) {
     }),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  운기 토큰 지급 핸들러
+// ════════════════════════════
+async function handleUngiGiveTokens(request, env) {
+  try {
+    const { pin, email, tokens } = await request.json().catch(() => ({}));
+
+    // PIN 인증 (간단한 비밀번호)
+    const UNGI_PIN = '7070'; // 나중에 env 변수로 변경 가능
+    if (pin !== UNGI_PIN) {
+      return cors(JSON.stringify({ error: { message: '잘못된 PIN 번호' } }), 401);
+    }
+
+    if (!email || !tokens) {
+      return cors(JSON.stringify({ error: { message: 'email, tokens 필수' } }), 400);
+    }
+
+    if (tokens < 1 || tokens > 10) {
+      return cors(JSON.stringify({ error: { message: '토큰은 1~10개만 가능' } }), 400);
+    }
+
+    // 사용자 존재 확인
+    const user = await env.DB.prepare('SELECT * FROM payment_requests WHERE user_email=?').bind(email).first();
+    if (!user) {
+      return cors(JSON.stringify({ error: { message: '존재하지 않는 사용자' } }), 404);
+    }
+
+    // 토큰 지급
+    await env.DB.prepare('UPDATE payment_requests SET token_count=token_count+? WHERE user_email=?')
+      .bind(tokens, email).run();
+
+    // 로그 기록
+    await env.DB.prepare('INSERT INTO ungi_token_gifts (user_email, tokens_given, gifted_by) VALUES (?, ?, ?)')
+      .bind(email, tokens, 'UNGI_STORE').run();
+
+    return cors(JSON.stringify({ success: true, tokens, email }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: e.message } }), 500);
   }
 }
 

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>운기 매장 관리 - 토큰 지급</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .logo {
+      text-align: center;
+      font-size: 3rem;
+      margin-bottom: 10px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 1.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #999;
+      font-size: 0.9rem;
+      margin-bottom: 30px;
+    }
+    .field {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.3s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .token-buttons {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .token-btn {
+      padding: 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      background: white;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .token-btn:hover {
+      border-color: #667eea;
+      background: #f5f7ff;
+    }
+    .token-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .message {
+      margin-top: 20px;
+      padding: 14px;
+      border-radius: 12px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+    }
+    .message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #c3e6cb;
+    }
+    .message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 2px solid #f5c6cb;
+    }
+    .history {
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 2px solid #e0e0e0;
+    }
+    .history h2 {
+      font-size: 1.1rem;
+      color: #666;
+      margin-bottom: 15px;
+    }
+    .history-item {
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+    .history-item strong {
+      color: #667eea;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🍮</div>
+    <h1>운기 매장 관리</h1>
+    <div class="subtitle">M;Y 安 토큰 지급 시스템</div>
+
+    <div class="field">
+      <label>PIN 번호</label>
+      <input type="password" id="pin" placeholder="4자리 PIN" maxlength="4" inputmode="numeric">
+    </div>
+
+    <div class="field">
+      <label>회원 이메일</label>
+      <input type="email" id="email" placeholder="customer@example.com">
+    </div>
+
+    <div class="field">
+      <label>토큰 개수</label>
+      <div class="token-buttons">
+        <button class="token-btn" data-tokens="1">1</button>
+        <button class="token-btn" data-tokens="2">2</button>
+        <button class="token-btn" data-tokens="3">3</button>
+        <button class="token-btn" data-tokens="5">5</button>
+        <button class="token-btn" data-tokens="10">10</button>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn">토큰 지급하기</button>
+
+    <div class="message" id="message"></div>
+  </div>
+
+  <script>
+    const EP = 'https://myan.riger7070.workers.dev/';
+    let selectedTokens = 0;
+
+    // 토큰 개수 선택
+    document.querySelectorAll('.token-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedTokens = parseInt(btn.dataset.tokens);
+      });
+    });
+
+    // 지급 버튼
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      const pin = document.getElementById('pin').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const messageEl = document.getElementById('message');
+      const submitBtn = document.getElementById('submitBtn');
+
+      messageEl.style.display = 'none';
+
+      if (!pin) {
+        showMessage('PIN 번호를 입력하세요', 'error');
+        return;
+      }
+
+      if (!email) {
+        showMessage('이메일을 입력하세요', 'error');
+        return;
+      }
+
+      if (!selectedTokens) {
+        showMessage('토큰 개수를 선택하세요', 'error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '처리 중...';
+
+      try {
+        const res = await fetch(EP + 'api/admin/ungi/give-tokens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin, email, tokens: selectedTokens })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error?.message || '지급 실패');
+        }
+
+        showMessage(`✅ ${email}님에게 토큰 ${selectedTokens}개 지급 완료!`, 'success');
+
+        // 입력 초기화
+        document.getElementById('email').value = '';
+        document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('active'));
+        selectedTokens = 0;
+
+      } catch (err) {
+        showMessage('❌ ' + err.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '토큰 지급하기';
+      }
+    });
+
+    function showMessage(text, type) {
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = text;
+      messageEl.className = 'message ' + type;
+      messageEl.style.display = 'block';
+    }
+
+    // Enter 키 지원
+    document.getElementById('email').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('submitBtn').click();
+    });
+  </script>
+</body>
+</html>
