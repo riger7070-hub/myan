@@ -3452,11 +3452,11 @@ function renderUngiPuddingCard(ohaeng) {
   const topOhaeng = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
 
   const puddingMap = {
-    '木': { name: '청포도 푸딩', color: '#4bc87a', desc: '상큼한 성장 에너지' },
-    '火': { name: '딸기 푸딩', color: '#e05a4a', desc: '열정의 불꽃 에너지' },
-    '土': { name: '카라멜 푸딩', color: '#d4a040', desc: '든든한 안정 에너지' },
+    '木': { name: '말차 푸딩', color: '#4bc87a', desc: '상큼한 성장 에너지' },
+    '火': { name: '우베 푸딩', color: '#e05a4a', desc: '열정의 불꽃 에너지' },
+    '土': { name: '커스타드 푸딩', color: '#d4a040', desc: '든든한 안정 에너지' },
     '金': { name: '바닐라 푸딩', color: '#a0aab4', desc: '깔끔한 정리 에너지' },
-    '水': { name: '블루베리 푸딩', color: '#5aa8e0', desc: '유연한 지혜 에너지' }
+    '水': { name: '초코 푸딩', color: '#5aa8e0', desc: '유연한 지혜 에너지' }
   };
 
   const pudding = puddingMap[topOhaeng];
