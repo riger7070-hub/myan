@@ -864,6 +864,9 @@ function addSecurityHeaders(response) {
   // 불필요한 브라우저 기능 차단
   h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
 
+  // Google OAuth를 위한 COOP 헤더
+  h.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+
   // Content-Security-Policy (XSS 브라우저 차단)
   h.set('Content-Security-Policy', [
     "default-src 'self'",
