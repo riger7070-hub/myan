@@ -1543,7 +1543,7 @@ async function handleTokenHistory(request, env) {
        FROM payment_requests
        WHERE user_email=? AND status='completed'
        ORDER BY created_at DESC`
-    ).bind(email).all();
+    ).bind(email).all().catch(() => ({ results: [] }));
 
     for (const p of payments.results || []) {
       history.push({
@@ -1562,7 +1562,7 @@ async function handleTokenHistory(request, env) {
        FROM ungi_token_gifts
        WHERE user_email=?
        ORDER BY gifted_at DESC`
-    ).bind(email).all();
+    ).bind(email).all().catch(() => ({ results: [] }));
 
     for (const g of ungiGifts.results || []) {
       history.push({
@@ -1579,7 +1579,7 @@ async function handleTokenHistory(request, env) {
        FROM referrals
        WHERE (referrer_email=? OR referee_email=?) AND rewarded_at IS NOT NULL
        ORDER BY rewarded_at DESC`
-    ).bind(email, email).all();
+    ).bind(email, email).all().catch(() => ({ results: [] }));
 
     for (const r of referrals.results || []) {
       history.push({
@@ -1596,7 +1596,7 @@ async function handleTokenHistory(request, env) {
        FROM promo_claims
        WHERE user_email=?
        ORDER BY claimed_at DESC`
-    ).bind(email).all();
+    ).bind(email).all().catch(() => ({ results: [] }));
 
     for (const p of promos.results || []) {
       history.push({
