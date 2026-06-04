@@ -488,11 +488,10 @@
       <!-- 레퍼럴 섹션 -->
       <div id="referral-section" class="referral-section" style="display:none"></div>
 
-      <!-- 토큰 내역 -->
-      <div id="token-history-section" style="display:none; margin-top: 30px;">
-        <h3 style="font-size: 1.1rem; margin-bottom: 16px; color: var(--gold);">💰 토큰 내역</h3>
-        <div id="token-history-list" style="max-height: 400px; overflow-y: auto;"></div>
-      </div>
+      <!-- 토큰 내역 버튼 -->
+      <button id="token-history-btn" class="referral-generate-btn" style="display:none; margin-top: 20px;" onclick="openTokenHistoryModal()">
+        💰 토큰 내역 보기
+      </button>
 
       <!-- 프로필 이미지 저장 버튼 -->
       <button class="referral-generate-btn" style="margin-bottom:0" onclick="_saveProfileImage()">📸 프로필 이미지 저장</button>
@@ -802,5 +801,19 @@ if ('serviceWorker' in navigator) {
   <p style="margin-top:10px;color:rgba(200,180,145,0.55)">결제 후 즉시 사용 가능 &nbsp;·&nbsp; 이용권(토큰)은 디지털 콘텐츠 상품으로 결제 완료 즉시 제공됩니다.</p>
   <p style="margin-top:4px;color:rgba(200,180,145,0.4)">© 2026 마이안. All rights reserved.</p>
 </footer>
+
+<!-- 토큰 내역 모달 -->
+<div id="tokenHistoryModal" class="modal" style="display:none" onclick="if(event.target===this)closeTokenHistoryModal()">
+  <div class="modal-content" style="max-width:500px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid rgba(255,255,255,0.1);">
+      <h3 style="margin:0; font-size:1.2rem; color:var(--gold);">💰 토큰 내역</h3>
+      <span onclick="closeTokenHistoryModal()" style="cursor:pointer; font-size:1.8rem; color:var(--text-dim); line-height:1;">&times;</span>
+    </div>
+    <div style="flex:1; overflow-y:auto; padding:20px;">
+      <div id="token-history-list"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

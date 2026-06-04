@@ -2670,12 +2670,13 @@ async function renderOhaengHeatmap() {
 // ════════════════════════════════════════════
 //  레퍼럴 섹션
 // ════════════════════════════════════════════
-async function renderTokenHistory() {
-  const section = document.getElementById('token-history-section');
+async function loadTokenHistory() {
   const list = document.getElementById('token-history-list');
-  if (!section || !list) return;
+  if (!list) return;
   const token = getGoogleIdToken();
-  if (!token) { section.style.display = 'none'; return; }
+  if (!token) return;
+
+  list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-dim);">불러오는 중...</div>';
 
   try {
     const res = await fetch(EP + 'api/token-history', {
@@ -2683,7 +2684,7 @@ async function renderTokenHistory() {
     });
 
     if (!res.ok) {
-      section.style.display = 'none';
+      list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-dim);">내역을 불러올 수 없습니다.</div>';
       return;
     }
 
@@ -2691,7 +2692,7 @@ async function renderTokenHistory() {
     const history = data.history || [];
 
     if (history.length === 0) {
-      section.style.display = 'none';
+      list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim);">아직 토큰 내역이 없습니다.</div>';
       return;
     }
 
@@ -2725,12 +2726,35 @@ async function renderTokenHistory() {
         </div>
       `;
     }).join('');
-
-    section.style.display = 'block';
   } catch (e) {
     console.error('[TOKEN HISTORY]', e);
-    section.style.display = 'none';
+    list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-dim);">오류가 발생했습니다.</div>';
   }
+}
+
+async function renderTokenHistory() {
+  // 버튼만 표시
+  const btn = document.getElementById('token-history-btn');
+  if (!btn) return;
+  const token = getGoogleIdToken();
+  if (!token) {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = 'block';
+}
+
+function openTokenHistoryModal() {
+  const modal = document.getElementById('tokenHistoryModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  loadTokenHistory();
+}
+
+function closeTokenHistoryModal() {
+  const modal = document.getElementById('tokenHistoryModal');
+  if (!modal) return;
+  modal.style.display = 'none';
 }
 
 async function renderReferralSection() {
