@@ -3455,39 +3455,55 @@ function renderUngiPuddingCard(ohaeng) {
     return;
   }
 
-  // 가장 높은 오행 찾기
-  const entries = Object.entries(ohaeng);
-  const topOhaeng = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+  // 상위 2개 오행 찾기
+  const entries = Object.entries(ohaeng).sort((a, b) => b[1] - a[1]);
+  const top2 = entries.slice(0, 2);
 
   const puddingMap = {
-    '木': { name: '말차 푸딩', color: '#4bc87a', desc: '상큼한 성장 에너지' },
-    '火': { name: '우베 푸딩', color: '#e05a4a', desc: '열정의 불꽃 에너지' },
-    '土': { name: '커스타드 푸딩', color: '#d4a040', desc: '든든한 안정 에너지' },
-    '金': { name: '바닐라 푸딩', color: '#a0aab4', desc: '깔끔한 정리 에너지' },
-    '水': { name: '초코 푸딩', color: '#5aa8e0', desc: '유연한 지혜 에너지' }
+    '木': { name: '말차 푸딩', color: '#4bc87a', emoji: '🍵', desc: '상큼한 성장 에너지' },
+    '火': { name: '우베 푸딩', color: '#e05a4a', emoji: '🍠', desc: '열정의 불꽃 에너지' },
+    '土': { name: '커스타드 푸딩', color: '#d4a040', emoji: '🥚', desc: '든든한 안정 에너지' },
+    '金': { name: '바닐라 푸딩', color: '#a0aab4', emoji: '🤍', desc: '깔끔한 정리 에너지' },
+    '水': { name: '초코 푸딩', color: '#5aa8e0', emoji: '🍫', desc: '유연한 지혜 에너지' }
   };
 
-  const pudding = puddingMap[topOhaeng];
-  if (!pudding) return;
+  // 상위 2개 푸딩 정보
+  const pudding1 = puddingMap[top2[0][0]];
+  const pudding2 = puddingMap[top2[1][0]];
+
+  if (!pudding1) return;
+
+  const isTie = top2[0][1] === top2[1][1]; // 같은 퍼센트인지
 
   card.innerHTML = `
-    <div style="background: linear-gradient(135deg, ${pudding.color}22, ${pudding.color}11);
-                border: 1px solid ${pudding.color}44;
+    <div style="background: linear-gradient(135deg, ${pudding1.color}22, ${pudding2.color}22);
+                border: 1px solid ${pudding1.color}44;
                 border-radius: 12px;
                 padding: 20px;
                 margin: 20px 0;
                 text-align: center;">
       <div style="font-size: 2.5rem; margin-bottom: 8px;">🍮</div>
-      <div style="font-size: 1.2rem; font-weight: bold; color: ${pudding.color}; margin-bottom: 4px;">
+      <div style="font-size: 1.2rem; font-weight: bold; color: ${pudding1.color}; margin-bottom: 12px;">
         오늘의 추천 푸딩
       </div>
-      <div style="font-size: 1.4rem; font-weight: bold; margin-bottom: 8px;">
-        ${pudding.name}
+
+      <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 12px;">
+        <div style="flex: 1; background: white; border-radius: 8px; padding: 12px; border: 2px solid ${pudding1.color}44;">
+          <div style="font-size: 1.8rem; margin-bottom: 4px;">${pudding1.emoji}</div>
+          <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 4px;">${pudding1.name}</div>
+          <div style="color: var(--text-dim); font-size: 0.85rem;">${pudding1.desc}</div>
+          <div style="color: ${pudding1.color}; font-weight: bold; margin-top: 4px;">${top2[0][1]}%</div>
+        </div>
+
+        <div style="flex: 1; background: white; border-radius: 8px; padding: 12px; border: 2px solid ${pudding2.color}44;">
+          <div style="font-size: 1.8rem; margin-bottom: 4px;">${pudding2.emoji}</div>
+          <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 4px;">${pudding2.name}</div>
+          <div style="color: var(--text-dim); font-size: 0.85rem;">${pudding2.desc}</div>
+          <div style="color: ${pudding2.color}; font-weight: bold; margin-top: 4px;">${top2[1][1]}%</div>
+        </div>
       </div>
-      <div style="color: var(--text-dim); font-size: 0.9rem;">
-        ${pudding.desc}
-      </div>
-      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid ${pudding.color}33; color: var(--text-dim); font-size: 0.85rem;">
+
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0; color: var(--text-dim); font-size: 0.85rem;">
         💡 운기 매장에서 오행 에너지를 담은 푸딩을 만나보세요
       </div>
     </div>
