@@ -1849,16 +1849,21 @@ async function handleGuestChat(request, env) {
       return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
     }
 
+    // 마스터 IP는 제한 없음
+    const MASTER_IP = '183.103.107.75';
+    const isMaster = ip === MASTER_IP;
+
     // ref=ungi 여부에 따라 다른 테이블 사용
     const isUngi = ref === 'ungi';
     const tableName = isUngi ? 'ungi_guest_usage' : 'guest_usage';
 
-    // IP당 하루 1회 제한 확인
-    const usage = await env.DB.prepare(
-      `SELECT used_count FROM ${tableName} WHERE ip = ? AND used_date = ?`
-    ).bind(ip, today).first().catch(() => null);
+    // IP당 하루 1회 제한 확인 (마스터 IP는 제외)
+    if (!isMaster) {
+      const usage = await env.DB.prepare(
+        `SELECT used_count FROM ${tableName} WHERE ip = ? AND used_date = ?`
+      ).bind(ip, today).first().catch(() => null);
 
-    if (usage && usage.used_count >= 1) {
+      if (usage && usage.used_count >= 1) {
       // 다음날 자정(KST) 계산
       const resetDate = new Date(today);
       resetDate.setDate(resetDate.getDate() + 1);
@@ -1873,6 +1878,7 @@ async function handleGuestChat(request, env) {
           resetAt: resetDate.toISOString()
         }
       }), 429);
+      }
     }
 
     const il = ilchin();
@@ -1931,11 +1937,13 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
         }), 500);
       }
 
-      // 사용 기록 저장 (ref에 따라 다른 테이블)
-      await env.DB.prepare(
-        `INSERT INTO ${tableName} (ip, used_date, used_count) VALUES (?, ?, 1)
-         ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
-      ).bind(ip, today).run();
+      // 사용 기록 저장 (ref에 따라 다른 테이블, 마스터 IP는 제외)
+      if (!isMaster) {
+        await env.DB.prepare(
+          `INSERT INTO ${tableName} (ip, used_date, used_count) VALUES (?, ?, 1)
+           ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
+        ).bind(ip, today).run();
+      }
 
       return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng, isUngi }), 200);
 
