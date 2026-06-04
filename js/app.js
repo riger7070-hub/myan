@@ -2948,11 +2948,16 @@ async function togglePushNotif(btn) {
       const sub = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
 
       if (token) {
-        await fetch(EP + 'api/push/subscribe', {
+        const res = await fetch(EP + 'api/push/subscribe', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ subscription: sub, lang: userLang })
-        }).catch(() => {});
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error('[PUSH] Subscribe error:', errorData);
+        }
       }
 
       _updateBtn(true);
