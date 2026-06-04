@@ -2669,6 +2669,69 @@ async function renderOhaengHeatmap() {
 // ════════════════════════════════════════════
 //  레퍼럴 섹션
 // ════════════════════════════════════════════
+async function renderTokenHistory() {
+  const section = document.getElementById('token-history-section');
+  const list = document.getElementById('token-history-list');
+  if (!section || !list) return;
+  const token = getGoogleIdToken();
+  if (!token) { section.style.display = 'none'; return; }
+
+  try {
+    const res = await fetch(EP + 'api/token-history', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      section.style.display = 'none';
+      return;
+    }
+
+    const data = await res.json();
+    const history = data.history || [];
+
+    if (history.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    list.innerHTML = history.map(h => {
+      const date = new Date(h.timestamp * 1000).toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const typeColor = {
+        charge: '#667eea',
+        event: '#4bc87a',
+        referral: '#e05a4a',
+        promo: '#d4a040'
+      }[h.type] || '#999';
+
+      return `
+        <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ${typeColor};">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: bold; margin-bottom: 4px;">${h.desc}</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">${date}</div>
+            </div>
+            <div style="font-size: 1.2rem; font-weight: bold; color: ${typeColor};">
+              +${h.tokens}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    section.style.display = 'block';
+  } catch (e) {
+    console.error('[TOKEN HISTORY]', e);
+    section.style.display = 'none';
+  }
+}
+
 async function renderReferralSection() {
   const section = document.getElementById('referral-section');
   if (!section) return;
