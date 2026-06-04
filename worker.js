@@ -164,6 +164,17 @@ async function ensureDBExt(env) {
       gifted_by TEXT,
       gifted_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+    CREATE TABLE IF NOT EXISTS ungi_admin_attempts (
+      ip TEXT NOT NULL,
+      attempt_at INTEGER NOT NULL,
+      success INTEGER DEFAULT 0,
+      PRIMARY KEY (ip, attempt_at)
+    );
+    CREATE TABLE IF NOT EXISTS ungi_admin_whitelist (
+      ip TEXT PRIMARY KEY,
+      description TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
     CREATE TABLE IF NOT EXISTS dynamic_promo_tokens (
       token TEXT PRIMARY KEY,
       created_at INTEGER NOT NULL,
@@ -239,6 +250,7 @@ export default {
     if (path === '/api/referral'          && method === 'GET')  { await ensureDBExt(env); return handleGetReferral(request, env); }
 
     if (path === '/api/admin/ungi/give-tokens' && method === 'POST') { await ensureDBExt(env); return handleUngiGiveTokens(request, env); }
+    if (path === '/api/admin/ungi/login' && method === 'POST') { await ensureDBExt(env); return handleUngiAdminLogin(request, env); }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
@@ -1513,15 +1525,66 @@ async function handleGetReferral(request, env) {
 }
 
 // ════════════════════════════
+//  운기 관리자 Google 로그인
+// ════════════════════════════
+async function handleUngiAdminLogin(request, env) {
+  try {
+    const { idToken } = await request.json().catch(() => ({}));
+    if (!idToken) {
+      return cors(JSON.stringify({ error: { message: 'idToken 필수' } }), 400);
+    }
+
+    // Google 토큰 검증
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) {
+      return cors(JSON.stringify({ error: { message: '유효하지 않은 토큰' } }), 401);
+    }
+
+    // 관리자 이메일 체크
+    const ADMIN_EMAIL = env.ADMIN_EMAIL || 'riger7070@gmail.com';
+    if (email !== ADMIN_EMAIL) {
+      return cors(JSON.stringify({ error: { message: '관리자 권한이 없습니다' } }), 403);
+    }
+
+    return cors(JSON.stringify({ success: true, email }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════
 //  운기 토큰 지급 핸들러
 // ════════════════════════════
 async function handleUngiGiveTokens(request, env) {
   try {
+    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
     const { pin, email, tokens } = await request.json().catch(() => ({}));
 
-    // PIN 인증 (간단한 비밀번호)
-    const UNGI_PIN = '5984'; // 나중에 env 변수로 변경 가능
-    if (pin !== UNGI_PIN) {
+    // 방법 2: IP 화이트리스트 체크
+    const whitelisted = await env.DB.prepare('SELECT * FROM ungi_admin_whitelist WHERE ip=?').bind(ip).first();
+    if (!whitelisted) {
+      return cors(JSON.stringify({ error: { message: '접근 권한이 없습니다. IP가 등록되지 않았습니다.' } }), 403);
+    }
+
+    // 방법 1: Rate Limiting - 최근 1시간 동안 시도 횟수 확인
+    const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
+    const attempts = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM ungi_admin_attempts WHERE ip=? AND attempt_at > ?'
+    ).bind(ip, oneHourAgo).first();
+
+    if (attempts && attempts.count >= 10) {
+      return cors(JSON.stringify({ error: { message: '너무 많은 시도. 1시간 후 다시 시도하세요.' } }), 429);
+    }
+
+    // PIN 인증 (환경변수에서 읽기)
+    const UNGI_PIN = env.UNGI_PIN || '5984'; // fallback
+    const pinMatch = pin === UNGI_PIN;
+
+    // 시도 기록
+    await env.DB.prepare('INSERT INTO ungi_admin_attempts (ip, attempt_at, success) VALUES (?, ?, ?)')
+      .bind(ip, Math.floor(Date.now() / 1000), pinMatch ? 1 : 0).run();
+
+    if (!pinMatch) {
       return cors(JSON.stringify({ error: { message: '잘못된 PIN 번호' } }), 401);
     }
 
