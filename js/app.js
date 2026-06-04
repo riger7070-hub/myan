@@ -3368,6 +3368,11 @@ async function submitGuestReading() {
 
     const data = await res.json();
 
+    // 500 에러 디버깅
+    if (!res.ok) {
+      console.error('[GUEST] Server error:', { status: res.status, data });
+    }
+
     if (res.status === 429) {
       if (data.error?.code === 'GUEST_LIMIT') {
         // 게스트 제한 도달 트래킹
