@@ -3347,10 +3347,14 @@ async function submitGuestReading() {
   }
 
   try {
+    // URL 파라미터에서 ref 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const ref = urlParams.get('ref');
+
     const res = await fetch(EP + 'chat-guest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ birth, lang })
+      body: JSON.stringify({ birth, lang, ref })
     });
 
     const data = await res.json();
@@ -3399,6 +3403,11 @@ async function submitGuestReading() {
       readingContent.textContent = data.reading || '풀이 결과를 가져오지 못했습니다.';
     }
 
+    // 운기 푸딩 카드 표시
+    if (data.isUngi && data.ohaeng) {
+      renderUngiPuddingCard(data.ohaeng);
+    }
+
   } catch (e) {
     errDiv.textContent = e.message || '오류가 발생했습니다. 다시 시도해주세요.';
     errDiv.style.display = 'block';
@@ -3427,5 +3436,67 @@ function backToHome() {
     submitBtn.disabled = false;
     submitBtn.textContent = 'AI 풀이 받기';
   }
+
+  // 푸딩 카드 숨기기
+  const card = document.getElementById('ungiPuddingCard');
+  if (card) card.style.display = 'none';
 }
+
+// 운기 푸딩 추천 카드 렌더링
+function renderUngiPuddingCard(ohaeng) {
+  const card = document.getElementById('ungiPuddingCard');
+  if (!card) return;
+
+  // 가장 높은 오행 찾기
+  const entries = Object.entries(ohaeng);
+  const topOhaeng = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+
+  const puddingMap = {
+    '木': { name: '청포도 푸딩', color: '#4bc87a', desc: '상큼한 성장 에너지' },
+    '火': { name: '딸기 푸딩', color: '#e05a4a', desc: '열정의 불꽃 에너지' },
+    '土': { name: '카라멜 푸딩', color: '#d4a040', desc: '든든한 안정 에너지' },
+    '金': { name: '바닐라 푸딩', color: '#a0aab4', desc: '깔끔한 정리 에너지' },
+    '水': { name: '블루베리 푸딩', color: '#5aa8e0', desc: '유연한 지혜 에너지' }
+  };
+
+  const pudding = puddingMap[topOhaeng];
+  if (!pudding) return;
+
+  card.innerHTML = `
+    <div style="background: linear-gradient(135deg, ${pudding.color}22, ${pudding.color}11);
+                border: 1px solid ${pudding.color}44;
+                border-radius: 12px;
+                padding: 20px;
+                margin: 20px 0;
+                text-align: center;">
+      <div style="font-size: 2.5rem; margin-bottom: 8px;">🍮</div>
+      <div style="font-size: 1.2rem; font-weight: bold; color: ${pudding.color}; margin-bottom: 4px;">
+        오늘의 추천 푸딩
+      </div>
+      <div style="font-size: 1.4rem; font-weight: bold; margin-bottom: 8px;">
+        ${pudding.name}
+      </div>
+      <div style="color: var(--text-dim); font-size: 0.9rem;">
+        ${pudding.desc}
+      </div>
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid ${pudding.color}33; color: var(--text-dim); font-size: 0.85rem;">
+        💡 운기 매장에서 오행 에너지를 담은 푸딩을 만나보세요
+      </div>
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+// ref=ungi 파라미터 감지하여 게스트 화면 문구 변경
+(function checkUngiParam() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('ref') === 'ungi') {
+    const defaultSubtitle = document.getElementById('guestSubtitleText');
+    const ungiSubtitle = document.getElementById('guestSubtitleUngi');
+    if (defaultSubtitle && ungiSubtitle) {
+      defaultSubtitle.style.display = 'none';
+      ungiSubtitle.style.display = 'block';
+    }
+  }
+})();
 

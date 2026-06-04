@@ -151,6 +151,12 @@ async function ensureDBExt(env) {
       used_count INTEGER DEFAULT 1,
       PRIMARY KEY (ip, used_date)
     );
+    CREATE TABLE IF NOT EXISTS ungi_guest_usage (
+      ip TEXT NOT NULL,
+      used_date TEXT NOT NULL,
+      used_count INTEGER DEFAULT 1,
+      PRIMARY KEY (ip, used_date)
+    );
     CREATE TABLE IF NOT EXISTS dynamic_promo_tokens (
       token TEXT PRIMARY KEY,
       created_at INTEGER NOT NULL,
@@ -1838,9 +1844,18 @@ async function handleGuestChat(request, env) {
       return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
     }
 
+    const { birth, lang = 'ko', ref } = await request.json().catch(() => ({}));
+    if (!birth) {
+      return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
+    }
+
+    // ref=ungi 여부에 따라 다른 테이블 사용
+    const isUngi = ref === 'ungi';
+    const tableName = isUngi ? 'ungi_guest_usage' : 'guest_usage';
+
     // IP당 하루 1회 제한 확인
     const usage = await env.DB.prepare(
-      `SELECT used_count FROM guest_usage WHERE ip = ? AND used_date = ?`
+      `SELECT used_count FROM ${tableName} WHERE ip = ? AND used_date = ?`
     ).bind(ip, today).first().catch(() => null);
 
     if (usage && usage.used_count >= 1) {
@@ -1858,11 +1873,6 @@ async function handleGuestChat(request, env) {
           resetAt: resetDate.toISOString()
         }
       }), 429);
-    }
-
-    const { birth, lang = 'ko' } = await request.json().catch(() => ({}));
-    if (!birth) {
-      return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
     }
 
     const il = ilchin();
@@ -1921,13 +1931,13 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
         }), 500);
       }
 
-      // 사용 기록 저장
+      // 사용 기록 저장 (ref에 따라 다른 테이블)
       await env.DB.prepare(
-        `INSERT INTO guest_usage (ip, used_date, used_count) VALUES (?, ?, 1)
+        `INSERT INTO ${tableName} (ip, used_date, used_count) VALUES (?, ?, 1)
          ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
       ).bind(ip, today).run();
 
-      return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng }), 200);
+      return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng, isUngi }), 200);
 
     } catch(e) {
       return cors(JSON.stringify({
