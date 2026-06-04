@@ -1,8 +1,8 @@
-// M;Y 安 — Service Worker v4.0 (Force Cache Clear)
-const VERSION = '4.0';
-const CACHE_NAME = `myan-v9-${VERSION}`;
-const CACHE_IMAGES = `myan-images-v6`;
-const CACHE_STATIC = `myan-static-v6`;
+// M;Y 安 — Service Worker v4.1 (Fix clone error & force refresh)
+const VERSION = '4.1';
+const CACHE_NAME = `myan-v10-${VERSION}`;
+const CACHE_IMAGES = `myan-images-v7`;
+const CACHE_STATIC = `myan-static-v7`;
 const OFFLINE_URL = '/index.html';
 
 // 즉시 캐시할 핵심 리소스
@@ -147,10 +147,16 @@ async function cacheFirst(request, cacheName = CACHE_IMAGES) {
 async function staleWhileRevalidate(request, cacheName = CACHE_STATIC) {
   const cachedResponse = await caches.match(request);
 
-  const fetchPromise = fetch(request).then(networkResponse => {
+  const fetchPromise = fetch(request).then(async networkResponse => {
     if (networkResponse && networkResponse.status === 200) {
-      const cache = caches.open(cacheName);
-      cache.then(c => c.put(request, networkResponse.clone()));
+      try {
+        const cache = await caches.open(cacheName);
+        // clone 전에 응답이 사용되지 않았는지 확인
+        const responseToCache = networkResponse.clone();
+        cache.put(request, responseToCache);
+      } catch (e) {
+        // clone 실패해도 계속 진행
+      }
     }
     return networkResponse;
   }).catch(() => cachedResponse);
