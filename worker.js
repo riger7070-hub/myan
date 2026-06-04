@@ -1973,13 +1973,17 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
 
       const data = await resp.json();
       const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      console.log('[GUEST CHAT] Gemini raw response:', raw);
+      console.log('[GUEST CHAT] Gemini raw response:', raw.substring(0, 500));
+
       let result = {};
       try {
-        result = JSON.parse(raw);
+        // JSON 파싱 시도
+        const cleaned = raw.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
+        result = JSON.parse(cleaned);
       } catch (parseError) {
+        console.error('[GUEST CHAT] Parse error:', parseError.message, 'Raw:', raw.substring(0, 200));
         return cors(JSON.stringify({
-          error: { message: 'AI 응답 파싱 오류' }
+          error: { message: 'AI 응답을 처리할 수 없습니다. 잠시 후 다시 시도해주세요.' }
         }), 500);
       }
 
