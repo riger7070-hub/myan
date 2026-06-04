@@ -3438,6 +3438,8 @@ async function submitGuestReading() {
     // URL 파라미터에서 ref 확인
     const urlParams = new URLSearchParams(window.location.search);
     const ref = urlParams.get('ref');
+    console.log('[GUEST] URL:', window.location.href);
+    console.log('[GUEST] ref parameter:', ref);
 
     const res = await fetch(EP + 'chat-guest', {
       method: 'POST',
