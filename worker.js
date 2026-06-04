@@ -1388,7 +1388,7 @@ async function handleStreakCheckin(request, env) {
     // 7일 스트릭 보너스
     if (current%7===0) {
       await env.DB.prepare(
-        `UPDATE payment_requests SET token_count=token_count+5 WHERE user_email=?`
+        `UPDATE payment_requests SET tokens=tokens+5 WHERE user_email=?`
       ).bind(email).run();
     }
 
@@ -1487,8 +1487,8 @@ async function handleReferralClaim(request, env) {
     if (ref.referrer_email===email) return cors(JSON.stringify({error:{message:'본인 코드 사용 불가'}}),400);
     // 보상: 양쪽 3토큰
     await env.DB.prepare('UPDATE referrals SET referee_email=?,rewarded_at=unixepoch() WHERE code=?').bind(email,code.toUpperCase()).run();
-    await env.DB.prepare('UPDATE payment_requests SET token_count=token_count+3 WHERE user_email=?').bind(email).run();
-    await env.DB.prepare('UPDATE payment_requests SET token_count=token_count+3 WHERE user_email=?').bind(ref.referrer_email).run();
+    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+3 WHERE user_email=?').bind(email).run();
+    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+3 WHERE user_email=?').bind(ref.referrer_email).run();
     return cors(JSON.stringify({success:true,bonus:3}),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
@@ -1540,7 +1540,7 @@ async function handleUngiGiveTokens(request, env) {
     }
 
     // 토큰 지급
-    await env.DB.prepare('UPDATE payment_requests SET token_count=token_count+? WHERE user_email=?')
+    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+? WHERE user_email=?')
       .bind(tokens, email).run();
 
     // 로그 기록
