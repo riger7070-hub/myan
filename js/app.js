@@ -368,7 +368,7 @@ function addRxCard(o) {
   // 오행 히스토리 저장 (D1)
   const _fbToken = getGoogleIdToken();
   if (_fbToken) {
-    fetch('/api/ohaeng-history', {
+    fetch(EP + 'api/ohaeng-history', {
       method: 'POST',
       headers: { Authorization: `Bearer ${_fbToken}`, 'Content-Type':'application/json' },
       body: JSON.stringify({ date: today, ohaeng: o })
@@ -2576,7 +2576,7 @@ async function fetchStreak() {
     return;
   }
   try {
-    const r = await fetch('/api/streak', { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(EP + 'api/streak', { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) return;
     _streakCache = await r.json();
     renderStreakUI(_streakCache);
@@ -2620,7 +2620,7 @@ async function doCheckin() {
   const btn = document.getElementById('streak-checkin-btn');
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
-    const r = await fetch('/api/streak/checkin', { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
+    const r = await fetch(EP + 'api/streak/checkin', { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
     const d = await r.json();
     _streakCache = d;
     renderStreakUI(d);
@@ -2645,7 +2645,7 @@ async function renderOhaengHeatmap() {
   const token = getGoogleIdToken();
   if (!token) { section.style.display = 'none'; return; }
   try {
-    const r = await fetch('/api/ohaeng-history', { headers:{ Authorization:`Bearer ${token}` } });
+    const r = await fetch(EP + 'api/ohaeng-history', { headers:{ Authorization:`Bearer ${token}` } });
     if (!r.ok) return;
     const { history } = await r.json();
     const t = getT();
@@ -2675,7 +2675,7 @@ async function renderReferralSection() {
   const token = getGoogleIdToken();
   if (!token) { section.style.display = 'none'; return; }
   try {
-    const r = await fetch('/api/referral', { headers:{ Authorization:`Bearer ${token}` } });
+    const r = await fetch(EP + 'api/referral', { headers:{ Authorization:`Bearer ${token}` } });
     if (!r.ok) return;
     const { myCode, used } = await r.json();
     const t = getT();
@@ -2703,7 +2703,7 @@ async function _generateReferralCode() {
   const token = getGoogleIdToken();
   if (!token) return;
   try {
-    const r = await fetch('/api/referral/generate', { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
+    const r = await fetch(EP + 'api/referral/generate', { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
     if (r.ok) renderReferralSection();
   } catch {}
 }
@@ -2721,7 +2721,7 @@ async function _claimReferral() {
   const code = input?.value?.trim();
   if (!code) return;
   try {
-    const r = await fetch('/api/referral/claim', {
+    const r = await fetch(EP + 'api/referral/claim', {
       method: 'POST',
       headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
       body: JSON.stringify({ code })
@@ -2916,7 +2916,7 @@ async function togglePushNotif(btn) {
   if (existing) {
     // 구독 해제
     await existing.unsubscribe();
-    if (token) fetch('/api/push/unsubscribe', {
+    if (token) fetch(EP + 'api/push/unsubscribe', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ endpoint: existing.endpoint })
@@ -2932,7 +2932,7 @@ async function togglePushNotif(btn) {
         return;
       }
 
-      const vr = await fetch('/api/push/vapid-key');
+      const vr = await fetch(EP + 'api/push/vapid-key');
       if (!vr.ok) {
         showToast('알림 설정에 실패했습니다. 잠시 후 다시 시도해 주세요.');
         return;
@@ -2948,7 +2948,7 @@ async function togglePushNotif(btn) {
       const sub = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
 
       if (token) {
-        await fetch('/api/push/subscribe', {
+        await fetch(EP + 'api/push/subscribe', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ subscription: sub, lang: userLang })
@@ -3219,7 +3219,7 @@ function _showPromoModal(code) {
     }
 
     try {
-      const r = await fetch('/api/promo/claim', {
+      const r = await fetch(EP + 'api/promo/claim', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
@@ -3285,7 +3285,7 @@ function _showDynamicPromoModal(token) {
     const authToken = getGoogleIdToken();
     if (!authToken) { showToast('로그인 후 이용해 주세요.'); overlay.remove(); return; }
     try {
-      const r = await fetch('/api/promo/claim', {
+      const r = await fetch(EP + 'api/promo/claim', {
         method:'POST',
         headers:{Authorization:`Bearer ${authToken}`,'Content-Type':'application/json'},
         body: JSON.stringify({ promo_token: token })
