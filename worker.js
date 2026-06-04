@@ -251,6 +251,7 @@ export default {
 
     if (path === '/api/admin/ungi/give-tokens' && method === 'POST') { await ensureDBExt(env); return handleUngiGiveTokens(request, env); }
     if (path === '/api/admin/ungi/login' && method === 'POST') { await ensureDBExt(env); return handleUngiAdminLogin(request, env); }
+    if (path === '/api/token-history' && method === 'GET') { await ensureDBExt(env); return handleTokenHistory(request, env); }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
@@ -1521,6 +1522,97 @@ async function handleGetReferral(request, env) {
     }),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  토큰 내역 조회
+// ════════════════════════════
+async function handleTokenHistory(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+
+    const history = [];
+
+    // 1. 충전 내역 (payment_requests)
+    const payments = await env.DB.prepare(
+      `SELECT pkg, amount, tokens, status, created_at
+       FROM payment_requests
+       WHERE user_email=? AND status='completed'
+       ORDER BY created_at DESC`
+    ).bind(email).all();
+
+    for (const p of payments.results || []) {
+      history.push({
+        type: 'charge',
+        tokens: p.tokens,
+        amount: p.amount,
+        pkg: p.pkg,
+        timestamp: p.created_at,
+        desc: `${p.pkg} 패키지 충전`
+      });
+    }
+
+    // 2. 운기 이벤트 (ungi_token_gifts)
+    const ungiGifts = await env.DB.prepare(
+      `SELECT tokens_given, gifted_at
+       FROM ungi_token_gifts
+       WHERE user_email=?
+       ORDER BY gifted_at DESC`
+    ).bind(email).all();
+
+    for (const g of ungiGifts.results || []) {
+      history.push({
+        type: 'event',
+        tokens: g.tokens_given,
+        timestamp: g.gifted_at,
+        desc: '🍮 운기 푸딩 이벤트'
+      });
+    }
+
+    // 3. 추천인 보상 (referrals)
+    const referrals = await env.DB.prepare(
+      `SELECT rewarded_at
+       FROM referrals
+       WHERE (referrer_email=? OR referee_email=?) AND rewarded_at IS NOT NULL
+       ORDER BY rewarded_at DESC`
+    ).bind(email, email).all();
+
+    for (const r of referrals.results || []) {
+      history.push({
+        type: 'referral',
+        tokens: 3,
+        timestamp: r.rewarded_at,
+        desc: '👥 친구 추천 보상'
+      });
+    }
+
+    // 4. 프로모션 (promo_claims)
+    const promos = await env.DB.prepare(
+      `SELECT promo_code, tokens_given, claimed_at
+       FROM promo_claims
+       WHERE user_email=?
+       ORDER BY claimed_at DESC`
+    ).bind(email).all();
+
+    for (const p of promos.results || []) {
+      history.push({
+        type: 'promo',
+        tokens: p.tokens_given,
+        timestamp: p.claimed_at,
+        desc: `🎁 프로모션: ${p.promo_code}`
+      });
+    }
+
+    // 시간순 정렬
+    history.sort((a, b) => b.timestamp - a.timestamp);
+
+    return cors(JSON.stringify({ history }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: e.message } }), 500);
   }
 }
 
