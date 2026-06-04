@@ -1965,13 +1965,15 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
 
       if (!resp.ok) {
         const errorText = await resp.text();
+        console.error('[GUEST CHAT] Gemini API error:', resp.status, errorText);
         return cors(JSON.stringify({
-          error: { message: `Gemini API 오류 (${resp.status})` }
+          error: { message: `Gemini API 오류 (${resp.status})`, details: errorText.substring(0, 200) }
         }), 500);
       }
 
       const data = await resp.json();
       const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      console.log('[GUEST CHAT] Gemini raw response:', raw);
       let result = {};
       try {
         result = JSON.parse(raw);
