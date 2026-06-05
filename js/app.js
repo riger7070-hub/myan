@@ -2991,11 +2991,17 @@ async function _openDetailReading(date, ohaeng) {
     </div>`;
   document.body.appendChild(overlay);
 
+  // 사용자 사주 계산용 생년월일시 (서버에서 만세력 계산해 개인 맞춤 상세풀이)
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  const birth = _u?.birthYear
+    ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour||'' }
+    : undefined;
+
   try {
     const r = await fetch('/chat-detail', {
       method: 'POST',
       headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ date, ohaeng, lang })
+      body: JSON.stringify({ date, ohaeng, lang, birth })
     });
     const data = await r.json();
     const loadEl = document.getElementById('detail-loading');

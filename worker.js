@@ -1471,8 +1471,16 @@ async function handleDetailReading(request, env) {
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
-    const { date, ohaeng, lang = 'ko' } = await request.json().catch(() => ({}));
+    const { date, ohaeng, lang = 'ko', birth } = await request.json().catch(() => ({}));
     if (!date || !ohaeng) return cors(JSON.stringify({ error: { message: 'date, ohaeng 필수' } }), 400);
+
+    // 사용자 사주 원국(만세력) — 생년월일시가 오면 서버에서 정확히 계산 (AI 재계산 금지)
+    const saju = (birth && birth.year)
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour)
+      : null;
+    const sajuBlock = saju
+      ? `\n\n[이 사람의 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n반드시 위 사주의 일간(日干=본질)과 오행 분포를 반영하여, 오늘(${date})의 ${ohaeng} 기운이 이 사람에게 어떻게 작용하는지 개인 맞춤으로 풀어주세요.`
+      : '';
 
     // 2토큰 차감 (atomic INSERT — 잔액 >= 2 일 때만 삽입)
     const detailUseId = `detail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1492,7 +1500,7 @@ async function handleDetailReading(request, env) {
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
-    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 오늘(${date})의 기운은 "${ohaeng}"(${ohaeng==='木'?'나무':ohaeng==='火'?'불':ohaeng==='土'?'흙':ohaeng==='金'?'쇠':'물'} 기운)입니다.
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 오늘(${date})의 기운은 "${ohaeng}"(${ohaeng==='木'?'나무':ohaeng==='火'?'불':ohaeng==='土'?'흙':ohaeng==='金'?'쇠':'물'} 기운)입니다.${sajuBlock}
 
 아래 4가지 영역에 대해 ${langLabel}로 조언해주세요.
 중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요. 따뜻하고 친근한 말투로, 각 영역 150자 이상.
