@@ -2979,15 +2979,15 @@ function _personFieldsHtml(idx, title) {
   const opts = _SIJI_OPTIONS.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
   const currentYear = new Date().getFullYear();
   return `
-    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
-      ${title ? `<div style="font-size:0.85rem;color:var(--gold);margin-bottom:10px;letter-spacing:1px">${title}</div>` : ''}
-      <input class="fif-input sj-name" data-p="${idx}" type="text" placeholder="이름 (선택)" maxlength="50" style="width:100%;margin-bottom:8px;box-sizing:border-box">
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input class="fif-input sj-year" data-p="${idx}" type="number" placeholder="1990" min="1920" max="${currentYear}" inputmode="numeric" style="flex:1.6;box-sizing:border-box">
-        <input class="fif-input sj-month" data-p="${idx}" type="number" placeholder="월" min="1" max="12" inputmode="numeric" style="flex:1;box-sizing:border-box">
-        <input class="fif-input sj-day" data-p="${idx}" type="number" placeholder="일" min="1" max="31" inputmode="numeric" style="flex:1;box-sizing:border-box">
+    <div style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px">
+      ${title ? `<div style="font-size:1rem;color:var(--gold);margin-bottom:14px;letter-spacing:1px;font-weight:500">${title}</div>` : ''}
+      <input class="fif-input sj-name" data-p="${idx}" type="text" placeholder="이름 (선택)" maxlength="50" style="width:100%;margin-bottom:12px;padding:12px;font-size:1rem;box-sizing:border-box">
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <input class="fif-input sj-year" data-p="${idx}" type="number" placeholder="1990" min="1920" max="${currentYear}" inputmode="numeric" style="flex:1.6;padding:12px;font-size:1rem;box-sizing:border-box">
+        <input class="fif-input sj-month" data-p="${idx}" type="number" placeholder="월" min="1" max="12" inputmode="numeric" style="flex:1;padding:12px;font-size:1rem;box-sizing:border-box">
+        <input class="fif-input sj-day" data-p="${idx}" type="number" placeholder="일" min="1" max="31" inputmode="numeric" style="flex:1;padding:12px;font-size:1rem;box-sizing:border-box">
       </div>
-      <select class="fif-input sj-time" data-p="${idx}" style="width:100%;box-sizing:border-box">${opts}</select>
+      <select class="fif-input sj-time" data-p="${idx}" style="width:100%;padding:12px;font-size:1rem;box-sizing:border-box">${opts}</select>
     </div>`;
 }
 
@@ -2998,13 +2998,15 @@ function showSajuInput(m) {
   const title = isDuo ? '💞 우리의 조화' : '☯ 나만의 리딩';
   const sub = isDuo ? '두 분의 생년월일·생시를 입력해 주세요' : '생년월일과 태어난 시간을 입력해 주세요';
   cw.innerHTML = `
-    <div style="max-width:460px;margin:0 auto;padding:8px 4px">
-      <div style="text-align:center;margin-bottom:6px;font-size:1.1rem;color:var(--gold);letter-spacing:1px">${title}</div>
-      <div style="text-align:center;margin-bottom:16px;font-size:0.8rem;color:var(--text-dim)">${sub}</div>
-      ${isDuo ? _personFieldsHtml(1,'첫 번째 분') + _personFieldsHtml(2,'두 번째 분') : _personFieldsHtml(1,'')}
-      <div style="font-size:0.72rem;color:var(--text-dim);text-align:center;margin:4px 0 12px">태어난 시간을 모르시면 비워두셔도 됩니다</div>
-      <button onclick="submitSajuInput('${m}')" class="fif-submit" style="width:100%" id="sjSubmitBtn">간단 풀이 보기 ›</button>
-      <div id="sjErr" style="color:#e05a4a;font-size:0.8rem;text-align:center;margin-top:8px;display:none"></div>
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
+      <div style="max-width:580px;width:100%;margin:0 auto">
+        <div style="text-align:center;margin-bottom:12px;font-size:1.4rem;color:var(--gold);letter-spacing:1px">${title}</div>
+        <div style="text-align:center;margin-bottom:24px;font-size:0.95rem;color:var(--text-dim)">${sub}</div>
+        ${isDuo ? _personFieldsHtml(1,'첫 번째 분') + _personFieldsHtml(2,'두 번째 분') : _personFieldsHtml(1,'')}
+        <div style="font-size:0.8rem;color:var(--text-dim);text-align:center;margin:8px 0 16px">태어난 시간을 모르시면 비워두셔도 됩니다</div>
+        <button onclick="submitSajuInput('${m}')" class="fif-submit" style="width:100%;padding:14px;font-size:1rem" id="sjSubmitBtn">간단 풀이 보기 ›</button>
+        <div id="sjErr" style="color:#e05a4a;font-size:0.9rem;text-align:center;margin-top:12px;display:none"></div>
+      </div>
     </div>`;
   cw.scrollTop = 0;
 }
