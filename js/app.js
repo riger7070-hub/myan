@@ -83,13 +83,23 @@ function getCurrentScreen() {
 async function callGemini(contents) {
   if (!getGoogleIdToken()) throw { refund: false, noLogin: true };
 
+  // solo 모드: 정확한 만세력 계산을 위해 생년월일시를 구조화해 함께 전송 (서버가 사주 4기둥 산출)
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  const birth = (mode === 'solo' && _u?.birthYear) ? {
+    year:  _u.birthYear,
+    month: _u.birthMonth,
+    day:   _u.birthDay,
+    hour:  _u.birthHour || ''   // 한글 시진명('자시'~'해시') 또는 빈값 — 서버에서 지지로 매핑
+  } : undefined;
+
   const doFetch = () => fetch(EP + 'chat', {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({
       mode: mode,
       lang: lang,
-      contents: contents
+      contents: contents,
+      birth: birth
     }),
   });
 

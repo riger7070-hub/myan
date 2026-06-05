@@ -13,6 +13,9 @@
 // );
 // ============================================================================
 
+import LunarPkg from 'lunar-javascript';
+const { Solar } = LunarPkg;
+
 const CG   = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
 const JJ   = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
 const CGO  = ['木','木','火','火','土','土','金','金','水','水'];
@@ -30,6 +33,53 @@ function ilchin() {
   const now = new Date(); now.setHours(0,0,0,0);
   const idx = ((44 + Math.round((now-ref)/864e5)) % 60 + 60) % 60;
   return { ci: idx%10, ji: idx%12, o: CGO[idx%10], jo: JJO[idx%12] };
+}
+
+// 한글 시진명 → 지지(시지) 매핑
+const SIJI_TO_JJ = {
+  '자시':'子','축시':'丑','인시':'寅','묘시':'卯','진시':'辰','사시':'巳',
+  '오시':'午','미시':'未','신시':'申','유시':'酉','술시':'戌','해시':'亥'
+};
+
+// ── 정확한 사주 4기둥(만세력) 계산 — 절기 반영. AI 환각 방지: 서버에서 코드로 산출 후 AI엔 해석만 시킴 ──
+// hourInput: 한글 시진명('자시'~'해시') 또는 지지 글자('子'~'亥') 또는 빈값(출생시 모름)
+function computeSaju(year, month, day, hourInput) {
+  try {
+    const y = parseInt(year), m = parseInt(month), d = parseInt(day);
+    if (!y || !m || !d) return null;
+    const ec = Solar.fromYmd(y, m, d).getLunar().getEightChar();
+    const yp = ec.getYear();   // 예: '己巳'
+    const mp = ec.getMonth();  // 예: '丁丑' (절기 기준 월주)
+    const dp = ec.getDay();    // 예: '乙酉'
+    const dayGan = dp[0];
+    const dayGanIdx = CG.indexOf(dayGan);
+
+    // 시주: 일간 + 시지로 五鼠遁(오서둔) 계산
+    let hp = null;
+    const raw = (hourInput || '').trim();
+    const hourBranch = SIJI_TO_JJ[raw] || raw; // 한글 시진명이면 지지로 변환
+    const hbIdx = JJ.indexOf(hourBranch);
+    if (hbIdx >= 0 && dayGanIdx >= 0) {
+      const hourGanIdx = ((dayGanIdx % 5) * 2 + hbIdx) % 10;
+      hp = CG[hourGanIdx] + JJ[hbIdx];
+    }
+
+    // 오행 분포 (천간 4 + 지지 4)
+    const elem = { 木:0, 火:0, 土:0, 金:0, 水:0 };
+    [yp, mp, dp, ...(hp ? [hp] : [])].forEach(p => {
+      const si = CG.indexOf(p[0]); if (si >= 0) elem[CGO[si]]++;
+      const bi = JJ.indexOf(p[1]); if (bi >= 0) elem[JJO[bi]]++;
+    });
+    const elemStr = Object.entries(elem).map(([k, v]) => `${k}${v}`).join(' ');
+    const dayElem = dayGanIdx >= 0 ? CGO[dayGanIdx] : '';
+
+    const text = `年柱 ${yp} / 月柱 ${mp} / 日柱 ${dp} / 時柱 ${hp || '미상(출생시각 모름)'}`
+      + ` · 일간(日干) ${dayGan}${dayElem} · 오행분포 ${elemStr}${hp ? '' : ' (시주 제외)'}`;
+
+    return { yp, mp, dp, hp, dayGan, dayElem, elem, text };
+  } catch (e) {
+    return null;
+  }
 }
 
 // ════════════════════════════
@@ -352,7 +402,12 @@ async function handleGeminiChat(request, env) {
     } catch { 
       return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400); 
     }
-    const { mode, lang, contents } = body;
+    const { mode, lang, contents, birth } = body;
+
+    // 정확한 사주 원국(만세력) — solo 모드에서 생년월일시가 오면 서버에서 코드로 계산
+    const saju = (mode === 'solo' && birth && birth.year)
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour)
+      : null;
 
     // contents 검증: 개수 + 총 텍스트 크기 (과대 payload 방지, max 32KB)
     if (!Array.isArray(contents) || contents.length > 50) {
@@ -393,11 +448,16 @@ async function handleGeminiChat(request, env) {
 
     const fallbackPrompt = `\nCritical Safe Guide: If the user asks general trivia, cooking, coding, or any topic completely unrelated to Saju, Ohaeng, and daily energy flow, DO NOT freeze or throw a safety block. Instead, kindly reply in the requested language that you are the Ohaeng Energy Master of M;Y 安, and gently guide them to ask about their spiritual energy reading or destiny elements.`;
 
+    // 정확한 사주 원국 블록 (계산됐을 때만) — AI엔 해석만 시키고 재계산 금지
+    const sajuBlock = saju
+      ? `\n\n[정확한 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 반드시 이 값만 사용]\n${saju.text}`
+      : '';
+
     // solo 모드: 응답 전체를 JSON 구조로 반환 (responseMimeType: application/json)
-    const ohaengJsonInstruction = `\n\nOUTPUT FORMAT (MANDATORY): Return ONLY a valid JSON object — no markdown, no code block, no extra text. Use exactly this structure:\n{\"reading\":\"<your full warm poetic saju reading here, including the #tag>\",\"ohaeng\":{\"木\":N,\"火\":N,\"土\":N,\"金\":N,\"水\":N}}\nFor ohaeng: each N is an integer 0–100, all five must sum to exactly 100. Base on user's actual Saju pillars (year/month/day/hour stems and branches). If birth info is incomplete, estimate from available data.`;
+    const ohaengJsonInstruction = `\n\nOUTPUT FORMAT (MANDATORY): Return ONLY a valid JSON object — no markdown, no code block, no extra text. Use exactly this structure:\n{\"reading\":\"<your full warm poetic saju reading here, including the #tag>\",\"ohaeng\":{\"木\":N,\"火\":N,\"土\":N,\"金\":N,\"水\":N}}\nFor ohaeng: each N is an integer 0–100, all five must sum to exactly 100. ${saju ? 'Derive these from the EXACT element distribution in [정확한 사주 원국] above — do NOT invent or recalculate the pillars.' : "Base on the user's actual Saju pillars; if birth info is incomplete, estimate from available data."}`;
 
     const sysText = (mode === 'solo')
-      ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Identify Saju Ohaeng from birth date/time. (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm, easy-to-read long-form reading in simple everyday language. (5) Give one specific, practical advice for today that anyone can act on.${ohaengJsonInstruction}`
+      ? `You are the Ohaeng Energy Master of M;Y 安.\n${basePrompt}${fallbackPrompt}${sajuBlock}\n\nMethod: (1) ${saju ? 'Use the EXACT Saju pillars given in [정확한 사주 원국] above — do NOT recalculate them from the birth date.' : 'Identify Saju Ohaeng from birth date/time.'} (2) Analyze harmony/conflict with today's Ilchin. (3) Conclude most needed Ohaeng. (4) Write warm, easy-to-read long-form reading in simple everyday language. (5) Give one specific, practical advice for today that anyone can act on.${ohaengJsonInstruction}`
       : `You are the Ohaeng Harmony Master of M;Y 安.\n${basePrompt}${fallbackPrompt}\n\nMethod: (1) Each person's Saju Ohaeng in plain words. (2) Explain the relationship dynamics simply — how their energies work together or clash, using everyday metaphors. (3) Today's energy impact on the relationship. (4) How they complement each other in practical daily life. (5) Suggest a shared activity or topic. Long-form, warm, simple tone. NEVER say "compatibility is bad".`;
 
     const geminiReqBody = {
@@ -2296,12 +2356,19 @@ async function handleGuestChat(request, env) {
     const il = ilchin();
     const on = ON[lang] || ON.ko;
 
-    const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.
+    // 정확한 사주(연/월/일주, 절기 반영) — 게스트는 출생시각이 없어 시주 제외. AI엔 해석만 시킴
+    const bm = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec((birth || '').trim());
+    const gsaju = bm ? computeSaju(bm[1], bm[2], bm[3], '') : null;
+    const gsajuBlock = gsaju
+      ? `\n[정확한 사주 원국 — 서버 만세력 계산값. 재계산·추측 금지, 이 값만 사용]: ${gsaju.text}`
+      : '';
+
+    const sysText = `You are the Ohaeng Energy Master of M;Y 安. Today's Ilchin: ${CG[il.ci]}${JJ[il.ji]} · Primary: ${on[il.o]}.${gsajuBlock}
 ${lang === 'ko' ? '한국어로 답변하세요.' : lang === 'en' ? 'Respond in English.' : lang === 'zh' ? '请用中文回答。' : '日本語で答えてください。'}
 HANJA RULE: When using Chinese characters, always add Korean meaning in parentheses.
 Write in warm, plain everyday language. Keep it concise (200-250 characters).
 OUTPUT: Return ONLY valid JSON: {"reading":"<warm short reading 200-300 chars>","ohaeng":{"木":N,"火":N,"土":N,"金":N,"水":N}}
-For ohaeng: integers 0–100, sum = 100. End reading with one of: #木 #火 #土 #金 #水`;
+For ohaeng: integers 0–100, sum = 100${gsaju ? ', derive from the EXACT 오행분포 above (do not recalculate pillars)' : ''}. End reading with one of: #木 #火 #土 #金 #水`;
 
     const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
 ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
