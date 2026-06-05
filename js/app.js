@@ -1198,6 +1198,14 @@ function handleGoogleCredential(response) {
     updateUserBtn(profile);
     refreshTokens();  // 서버 토큰 잔액 동기화
 
+    // 로그인 기록 (users upsert + login_events) — 로그인 직후 1회, 실패해도 무시
+    try {
+      fetch(EP + 'auth/login', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + response.credential }
+      }).catch(() => {});
+    } catch {}
+
     // 관리자 배지 확인
     _checkAdminBadge();
 

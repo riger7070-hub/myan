@@ -194,6 +194,25 @@ async function ensureDBExt(env) {
       rewarded_at INTEGER, created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
     CREATE INDEX IF NOT EXISTS idx_ref_referrer ON referrals (referrer_email);
+    CREATE TABLE IF NOT EXISTS users (
+      email         TEXT PRIMARY KEY,
+      name          TEXT,
+      picture       TEXT,
+      locale        TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+      last_login_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      login_count   INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS login_events (
+      id         TEXT PRIMARY KEY,
+      email      TEXT NOT NULL,
+      at         INTEGER NOT NULL DEFAULT (unixepoch()),
+      ip         TEXT,
+      country    TEXT,
+      user_agent TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_login_events_email ON login_events (email, at DESC);
+    CREATE INDEX IF NOT EXISTS idx_login_events_at ON login_events (at DESC);
   `).catch(() => {});
   _dbExtReady = true;
 }
@@ -252,6 +271,8 @@ export default {
     if (path === '/api/admin/ungi/give-tokens' && method === 'POST') { await ensureDBExt(env); return handleUngiGiveTokens(request, env); }
     if (path === '/api/admin/ungi/login' && method === 'POST') { await ensureDBExt(env); return handleUngiAdminLogin(request, env); }
     if (path === '/api/token-history' && method === 'GET') { await ensureDBExt(env); return handleTokenHistory(request, env); }
+    // ── 로그인 기록 ──
+    if (path === '/auth/login' && method === 'POST') { await ensureDBExt(env); return handleAuthLogin(request, env); }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
@@ -530,6 +551,59 @@ async function getEmailFromToken(idToken, env) {
 
     return info.email;
   } catch { return null; }
+}
+
+// 로그인 기록: Google 토큰 검증 후 users upsert + login_events 기록 (로그인 직후 1회 호출)
+async function handleAuthLogin(request, env) {
+  const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+  if (!idToken) return cors(JSON.stringify({ error: '로그인이 필요합니다.' }), 401);
+  if (!env.DB) return cors(JSON.stringify({ ok: false }), 200);
+
+  // Google tokeninfo로 서명 검증 + 프로필(name/picture/locale) 추출
+  let info;
+  try {
+    const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+    if (!res.ok) return cors(JSON.stringify({ error: '유효하지 않은 토큰입니다.' }), 401);
+    info = await res.json();
+  } catch {
+    return cors(JSON.stringify({ error: '토큰 검증 실패' }), 401);
+  }
+  if (!info.email || info.email_verified !== 'true') {
+    return cors(JSON.stringify({ error: '이메일 인증되지 않은 계정입니다.' }), 401);
+  }
+
+  const email   = info.email;
+  const name    = info.name || null;
+  const picture = info.picture || null;
+  const locale  = info.locale || null;
+  const ip      = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const country = request.cf?.country || null;
+  const ua      = request.headers.get('User-Agent') || null;
+
+  try {
+    // users upsert: 최초면 생성(가입), 재로그인이면 last_login/count 갱신 + 프로필 최신화
+    await env.DB.prepare(
+      `INSERT INTO users (email, name, picture, locale, login_count)
+       VALUES (?, ?, ?, ?, 1)
+       ON CONFLICT(email) DO UPDATE SET
+         name = excluded.name,
+         picture = excluded.picture,
+         locale = excluded.locale,
+         last_login_at = unixepoch(),
+         login_count = login_count + 1`
+    ).bind(email, name, picture, locale).run();
+
+    // 감사 로그 (append-only)
+    await env.DB.prepare(
+      `INSERT INTO login_events (id, email, ip, country, user_agent) VALUES (?, ?, ?, ?, ?)`
+    ).bind(crypto.randomUUID(), email, ip, country, ua).run();
+  } catch (e) {
+    // 로깅 실패가 로그인 자체를 막지 않도록 조용히 무시
+    console.error('[AUTH LOGIN]', e);
+    return cors(JSON.stringify({ ok: false }), 200);
+  }
+
+  return cors(JSON.stringify({ ok: true }), 200);
 }
 
 async function handleUserTokens(request, env) {
@@ -981,7 +1055,7 @@ function legalPageWrapper(title, bodyHtml) {
 function handlePrivacyPage() {
   return legalPageWrapper('개인정보처리방침', `
 <h1>개인정보처리방침</h1>
-<div class="date">시행일: 2026년 1월 1일 &nbsp;|&nbsp; 최종 수정: 2026년 5월 26일</div>
+<div class="date">시행일: 2026년 1월 1일 &nbsp;|&nbsp; 최종 수정: 2026년 6월 5일</div>
 
 <p>마이안(M;Y 安, 이하 "회사")은 이용자의 개인정보를 소중히 여기며, 「개인정보 보호법」 및 관련 법령을 준수합니다.</p>
 
@@ -989,15 +1063,27 @@ function handlePrivacyPage() {
 <div class="box">
   <p><strong>Google 로그인 시 수집:</strong></p>
   <ul>
-    <li>이메일 주소 (서비스 식별 및 토큰 관리)</li>
-    <li>이름 (리딩 서비스 제공)</li>
-    <li>프로필 사진 (선택, 화면 표시용)</li>
+    <li>이메일 주소 (서비스 식별 및 토큰 관리, 서버 저장)</li>
+    <li>이름 (리딩 서비스 제공 및 계정 표시, 서버 저장)</li>
+    <li>프로필 사진 (선택, 화면 표시용, 서버 저장)</li>
+    <li>언어 설정(locale) (서비스 언어 제공, 서버 저장)</li>
+  </ul>
+  <p style="margin-top:10px"><strong>로그인 시 자동 수집 (접속 기록):</strong></p>
+  <ul>
+    <li>로그인 일시 및 누적 로그인 횟수 (부정 이용 방지·서비스 운영, 서버 저장)</li>
+    <li>IP 주소 (보안·부정 이용 방지, 서버 저장)</li>
+    <li>접속 국가 (보안·통계, 서버 저장)</li>
+    <li>브라우저/기기 정보(User-Agent) (보안·오류 대응, 서버 저장)</li>
   </ul>
   <p style="margin-top:10px"><strong>서비스 이용 중 수집:</strong></p>
   <ul>
     <li>생년월일 (사주 풀이 서비스 제공, 기기에만 저장)</li>
     <li>성별·거주지역 (선택, 정밀 풀이 목적, 기기에만 저장)</li>
     <li>결제 기록 (토큰 잔액 관리, 서버 저장)</li>
+  </ul>
+  <p style="margin-top:10px"><strong>게스트(비회원) 체험 시 수집:</strong></p>
+  <ul>
+    <li>IP 주소 (1일 1회 무료 체험 횟수 제한 목적, 서버 저장)</li>
   </ul>
 </div>
 
@@ -1006,11 +1092,13 @@ function handlePrivacyPage() {
   <li>AI 사주 리딩 서비스 제공</li>
   <li>토큰 잔액 관리 및 결제 처리</li>
   <li>서비스 이용 내역 관리 및 오류 대응</li>
+  <li>로그인·접속 기록을 통한 보안 및 부정 이용(어뷰징) 방지</li>
+  <li>서비스 이용 통계 분석 및 품질 개선</li>
   <li>법령상 의무 이행</li>
 </ul>
 
 <h2>3. 개인정보 보유 및 파기</h2>
-<p>회원 탈퇴 시 서버에 저장된 모든 데이터(이메일, 토큰 잔액, 결제 기록)를 즉시 파기합니다. 생년월일 등 기기 로컬 데이터는 앱 삭제 또는 회원 탈퇴 시 파기됩니다.</p>
+<p>회원 탈퇴 시 서버에 저장된 모든 데이터(이메일, 이름·프로필·언어 설정, 토큰 잔액, 결제 기록, 로그인·접속 기록)를 즉시 파기합니다. 생년월일 등 기기 로컬 데이터는 앱 삭제 또는 회원 탈퇴 시 파기됩니다. 게스트 체험 기록은 횟수 제한 목적 달성 후 일정 기간 경과 시 파기됩니다.</p>
 
 <h2>4. 개인정보 제3자 제공</h2>
 <p>회사는 이용자의 동의 없이 개인정보를 제3자에게 제공하지 않습니다. 단, 법령에 의한 요청이 있는 경우는 예외로 합니다.</p>
@@ -1203,10 +1291,16 @@ async function handleWithdraw(request, env) {
 
     if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스가 연결되지 않았습니다.' } }), 500);
 
+    await ensureDBExt(env);
+
     // 해당 이메일의 모든 결제/토큰 기록 삭제
     await env.DB.prepare(
       'DELETE FROM payment_requests WHERE user_email = ?'
     ).bind(email).run();
+
+    // 로그인 기록(계정 정보 + 접속 로그)도 함께 파기
+    await env.DB.prepare('DELETE FROM users WHERE email = ?').bind(email).run().catch(() => {});
+    await env.DB.prepare('DELETE FROM login_events WHERE email = ?').bind(email).run().catch(() => {});
 
     return cors(JSON.stringify({ success: true, message: '회원 탈퇴가 완료되었습니다.' }), 200);
   } catch (e) {
