@@ -709,7 +709,7 @@ function _enterMode(m, user) {
     openTokenModal();
     return;
   }
-  mode = m; hist = [];
+  mode = m;
 
   // 모드 선택 트래킹
   if (typeof Analytics !== 'undefined') {
@@ -724,44 +724,13 @@ function _enterMode(m, user) {
   updateUserBtn(user);
   document.getElementById('signupLinkBtn').style.display = 'none';
 
-  // ── 저장된 채팅 복원 ──
-  try {
-    const savedMode = localStorage.getItem('myan_chat_mode');
-    const savedHist = localStorage.getItem('myan_chat_hist');
-    const savedHtml = localStorage.getItem('myan_chat_html');
-    if (savedMode === m && savedHist && savedHtml) {
-      hist = JSON.parse(savedHist);
-      document.getElementById('chat-window').innerHTML = savedHtml;
-      document.getElementById('newChatBtn').style.display = 'inline-block';
-      showNormalInput(); showSuggestChips();
-      document.getElementById('chat-window').scrollTop = 99999;
-      return; // 복원 완료 → 새 인사 메시지 생략
-    }
-  } catch(e) {}
+  // ── 대화 방식 제거 ── 항상 생년월일·생시 입력 → 간단 풀이(로컬·무료) → 상세풀이(AI)
+  hideSuggestChips();
+  const _nir = document.getElementById('normalInputRow'); if (_nir) _nir.style.display = 'none';
+  const _fif = document.getElementById('firstInputForm'); if (_fif) _fif.style.display = 'none';
+  const _ncb = document.getElementById('newChatBtn'); if (_ncb) _ncb.style.display = 'none';
 
-  document.getElementById('newChatBtn').style.display = 'none';
-  const il = ilchin();
-
-  if (m === 'solo' && user?.birthYear) {
-    // 프로필 있는 경우: 구조화 폼 불필요
-    // (사주 정보는 첫 send() 시 질문과 결합하여 1개의 turn으로 전송 — Gemini 교대 규칙 준수)
-    showNormalInput();
-    showSuggestChips(); // 프로필 있으면 추천 칩 표시 — 첫 질문 유도
-    document.getElementById('inp').focus();
-    addBubble(TX[lang].g1_auto(il, user), 'ai');
-  } else {
-    const greet = m === 'solo' ? TX[lang].g1(il) : TX[lang].g2(il);
-    addBubble(greet, 'ai');
-    // Change 2: solo 모드에서 구조화 폼 표시
-    if (m === 'solo') {
-      showFirstInputForm();
-      hideSuggestChips(); // 사주 입력 폼 활성 중엔 추천 칩 숨김
-    } else {
-      showNormalInput();
-      document.getElementById('inp').focus();
-      showSuggestChips();
-    }
-  }
+  showSajuInput(m); // app.js — 생년월일·생시 입력 폼 렌더
 }
 
 // ── Change 2: 첫 입력 폼 토글 ──

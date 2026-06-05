@@ -2964,9 +2964,136 @@ async function _claimReferral() {
 
 
 // ════════════════════════════════════════════
+//  사주 입력 → 로컬 간단 풀이 → 상세풀이 (대화 없음)
+// ════════════════════════════════════════════
+const _SIJI_OPTIONS = [
+  ['', '모름 / 선택 안 함'],
+  ['자시','🌑 자시 (23~01시)'],['축시','🌒 축시 (01~03시)'],['인시','🌓 인시 (03~05시)'],
+  ['묘시','🌅 묘시 (05~07시)'],['진시','🌤 진시 (07~09시)'],['사시','☀️ 사시 (09~11시)'],
+  ['오시','🌞 오시 (11~13시)'],['미시','🌇 미시 (13~15시)'],['신시','🌆 신시 (15~17시)'],
+  ['유시','🌇 유시 (17~19시)'],['술시','🌃 술시 (19~21시)'],['해시','🌙 해시 (21~23시)']
+];
+let _lastSaju = null; // {mode, p1, p2, dayElem}
+
+function _personFieldsHtml(idx, title) {
+  const opts = _SIJI_OPTIONS.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  return `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+      ${title ? `<div style="font-size:0.85rem;color:var(--gold);margin-bottom:10px;letter-spacing:1px">${title}</div>` : ''}
+      <input class="fif-input sj-name" data-p="${idx}" type="text" placeholder="이름 (선택)" style="width:100%;margin-bottom:8px;box-sizing:border-box">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input class="fif-input sj-year" data-p="${idx}" type="number" placeholder="1990" min="1920" max="2025" inputmode="numeric" style="flex:1.6;box-sizing:border-box">
+        <input class="fif-input sj-month" data-p="${idx}" type="number" placeholder="월" min="1" max="12" inputmode="numeric" style="flex:1;box-sizing:border-box">
+        <input class="fif-input sj-day" data-p="${idx}" type="number" placeholder="일" min="1" max="31" inputmode="numeric" style="flex:1;box-sizing:border-box">
+      </div>
+      <select class="fif-input sj-time" data-p="${idx}" style="width:100%;box-sizing:border-box">${opts}</select>
+    </div>`;
+}
+
+function showSajuInput(m) {
+  const cw = document.getElementById('chat-window');
+  if (!cw) return;
+  const isDuo = m === 'duo';
+  const title = isDuo ? '💞 우리의 조화' : '☯ 나만의 리딩';
+  const sub = isDuo ? '두 분의 생년월일·생시를 입력해 주세요' : '생년월일과 태어난 시간을 입력해 주세요';
+  cw.innerHTML = `
+    <div style="max-width:460px;margin:0 auto;padding:8px 4px">
+      <div style="text-align:center;margin-bottom:6px;font-size:1.1rem;color:var(--gold);letter-spacing:1px">${title}</div>
+      <div style="text-align:center;margin-bottom:16px;font-size:0.8rem;color:var(--text-dim)">${sub}</div>
+      ${isDuo ? _personFieldsHtml(1,'첫 번째 분') + _personFieldsHtml(2,'두 번째 분') : _personFieldsHtml(1,'')}
+      <div style="font-size:0.72rem;color:var(--text-dim);text-align:center;margin:4px 0 12px">태어난 시간을 모르시면 비워두셔도 됩니다</div>
+      <button onclick="submitSajuInput('${m}')" class="fif-submit" style="width:100%" id="sjSubmitBtn">간단 풀이 보기 ›</button>
+      <div id="sjErr" style="color:#e05a4a;font-size:0.8rem;text-align:center;margin-top:8px;display:none"></div>
+    </div>`;
+  cw.scrollTop = 0;
+}
+
+function _readPerson(idx) {
+  const q = (cls) => document.querySelector(`.${cls}[data-p="${idx}"]`);
+  return {
+    name: (q('sj-name')?.value || '').trim(),
+    year: parseInt(q('sj-year')?.value, 10),
+    month: parseInt(q('sj-month')?.value, 10),
+    day: parseInt(q('sj-day')?.value, 10),
+    hour: q('sj-time')?.value || ''
+  };
+}
+function _validPerson(p) {
+  const cy = new Date().getFullYear();
+  return p.year>=1920 && p.year<=cy && p.month>=1 && p.month<=12 && p.day>=1 && p.day<=31;
+}
+
+async function submitSajuInput(m) {
+  const err = document.getElementById('sjErr');
+  const showErr = (msg) => { if(err){ err.textContent=msg; err.style.display='block'; } };
+  const p1 = _readPerson(1);
+  if (!_validPerson(p1)) return showErr('생년월일을 정확히 입력해 주세요.');
+  let p2 = null;
+  if (m === 'duo') {
+    p2 = _readPerson(2);
+    if (!_validPerson(p2)) return showErr('두 번째 분의 생년월일을 정확히 입력해 주세요.');
+  }
+  if (err) err.style.display = 'none';
+  const btn = document.getElementById('sjSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '계산 중...'; }
+  try {
+    const res = await fetch(EP + 'saju-reading', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mode:m, lang, p1, p2 })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error?.message || 'fail');
+    _lastSaju = { mode:m, p1, p2, dayElem: data.dayElem };
+    renderSajuResult(data, m);
+  } catch(e) {
+    if (btn) { btn.disabled=false; btn.textContent='간단 풀이 보기 ›'; }
+    showErr('풀이 생성에 실패했습니다. 다시 시도해 주세요.');
+  }
+}
+
+function _ohaengGaugeHtml(ohaeng) {
+  const COL = {木:'#4bc87a',火:'#e05a4a',土:'#d4a040',金:'#a0aab4',水:'#5aa8e0'};
+  return `<div style="display:flex;gap:6px;margin:14px 0">` + ['木','火','土','金','水'].map(k=>{
+    const v = ohaeng[k]||0;
+    return `<div style="flex:1;text-align:center">
+      <div style="height:60px;display:flex;align-items:flex-end;justify-content:center">
+        <div style="width:60%;height:${Math.max(v,3)}%;background:${COL[k]};border-radius:4px 4px 0 0"></div>
+      </div>
+      <div style="font-size:0.7rem;color:${COL[k]};margin-top:4px">${k}</div>
+      <div style="font-size:0.65rem;color:var(--text-dim)">${v}%</div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function renderSajuResult(data, m) {
+  const cw = document.getElementById('chat-window');
+  if (!cw) return;
+  const today = new Date().toISOString().slice(0,10);
+  const ohaeng = data.dayElem || '土';
+  const readingHtml = (data.reading||'').split('\n').map(line =>
+    `<div style="margin:6px 0;font-size:0.9rem;line-height:1.6">${_escHtml(line)}</div>`
+  ).join('');
+  cw.innerHTML = `
+    <div style="max-width:520px;margin:0 auto;padding:8px 4px">
+      <div style="text-align:center;font-size:1.1rem;color:var(--gold);letter-spacing:1px;margin-bottom:4px">✨ 간단 풀이</div>
+      ${_ohaengGaugeHtml(data.ohaeng||{})}
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:16px">${readingHtml}</div>
+      <button onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:14px">🔍 상세 풀이 보기 (토큰 2)</button>
+      <button onclick="showSajuInput('${m}')" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer">다시 입력</button>
+    </div>`;
+  cw.scrollTop = 0;
+}
+
+function _detailFromSaju(date, ohaeng) {
+  if (!_lastSaju) return;
+  if (!getGoogleIdToken()) { showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.'); return; }
+  _openDetailReading(date, ohaeng, _lastSaju.p1, _lastSaju.mode==='duo' ? _lastSaju.p2 : null);
+}
+
+// ════════════════════════════════════════════
 //  상세 풀이 모달
 // ════════════════════════════════════════════
-async function _openDetailReading(date, ohaeng) {
+async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   const token = getGoogleIdToken();
   if (!token) {
     showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
@@ -2991,17 +3118,20 @@ async function _openDetailReading(date, ohaeng) {
     </div>`;
   document.body.appendChild(overlay);
 
-  // 사용자 사주 계산용 생년월일시 (서버에서 만세력 계산해 개인 맞춤 상세풀이)
-  const _u = (typeof getUser === 'function') ? getUser() : null;
-  const birth = _u?.birthYear
-    ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour||'' }
-    : undefined;
+  // 사용자 사주 계산용 생년월일시 (입력폼에서 넘어온 값 우선, 없으면 프로필)
+  let birth = birthOverride;
+  if (!birth) {
+    const _u = (typeof getUser === 'function') ? getUser() : null;
+    birth = _u?.birthYear
+      ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour||'' }
+      : undefined;
+  }
 
   try {
     const r = await fetch('/chat-detail', {
       method: 'POST',
       headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ date, ohaeng, lang, birth })
+      body: JSON.stringify({ date, ohaeng, lang, birth, p2 })
     });
     const data = await r.json();
     const loadEl = document.getElementById('detail-loading');

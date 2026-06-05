@@ -83,6 +83,105 @@ function computeSaju(year, month, day, hourInput) {
 }
 
 // ════════════════════════════
+//  로컬(무료) 간단 사주 풀이 — Gemini 미호출, 토큰 미차감. 코드로 생성
+// ════════════════════════════
+const _GAN_TRAIT = {
+  ko:{甲:'곧게 뻗는 큰 나무처럼 추진력과 리더십이 있어요',乙:'유연한 화초처럼 섬세하고 적응력이 좋아요',丙:'밝은 태양처럼 열정적이고 표현력이 풍부해요',丁:'따뜻한 촛불처럼 세심하고 헌신적이에요',戊:'든든한 산처럼 포용력 있고 안정적이에요',己:'비옥한 밭처럼 현실감각과 보살핌이 있어요',庚:'단단한 쇠처럼 결단력 있고 의리가 있어요',辛:'빛나는 보석처럼 예리하고 자존심이 강해요',壬:'큰 강물처럼 지혜롭고 포용력이 커요',癸:'맑은 이슬처럼 직관적이고 순수해요'},
+  en:{甲:'driven with leadership, like a tall straight tree',乙:'delicate and adaptable, like a graceful plant',丙:'passionate and expressive, like the bright sun',丁:'attentive and devoted, like a warm candle',戊:'embracing and stable, like a solid mountain',己:'practical and nurturing, like fertile soil',庚:'decisive and loyal, like firm metal',辛:'sharp and proud, like a shining jewel',壬:'wise and generous, like a great river',癸:'intuitive and pure, like clear dew'}
+};
+const _OHAENG_ADVICE = {
+  ko:{木:'산책과 독서로 성장의 기운(木)을 채워보세요 🌱',火:'사람들과의 만남과 가벼운 운동으로 열정(火)을 더해보세요 🔥',土:'규칙적인 식사와 정리정돈으로 안정(土)을 다져보세요 🏔️',金:'계획과 마무리로 결단력(金)을 키워보세요 ⚙️',水:'충분한 수분과 사색·휴식으로 지혜(水)를 채워보세요 🌊'},
+  en:{木:'Walk and read to nurture growth (Wood) 🌱',火:'Meet people and move to add passion (Fire) 🔥',土:'Eat regularly and tidy up for stability (Earth) 🏔️',金:'Plan and finish tasks to sharpen resolve (Metal) ⚙️',水:'Hydrate, rest and reflect for wisdom (Water) 🌊'}
+};
+const _ELEM_FR = { ko:{木:'목(나무)',火:'화(불)',土:'토(흙)',金:'금(쇠)',水:'수(물)'}, en:{木:'Wood',火:'Fire',土:'Earth',金:'Metal',水:'Water'} };
+const _GEN  = {木:'火',火:'土',土:'金',金:'水',水:'木'};   // 상생
+const _CTRL = {木:'土',土:'水',水:'火',火:'金',金:'木'};   // 상극
+
+function _ohaengPct(elem) {
+  const order = ['木','火','土','金','水'];
+  const total = order.reduce((a,k)=>a+(elem[k]||0),0) || 1;
+  const p = order.map(k => Math.round((elem[k]||0)/total*100));
+  const diff = 100 - p.reduce((a,b)=>a+b,0);
+  if (diff !== 0) { let mi=0; for(let i=1;i<5;i++) if(p[i]>p[mi]) mi=i; p[mi]+=diff; }
+  const out={}; order.forEach((k,i)=>out[k]=p[i]); return out;
+}
+function _strongElem(elem){ let b='木'; ['火','土','金','水'].forEach(k=>{ if((elem[k]||0)>(elem[b]||0)) b=k; }); return b; }
+function _needElem(elem){ const zero=['木','火','土','金','水'].find(k=>(elem[k]||0)===0); if(zero)return zero; let b='木'; ['火','土','金','水'].forEach(k=>{ if((elem[k]||0)<(elem[b]||0)) b=k; }); return b; }
+
+function _todayRel(todayElem, me, ef, isKo) {
+  if (todayElem===me) return isKo?`오늘은 ${ef[todayElem]} 기운이 같은 기운을 더해 힘이 솟는 날이에요.`:`Today's ${ef[todayElem]} energy reinforces yours — an energizing day.`;
+  if (_GEN[todayElem]===me) return isKo?`오늘은 ${ef[todayElem]} 기운이 당신을 도와주는(생) 날이라 일이 수월해요.`:`Today's ${ef[todayElem]} energy supports you — things flow smoothly.`;
+  if (_GEN[me]===todayElem) return isKo?`오늘은 당신이 ${ef[todayElem]} 기운에 베푸는 날이라 에너지를 아끼는 게 좋아요.`:`Today you give to the ${ef[todayElem]} energy — pace yourself.`;
+  if (_CTRL[todayElem]===me) return isKo?`오늘은 ${ef[todayElem]} 기운이 당신을 누르는(극) 날이라 무리하지 마세요.`:`Today's ${ef[todayElem]} energy presses on you — don't overdo it.`;
+  return isKo?`오늘은 당신이 ${ef[todayElem]} 기운을 다스리는 날이라 주도권을 쥐기 좋아요.`:`Today you control the ${ef[todayElem]} energy — a good day to lead.`;
+}
+
+// solo 간단 풀이
+function buildLocalReading(saju, lang, il, name) {
+  const L = (lang==='ko') ? 'ko' : 'en';
+  const isKo = L==='ko';
+  const ef = _ELEM_FR[L];
+  const trait = _GAN_TRAIT[L][saju.dayGan] || '';
+  const need = _needElem(saju.elem);
+  const strong = _strongElem(saju.elem);
+  const pillars = `年 ${saju.yp} / 月 ${saju.mp} / 日 ${saju.dp} / 時 ${saju.hp || (isKo?'미상':'unknown')}`;
+  const rel = _todayRel(il.o, saju.dayElem, ef, isKo);
+  const adv = _OHAENG_ADVICE[L][need];
+  const reading = isKo
+    ? `• 사주 원국: ${pillars}\n• 일간(본질): ${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n• 오행 분포: 강한 기운 ${ef[strong]} · 부족한 기운 ${ef[need]}\n• 오늘(${CG[il.ci]}${JJ[il.ji]}日): ${rel}\n• 오늘의 조언: ${adv}`
+    : `• Pillars: ${pillars}\n• Day Master: ${saju.dayGan} (${ef[saju.dayElem]}) — ${trait}\n• Elements: strong ${ef[strong]} · lacking ${ef[need]}\n• Today (${CG[il.ci]}${JJ[il.ji]}): ${rel}\n• Advice: ${adv}`;
+  return { reading, ohaeng: _ohaengPct(saju.elem), need };
+}
+
+// duo(2인) 간단 풀이
+function buildLocalReadingDuo(s1, s2, lang, il, n1, n2) {
+  const L = (lang==='ko') ? 'ko' : 'en';
+  const isKo = L==='ko';
+  const ef = _ELEM_FR[L];
+  const A = n1 || (isKo?'첫 번째 분':'Person A');
+  const B = n2 || (isKo?'두 번째 분':'Person B');
+  const m1 = s1.dayElem, m2 = s2.dayElem;
+  let rel;
+  if (m1===m2) rel = isKo?`두 분 모두 ${ef[m1]} 일간 — 비슷한 결을 가진, 서로를 잘 이해하는 사이예요.`:`Both share a ${ef[m1]} Day Master — kindred spirits who understand each other.`;
+  else if (_GEN[m1]===m2) rel = isKo?`${A}(${ef[m1]})이 ${B}(${ef[m2]})를 북돋아주는(생) 관계 — 챙겨주고 이끌어주는 사이예요.`:`${A} (${ef[m1]}) nourishes ${B} (${ef[m2]}) — a caring, guiding bond.`;
+  else if (_GEN[m2]===m1) rel = isKo?`${B}(${ef[m2]})이 ${A}(${ef[m1]})를 북돋아주는(생) 관계 — 서로 기대고 채워주는 사이예요.`:`${B} (${ef[m2]}) nourishes ${A} (${ef[m1]}) — mutually supportive.`;
+  else if (_CTRL[m1]===m2) rel = isKo?`${A}(${ef[m1]})이 ${B}(${ef[m2]})를 다스리는(극) 관계 — 균형을 잡아주되 배려가 필요해요.`:`${A} (${ef[m1]}) controls ${B} (${ef[m2]}) — balancing, but needs care.`;
+  else rel = isKo?`${B}(${ef[m2]})이 ${A}(${ef[m1]})를 다스리는(극) 관계 — 서로 자극을 주는 사이예요.`:`${B} (${ef[m2]}) controls ${A} (${ef[m1]}) — a stimulating pair.`;
+  const need1 = _needElem(s1.elem), need2 = _needElem(s2.elem);
+  const comp = (need1===m2 || need2===m1)
+    ? (isKo?'서로의 부족한 기운을 채워줄 수 있는 좋은 짝이에요. 🤝':'You fill each other\'s lacking energy — a great match. 🤝')
+    : (isKo?'서로 다른 기운을 가져 새로운 자극을 주고받아요.':'Different energies that bring fresh stimulation.');
+  // 합산 오행
+  const merged = {木:0,火:0,土:0,金:0,水:0};
+  ['木','火','土','金','水'].forEach(k=>{ merged[k]=(s1.elem[k]||0)+(s2.elem[k]||0); });
+  const reading = isKo
+    ? `• ${A} 일간: ${s1.dayGan}${ef[m1]} / ${B} 일간: ${s2.dayGan}${ef[m2]}\n• 두 기운의 관계: ${rel}\n• 궁합: ${comp}\n• 오늘(${CG[il.ci]}${JJ[il.ji]}日)은 ${ef[il.o]} 기운의 날 — 함께 ${_OHAENG_ADVICE.ko[il.o].replace(/\s*[🌱🔥🏔️⚙️🌊]\s*$/,'')}면 좋아요.`
+    : `• ${A} Day Master: ${s1.dayGan} (${ef[m1]}) / ${B}: ${s2.dayGan} (${ef[m2]})\n• Relationship: ${rel}\n• Compatibility: ${comp}\n• Today (${CG[il.ci]}${JJ[il.ji]}) carries ${ef[il.o]} energy — a good day to ${_OHAENG_ADVICE.en[il.o].replace(/\s*[🌱🔥🏔️⚙️🌊]\s*$/,'').toLowerCase()} together.`;
+  return { reading, ohaeng: _ohaengPct(merged), need: need1 };
+}
+
+// 무료 간단 풀이 엔드포인트 (Gemini 미호출 · 토큰 미차감)
+async function handleSajuReading(request, env) {
+  try {
+    const { mode='solo', lang='ko', p1, p2 } = await request.json().catch(()=>({}));
+    if (!p1 || !p1.year) return cors(JSON.stringify({ error:{ message:'생년월일이 필요합니다.' } }), 400);
+    const il = ilchin();
+    const s1 = computeSaju(p1.year, p1.month, p1.day, p1.hour);
+    if (!s1) return cors(JSON.stringify({ error:{ message:'사주 계산에 실패했습니다.' } }), 400);
+    if (mode === 'duo' && p2 && p2.year) {
+      const s2 = computeSaju(p2.year, p2.month, p2.day, p2.hour);
+      if (!s2) return cors(JSON.stringify({ error:{ message:'두 번째 분 사주 계산 실패' } }), 400);
+      const out = buildLocalReadingDuo(s1, s2, lang, il, p1.name, p2.name);
+      return cors(JSON.stringify({ ok:true, mode:'duo', ...out, saju1:s1.text, saju2:s2.text, dayElem: il.o }), 200);
+    }
+    const out = buildLocalReading(s1, lang, il, p1.name);
+    return cors(JSON.stringify({ ok:true, mode:'solo', ...out, saju1:s1.text, dayElem: il.o }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error:{ message:'오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════
 //  보안 헬퍼 함수
 // ════════════════════════════
 
@@ -297,6 +396,8 @@ export default {
     if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
+    // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
+    if (path === '/saju-reading' && method === 'POST') return handleSajuReading(request, env);
     // ── 푸시 알림 API ──
     if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
     if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }
@@ -1471,16 +1572,19 @@ async function handleDetailReading(request, env) {
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
-    const { date, ohaeng, lang = 'ko', birth } = await request.json().catch(() => ({}));
+    const { date, ohaeng, lang = 'ko', birth, p2 } = await request.json().catch(() => ({}));
     if (!date || !ohaeng) return cors(JSON.stringify({ error: { message: 'date, ohaeng 필수' } }), 400);
 
     // 사용자 사주 원국(만세력) — 생년월일시가 오면 서버에서 정확히 계산 (AI 재계산 금지)
-    const saju = (birth && birth.year)
-      ? computeSaju(birth.year, birth.month, birth.day, birth.hour)
-      : null;
-    const sajuBlock = saju
-      ? `\n\n[이 사람의 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n반드시 위 사주의 일간(日干=본질)과 오행 분포를 반영하여, 오늘(${date})의 ${ohaeng} 기운이 이 사람에게 어떻게 작용하는지 개인 맞춤으로 풀어주세요.`
-      : '';
+    const saju  = (birth && birth.year) ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    const saju2 = (p2 && p2.year)       ? computeSaju(p2.year, p2.month, p2.day, p2.hour) : null;
+    let sajuBlock = '';
+    if (saju && saju2) {
+      // 우리의 조화(2인) 상세풀이 — 두 사람의 확정 사주 기반 관계 풀이
+      sajuBlock = `\n\n[두 사람의 사주 원국 — 서버 만세력 계산 확정값. 재계산·추측 금지]\n첫 번째 분: ${saju.text}\n두 번째 분: ${saju2.text}\n반드시 두 사람의 일간(본질)과 오행 분포를 비교·반영하여, 오늘(${date}) 기운 속에서 두 사람의 관계를 개인 맞춤으로 풀어주세요. 아래 4영역은 '두 사람의 관계' 관점으로 해석하세요.`;
+    } else if (saju) {
+      sajuBlock = `\n\n[이 사람의 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n반드시 위 사주의 일간(日干=본질)과 오행 분포를 반영하여, 오늘(${date})의 ${ohaeng} 기운이 이 사람에게 어떻게 작용하는지 개인 맞춤으로 풀어주세요.`;
+    }
 
     // 2토큰 차감 (atomic INSERT — 잔액 >= 2 일 때만 삽입)
     const detailUseId = `detail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
