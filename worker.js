@@ -101,6 +101,15 @@ const _ELEM_FR = { ko:{木:'목(나무)',火:'화(불)',土:'토(흙)',金:'금(
 const _GEN  = {木:'火',火:'土',土:'金',金:'水',水:'木'};   // 상생
 const _CTRL = {木:'土',土:'水',水:'火',火:'金',金:'木'};   // 상극
 
+// 십성(十星) - 오행 관계에 따른 의미 (일간 기준)
+const _SIPSEONG = {
+  same: {ko:'비견(比肩) - 형제/동료', en:'Equal - Siblings/Peers', zh:'比肩 - 兄弟/同事', ja:'比肩 - 兄弟/同僚'},
+  gen: {ko:'식신(食神) - 표현/자유', en:'Food God - Expression/Freedom', zh:'食神 - 表达/自由', ja:'食神 - 表現/自由'},
+  birth: {ko:'정재(正財) - 안정/재물', en:'Proper Wealth - Stability/Money', zh:'正财 - 稳定/财物', ja:'正財 - 安定/財物'},
+  ctrl: {ko:'정관(正官) - 직장/명예', en:'Proper Officer - Career/Honor', zh:'正官 - 职位/名誉', ja:'正官 - 職位/名誉'},
+  ctrlme: {ko:'정인(正印) - 학문/지혜', en:'Proper Seal - Study/Wisdom', zh:'正印 - 学问/智慧', ja:'正印 - 学問/知恵'}
+};
+
 // 용신(用神) - 필요한 기운에 따른 추천 행동
 const _YONGSIN_ADVICE = {
   ko: {
@@ -144,12 +153,65 @@ function _ohaengPct(elem) {
 function _strongElem(elem){ let b='木'; ['火','土','金','水'].forEach(k=>{ if((elem[k]||0)>(elem[b]||0)) b=k; }); return b; }
 function _needElem(elem){ const zero=['木','火','土','金','水'].find(k=>(elem[k]||0)===0); if(zero)return zero; let b='木'; ['火','土','金','水'].forEach(k=>{ if((elem[k]||0)<(elem[b]||0)) b=k; }); return b; }
 
-function _todayRel(todayElem, me, ef, isKo) {
-  if (todayElem===me) return isKo?`오늘은 ${ef[todayElem]} 기운이 같은 기운을 더해 힘이 솟는 날이에요.`:`Today's ${ef[todayElem]} energy reinforces yours — an energizing day.`;
-  if (_GEN[todayElem]===me) return isKo?`오늘은 ${ef[todayElem]} 기운이 당신을 도와주는(생) 날이라 일이 수월해요.`:`Today's ${ef[todayElem]} energy supports you — things flow smoothly.`;
-  if (_GEN[me]===todayElem) return isKo?`오늘은 당신이 ${ef[todayElem]} 기운에 베푸는 날이라 에너지를 아끼는 게 좋아요.`:`Today you give to the ${ef[todayElem]} energy — pace yourself.`;
-  if (_CTRL[todayElem]===me) return isKo?`오늘은 ${ef[todayElem]} 기운이 당신을 누르는(극) 날이라 무리하지 마세요.`:`Today's ${ef[todayElem]} energy presses on you — don't overdo it.`;
-  return isKo?`오늘은 당신이 ${ef[todayElem]} 기운을 다스리는 날이라 주도권을 쥐기 좋아요.`:`Today you control the ${ef[todayElem]} energy — a good day to lead.`;
+// 십성 해석 (년월일시 기둥의 의미)
+function _pillarMeaning(L) {
+  if (L==='ko') return {
+    year: '조상·부모님으로부터 물려받은 기질과 초년 운세',
+    month: '청년기 운세와 직장·사회생활의 방향',
+    day: '본인의 핵심 성격과 배우자·가정 관계',
+    hour: '노년 운세와 자녀·말년의 복'
+  };
+  if (L==='zh') return {
+    year: '从祖先·父母继承的气质和早年运势',
+    month: '青年时期运势和职场·社会生活方向',
+    day: '本人核心性格和配偶·家庭关系',
+    hour: '晚年运势和子女·晚年之福'
+  };
+  if (L==='ja') return {
+    year: '先祖·両親から受け継いだ気質と初年運',
+    month: '青年期運勢と職場·社会生活の方向',
+    day: '本人の核心性格と配偶者·家庭関係',
+    hour: '晩年運勢と子女·晩年の福'
+  };
+  return {
+    year: 'Inherited traits from ancestors and early life fortune',
+    month: 'Youth fortune and career/social direction',
+    day: 'Core personality and spouse/family relations',
+    hour: 'Late life fortune and children/elderly blessings'
+  };
+}
+
+function _todayRel(todayElem, me, ef, lang) {
+  const L = ['ko','en','zh','ja'].includes(lang) ? lang : 'en';
+
+  if (todayElem===me) {
+    if (L==='ko') return `오늘은 ${ef[todayElem]} 기운이 같은 기운을 더해 힘이 솟는 날이에요.`;
+    if (L==='zh') return `今天是${ef[todayElem]}气相同之气相加，充满力量的一天。`;
+    if (L==='ja') return `今日は${ef[todayElem]}の気が同じ気を加えて力が湧く日です。`;
+    return `Today's ${ef[todayElem]} energy reinforces yours — an energizing day.`;
+  }
+  if (_GEN[todayElem]===me) {
+    if (L==='ko') return `오늘은 ${ef[todayElem]} 기운이 당신을 도와주는(생) 날이라 일이 수월해요.`;
+    if (L==='zh') return `今天是${ef[todayElem]}气帮助您(相生)的日子，事情会很顺利。`;
+    if (L==='ja') return `今日は${ef[todayElem]}の気があなたを助ける(相生)日なので、物事がスムーズです。`;
+    return `Today's ${ef[todayElem]} energy supports you — things flow smoothly.`;
+  }
+  if (_GEN[me]===todayElem) {
+    if (L==='ko') return `오늘은 당신이 ${ef[todayElem]} 기운에 베푸는 날이라 에너지를 아끼는 게 좋아요.`;
+    if (L==='zh') return `今天是您给予${ef[todayElem]}气的日子，需要节省能量。`;
+    if (L==='ja') return `今日はあなたが${ef[todayElem]}の気に与える日なので、エネルギーを節約するのが良いです。`;
+    return `Today you give to the ${ef[todayElem]} energy — pace yourself.`;
+  }
+  if (_CTRL[todayElem]===me) {
+    if (L==='ko') return `오늘은 ${ef[todayElem]} 기운이 당신을 누르는(극) 날이라 무리하지 마세요.`;
+    if (L==='zh') return `今天是${ef[todayElem]}气压制您(相克)的日子，不要勉强。`;
+    if (L==='ja') return `今日は${ef[todayElem]}の気があなたを抑える(相克)日なので、無理しないでください。`;
+    return `Today's ${ef[todayElem]} energy presses on you — don't overdo it.`;
+  }
+  if (L==='ko') return `오늘은 당신이 ${ef[todayElem]} 기운을 다스리는 날이라 주도권을 쥐기 좋아요.`;
+  if (L==='zh') return `今天是您掌控${ef[todayElem]}气的日子，适合掌握主导权。`;
+  if (L==='ja') return `今日はあなたが${ef[todayElem]}の気を制する日なので、主導権を握るのに良いです。`;
+  return `Today you control the ${ef[todayElem]} energy — a good day to lead.`;
 }
 
 // solo 간단 풀이
@@ -160,8 +222,8 @@ function buildLocalReading(saju, lang, il, name) {
   const trait = _GAN_TRAIT[L][saju.dayGan] || '';
   const need = _needElem(saju.elem);
   const strong = _strongElem(saju.elem);
-  const pillars = `年 ${saju.yp} / 月 ${saju.mp} / 日 ${saju.dp} / 時 ${saju.hp || (isKo?'미상':'unknown')}`;
-  const rel = _todayRel(il.o, saju.dayElem, ef, isKo);
+  const pillars = `年 ${saju.yp} / 月 ${saju.mp} / 日 ${saju.dp} / 時 ${saju.hp || (L==='ko'?'미상':L==='zh'?'不明':L==='ja'?'不明':'unknown')}`;
+  const rel = _todayRel(il.o, saju.dayElem, ef, L);
   const adv = _OHAENG_ADVICE[L][need];
 
   // 오행 비율 설명
@@ -175,15 +237,25 @@ function buildLocalReading(saju, lang, il, name) {
   // 용신(필요한 기운) 조언
   const yongsinAdv = _YONGSIN_ADVICE[L][need];
 
+  // 사주 4기둥 해석
+  const pm = _pillarMeaning(L);
+  const pillarInterpret = L==='ko'
+    ? `\n\n📜 사주 4기둥의 의미\n年柱: ${pm.year}\n月柱: ${pm.month}\n日柱: ${pm.day}\n時柱: ${pm.hour}`
+    : L==='zh'
+    ? `\n\n📜 四柱含义\n年柱: ${pm.year}\n月柱: ${pm.month}\n日柱: ${pm.day}\n时柱: ${pm.hour}`
+    : L==='ja'
+    ? `\n\n📜 四柱の意味\n年柱: ${pm.year}\n月柱: ${pm.month}\n日柱: ${pm.day}\n時柱: ${pm.hour}`
+    : `\n\n📜 Four Pillars Meaning\nYear: ${pm.year}\nMonth: ${pm.month}\nDay: ${pm.day}\nHour: ${pm.hour}`;
+
   let reading;
   if (L === 'ko') {
-    reading = `📅 사주 원국 (만세력)\n${pillars}\n\n🎯 당신의 본질 (일간)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 오행 에너지 분포\n${elemDesc}\n가장 강한 기운: ${ef[strong]}\n부족한 기운: ${ef[need]}\n\n🔮 용신 (필요한 기운)\n${yongsinAdv}\n\n☀️ 오늘의 기운 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 오늘의 조언\n${adv}`;
+    reading = `📅 사주 원국 (만세력)\n${pillars}${pillarInterpret}\n\n🎯 당신의 본질 (일간)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 오행 에너지 분포\n${elemDesc}\n가장 강한 기운: ${ef[strong]}\n부족한 기운: ${ef[need]}\n\n🔮 용신 (필요한 기운)\n${yongsinAdv}\n\n☀️ 오늘의 기운 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 오늘의 조언\n${adv}`;
   } else if (L === 'zh') {
-    reading = `📅 四柱命盘 (万年历)\n${pillars}\n\n🎯 您的本质 (日干)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 五行能量分布\n${elemDesc}\n最强之气: ${ef[strong]}\n不足之气: ${ef[need]}\n\n🔮 用神 (所需之气)\n${yongsinAdv}\n\n☀️ 今日之气 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 今日建议\n${adv}`;
+    reading = `📅 四柱命盘 (万年历)\n${pillars}${pillarInterpret}\n\n🎯 您的本质 (日干)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 五行能量分布\n${elemDesc}\n最强之气: ${ef[strong]}\n不足之气: ${ef[need]}\n\n🔮 用神 (所需之气)\n${yongsinAdv}\n\n☀️ 今日之气 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 今日建议\n${adv}`;
   } else if (L === 'ja') {
-    reading = `📅 四柱命式 (万年暦)\n${pillars}\n\n🎯 あなたの本質 (日干)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 五行エネルギー分布\n${elemDesc}\n最も強い気: ${ef[strong]}\n不足している気: ${ef[need]}\n\n🔮 用神 (必要な気)\n${yongsinAdv}\n\n☀️ 今日の気 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 今日のアドバイス\n${adv}`;
+    reading = `📅 四柱命式 (万年暦)\n${pillars}${pillarInterpret}\n\n🎯 あなたの本質 (日干)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 五行エネルギー分布\n${elemDesc}\n最も強い気: ${ef[strong]}\n不足している気: ${ef[need]}\n\n🔮 用神 (必要な気)\n${yongsinAdv}\n\n☀️ 今日の気 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 今日のアドバイス\n${adv}`;
   } else {
-    reading = `📅 Four Pillars\n${pillars}\n\n🎯 Your Essence (Day Master)\n${saju.dayGan} (${ef[saju.dayElem]}) — ${trait}\n\n⚖️ Five Elements Distribution\n${elemDesc}\nStrongest: ${ef[strong]}\nWeakest: ${ef[need]}\n\n🔮 Beneficial Element\n${yongsinAdv}\n\n☀️ Today's Energy (${CG[il.ci]}${JJ[il.ji]})\n${rel}\n\n💡 Today's Advice\n${adv}`;
+    reading = `📅 Four Pillars\n${pillars}${pillarInterpret}\n\n🎯 Your Essence (Day Master)\n${saju.dayGan} (${ef[saju.dayElem]}) — ${trait}\n\n⚖️ Five Elements Distribution\n${elemDesc}\nStrongest: ${ef[strong]}\nWeakest: ${ef[need]}\n\n🔮 Beneficial Element\n${yongsinAdv}\n\n☀️ Today's Energy (${CG[il.ci]}${JJ[il.ji]})\n${rel}\n\n💡 Today's Advice\n${adv}`;
   }
   return { reading, ohaeng: _ohaengPct(saju.elem), need };
 }

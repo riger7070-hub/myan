@@ -3009,6 +3009,9 @@ function showSajuInput(m) {
       </div>
     </div>`;
   cw.scrollTop = 0;
+
+  // 프로필 생년월일 자동 입력
+  _autoFillBirthData(m);
 }
 
 function _readPerson(idx) {
@@ -3998,4 +4001,28 @@ async function showSajuHistory() {
       </div>
     `;
   }
+}
+
+// 프로필 생년월일 자동 입력
+function _autoFillBirthData(mode) {
+  const user = getUser();
+  if (!user || !user.birthYear) return;
+
+  setTimeout(() => {
+    // Solo 모드 또는 Duo 모드의 첫 번째 분에만 자동 입력
+    const nameInput = document.querySelector('.sj-name[data-p="1"]');
+    const yearInput = document.querySelector('.sj-year[data-p="1"]');
+    const monthInput = document.querySelector('.sj-month[data-p="1"]');
+    const dayInput = document.querySelector('.sj-day[data-p="1"]');
+    const timeSelect = document.querySelector('.sj-time[data-p="1"]');
+
+    if (nameInput && user.name) nameInput.value = user.name;
+    if (yearInput && user.birthYear) yearInput.value = user.birthYear;
+    if (monthInput && user.birthMonth) monthInput.value = user.birthMonth;
+    if (dayInput && user.birthDay) dayInput.value = user.birthDay;
+    if (timeSelect && user.birthHour) {
+      // birthHour는 한글 시진명 (예: '오시') 형태로 저장되어 있음
+      timeSelect.value = user.birthHour;
+    }
+  }, 100);
 }
