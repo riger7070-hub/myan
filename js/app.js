@@ -756,6 +756,7 @@ function _scheduleTokenRefresh() {
   _silentRefreshTimer = setTimeout(_silentTokenRefresh, delay);
 }
 
+let _gisRetryCount = 0;
 function _silentTokenRefresh() {
   // 명시적 로그아웃/비로그인 상태면 갱신하지 않음
   if (localStorage.getItem('myan_signed_out') === 'true') return;
@@ -764,21 +765,48 @@ function _silentTokenRefresh() {
   _silentRefreshActive = true;
   try {
     _ensureGisInit(); // GIS 초기화 보장
-    // Google API 로드 체크
+    // Google API 로드 체크 — 아직 안 떴으면 잠시 후 재시도 (async defer 로드 경쟁 대비)
     if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
       _silentRefreshActive = false;
+      if (_gisRetryCount++ < 10) setTimeout(_silentTokenRefresh, 3000);
       return;
     }
+    _gisRetryCount = 0;
     google.accounts.id.prompt(notification => {
       _silentRefreshActive = false;
       // 'skipped' / 'dismissed': 자동 갱신 불가 (사용자가 구글에서 로그아웃한 경우 등)
-      // 이 경우도 기존 캐시를 유지하고, 다음 채팅 요청 시 서버가 401 반환하면 로그인 유도
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      }
+      // 이 경우 기존 캐시를 유지하고, 인증 요청이 401을 받으면 _reauthExpired로 재로그인 유도
     });
   } catch(e) {
     _silentRefreshActive = false;
   }
+}
+
+// 토큰 만료로 401을 받았을 때 재로그인 유도 (One Tap → 실패 시 로그인 화면)
+let _reauthPrompting = false;
+function _reauthExpired() {
+  if (_reauthPrompting) return;
+  _reauthPrompting = true;
+  setTimeout(() => { _reauthPrompting = false; }, 8000);
+  try { showToast('세션이 만료되었습니다. 다시 로그인해 주세요.'); } catch(e) {}
+  try {
+    _ensureGisInit();
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+      google.accounts.id.prompt(notification => {
+        // One Tap이 표시되지 않으면(차단/억제) 로그인 화면으로 폴백
+        try {
+          if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
+            try { closeAdminPanel(); } catch(e) {}
+            showScreen('LOGIN');
+          }
+        } catch(e) {}
+      });
+      return;
+    }
+  } catch(e) {}
+  // GIS 사용 불가 → 로그인 화면으로 유도
+  try { closeAdminPanel(); } catch(e) {}
+  try { showScreen('LOGIN'); } catch(e) {}
 }
 
 function setGoogleIdToken(token) {
@@ -952,6 +980,11 @@ async function renderAdminUsers() {
   el.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
   try {
     const res = await fetch(EP + 'admin/users', { headers: adminAuthHeaders() });
+    if (res.status === 401) {
+      el.innerHTML = '<div class="admin-empty">세션이 만료되었습니다.<br><button onclick="_reauthExpired()" style="margin-top:12px;background:rgba(201,169,110,0.2);border:1px solid rgba(201,169,110,0.4);border-radius:8px;color:#c9a96e;padding:8px 16px;cursor:pointer">🔄 다시 로그인</button></div>';
+      _reauthExpired();
+      return;
+    }
     if (!res.ok) throw new Error('auth');
     const data = await res.json();
     const s = data.stats || {};
@@ -1040,6 +1073,11 @@ async function renderAdminPanel() {
     const res = await fetch(EP + 'admin/payments', {
       headers: adminAuthHeaders(),
     });
+    if (res.status === 401) {
+      listEl.innerHTML = '<div class="admin-empty">세션이 만료되었습니다.<br><button onclick="_reauthExpired()" style="margin-top:12px;background:rgba(201,169,110,0.2);border:1px solid rgba(201,169,110,0.4);border-radius:8px;color:#c9a96e;padding:8px 16px;cursor:pointer">🔄 다시 로그인</button></div>';
+      _reauthExpired();
+      return;
+    }
     if (!res.ok) throw new Error('auth');
     const data = await res.json();
     _adminPayments = data.results || data || [];
