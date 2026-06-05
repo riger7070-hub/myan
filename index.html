@@ -455,12 +455,9 @@
       <div class="signup-notice" id="mypageNotice"></div>
 
       <div class="mypage-actions">
-        <div style="display: flex; gap: 8px;">
-          <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)" style="flex: 1; cursor: pointer;"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
-          <button class="notif-settings-btn" id="notifSettingsBtn" style="padding: 11px 16px; background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.3); border-radius: 10px; color: var(--gold); cursor: pointer; font-size: 0.9rem;" title="알림 시간 설정">⚙️</button>
-        </div>
-        <button class="mypage-action-btn" onclick="showDetailReadingHistory()" style="background: rgba(201,169,110,0.15); border: 1px solid rgba(201,169,110,0.3);">
-          📖 상세 풀이 기록
+        <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)" style="width: 100%; cursor: pointer;"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
+        <button class="mypage-action-btn" onclick="showSajuHistory()" style="background: rgba(201,169,110,0.15); border: 1px solid rgba(201,169,110,0.3);">
+          ☯️ 내 사주 기록
         </button>
         <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>

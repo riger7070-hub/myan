@@ -175,7 +175,7 @@ async function handleSajuReading(request, env) {
       return cors(JSON.stringify({ error:{ message:'요청 크기가 너무 큽니다.' } }), 413);
     }
 
-    const { mode='solo', lang='ko', p1, p2 } = await request.json().catch(()=>({}));
+    const { mode='solo', lang='ko', p1, p2, save=false } = await request.json().catch(()=>({}));
     if (!p1 || !p1.year) return cors(JSON.stringify({ error:{ message:'생년월일이 필요합니다.' } }), 400);
 
     // 이름 새니타이즈
@@ -185,16 +185,137 @@ async function handleSajuReading(request, env) {
     const il = ilchin();
     const s1 = computeSaju(p1.year, p1.month, p1.day, p1.hour);
     if (!s1) return cors(JSON.stringify({ error:{ message:'사주 계산에 실패했습니다.' } }), 400);
+
+    let out, result;
     if (mode === 'duo' && p2 && p2.year) {
       const s2 = computeSaju(p2.year, p2.month, p2.day, p2.hour);
       if (!s2) return cors(JSON.stringify({ error:{ message:'두 번째 분 사주 계산 실패' } }), 400);
-      const out = buildLocalReadingDuo(s1, s2, lang, il, p1.name, p2.name);
-      return cors(JSON.stringify({ ok:true, mode:'duo', ...out, saju1:s1.text, saju2:s2.text, dayElem: il.o }), 200);
+      out = buildLocalReadingDuo(s1, s2, lang, il, p1.name, p2.name);
+      result = { ok:true, mode:'duo', ...out, saju1:s1.text, saju2:s2.text, dayElem: il.o };
+    } else {
+      out = buildLocalReading(s1, lang, il, p1.name);
+      result = { ok:true, mode:'solo', ...out, saju1:s1.text, dayElem: il.o };
     }
-    const out = buildLocalReading(s1, lang, il, p1.name);
-    return cors(JSON.stringify({ ok:true, mode:'solo', ...out, saju1:s1.text, dayElem: il.o }), 200);
+
+    // 로그인한 사용자이고 save=true면 기록 저장 (백그라운드)
+    if (save) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const idToken = authHeader.slice(7);
+        const email = await getEmailFromToken(idToken, env).catch(() => null);
+        if (email) {
+          // 비동기로 저장 (응답 블로킹 안 함)
+          saveSajuHistory(env, email, mode, p1, p2, out.reading, out.ohaeng, il.o).catch(() => {});
+        }
+      }
+    }
+
+    return cors(JSON.stringify(result), 200);
   } catch (e) {
     return cors(JSON.stringify({ error:{ message:'오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════
+//  사주 기록 저장 및 관리
+// ════════════════════════════
+
+// 사주 기록 저장 (비동기)
+async function saveSajuHistory(env, email, mode, p1, p2, reading, ohaeng, dayElem) {
+  try {
+    const p1Birth = `${p1.year}-${String(p1.month).padStart(2, '0')}-${String(p1.day).padStart(2, '0')}`;
+    const p2Birth = (mode === 'duo' && p2?.year)
+      ? `${p2.year}-${String(p2.month).padStart(2, '0')}-${String(p2.day).padStart(2, '0')}`
+      : null;
+
+    await env.DB.prepare(`
+      INSERT INTO saju_history (user_email, mode, p1_name, p1_birth, p1_hour, p2_name, p2_birth, p2_hour, reading, ohaeng, day_elem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      email, mode,
+      p1.name || null, p1Birth, p1.hour || null,
+      p2?.name || null, p2Birth, p2?.hour || null,
+      reading, JSON.stringify(ohaeng), dayElem
+    ).run();
+
+    // 용량 관리: 사용자당 최대 100개 기록만 유지 (오래된 것부터 삭제)
+    await cleanOldHistory(env, email, 100);
+  } catch (e) {
+    console.error('Failed to save saju history:', e);
+  }
+}
+
+// 오래된 기록 자동 삭제 (사용자당 최대 N개 유지)
+async function cleanOldHistory(env, email, maxRecords = 100) {
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT id FROM saju_history
+      WHERE user_email = ?
+      ORDER BY created_at DESC
+      LIMIT 1 OFFSET ?
+    `).bind(email, maxRecords).all();
+
+    if (results && results.length > 0) {
+      const oldestId = results[0].id;
+      await env.DB.prepare(`
+        DELETE FROM saju_history
+        WHERE user_email = ? AND id < ?
+      `).bind(email, oldestId).run();
+    }
+  } catch (e) {
+    console.error('Failed to clean old history:', e);
+  }
+}
+
+// 사주 기록 조회 (최신순, 페이징)
+async function handleGetSajuHistory(request, env) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return cors(JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
+  }
+
+  const idToken = authHeader.slice(7);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) {
+    return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT id, mode, p1_name, p1_birth, p1_hour, p2_name, p2_birth, p2_hour,
+             reading, ohaeng, day_elem, created_at
+      FROM saju_history
+      WHERE user_email = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(email, limit, offset).all();
+
+    const history = results.map(row => ({
+      id: row.id,
+      mode: row.mode,
+      p1: {
+        name: row.p1_name,
+        birth: row.p1_birth,
+        hour: row.p1_hour
+      },
+      p2: row.p2_birth ? {
+        name: row.p2_name,
+        birth: row.p2_birth,
+        hour: row.p2_hour
+      } : null,
+      reading: row.reading,
+      ohaeng: JSON.parse(row.ohaeng),
+      dayElem: row.day_elem,
+      createdAt: row.created_at
+    }));
+
+    return cors(JSON.stringify({ ok: true, history, count: history.length }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '기록 조회에 실패했습니다.' } }), 500);
   }
 }
 
@@ -420,6 +541,8 @@ export default {
       if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
       return handleSajuReading(request, env);
     }
+    // ── 사주 기록 조회 ──
+    if (path === '/api/saju-history' && method === 'GET') { await ensureDBExt(env); return handleGetSajuHistory(request, env); }
     // ── 푸시 알림 API ──
     if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
     if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }

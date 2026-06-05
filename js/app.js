@@ -3040,9 +3040,18 @@ async function submitSajuInput(m) {
   const btn = document.getElementById('sjSubmitBtn');
   if (btn) { btn.disabled = true; btn.textContent = '계산 중...'; }
   try {
+    const headers = {'Content-Type':'application/json'};
+    const token = getGoogleIdToken();
+    const body = { mode:m, lang, p1, p2 };
+
+    // 로그인한 사용자는 기록 저장
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      body.save = true;
+    }
+
     const res = await fetch(EP + 'saju-reading', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ mode:m, lang, p1, p2 })
+      method:'POST', headers, body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!data.ok) {
@@ -3893,3 +3902,98 @@ function renderUngiPuddingCard(ohaeng) {
   }
 })();
 
+
+// ════════════════════════════════════════════
+//  사주 기록 조회 UI
+// ════════════════════════════════════════════
+async function showSajuHistory() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast('로그인이 필요합니다.');
+    return;
+  }
+
+  // 모달 생성
+  const modal = document.createElement('div');
+  modal.id = 'saju-history-modal';
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8); z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; animation: fadeIn 0.3s ease;
+  `;
+
+  modal.innerHTML = `
+    <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ 내 사주 기록</div>
+        <button onclick="document.getElementById('saju-history-modal').remove()" style="background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; padding: 0; width: 32px; height: 32px;">×</button>
+      </div>
+      <div id="saju-history-content" style="flex: 1; overflow-y: auto; padding: 20px;">
+        <div style="text-align: center; padding: 40px; color: var(--text-dim);">
+          <div style="font-size: 2rem; margin-bottom: 12px;">⏳</div>
+          <div>기록을 불러오는 중...</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // 기록 조회
+  try {
+    const res = await fetch(EP + 'api/saju-history?limit=20', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+
+    const content = document.getElementById('saju-history-content');
+    if (!data.ok || !data.history || data.history.length === 0) {
+      content.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
+          <div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;">📜</div>
+          <div style="font-size: 1.1rem; margin-bottom: 8px;">아직 기록이 없습니다</div>
+          <div style="font-size: 0.9rem; opacity: 0.7;">사주 풀이를 받으면 자동으로 저장됩니다</div>
+        </div>
+      `;
+      return;
+    }
+
+    // 기록 렌더링
+    content.innerHTML = data.history.map(h => {
+      const date = new Date(h.createdAt * 1000);
+      const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      
+      const modeIcon = h.mode === 'duo' ? '💞' : '☯';
+      const modeText = h.mode === 'duo' ? '우리의 조화' : '나만의 리딩';
+      const names = h.mode === 'duo' 
+        ? `${h.p1.name || '첫 번째 분'} & ${h.p2?.name || '두 번째 분'}`
+        : (h.p1.name || '나');
+
+      return `
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+            <div>
+              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${modeIcon} ${modeText}</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">${names}</div>
+            </div>
+            <div style="text-align: right; font-size: 0.75rem; color: var(--text-dim);">
+              <div>${dateStr}</div>
+              <div>${timeStr}</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.8;">${h.reading.split('\n').slice(0, 2).join('\n')}</div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    const content = document.getElementById('saju-history-content');
+    content.innerHTML = `
+      <div style="text-align: center; padding: 60px 20px; color: #e05a4a;">
+        <div style="font-size: 2rem; margin-bottom: 12px;">⚠️</div>
+        <div>기록을 불러오는데 실패했습니다</div>
+      </div>
+    `;
+  }
+}
