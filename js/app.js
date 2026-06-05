@@ -3086,15 +3086,17 @@ function renderSajuResult(data, m) {
   const today = new Date().toISOString().slice(0,10);
   const ohaeng = data.dayElem || '土';
   const readingHtml = (data.reading||'').split('\n').map(line =>
-    `<div style="margin:6px 0;font-size:0.9rem;line-height:1.6">${_escHtml(line)}</div>`
+    `<div style="margin:8px 0;font-size:0.95rem;line-height:1.8">${_escHtml(line)}</div>`
   ).join('');
   cw.innerHTML = `
-    <div style="max-width:520px;margin:0 auto;padding:8px 4px">
-      <div style="text-align:center;font-size:1.1rem;color:var(--gold);letter-spacing:1px;margin-bottom:4px">✨ 간단 풀이</div>
-      ${_ohaengGaugeHtml(data.ohaeng||{})}
-      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:16px">${readingHtml}</div>
-      <button onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:14px">🔍 상세 풀이 보기 (토큰 2)</button>
-      <button onclick="showSajuInput('${m}')" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer">다시 입력</button>
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
+      <div style="max-width:640px;width:100%;margin:0 auto">
+        <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:20px">✨ 간단 풀이</div>
+        ${_ohaengGaugeHtml(data.ohaeng||{})}
+        <div style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px">${readingHtml}</div>
+        <button onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:18px;padding:16px;font-size:1rem">🔍 상세 풀이 보기 (토큰 2)</button>
+        <button onclick="showSajuInput('${m}')" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem">다시 입력</button>
+      </div>
     </div>`;
   cw.scrollTop = 0;
 }

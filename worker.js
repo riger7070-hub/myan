@@ -97,6 +97,24 @@ const _ELEM_FR = { ko:{木:'목(나무)',火:'화(불)',土:'토(흙)',金:'금(
 const _GEN  = {木:'火',火:'土',土:'金',金:'水',水:'木'};   // 상생
 const _CTRL = {木:'土',土:'水',水:'火',火:'金',金:'木'};   // 상극
 
+// 용신(用神) - 필요한 기운에 따른 추천 행동
+const _YONGSIN_ADVICE = {
+  ko: {
+    木: '나무 기운이 부족합니다. 아침 산책, 식물 키우기, 독서와 학습이 도움됩니다. 동쪽 방향이 길합니다.',
+    火: '불 기운이 부족합니다. 사람들과의 교류, 운동, 밝은 색상 옷이 도움됩니다. 남쪽 방향이 길합니다.',
+    土: '흙 기운이 부족합니다. 규칙적인 생활, 정리정돈, 명상이 도움됩니다. 중앙이나 남서쪽 방향이 길합니다.',
+    金: '쇠 기운이 부족합니다. 계획 세우기, 정리, 금속 액세서리 착용이 도움됩니다. 서쪽 방향이 길합니다.',
+    水: '물 기운이 부족합니다. 충분한 수면과 휴식, 물 자주 마시기, 사색 시간이 도움됩니다. 북쪽 방향이 길합니다.'
+  },
+  en: {
+    木: 'Wood energy is lacking. Morning walks, growing plants, reading help. East direction is favorable.',
+    火: 'Fire energy is lacking. Social interactions, exercise, bright colors help. South direction is favorable.',
+    土: 'Earth energy is lacking. Regular routines, organizing, meditation help. Center or southwest is favorable.',
+    金: 'Metal energy is lacking. Planning, organizing, metal accessories help. West direction is favorable.',
+    水: 'Water energy is lacking. Rest, hydration, reflection time help. North direction is favorable.'
+  }
+}
+
 function _ohaengPct(elem) {
   const order = ['木','火','土','金','水'];
   const total = order.reduce((a,k)=>a+(elem[k]||0),0) || 1;
@@ -127,9 +145,19 @@ function buildLocalReading(saju, lang, il, name) {
   const pillars = `年 ${saju.yp} / 月 ${saju.mp} / 日 ${saju.dp} / 時 ${saju.hp || (isKo?'미상':'unknown')}`;
   const rel = _todayRel(il.o, saju.dayElem, ef, isKo);
   const adv = _OHAENG_ADVICE[L][need];
+
+  // 오행 비율 설명
+  const ohaengPct = _ohaengPct(saju.elem);
+  const elemDesc = isKo
+    ? `목${ohaengPct['木']}% 화${ohaengPct['火']}% 토${ohaengPct['土']}% 금${ohaengPct['金']}% 수${ohaengPct['水']}%`
+    : `Wood${ohaengPct['木']}% Fire${ohaengPct['火']}% Earth${ohaengPct['土']}% Metal${ohaengPct['金']}% Water${ohaengPct['水']}%`;
+
+  // 용신(필요한 기운) 조언
+  const yongsinAdv = _YONGSIN_ADVICE[L][need];
+
   const reading = isKo
-    ? `• 사주 원국: ${pillars}\n• 일간(본질): ${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n• 오행 분포: 강한 기운 ${ef[strong]} · 부족한 기운 ${ef[need]}\n• 오늘(${CG[il.ci]}${JJ[il.ji]}日): ${rel}\n• 오늘의 조언: ${adv}`
-    : `• Pillars: ${pillars}\n• Day Master: ${saju.dayGan} (${ef[saju.dayElem]}) — ${trait}\n• Elements: strong ${ef[strong]} · lacking ${ef[need]}\n• Today (${CG[il.ci]}${JJ[il.ji]}): ${rel}\n• Advice: ${adv}`;
+    ? `📅 사주 원국 (만세력)\n${pillars}\n\n🎯 당신의 본질 (일간)\n${saju.dayGan}${ef[saju.dayElem]} — ${trait}\n\n⚖️ 오행 에너지 분포\n${elemDesc}\n가장 강한 기운: ${ef[strong]}\n부족한 기운: ${ef[need]}\n\n🔮 용신 (필요한 기운)\n${yongsinAdv}\n\n☀️ 오늘의 기운 (${CG[il.ci]}${JJ[il.ji]}日)\n${rel}\n\n💡 오늘의 조언\n${adv}`
+    : `📅 Four Pillars\n${pillars}\n\n🎯 Your Essence (Day Master)\n${saju.dayGan} (${ef[saju.dayElem]}) — ${trait}\n\n⚖️ Five Elements Distribution\n${elemDesc}\nStrongest: ${ef[strong]}\nWeakest: ${ef[need]}\n\n🔮 Beneficial Element\n${yongsinAdv}\n\n☀️ Today's Energy (${CG[il.ci]}${JJ[il.ji]})\n${rel}\n\n💡 Today's Advice\n${adv}`;
   return { reading, ohaeng: _ohaengPct(saju.elem), need };
 }
 
@@ -154,9 +182,16 @@ function buildLocalReadingDuo(s1, s2, lang, il, n1, n2) {
   // 합산 오행
   const merged = {木:0,火:0,土:0,金:0,水:0};
   ['木','火','土','金','水'].forEach(k=>{ merged[k]=(s1.elem[k]||0)+(s2.elem[k]||0); });
+
+  // 합산 오행 비율
+  const ohaengPct = _ohaengPct(merged);
+  const elemDesc = isKo
+    ? `목${ohaengPct['木']}% 화${ohaengPct['火']}% 토${ohaengPct['土']}% 금${ohaengPct['金']}% 수${ohaengPct['水']}%`
+    : `Wood${ohaengPct['木']}% Fire${ohaengPct['火']}% Earth${ohaengPct['土']}% Metal${ohaengPct['金']}% Water${ohaengPct['水']}%`;
+
   const reading = isKo
-    ? `• ${A} 일간: ${s1.dayGan}${ef[m1]} / ${B} 일간: ${s2.dayGan}${ef[m2]}\n• 두 기운의 관계: ${rel}\n• 궁합: ${comp}\n• 오늘(${CG[il.ci]}${JJ[il.ji]}日)은 ${ef[il.o]} 기운의 날 — 함께 ${_OHAENG_ADVICE.ko[il.o].replace(/\s*[🌱🔥🏔️⚙️🌊]\s*$/,'')}면 좋아요.`
-    : `• ${A} Day Master: ${s1.dayGan} (${ef[m1]}) / ${B}: ${s2.dayGan} (${ef[m2]})\n• Relationship: ${rel}\n• Compatibility: ${comp}\n• Today (${CG[il.ci]}${JJ[il.ji]}) carries ${ef[il.o]} energy — a good day to ${_OHAENG_ADVICE.en[il.o].replace(/\s*[🌱🔥🏔️⚙️🌊]\s*$/,'').toLowerCase()} together.`;
+    ? `👥 두 분의 일간 (본질)\n${A}: ${s1.dayGan}${ef[m1]}\n${B}: ${s2.dayGan}${ef[m2]}\n\n💞 두 기운의 관계\n${rel}\n\n🤝 궁합\n${comp}\n\n⚖️ 합산 오행 분포\n${elemDesc}\n\n☀️ 오늘의 기운 (${CG[il.ci]}${JJ[il.ji]}日)\n오늘은 ${ef[il.o]} 기운의 날입니다.\n함께 ${_OHAENG_ADVICE.ko[il.o].replace(/\s*[🌱🔥🏔️⚙️🌊]\s*$/,'')}면 좋아요.`
+    : `👥 Your Essences\n${A}: ${s1.dayGan} (${ef[m1]})\n${B}: ${s2.dayGan} (${ef[m2]})\n\n💞 Relationship\n${rel}\n\n🤝 Compatibility\n${comp}\n\n⚖️ Combined Elements\n${elemDesc}\n\n☀️ Today's Energy (${CG[il.ci]}${JJ[il.ji]})\nToday carries ${ef[il.o]} energy.\nA good day to ${_OHAENG_ADVICE.en[il.o].replace(/\s*[🌱🔥🏔️⚙️🌊]\s*$/,'').toLowerCase()} together.`;
   return { reading, ohaeng: _ohaengPct(merged), need: need1 };
 }
 
