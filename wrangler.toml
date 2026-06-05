@@ -5,6 +5,9 @@ compatibility_date = "2024-11-01"
 [assets]
 directory = "./"
 binding = "ASSETS"
+# 워커를 먼저 실행 → index.html에 보안 헤더(COOP 등)+ENV 주입이 실제로 적용되도록.
+# (미설정 시 정적 자산이 워커를 우회해 직접 서빙되어 COOP가 누락됨 → Google 로그인 팝업 차단)
+run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"

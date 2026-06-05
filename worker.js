@@ -539,13 +539,18 @@ function _sessionSecret(env) {
   return env.SESSION_SECRET || env.ADMIN_SECRET || env.GEMINI_API_KEY || 'myan-dev-secret';
 }
 function _b64urlFromObj(obj) {
-  return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 function _objFromB64url(str) {
   let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
   while (b64.length % 4) b64 += '=';
-  return JSON.parse(decodeURIComponent(escape(atob(b64))));
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 async function createSessionToken(email, env) {
   const header  = _b64urlFromObj({ alg: 'HS256', typ: 'JWT' });
