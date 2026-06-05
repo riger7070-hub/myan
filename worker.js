@@ -1066,14 +1066,14 @@ function addSecurityHeaders(response) {
     "default-src 'self'",
     // 구글 로그인 + 토스페이먼츠 + QR 라이브러리 스크립트
     "script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdnjs.cloudflare.com https://js.tosspayments.com",
-    // 인라인 스타일 + 구글 폰트
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    // 인라인 스타일 + 구글 폰트 + GIS(구글 로그인) 스타일시트(gsi/style)
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
     // 구글 폰트 파일
     "font-src 'self' https://fonts.gstatic.com",
     // 이미지: self, data URI
     "img-src 'self' data: https:",
-    // API 통신 허용 출처 (토스페이먼츠 API 추가)
-    "connect-src 'self' https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.tosspayments.com https://script.google.com",
+    // API 통신 허용 출처 (토스페이먼츠 API + GIS gsi 엔드포인트 추가)
+    "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.tosspayments.com https://script.google.com",
     // 구글 로그인 팝업 + 토스 결제 페이지 iframe 허용
     "frame-src https://accounts.google.com https://tosspayments.com https://*.tosspayments.com",
   ].join('; '));
