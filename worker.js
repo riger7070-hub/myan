@@ -160,11 +160,28 @@ function buildLocalReadingDuo(s1, s2, lang, il, n1, n2) {
   return { reading, ohaeng: _ohaengPct(merged), need: need1 };
 }
 
+// 이름 새니타이즈 (XSS 방지, 길이 제한)
+function sanitizeName(name) {
+  if (!name) return '';
+  return String(name).trim().replace(/[<>'"&]/g, '').slice(0, 50);
+}
+
 // 무료 간단 풀이 엔드포인트 (Gemini 미호출 · 토큰 미차감)
 async function handleSajuReading(request, env) {
   try {
+    // Body 크기 제한 (10KB)
+    const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
+    if (contentLength > 10240) {
+      return cors(JSON.stringify({ error:{ message:'요청 크기가 너무 큽니다.' } }), 413);
+    }
+
     const { mode='solo', lang='ko', p1, p2 } = await request.json().catch(()=>({}));
     if (!p1 || !p1.year) return cors(JSON.stringify({ error:{ message:'생년월일이 필요합니다.' } }), 400);
+
+    // 이름 새니타이즈
+    if (p1.name) p1.name = sanitizeName(p1.name);
+    if (p2?.name) p2.name = sanitizeName(p2.name);
+
     const il = ilchin();
     const s1 = computeSaju(p1.year, p1.month, p1.day, p1.hour);
     if (!s1) return cors(JSON.stringify({ error:{ message:'사주 계산에 실패했습니다.' } }), 400);
@@ -397,7 +414,12 @@ export default {
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
-    if (path === '/saju-reading' && method === 'POST') return handleSajuReading(request, env);
+    if (path === '/saju-reading' && method === 'POST') {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const { success } = await env.RL_API.limit({ key: `saju:${ip}` });
+      if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
+      return handleSajuReading(request, env);
+    }
     // ── 푸시 알림 API ──
     if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
     if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }

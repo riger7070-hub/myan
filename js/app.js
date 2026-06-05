@@ -2977,12 +2977,13 @@ let _lastSaju = null; // {mode, p1, p2, dayElem}
 
 function _personFieldsHtml(idx, title) {
   const opts = _SIJI_OPTIONS.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  const currentYear = new Date().getFullYear();
   return `
     <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
       ${title ? `<div style="font-size:0.85rem;color:var(--gold);margin-bottom:10px;letter-spacing:1px">${title}</div>` : ''}
-      <input class="fif-input sj-name" data-p="${idx}" type="text" placeholder="이름 (선택)" style="width:100%;margin-bottom:8px;box-sizing:border-box">
+      <input class="fif-input sj-name" data-p="${idx}" type="text" placeholder="이름 (선택)" maxlength="50" style="width:100%;margin-bottom:8px;box-sizing:border-box">
       <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input class="fif-input sj-year" data-p="${idx}" type="number" placeholder="1990" min="1920" max="2025" inputmode="numeric" style="flex:1.6;box-sizing:border-box">
+        <input class="fif-input sj-year" data-p="${idx}" type="number" placeholder="1990" min="1920" max="${currentYear}" inputmode="numeric" style="flex:1.6;box-sizing:border-box">
         <input class="fif-input sj-month" data-p="${idx}" type="number" placeholder="월" min="1" max="12" inputmode="numeric" style="flex:1;box-sizing:border-box">
         <input class="fif-input sj-day" data-p="${idx}" type="number" placeholder="일" min="1" max="31" inputmode="numeric" style="flex:1;box-sizing:border-box">
       </div>
@@ -3042,12 +3043,15 @@ async function submitSajuInput(m) {
       body: JSON.stringify({ mode:m, lang, p1, p2 })
     });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error?.message || 'fail');
+    if (!data.ok) {
+      const errMsg = data.error?.message || '풀이 생성에 실패했습니다.';
+      throw new Error(errMsg);
+    }
     _lastSaju = { mode:m, p1, p2, dayElem: data.dayElem };
     renderSajuResult(data, m);
   } catch(e) {
     if (btn) { btn.disabled=false; btn.textContent='간단 풀이 보기 ›'; }
-    showErr('풀이 생성에 실패했습니다. 다시 시도해 주세요.');
+    showErr(e.message || '풀이 생성에 실패했습니다. 다시 시도해 주세요.');
   }
 }
 
