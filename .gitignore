@@ -19,9 +19,8 @@ node_modules/
 # 빌드 출력
 dist/
 
-# Lock 파일
+# Lock 파일 (package-lock.json은 배포 환경에 필요하므로 포함)
 *.lock
-package-lock.json
 
 # 아카이브 (git에 불필요)
 myan-icons.zip
