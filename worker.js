@@ -273,6 +273,7 @@ export default {
     if (path === '/api/token-history' && method === 'GET') { await ensureDBExt(env); return handleTokenHistory(request, env); }
     // ── 로그인 기록 ──
     if (path === '/auth/login' && method === 'POST') { await ensureDBExt(env); return handleAuthLogin(request, env); }
+    if (path === '/admin/users' && method === 'GET') { await ensureDBExt(env); return handleAdminUsers(request, env); }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
@@ -604,6 +605,42 @@ async function handleAuthLogin(request, env) {
   }
 
   return cors(JSON.stringify({ ok: true }), 200);
+}
+
+// 관리자: 회원/로그인 기록 조회 (통계 + 회원 목록 + 최근 접속 로그)
+async function handleAdminUsers(request, env) {
+  if (!await isAdmin(request, env)) return cors(JSON.stringify({ error: { message: '관리자 권한이 필요합니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const now    = Math.floor(Date.now() / 1000);
+  const dayAgo  = now - 86400;
+  const weekAgo = now - 7 * 86400;
+
+  const total       = await env.DB.prepare('SELECT COUNT(*) AS c FROM users').first().catch(() => null);
+  const dau         = await env.DB.prepare('SELECT COUNT(*) AS c FROM users WHERE last_login_at >= ?').bind(dayAgo).first().catch(() => null);
+  const wau         = await env.DB.prepare('SELECT COUNT(*) AS c FROM users WHERE last_login_at >= ?').bind(weekAgo).first().catch(() => null);
+  const newToday    = await env.DB.prepare('SELECT COUNT(*) AS c FROM users WHERE created_at >= ?').bind(dayAgo).first().catch(() => null);
+  const totalLogins = await env.DB.prepare('SELECT COALESCE(SUM(login_count), 0) AS c FROM users').first().catch(() => null);
+
+  const users = await env.DB.prepare(
+    'SELECT email, name, locale, created_at, last_login_at, login_count FROM users ORDER BY last_login_at DESC LIMIT 200'
+  ).all().catch(() => ({ results: [] }));
+
+  const logins = await env.DB.prepare(
+    'SELECT email, at, ip, country, user_agent FROM login_events ORDER BY at DESC LIMIT 100'
+  ).all().catch(() => ({ results: [] }));
+
+  return cors(JSON.stringify({
+    stats: {
+      totalUsers:  total?.c || 0,
+      dau:         dau?.c || 0,
+      wau:         wau?.c || 0,
+      newToday:    newToday?.c || 0,
+      totalLogins: totalLogins?.c || 0,
+    },
+    users:  users.results || [],
+    logins: logins.results || [],
+  }));
 }
 
 async function handleUserTokens(request, env) {

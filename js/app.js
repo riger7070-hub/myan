@@ -925,14 +925,79 @@ function closeAdminPanel() {
 
 function setAdminTab(tab) {
   _adminTab = tab;
-  ['pending','approved','all','grant'].forEach(t => {
+  ['pending','approved','all','grant','users'].forEach(t => {
     document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1))
       .classList.toggle('on', t === tab);
   });
   const isGrant = tab === 'grant';
-  document.getElementById('adminPaymentList').style.display = isGrant ? 'none' : '';
+  const isUsers = tab === 'users';
+  const isList  = !isGrant && !isUsers;
+  document.getElementById('adminPaymentList').style.display = isList ? '' : 'none';
   document.getElementById('adminGrantPanel').style.display  = isGrant ? 'block' : 'none';
-  if (!isGrant) _renderAdminList();
+  document.getElementById('adminUsersPanel').style.display  = isUsers ? 'block' : 'none';
+  if (isList) _renderAdminList();
+  if (isUsers) renderAdminUsers();
+}
+
+// HTML 이스케이프 (관리자 화면에 사용자 입력 표시 시 XSS 방지)
+function _escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function renderAdminUsers() {
+  const el = document.getElementById('adminUsersPanel');
+  if (!el) return;
+  el.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+  try {
+    const res = await fetch(EP + 'admin/users', { headers: adminAuthHeaders() });
+    if (!res.ok) throw new Error('auth');
+    const data = await res.json();
+    const s = data.stats || {};
+    const fmt = (ts) => ts
+      ? new Date(ts * 1000).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : '-';
+
+    const statCards = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(82px,1fr));gap:8px;margin-bottom:16px">
+        ${[['전체 회원', s.totalUsers], ['오늘 접속', s.dau], ['7일 활성', s.wau], ['오늘 가입', s.newToday], ['누적 로그인', s.totalLogins]]
+          .map(([label, val]) => `<div style="background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.15);border-radius:8px;padding:10px 6px;text-align:center"><div style="font-size:1.3rem;font-weight:700;color:#c9a96e">${val ?? 0}</div><div style="font-size:0.66rem;color:#999;margin-top:2px">${label}</div></div>`).join('')}
+      </div>`;
+
+    const users = data.users || [];
+    const userRows = users.length ? users.map(u => `
+      <div style="padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="min-width:0">
+            <div style="font-weight:600;font-size:0.85rem;color:#e8dcc8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.name ? _escHtml(u.name) : '(이름 없음)'}</div>
+            <div style="font-size:0.72rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(u.email)}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:0.72rem;color:#c9a96e">${u.login_count ?? 0}회</div>
+            <div style="font-size:0.68rem;color:#777">${fmt(u.last_login_at)}</div>
+          </div>
+        </div>
+      </div>`).join('') : '<div class="admin-empty">회원이 없습니다</div>';
+
+    const logins = data.logins || [];
+    const loginRows = logins.length ? logins.map(l => `
+      <div style="padding:8px 12px;background:rgba(255,255,255,0.02);border-radius:6px;margin-bottom:4px;font-size:0.72rem">
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(l.email)}</span>
+          <span style="color:#777;flex-shrink:0">${fmt(l.at)}</span>
+        </div>
+        <div style="color:#666;margin-top:2px">${l.country ? _escHtml(l.country) + ' · ' : ''}${_escHtml(l.ip || '-')}</div>
+      </div>`).join('') : '<div class="admin-empty">접속 기록이 없습니다</div>';
+
+    el.innerHTML = statCards
+      + '<div style="font-size:0.75rem;color:#999;margin:6px 0 8px;letter-spacing:1px">회원 목록 (최근 접속순)</div>'
+      + userRows
+      + '<div style="font-size:0.75rem;color:#999;margin:18px 0 8px;letter-spacing:1px">최근 로그인 기록</div>'
+      + loginRows;
+  } catch (e) {
+    el.innerHTML = '<div class="admin-empty">불러올 수 없습니다 (권한 확인)</div>';
+  }
 }
 
 async function adminGrantTokens() {
