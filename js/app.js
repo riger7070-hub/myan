@@ -103,6 +103,7 @@ async function callGemini(contents) {
   if (res.status === 401) {
     _googleIdToken = ''; _googleIdTokenExp = 0;
     localStorage.removeItem('myan_id_token');
+    localStorage.removeItem('myan_session');
     throw { refund: false, noLogin: true };
   }
 
@@ -752,6 +753,8 @@ function _scheduleTokenRefresh() {
   if (!_googleIdTokenExp) return;
   // 만료 10분 전에 silent refresh 실행 (50분 후)
   const delay = _googleIdTokenExp - Date.now() - 10 * 60 * 1000;
+  // 자체 세션 토큰(30일 등 장기)은 주기 갱신 불필요 + setTimeout 오버플로(>24.8일) 방지
+  if (delay > 2 * 60 * 60 * 1000) return;
   if (delay <= 0) { _silentTokenRefresh(); return; }
   _silentRefreshTimer = setTimeout(_silentTokenRefresh, delay);
 }
@@ -820,12 +823,42 @@ function setGoogleIdToken(token) {
     _scheduleTokenRefresh(); // 만료 10분 전 자동 재발급 예약
   } catch {}
 }
+
+// 자체 세션 토큰 저장 (Google 토큰 대체, 30일 장기)
+function setSessionToken(token, expSec) {
+  _googleIdToken    = token;
+  _googleIdTokenExp = expSec ? expSec * 1000 : 0;
+  try {
+    localStorage.setItem('myan_session', token);
+    localStorage.removeItem('myan_id_token'); // 구 Google 토큰 캐시 제거
+  } catch {}
+  // 세션은 장기 → 주기 refresh 타이머 해제 (만료 시엔 401 → _reauthExpired로 재로그인)
+  if (_silentRefreshTimer) { clearTimeout(_silentRefreshTimer); _silentRefreshTimer = null; }
+}
+
+// Google ID 토큰을 서버에서 자체 세션 토큰으로 교환 (로그인 직후 1회)
+async function _exchangeSession(googleCredential) {
+  try {
+    const res = await fetch(EP + 'auth/login', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + googleCredential },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.session) { setSessionToken(data.session, data.exp); return true; }
+    }
+  } catch (e) {}
+  // 폴백: 세션 발급 실패 시 Google 토큰을 그대로 사용 (서버가 둘 다 수용)
+  return false;
+}
+
 function getGoogleIdToken() {
-  if (!_googleIdToken) _googleIdToken = localStorage.getItem('myan_id_token') || '';
+  if (!_googleIdToken) _googleIdToken = localStorage.getItem('myan_session') || localStorage.getItem('myan_id_token') || '';
   if (!_googleIdToken) return '';
   if (_googleIdTokenExp && Date.now() > _googleIdTokenExp - 5*60*1000) {
     _googleIdToken = ''; _googleIdTokenExp = 0;
     localStorage.removeItem('myan_id_token');
+    localStorage.removeItem('myan_session');
     return '';
   }
   // exp를 한 번 더 파싱 (페이지 새로고침 직후)
@@ -836,7 +869,7 @@ function getGoogleIdToken() {
       const payload = JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/') + pad));
       _googleIdTokenExp = (payload.exp || 0) * 1000;
       if (Date.now() > _googleIdTokenExp - 5*60*1000) {
-        _googleIdToken = ''; localStorage.removeItem('myan_id_token'); return '';
+        _googleIdToken = ''; localStorage.removeItem('myan_id_token'); localStorage.removeItem('myan_session'); return '';
       }
       _scheduleTokenRefresh(); // 새로고침 후 복원된 토큰에도 타이머 예약
     } catch {}
@@ -1301,13 +1334,9 @@ function handleGoogleCredential(response) {
     updateUserBtn(profile);
     refreshTokens();  // 서버 토큰 잔액 동기화
 
-    // 로그인 기록 (users upsert + login_events) — 로그인 직후 1회, 실패해도 무시
-    try {
-      fetch(EP + 'auth/login', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + response.credential }
-      }).catch(() => {});
-    } catch {}
+    // Google 토큰 → 자체 세션 토큰 교환 (로그인 기록 + 30일 세션 발급, 백그라운드)
+    // 성공 시 setSessionToken이 myan_session으로 교체 → 이후 요청은 로컬 검증
+    _exchangeSession(response.credential);
 
     // 관리자 배지 확인
     _checkAdminBadge();
@@ -1700,6 +1729,7 @@ function _signOut() {
   // 다음 로그인 시 기존 프로필을 그대로 복원하기 위함
   localStorage.removeItem('myan_logged_in');
   localStorage.removeItem('myan_id_token');
+  localStorage.removeItem('myan_session');
   // 채팅 캐시 제거 → 재로그인 시 이전 대화가 다시 뜨는 현상 방지
   localStorage.removeItem('myan_chat_html');
   localStorage.removeItem('myan_chat_hist');
@@ -1758,7 +1788,7 @@ async function _withdrawAccount() {
 
   // ③ 서버 삭제 성공 후에만 로컬 데이터 전체 정리
   [
-    'myan_logged_in', 'myan_user', 'myan_id_token',
+    'myan_logged_in', 'myan_user', 'myan_id_token', 'myan_session',
     'myan_ohaeng', 'myan_chat_html', 'myan_chat_hist', 'myan_chat_mode',
     'myan_cal', 'myan_adm_key', 'myan_notif_enabled',
     'myan_pending_pay_id', 'myan_signed_out',

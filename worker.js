@@ -530,11 +530,56 @@ async function handleGeminiChat(request, env) {
 //  토큰 핸들러 & 헬퍼 함수
 // ════════════════════════════
 
+// ── 자체 세션 토큰 (HS256 JWT, 30일) ──
+// Google ID 토큰은 1시간 만료라 매 요청 검증/재로그인 부담이 큼.
+// 로그인 시 1회 Google 검증 후 자체 세션을 발급하고, 이후 요청은 로컬 HMAC 검증(네트워크 0회).
+const SESSION_TTL = 30 * 24 * 60 * 60; // 30일(초)
+
+function _sessionSecret(env) {
+  return env.SESSION_SECRET || env.ADMIN_SECRET || env.GEMINI_API_KEY || 'myan-dev-secret';
+}
+function _b64urlFromObj(obj) {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function _objFromB64url(str) {
+  let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  return JSON.parse(decodeURIComponent(escape(atob(b64))));
+}
+async function createSessionToken(email, env) {
+  const header  = _b64urlFromObj({ alg: 'HS256', typ: 'JWT' });
+  const now     = Math.floor(Date.now() / 1000);
+  const payload = _b64urlFromObj({ email, iat: now, exp: now + SESSION_TTL, t: 's' });
+  const sig     = await hmacSign(_sessionSecret(env), `${header}.${payload}`);
+  return `${header}.${payload}.${sig}`;
+}
+async function verifySessionToken(token, env) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  let header;
+  try { header = _objFromB64url(parts[0]); } catch { return null; }
+  if (!header || header.alg !== 'HS256') return null;
+  if (!await hmacVerify(_sessionSecret(env), `${parts[0]}.${parts[1]}`, parts[2])) return null;
+  let payload;
+  try { payload = _objFromB64url(parts[1]); } catch { return null; }
+  if (!payload || !payload.email) return null;
+  if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) return null;
+  return payload.email;
+}
+
 async function getEmailFromToken(idToken, env) {
   try {
     // 1) 만료일 선행 체크 (빠른 거부 — 네트워크 절약)
     const parts = idToken.split('.');
     if (parts.length !== 3) return null;
+
+    // 1-a) 자체 세션 토큰(HS256)이면 로컬 HMAC 검증으로 즉시 처리 (Google 호출 없음)
+    try {
+      const header = _objFromB64url(parts[0]);
+      if (header && header.alg === 'HS256') return await verifySessionToken(idToken, env);
+    } catch {}
+
     let b64 = parts[1].replace(/-/g,'+').replace(/_/g,'/');
     while (b64.length % 4) b64 += '=';
     const payload = JSON.parse(atob(b64));
@@ -558,8 +603,6 @@ async function getEmailFromToken(idToken, env) {
 async function handleAuthLogin(request, env) {
   const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
   if (!idToken) return cors(JSON.stringify({ error: '로그인이 필요합니다.' }), 401);
-  if (!env.DB) return cors(JSON.stringify({ ok: false }), 200);
-
   // Google tokeninfo로 서명 검증 + 프로필(name/picture/locale) 추출
   let info;
   try {
@@ -581,30 +624,37 @@ async function handleAuthLogin(request, env) {
   const country = request.cf?.country || null;
   const ua      = request.headers.get('User-Agent') || null;
 
-  try {
-    // users upsert: 최초면 생성(가입), 재로그인이면 last_login/count 갱신 + 프로필 최신화
-    await env.DB.prepare(
-      `INSERT INTO users (email, name, picture, locale, login_count)
-       VALUES (?, ?, ?, ?, 1)
-       ON CONFLICT(email) DO UPDATE SET
-         name = excluded.name,
-         picture = excluded.picture,
-         locale = excluded.locale,
-         last_login_at = unixepoch(),
-         login_count = login_count + 1`
-    ).bind(email, name, picture, locale).run();
+  // 로그인 기록 (DB 있을 때만, 실패해도 세션 발급은 진행)
+  if (env.DB) {
+    try {
+      // users upsert: 최초면 생성(가입), 재로그인이면 last_login/count 갱신 + 프로필 최신화
+      await env.DB.prepare(
+        `INSERT INTO users (email, name, picture, locale, login_count)
+         VALUES (?, ?, ?, ?, 1)
+         ON CONFLICT(email) DO UPDATE SET
+           name = excluded.name,
+           picture = excluded.picture,
+           locale = excluded.locale,
+           last_login_at = unixepoch(),
+           login_count = login_count + 1`
+      ).bind(email, name, picture, locale).run();
 
-    // 감사 로그 (append-only)
-    await env.DB.prepare(
-      `INSERT INTO login_events (id, email, ip, country, user_agent) VALUES (?, ?, ?, ?, ?)`
-    ).bind(crypto.randomUUID(), email, ip, country, ua).run();
-  } catch (e) {
-    // 로깅 실패가 로그인 자체를 막지 않도록 조용히 무시
-    console.error('[AUTH LOGIN]', e);
-    return cors(JSON.stringify({ ok: false }), 200);
+      // 감사 로그 (append-only)
+      await env.DB.prepare(
+        `INSERT INTO login_events (id, email, ip, country, user_agent) VALUES (?, ?, ?, ?, ?)`
+      ).bind(crypto.randomUUID(), email, ip, country, ua).run();
+    } catch (e) {
+      console.error('[AUTH LOGIN]', e); // 로깅 실패는 무시
+    }
   }
 
-  return cors(JSON.stringify({ ok: true }), 200);
+  // 자체 세션 토큰 발급 (이후 요청은 이 토큰으로 로컬 검증)
+  const session = await createSessionToken(email, env);
+  return cors(JSON.stringify({
+    ok: true,
+    session,
+    exp: Math.floor(Date.now() / 1000) + SESSION_TTL,
+  }), 200);
 }
 
 // 관리자: 회원/로그인 기록 조회 (통계 + 회원 목록 + 최근 접속 로그)
