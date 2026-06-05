@@ -785,29 +785,14 @@ function _silentTokenRefresh() {
   }
 }
 
-// 토큰 만료로 401을 받았을 때 재로그인 유도 (One Tap → 실패 시 로그인 화면)
+// 토큰/세션 만료로 401을 받았을 때 재로그인 유도 → 로그인 화면(구글 버튼)으로 안내.
+// (FedCM 모드에선 isNotDisplayed/isSkippedMoment가 폐기되어 사용하지 않음)
 let _reauthPrompting = false;
 function _reauthExpired() {
   if (_reauthPrompting) return;
   _reauthPrompting = true;
   setTimeout(() => { _reauthPrompting = false; }, 8000);
   try { showToast('세션이 만료되었습니다. 다시 로그인해 주세요.'); } catch(e) {}
-  try {
-    _ensureGisInit();
-    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-      google.accounts.id.prompt(notification => {
-        // One Tap이 표시되지 않으면(차단/억제) 로그인 화면으로 폴백
-        try {
-          if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
-            try { closeAdminPanel(); } catch(e) {}
-            showScreen('LOGIN');
-          }
-        } catch(e) {}
-      });
-      return;
-    }
-  } catch(e) {}
-  // GIS 사용 불가 → 로그인 화면으로 유도
   try { closeAdminPanel(); } catch(e) {}
   try { showScreen('LOGIN'); } catch(e) {}
 }
@@ -1244,6 +1229,7 @@ function _ensureGisInit() {
       callback: handleGoogleCredential,
       auto_select: !wasSignedOut, // 명시적 로그아웃 후엔 자동 선택 차단
       cancel_on_tap_outside: true,
+      use_fedcm_for_prompt: true, // 브라우저 네이티브 FedCM 사용 → 팝업/postMessage 제거(COOP 경고 해소)
     });
     _gisInited = true;
   } catch(e) {
