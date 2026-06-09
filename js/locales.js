@@ -87,6 +87,7 @@ const TX = {
     pwMismatch:'비밀번호가 일치하지 않습니다.', pwTooShort:'비밀번호는 6자 이상이어야 합니다.',
     loginFail:'아이디 또는 비밀번호가 올바르지 않습니다.',
     mpSupport:'✉ 1:1 고객센터',
+    quickFortuneTitle:'오늘의 행운', quickFortuneDesc:'포춘쿠키 메시지 보기',
     quickTokenTitle:'토큰 충전', quickTokenDesc:'대화권 충전하기',
     quickSupportTitle:'1대1 상담', quickSupportDesc:'카카오로 바로 상담',
     tmNote:'정상적으로 리딩 답변이 완료될 때만 1토큰이 차감됩니다.\n신규 가입 시 3토큰이 무료 지급됩니다.',

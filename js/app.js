@@ -3712,6 +3712,7 @@ async function submitGuestReading() {
   const errDiv = document.getElementById('guestErr');
 
   const birth = birthInput.value.trim();
+  const name = (nameInput?.value || '').trim() || '손님';
   if (!birth) {
     errDiv.textContent = '생년월일을 입력해주세요.';
     errDiv.style.display = 'block';
@@ -3731,13 +3732,11 @@ async function submitGuestReading() {
     // URL 파라미터에서 ref 확인
     const urlParams = new URLSearchParams(window.location.search);
     const ref = urlParams.get('ref');
-    console.log('[GUEST] URL:', window.location.href);
-    console.log('[GUEST] ref parameter:', ref);
 
     const res = await fetch(EP + 'chat-guest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ birth, lang, ref })
+      body: JSON.stringify({ birth, name, lang, ref })
     });
 
     const data = await res.json();
@@ -4025,4 +4024,133 @@ function _autoFillBirthData(mode) {
       timeSelect.value = user.birthHour;
     }
   }, 100);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  오늘의 행운 모달
+// ══════════════════════════════════════════════════════════════════════
+
+const FORTUNES = [
+  {
+    category: '재물운',
+    messages: [
+      '오늘은 작은 행운이 당신을 찾아옵니다',
+      '예상치 못한 기쁜 소식이 있을 거예요',
+      '금전적 여유가 생길 조짐이 보입니다',
+      '아껴둔 것이 빛을 발하는 날입니다'
+    ]
+  },
+  {
+    category: '사랑운',
+    messages: [
+      '소중한 인연이 더욱 깊어지는 날입니다',
+      '따뜻한 말 한마디가 마음을 움직입니다',
+      '오늘 만나는 사람에게 진심을 전해보세요',
+      '작은 관심이 큰 사랑으로 돌아옵니다'
+    ]
+  },
+  {
+    category: '건강운',
+    messages: [
+      '몸과 마음이 가벼워지는 하루입니다',
+      '충분한 휴식이 행운을 부릅니다',
+      '오늘은 당신을 위한 시간을 가져보세요',
+      '건강한 선택이 미래를 밝게 합니다'
+    ]
+  },
+  {
+    category: '행운',
+    messages: [
+      '오늘 하루 모든 일이 순조롭게 풀립니다',
+      '긍정적인 에너지가 당신을 감싸줍니다',
+      '작은 기쁨들이 모여 큰 행복이 됩니다',
+      '오늘은 당신이 주인공입니다'
+    ]
+  },
+  {
+    category: '지혜',
+    messages: [
+      '느리게 가도 괜찮아요. 중요한 건 방향입니다',
+      '오늘의 작은 노력이 내일의 큰 결실이 됩니다',
+      '어려운 선택 앞에서 당신의 직감을 믿으세요',
+      '때로는 쉬어가는 것도 앞으로 나아가는 것입니다'
+    ]
+  },
+  {
+    category: '행복',
+    messages: [
+      '주변 사람들에게 감사함을 느끼는 하루',
+      '당신의 미소가 누군가에게 힘이 됩니다',
+      '오늘 하루를 소중히 기억하게 될 거예요',
+      '작은 행복이 곳곳에 숨어있습니다'
+    ]
+  }
+];
+
+function getRandomFortune() {
+  const category = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+  const message = category.messages[Math.floor(Math.random() * category.messages.length)];
+  return { category: category.category, message };
+}
+
+function openFortuneModal() {
+  const today = new Date().toISOString().slice(0, 10);
+  const lastVisit = localStorage.getItem('fortune_date');
+  const savedFortune = localStorage.getItem('fortune_today');
+
+  let fortune;
+  let isRevisit = false;
+
+  if (lastVisit === today && savedFortune) {
+    // 오늘 이미 확인함
+    fortune = JSON.parse(savedFortune);
+    isRevisit = true;
+  } else {
+    // 새로운 행운 생성
+    fortune = getRandomFortune();
+    localStorage.setItem('fortune_date', today);
+    localStorage.setItem('fortune_today', JSON.stringify(fortune));
+  }
+
+  const content = document.getElementById('fortune-content');
+  content.innerHTML = `
+    <div style="background:white; border-radius:16px; padding:28px 20px; box-shadow:0 4px 16px rgba(212,165,116,0.15); margin-bottom:16px;">
+      <div style="font-size:0.75rem; color:#d4a574; font-weight:600; margin-bottom:12px; text-transform:uppercase; letter-spacing:1.5px; text-align:center;">
+        ${isRevisit ? '오늘의 행운 (재확인)' : 'Today\'s Fortune'}
+      </div>
+      <div style="font-size:1.2rem; line-height:1.8; color:#4a3520; font-weight:500; margin-bottom:16px; word-break:keep-all; text-align:center;">
+        ${fortune.message}
+      </div>
+      <div style="text-align:center;">
+        <span style="display:inline-block; background:linear-gradient(135deg, #d4a574, #e8b88a); color:white; padding:6px 16px; border-radius:20px; font-size:0.75rem; font-weight:600; letter-spacing:0.5px;">
+          ${fortune.category}
+        </span>
+      </div>
+    </div>
+    <div style="background:rgba(255,255,255,0.6); border-radius:12px; padding:16px; text-align:center;">
+      <div style="font-size:0.9rem; font-weight:600; color:#4a3520; margin-bottom:10px;">더 정확한 운세가 궁금하신가요?</div>
+      <button onclick="closeFortuneModal();startMode('solo')" style="
+        background:linear-gradient(135deg, #d4a574, #e8b88a);
+        color:white;
+        border:none;
+        padding:12px 28px;
+        border-radius:25px;
+        font-weight:600;
+        font-size:0.9rem;
+        cursor:pointer;
+        box-shadow:0 4px 12px rgba(212,165,116,0.3);
+      ">✨ AI 사주 풀이 받기</button>
+    </div>
+    <div style="margin-top:16px; font-size:0.7rem; color:#4a3520; opacity:0.5; text-align:center;">
+      매일 새로운 행운 메시지가 준비됩니다 💛
+    </div>
+  `;
+
+  document.getElementById('fortuneModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeFortuneModal() {
+  document.getElementById('fortuneModal').style.display = 'none';
+  document.body.style.overflow = '';
 }

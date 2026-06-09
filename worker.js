@@ -707,15 +707,15 @@ export default {
 
     // ── 운기 푸딩 행운 페이지 ──
     if (path === '/pudding-fortune' && method === 'GET') {
-      return env.ASSETS.fetch(new Request(new URL('/pudding-fortune.html', request.url)));
+      return env.SITE_ASSETS.fetch(new Request(new URL('/pudding-fortune.html', request.url)));
     }
     if (path === '/pudding-qr' && method === 'GET') {
-      return env.ASSETS.fetch(new Request(new URL('/pudding-qr-generator.html', request.url)));
+      return env.SITE_ASSETS.fetch(new Request(new URL('/pudding-qr-generator.html', request.url)));
     }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
-      const res = await env.ASSETS.fetch(request);
+      const res = await env.SITE_ASSETS.fetch(request);
 
       // HTML 파일인 경우 ENV 주입
       const contentType = res.headers.get('content-type') || '';
