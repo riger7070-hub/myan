@@ -705,6 +705,14 @@ export default {
     if (path === '/auth/login' && method === 'POST') { await ensureDBExt(env); return handleAuthLogin(request, env); }
     if (path === '/admin/users' && method === 'GET') { await ensureDBExt(env); return handleAdminUsers(request, env); }
 
+    // ── 운기 푸딩 행운 페이지 ──
+    if (path === '/pudding-fortune' && method === 'GET') {
+      return env.ASSETS.fetch(new Request(new URL('/pudding-fortune.html', request.url)));
+    }
+    if (path === '/pudding-qr' && method === 'GET') {
+      return env.ASSETS.fetch(new Request(new URL('/pudding-qr-generator.html', request.url)));
+    }
+
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
       const res = await env.ASSETS.fetch(request);
@@ -2707,7 +2715,7 @@ async function handleGuestChat(request, env) {
       return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
     }
 
-    const { birth, lang = 'ko', ref } = await request.json().catch(() => ({}));
+    const { birth, name = '손님', lang = 'ko', ref } = await request.json().catch(() => ({}));
     if (!birth) {
       return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
     }
@@ -2761,8 +2769,9 @@ Write in warm, plain everyday language. Keep it concise (200-250 characters).
 OUTPUT: Return ONLY valid JSON: {"reading":"<warm short reading 200-300 chars>","ohaeng":{"木":N,"火":N,"土":N,"金":N,"水":N}}
 For ohaeng: integers 0–100, sum = 100${gsaju ? ', derive from the EXACT 오행분포 above (do not recalculate pillars)' : ''}. End reading with one of: #木 #火 #土 #金 #水`;
 
-    const userMsg = `${lang === 'ko' ? '생년월일' : 'Birth date'}: ${birth}
-${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요.' : "Give me a short reading of today's energy and my five elements."}`;
+    const userName = name || '손님';
+    const userMsg = `${lang === 'ko' ? `이름: ${userName}\n생년월일` : `Name: ${userName}\nBirth date`}: ${birth}
+${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주세요. 이름을 불러주세요.' : `Give me a short reading of today's energy and my five elements. Address me by name (${userName}).`}`;
 
     try {
       const resp = await fetch(

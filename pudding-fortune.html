@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>운기 푸딩 · 오늘의 행운 🍮</title>
+
+<meta name="description" content="QR 코드로 만나는 오늘의 행운 메시지. 운기 푸딩과 함께하는 포춘쿠키 체험.">
+<meta property="og:title" content="운기 푸딩 · 오늘의 행운">
+<meta property="og:description" content="푸딩 하나에 담긴 오늘의 행운 메시지">
+<meta property="og:image" content="https://myan.riger7070.workers.dev/icon-og-512-512.webp">
+
+<link rel="stylesheet" href="/css/style.css">
+
+<style>
+:root {
+  --pudding-bg: #fff8e7;
+  --pudding-gold: #d4a574;
+  --pudding-text: #4a3520;
+  --pudding-shadow: rgba(212,165,116,0.15);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fff8e7 0%, #ffe4c4 100%);
+  font-family: -apple-system, 'Pretendard', 'Noto Sans KR', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+.fortune-container {
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  padding: 20px;
+}
+
+.pudding-logo {
+  font-size: 3.5rem;
+  margin-bottom: 12px;
+  animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.brand-name {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--pudding-gold);
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+.brand-sub {
+  font-size: 0.9rem;
+  color: var(--pudding-text);
+  opacity: 0.7;
+  margin-bottom: 32px;
+}
+
+.fortune-card {
+  background: white;
+  border-radius: 20px;
+  padding: 32px 24px;
+  box-shadow: 0 8px 24px var(--pudding-shadow);
+  margin-bottom: 20px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.8s ease forwards;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fortune-label {
+  font-size: 0.85rem;
+  color: var(--pudding-gold);
+  font-weight: 600;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.fortune-text {
+  font-size: 1.3rem;
+  line-height: 1.8;
+  color: var(--pudding-text);
+  font-weight: 500;
+  margin-bottom: 20px;
+  word-break: keep-all;
+}
+
+.fortune-category {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--pudding-gold), #e8b88a);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+}
+
+.cta-section {
+  background: rgba(255,255,255,0.7);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.cta-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--pudding-text);
+  margin-bottom: 12px;
+}
+
+.cta-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--pudding-gold), #e8b88a);
+  color: white;
+  padding: 14px 32px;
+  border-radius: 30px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(212,165,116,0.3);
+  transition: transform 0.2s;
+}
+
+.cta-btn:hover {
+  transform: translateY(-2px);
+}
+
+.footer-note {
+  margin-top: 24px;
+  font-size: 0.75rem;
+  color: var(--pudding-text);
+  opacity: 0.5;
+}
+
+.loading {
+  font-size: 1.2rem;
+  color: var(--pudding-gold);
+  margin: 40px 0;
+}
+
+.error {
+  color: #e05a4a;
+  background: rgba(224,90,74,0.1);
+  padding: 16px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+</style>
+</head>
+<body>
+
+<div class="fortune-container">
+  <div class="pudding-logo">🍮</div>
+  <div class="brand-name">운기 푸딩</div>
+  <div class="brand-sub">오늘의 행운을 만나보세요</div>
+
+  <div id="content">
+    <div class="loading">행운을 불러오는 중...</div>
+  </div>
+</div>
+
+<script>
+const FORTUNES = [
+  {
+    category: '재물운',
+    messages: [
+      '오늘은 작은 행운이 당신을 찾아옵니다',
+      '예상치 못한 기쁜 소식이 있을 거예요',
+      '금전적 여유가 생길 조짐이 보입니다',
+      '아껴둔 것이 빛을 발하는 날입니다'
+    ]
+  },
+  {
+    category: '사랑운',
+    messages: [
+      '소중한 인연이 더욱 깊어지는 날입니다',
+      '따뜻한 말 한마디가 마음을 움직입니다',
+      '오늘 만나는 사람에게 진심을 전해보세요',
+      '작은 관심이 큰 사랑으로 돌아옵니다'
+    ]
+  },
+  {
+    category: '건강운',
+    messages: [
+      '몸과 마음이 가벼워지는 하루입니다',
+      '충분한 휴식이 행운을 부릅니다',
+      '오늘은 당신을 위한 시간을 가져보세요',
+      '건강한 선택이 미래를 밝게 합니다'
+    ]
+  },
+  {
+    category: '행운',
+    messages: [
+      '오늘 하루 모든 일이 순조롭게 풀립니다',
+      '긍정적인 에너지가 당신을 감싸줍니다',
+      '작은 기쁨들이 모여 큰 행복이 됩니다',
+      '오늘은 당신이 주인공입니다'
+    ]
+  },
+  {
+    category: '지혜',
+    messages: [
+      '느리게 가도 괜찮아요. 중요한 건 방향입니다',
+      '오늘의 작은 노력이 내일의 큰 결실이 됩니다',
+      '어려운 선택 앞에서 당신의 직감을 믿으세요',
+      '때로는 쉬어가는 것도 앞으로 나아가는 것입니다'
+    ]
+  },
+  {
+    category: '행복',
+    messages: [
+      '주변 사람들에게 감사함을 느끼는 하루',
+      '당신의 미소가 누군가에게 힘이 됩니다',
+      '오늘 하루를 소중히 기억하게 될 거예요',
+      '작은 행복이 곳곳에 숨어있습니다'
+    ]
+  }
+];
+
+function getRandomFortune() {
+  const category = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+  const message = category.messages[Math.floor(Math.random() * category.messages.length)];
+  return { category: category.category, message };
+}
+
+// IP 기반 하루 1회 제한 체크
+async function checkDailyLimit() {
+  const today = new Date().toISOString().slice(0, 10);
+  const lastVisit = localStorage.getItem('pudding_fortune_date');
+
+  // 로컬스토리지 체크 (같은 기기에서 하루 1회)
+  if (lastVisit === today) {
+    return false;
+  }
+
+  return true;
+}
+
+async function showFortune() {
+  const content = document.getElementById('content');
+
+  try {
+    const canView = await checkDailyLimit();
+
+    if (!canView) {
+      const today = new Date().toISOString().slice(0, 10);
+      const savedFortune = localStorage.getItem('pudding_fortune_today');
+
+      if (savedFortune) {
+        const fortune = JSON.parse(savedFortune);
+        displayFortune(fortune, true);
+      } else {
+        content.innerHTML = `
+          <div class="error">
+            <div style="font-size:2rem;margin-bottom:8px">🍮</div>
+            <div>오늘의 행운은 이미 확인하셨어요!</div>
+            <div style="margin-top:8px;font-size:0.85rem;opacity:0.8">내일 다시 만나요 💛</div>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    // 새로운 행운 생성
+    const fortune = getRandomFortune();
+    const today = new Date().toISOString().slice(0, 10);
+
+    localStorage.setItem('pudding_fortune_date', today);
+    localStorage.setItem('pudding_fortune_today', JSON.stringify(fortune));
+
+    displayFortune(fortune, false);
+
+  } catch (error) {
+    content.innerHTML = `
+      <div class="error">
+        행운을 불러오는 중 문제가 발생했어요<br>
+        잠시 후 다시 시도해주세요
+      </div>
+    `;
+  }
+}
+
+function displayFortune(fortune, isRevisit) {
+  const content = document.getElementById('content');
+
+  content.innerHTML = `
+    <div class="fortune-card">
+      <div class="fortune-label">${isRevisit ? '오늘의 행운 (재확인)' : 'Today\'s Fortune'}</div>
+      <div class="fortune-text">${fortune.message}</div>
+      <div class="fortune-category">${fortune.category}</div>
+    </div>
+
+    <div class="cta-section">
+      <div class="cta-title">더 정확한 운세가 궁금하신가요?</div>
+      <a href="/" class="cta-btn">
+        ✨ AI 사주 풀이 받기
+      </a>
+    </div>
+
+    <div class="footer-note">
+      매일 새로운 행운 메시지가 준비됩니다<br>
+      운기 푸딩과 함께하는 특별한 하루 되세요 💛
+    </div>
+  `;
+}
+
+// 페이지 로드 시 실행
+window.addEventListener('load', () => {
+  setTimeout(showFortune, 800);
+});
+</script>
+
+</body>
+</html>

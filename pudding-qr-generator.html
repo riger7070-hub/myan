@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>운기 푸딩 QR 코드 생성기</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, 'Pretendard', 'Noto Sans KR', sans-serif;
+  background: linear-gradient(135deg, #fff8e7 0%, #ffe4c4 100%);
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 8px 24px rgba(212,165,116,0.2);
+}
+
+h1 {
+  text-align: center;
+  color: #d4a574;
+  margin-bottom: 12px;
+  font-size: 2rem;
+}
+
+.subtitle {
+  text-align: center;
+  color: #666;
+  margin-bottom: 32px;
+  font-size: 0.95rem;
+}
+
+.qr-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 32px 0;
+}
+
+#qrcode {
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  border: 2px solid #d4a574;
+}
+
+.download-btn {
+  margin-top: 24px;
+  background: linear-gradient(135deg, #d4a574, #e8b88a);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 30px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(212,165,116,0.3);
+  transition: transform 0.2s;
+}
+
+.download-btn:hover {
+  transform: translateY(-2px);
+}
+
+.download-btn:active {
+  transform: translateY(0);
+}
+
+.info-section {
+  background: #fff8e7;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.info-title {
+  font-weight: 600;
+  color: #d4a574;
+  margin-bottom: 12px;
+  font-size: 1.1rem;
+}
+
+.info-list {
+  list-style: none;
+  padding: 0;
+}
+
+.info-list li {
+  padding: 8px 0;
+  color: #4a3520;
+  font-size: 0.9rem;
+}
+
+.info-list li:before {
+  content: "✓ ";
+  color: #d4a574;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.url-display {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+  text-align: center;
+  word-break: break-all;
+  font-size: 0.85rem;
+  color: #666;
+  font-family: monospace;
+}
+
+.copy-btn {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-top: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.copy-btn:hover {
+  background: #e8e8e8;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🍮 운기 푸딩 QR 코드</h1>
+  <p class="subtitle">오늘의 행운 메시지를 전하는 QR 코드</p>
+
+  <div class="qr-wrapper">
+    <div id="qrcode"></div>
+    <button class="download-btn" onclick="downloadQR()">📥 QR 코드 다운로드</button>
+  </div>
+
+  <div class="url-display">
+    <div id="qrUrl"></div>
+    <button class="copy-btn" onclick="copyUrl()">📋 URL 복사</button>
+  </div>
+
+  <div class="info-section">
+    <div class="info-title">📌 사용 방법</div>
+    <ul class="info-list">
+      <li>QR 코드를 다운로드하여 매장에 부착하세요</li>
+      <li>고객이 QR 코드를 스캔하면 오늘의 행운 메시지를 볼 수 있어요</li>
+      <li>하루에 한 번씩 새로운 메시지를 받을 수 있습니다</li>
+      <li>더 정확한 AI 사주 풀이로 자동 유도됩니다</li>
+    </ul>
+  </div>
+
+  <div class="info-section" style="margin-top: 16px;">
+    <div class="info-title">💡 활용 팁</div>
+    <ul class="info-list">
+      <li>푸딩 포장에 스티커로 부착</li>
+      <li>매장 테이블 위 POP 형태로 배치</li>
+      <li>영수증이나 쇼핑백에 인쇄</li>
+      <li>SNS 이벤트로 활용</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+// 현재 도메인 자동 감지 (로컬/배포 환경 모두 대응)
+const BASE_URL = window.location.origin;
+const FORTUNE_URL = `${BASE_URL}/pudding-fortune`;
+
+// QR 코드 생성
+new QRCode(document.getElementById("qrcode"), {
+  text: FORTUNE_URL,
+  width: 256,
+  height: 256,
+  colorDark: "#4a3520",
+  colorLight: "#ffffff",
+  correctLevel: QRCode.CorrectLevel.H
+});
+
+// URL 표시
+document.getElementById("qrUrl").textContent = FORTUNE_URL;
+
+// QR 코드 다운로드
+function downloadQR() {
+  const canvas = document.querySelector('#qrcode canvas');
+  if (!canvas) {
+    alert('QR 코드를 생성하는 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+
+  // 캔버스를 이미지로 변환
+  canvas.toBlob(function(blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '운기푸딩_QR코드.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
+// URL 복사
+function copyUrl() {
+  const url = FORTUNE_URL;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✓ 복사 완료!';
+    btn.style.background = '#d4f4dd';
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.style.background = '';
+    }, 2000);
+  }).catch(err => {
+    alert('복사 실패: ' + err);
+  });
+}
+</script>
+
+</body>
+</html>
