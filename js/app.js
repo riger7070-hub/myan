@@ -4143,10 +4143,49 @@ const FORTUNES = [
   }
 ];
 
+// 전체 메시지를 1차원 배열로 평탄화 (인덱스 0-59)
+function getAllFortuneMessages() {
+  const all = [];
+  FORTUNES.forEach(cat => {
+    cat.messages.forEach(msg => {
+      all.push({ category: cat.category, message: msg });
+    });
+  });
+  return all;
+}
+
 function getRandomFortune() {
-  const category = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
-  const message = category.messages[Math.floor(Math.random() * category.messages.length)];
-  return { category: category.category, message };
+  const allMessages = getAllFortuneMessages();
+
+  // 이미 본 메시지 인덱스 가져오기
+  let seen = [];
+  try {
+    const saved = localStorage.getItem('fortune_seen');
+    if (saved) seen = JSON.parse(saved);
+  } catch {}
+
+  // 60개를 다 봤으면 리셋
+  if (seen.length >= allMessages.length) {
+    seen = [];
+  }
+
+  // 아직 안 본 메시지 인덱스만 필터링
+  const available = [];
+  for (let i = 0; i < allMessages.length; i++) {
+    if (!seen.includes(i)) {
+      available.push(i);
+    }
+  }
+
+  // 랜덤 선택
+  const randomIdx = available[Math.floor(Math.random() * available.length)];
+  const fortune = allMessages[randomIdx];
+
+  // 본 메시지로 기록
+  seen.push(randomIdx);
+  localStorage.setItem('fortune_seen', JSON.stringify(seen));
+
+  return fortune;
 }
 
 function openFortuneModal() {
