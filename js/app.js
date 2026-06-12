@@ -4077,6 +4077,39 @@ function getRandomFortune() {
 }
 
 function openFortuneModal() {
+  // 비로그인 → 회원 전용 안내 (로그인 유도)
+  if (!isLoggedIn()) {
+    const L = {
+      ko: { title: '오늘의 행운은 회원 혜택이에요', desc: '로그인하시면 매일 새로운<br>행운 메시지를 드려요 💛', btn: '🔑 로그인하고 행운 받기' },
+      en: { title: "Today's fortune is a member perk", desc: 'Log in to receive a new<br>fortune message every day 💛', btn: '🔑 Log in & get your fortune' },
+      zh: { title: '今日幸运是会员专属福利', desc: '登录后每天都能收到<br>新的幸运讯息 💛', btn: '🔑 登录领取幸运' },
+      ja: { title: '今日の幸運は会員特典です', desc: 'ログインすると毎日新しい<br>幸運メッセージが届きます 💛', btn: '🔑 ログインして幸運を受け取る' }
+    }[lang] || {
+      title: '오늘의 행운은 회원 혜택이에요', desc: '로그인하시면 매일 새로운<br>행운 메시지를 드려요 💛', btn: '🔑 로그인하고 행운 받기'
+    };
+    document.getElementById('fortune-content').innerHTML = `
+      <div style="background:white; border-radius:16px; padding:32px 20px; box-shadow:0 4px 16px rgba(212,165,116,0.15); margin-bottom:16px; text-align:center;">
+        <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+        <div style="font-size:1.1rem; font-weight:600; color:#4a3520; margin-bottom:10px; word-break:keep-all;">${L.title}</div>
+        <div style="font-size:0.9rem; line-height:1.7; color:#4a3520; opacity:0.7; margin-bottom:20px; word-break:keep-all;">${L.desc}</div>
+        <button onclick="closeFortuneModal();showLogin()" style="
+          background:linear-gradient(135deg, #d4a574, #e8b88a);
+          color:white;
+          border:none;
+          padding:12px 28px;
+          border-radius:25px;
+          font-weight:600;
+          font-size:0.9rem;
+          cursor:pointer;
+          box-shadow:0 4px 12px rgba(212,165,116,0.3);
+        ">${L.btn}</button>
+      </div>
+    `;
+    document.getElementById('fortuneModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    return;
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const lastVisit = localStorage.getItem('fortune_date');
   const savedFortune = localStorage.getItem('fortune_today');
