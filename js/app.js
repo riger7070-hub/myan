@@ -1211,7 +1211,6 @@ function goSignup() {
       initGoogleSignin();
     } else if (!GOOGLE_CID) {
       document.getElementById('googleBtnWrap').style.display = 'none';
-      document.getElementById('orDivider').style.display     = 'none';
     } else if (attempts > 0) {
       setTimeout(() => tryInit(attempts - 1), 300);
     } else {
@@ -1348,6 +1347,14 @@ function handleGoogleCredential(response) {
     if (pendingMode) {
       const m = pendingMode; pendingMode = null;
       _enterMode(m, profile); // 채팅 복귀 시 _enterMode 내부에서 저장된 대화 자동 복원
+    } else if (!profile.birthYear && !profile.profileSkipped) {
+      // 신규 가입(생년월일 미입력) → 프로필 입력 단계로 이동
+      ['screen-chat', 'screen-mypage'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      showScreen('SIGNUP', true);
+      renderSignup();
     } else {
       // 어느 화면도 남아있지 않도록 전부 정리 후 홈 표시
       ['screen-chat', 'screen-signup', 'screen-mypage'].forEach(id => {
@@ -1388,42 +1395,41 @@ function buildSignupDropdowns() {
   const monthSelect = document.getElementById('fMonth');
   if (!monthSelect) return;
 
-  // 이미 채워져 있으면 스킵
-  if (monthSelect.options.length > 0) return;
-
-  // 1월~12월 옵션 추가
+  // 언어 변경에 대응하기 위해 매번 현재 언어로 재구성
+  const mSuf = ({ko:'월', en:'', zh:'月', ja:'月'})[lang] ?? '월';
+  const prev = monthSelect.value;
+  monthSelect.innerHTML = '';
   for (let i = 1; i <= 12; i++) {
     const option = document.createElement('option');
     option.value = i;
-    option.textContent = i + '월';
+    option.textContent = i + mSuf;
     monthSelect.appendChild(option);
   }
+  if (prev) monthSelect.value = prev;
 }
 
 function renderSignup() {
   const s = TX[lang];
   buildSignupDropdowns();
-  document.getElementById('signupHeadline').textContent  = s.sgHeadline;
-  document.getElementById('signupSub').textContent       = s.sgSub;
   document.getElementById('signupLinkText').textContent  = s.sgLink;
-  document.getElementById('lblName').textContent         = s.sgName;
-  document.getElementById('fName').placeholder           = s.sgName;
-  document.getElementById('lblEmail').textContent        = s.sgEmail;
   document.getElementById('lblYear').textContent         = s.sgYear;
   document.getElementById('lblMonth').textContent        = s.sgMonth;
   document.getElementById('lblDay').textContent          = s.sgDay;
-  document.getElementById('lblUsername').textContent     = s.sgUsername;
-  document.getElementById('fUsername').placeholder       = s.sgUsername;
-  document.getElementById('lblPassword').textContent     = s.sgPassword;
-  document.getElementById('fPassword').placeholder       = s.sgPassword;
-  document.getElementById('lblConfirmPw').textContent    = s.sgConfirmPw;
-  document.getElementById('fConfirmPw').placeholder      = s.sgConfirmPw;
-  document.getElementById('submitBtn').textContent       = s.sgSubmit;
+  document.getElementById('submitBtn').textContent       = s.sgPfSave;
+  document.getElementById('profileSkipBtn').textContent  = s.sgPfSkip;
   document.getElementById('signupNotice').textContent    = s.sgNotice;
   document.getElementById('successTitle').textContent    = s.sgSuccTitle;
   document.getElementById('successDesc').textContent     = s.sgSuccDesc;
   document.getElementById('successBackBtn').textContent  = s.sgBack;
-  document.getElementById('orDividerText').textContent   = s.sgOr;
+
+  // Google 로그인 완료 + 생년월일 미입력 → 프로필 입력 단계 / 그 외 → Google 가입 버튼
+  let user = null;
+  try { user = JSON.parse(localStorage.getItem('myan_user') || 'null'); } catch {}
+  const profileMode = isLoggedIn() && user && user.email && !user.birthYear;
+  document.getElementById('profile-step').style.display  = profileMode ? '' : 'none';
+  document.getElementById('googleBtnWrap').style.display = profileMode ? 'none' : '';
+  document.getElementById('signupHeadline').textContent  = profileMode ? s.sgPfHeadline : s.sgHeadline;
+  document.getElementById('signupSub').textContent       = profileMode ? s.sgPfSub : s.sgSub;
 }
 
 let _sgErrTimer = null;
@@ -1439,69 +1445,46 @@ function showSignupError(msg) {
   }, 3500);
 }
 
-async function submitSignup() {
+// Google 로그인 후 생년월일 입력 단계 (가입 자체는 Google 로그인으로만 가능)
+async function submitProfile() {
   const s    = TX[lang];
-  const name = document.getElementById('fName').value.trim();
-  const email = document.getElementById('fEmail').value.trim();
-  const year  = document.getElementById('fYear').value.trim();
-  const mon   = document.getElementById('fMonth').value;
-  const day   = document.getElementById('fDay').value.trim();
-  // 선택 정보는 마이페이지에서 입력
-  const phone = ''; const hour = ''; const region = '';
+  const year = document.getElementById('fYear').value.trim();
+  const mon  = document.getElementById('fMonth').value;
+  const day  = document.getElementById('fDay').value.trim();
 
-  // 필수 항목 검사
-  if (!name || !email || !year || !mon || !day) {
-    const msg = {ko:'이름, 이메일, 생년월일을 입력해 주세요.', en:'Please fill in name, email, and date of birth.',
-                 zh:'请填写姓名、邮箱和出生日期。', ja:'お名前、メールアドレス、生年月日を入力してください。'};
-    showSignupError(msg[lang] || msg.ko); return;
-  }
-  // 이메일 형식 간단 검사
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    const msg = {ko:'올바른 이메일 주소를 입력해 주세요.', en:'Please enter a valid email address.',
-                 zh:'请输入有效的电子邮件地址。', ja:'正しいメールアドレスを入力してください。'};
-    showSignupError(msg[lang] || msg.ko); return;
-  }
-  // 생년 범위 검사
   const yearNum = parseInt(year, 10);
-  if (yearNum < 1900 || yearNum > new Date().getFullYear()) {
-    const msg = {ko:'올바른 생년을 입력해 주세요.', en:'Please enter a valid birth year.',
-                 zh:'请输入有效的出生年份。', ja:'正しい生年を入力してください。'};
-    showSignupError(msg[lang] || msg.ko); return;
+  const dayNum  = parseInt(day, 10);
+  if (!year || !mon || !day || yearNum < 1900 || yearNum > new Date().getFullYear() || dayNum < 1 || dayNum > 31) {
+    showSignupError(s.sgPfErrBirth); return;
   }
 
-  const btn = document.getElementById('submitBtn');
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = {ko:'저장 중…', en:'Saving…', zh:'保存中…', ja:'保存中…'}[lang] || '…';
+  let user = {};
+  try { user = JSON.parse(localStorage.getItem('myan_user') || '{}'); } catch {}
+  user.birthYear  = year;
+  user.birthMonth = mon;
+  user.birthDay   = day;
+  localStorage.setItem('myan_user', JSON.stringify(user));
 
-  const payload = {
-    timestamp: new Date().toISOString(),
-    name, email, phone, birthYear: year, birthMonth: mon, birthDay: day,
-    birthHour: hour, gender: selGender, region, lang, source: 'signup'
-  };
-
-  try {
-    if (SHEETS_EP) {
-      await fetch(SHEETS_EP, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    }
-    localStorage.setItem('myan_user', JSON.stringify({
-      name, email, phone,
-      birthYear: year, birthMonth: mon, birthDay: day,
-      birthHour: hour, gender: selGender, region,
-      tokens: 3   // 신규 가입 무료 토큰
-    }));
-    localStorage.setItem('myan_logged_in', 'true');
-    document.getElementById('signup-form-wrap').style.display = 'none';
-    document.getElementById('signup-success').style.display   = 'flex';
-  } catch(e) {
-    showSignupError(s.sgErr);
-    btn.disabled = false;
-    btn.textContent = origText;
+  // Sheets에 프로필 완성 기록 (백그라운드, 실패해도 무시)
+  if (SHEETS_EP) {
+    fetch(SHEETS_EP, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...user, timestamp: new Date().toISOString(), lang, source: 'profile_complete' })
+    }).catch(() => {});
   }
+
+  document.getElementById('signup-form-wrap').style.display = 'none';
+  document.getElementById('signup-success').style.display   = 'flex';
+}
+
+function skipProfile() {
+  // 다음 로그인 때 다시 묻지 않도록 기록
+  let user = {};
+  try { user = JSON.parse(localStorage.getItem('myan_user') || '{}'); } catch {}
+  user.profileSkipped = true;
+  localStorage.setItem('myan_user', JSON.stringify(user));
+  goToApp();
 }
 
 /* ── 마이페이지 ── */

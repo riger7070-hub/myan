@@ -352,45 +352,27 @@
       <div class="google-btn-wrap" id="googleBtnWrap">
         <div id="googleBtnEl"></div>
       </div>
-      <div class="or-divider" id="orDivider"><span id="orDividerText"></span></div>
 
-      <div class="form-grid">
-        <div class="field full">
-          <label id="lblName"></label>
-          <input type="text" id="fName" autocomplete="name">
+      <!-- 프로필 입력 단계 (Google 로그인 후 생년월일 수집) -->
+      <div id="profile-step" style="display:none">
+        <div class="form-grid">
+          <div class="field third">
+            <label id="lblYear"></label>
+            <input type="number" id="fYear" placeholder="1990" min="1900" max="2026">
+          </div>
+          <div class="field third">
+            <label id="lblMonth"></label>
+            <select id="fMonth"></select>
+          </div>
+          <div class="field third">
+            <label id="lblDay"></label>
+            <input type="number" id="fDay" placeholder="15" min="1" max="31">
+          </div>
         </div>
-        <div class="field full">
-          <label id="lblEmail"></label>
-          <input type="email" id="fEmail" autocomplete="email" placeholder="name@example.com">
-        </div>
-        <div class="field third">
-          <label id="lblYear"></label>
-          <input type="number" id="fYear" placeholder="1990" min="1900" max="2026">
-        </div>
-        <div class="field third">
-          <label id="lblMonth"></label>
-          <select id="fMonth"></select>
-        </div>
-        <div class="field third">
-          <label id="lblDay"></label>
-          <input type="number" id="fDay" placeholder="15" min="1" max="31">
-        </div>
-        <div class="field full" style="display:none">
-          <label id="lblUsername"></label>
-          <input type="text" id="fUsername" autocomplete="username">
-        </div>
-        <div class="field full pw-wrap" style="display:none">
-          <label id="lblPassword"></label>
-          <input type="password" id="fPassword" autocomplete="new-password">
-          <button class="pw-toggle" onclick="togglePwVis('fPassword',this)" type="button">👁</button>
-        </div>
-        <div class="field full pw-wrap" style="display:none">
-          <label id="lblConfirmPw"></label>
-          <input type="password" id="fConfirmPw" autocomplete="new-password">
-          <button class="pw-toggle" onclick="togglePwVis('fConfirmPw',this)" type="button">👁</button>
-        </div>
+        <button class="submit-btn" id="submitBtn" onclick="submitProfile()"></button>
+        <div id="profileSkipBtn" onclick="skipProfile()" style="text-align:center; margin-top:14px; font-size:0.85rem; opacity:0.55; cursor:pointer; text-decoration:underline;"></div>
       </div>
-      <button class="submit-btn" id="submitBtn" onclick="submitSignup()"></button>
+
       <div class="signup-notice" id="signupNotice"></div>
     </div>
     <div class="signup-success" id="signup-success">
