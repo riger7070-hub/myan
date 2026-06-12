@@ -1719,8 +1719,8 @@ function _signOut() {
   updateAllTokenDisplays();
   try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   try { google.accounts.id.cancel(); } catch(e) {}
-  // GIS 초기화 상태 리셋 — 다음 로그인 시 auto_select:false로 재초기화
-  _gisInited = false;
+  // 재초기화 불필요: disableAutoSelect가 세션 내 자동선택을 차단하고,
+  // 다음 페이지 로드에선 myan_signed_out 플래그로 auto_select:false 초기화됨
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnSO = document.getElementById('userBtn');
@@ -1779,7 +1779,6 @@ async function _withdrawAccount() {
   updateAllTokenDisplays();
   try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   try { google.accounts.id.cancel(); } catch(e) {}
-  _gisInited = false;
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnWD = document.getElementById('userBtn');
