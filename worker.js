@@ -603,6 +603,13 @@ async function ensureDBExt(env) {
       used_by TEXT,
       tokens_given INTEGER NOT NULL DEFAULT 5
     );
+    CREATE TABLE IF NOT EXISTS fortune_codes (
+      code TEXT PRIMARY KEY,
+      batch_id TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      used_at INTEGER,
+      fortune_seed INTEGER
+    );
     CREATE TABLE IF NOT EXISTS promo_claims (
       id TEXT PRIMARY KEY,
       user_email TEXT NOT NULL,
@@ -712,6 +719,12 @@ export default {
     if (path === '/pudding-qr' && method === 'GET') {
       return env.SITE_ASSETS.fetch(new Request(new URL('/pudding-qr-generator.html', request.url)));
     }
+    // ── 운기 푸딩 일회용 QR (스티커 라벨) ──
+    if (path === '/pudding-qr-batch' && method === 'GET') {
+      return env.SITE_ASSETS.fetch(new Request(new URL('/pudding-qr-batch.html', request.url)));
+    }
+    if (path === '/api/fortune-qr/generate' && method === 'POST') { await ensureDBExt(env); return handleFortuneQrGenerate(request, env); }
+    if (path === '/api/fortune-qr/redeem'   && method === 'POST') { await ensureDBExt(env); return handleFortuneQrRedeem(request, env); }
 
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
@@ -2369,6 +2382,100 @@ async function handleUngiGiveTokens(request, env) {
       .bind(email, tokens, 'UNGI_STORE').run();
 
     return cors(JSON.stringify({ success: true, tokens, email }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+  }
+}
+
+
+// ════════════════════════════════════════════
+//  운기 푸딩 일회용 QR 행운 시스템
+//  - 푸딩 1개당 일회용 코드 1개 (스티커 라벨로 인쇄)
+//  - 첫 스캔 시 행운 시드 확정, 이후 24시간 동안만 같은 메시지 재확인 가능
+// ════════════════════════════════════════════
+const FORTUNE_CODE_REVIEW_WINDOW = 86400; // 사용 후 재확인 허용 시간(초)
+
+function _genFortuneCode() {
+  // 혼동되는 문자(I,O,0,1) 제외 32자 × 10자리 = 약 10^15 조합 (추측 불가)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const buf = new Uint8Array(10);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, b => chars[b % chars.length]).join('');
+}
+
+// [사장님] 일회용 코드 일괄 생성 — 스티커 라벨 인쇄용
+async function handleFortuneQrGenerate(request, env) {
+  try {
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const { success } = await env.RL_API.limit({ key: `fqrgen:${ip}` });
+    if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
+
+    const { pin, count } = await request.json().catch(() => ({}));
+    const UNGI_PIN = env.UNGI_PIN || '5984';
+    if (!pin || String(pin).length > 8 || String(pin) !== UNGI_PIN) {
+      return cors(JSON.stringify({ error: { message: 'PIN이 올바르지 않습니다.' } }), 403);
+    }
+
+    const n = Math.min(Math.max(parseInt(count, 10) || 0, 1), 100);
+    const batchId = `b${Date.now()}`;
+    const codes = [];
+    const stmts = [];
+    for (let i = 0; i < n; i++) {
+      const code = _genFortuneCode();
+      codes.push(code);
+      stmts.push(env.DB.prepare(
+        `INSERT INTO fortune_codes (code, batch_id) VALUES (?, ?)`
+      ).bind(code, batchId));
+    }
+    await env.DB.batch(stmts);
+
+    return cors(JSON.stringify({ success: true, batchId, codes }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+  }
+}
+
+// [손님] 일회용 코드 사용 → 행운 시드 반환 (메시지 매핑은 클라이언트)
+async function handleFortuneQrRedeem(request, env) {
+  try {
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const { success } = await env.RL_API.limit({ key: `fqr:${ip}` });
+    if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
+
+    const { code } = await request.json().catch(() => ({}));
+    if (!code || typeof code !== 'string' || code.length > 20) {
+      return cors(JSON.stringify({ error: { message: '코드 형식이 올바르지 않습니다.' } }), 400);
+    }
+
+    const row = await env.DB.prepare(
+      `SELECT code, used_at, fortune_seed FROM fortune_codes WHERE code = ?`
+    ).bind(code.toUpperCase().trim()).first();
+
+    if (!row) return cors(JSON.stringify({ error: { message: '유효하지 않은 QR 코드입니다.' } }), 404);
+
+    const now = Math.floor(Date.now() / 1000);
+    if (row.used_at) {
+      if (now - row.used_at <= FORTUNE_CODE_REVIEW_WINDOW) {
+        return cors(JSON.stringify({ success: true, seed: row.fortune_seed, revisit: true }), 200);
+      }
+      return cors(JSON.stringify({ error: { message: '이미 사용된 QR 코드입니다.' } }), 410);
+    }
+
+    // 첫 사용: 시드 확정 (WHERE used_at IS NULL 조건으로 동시 스캔 경합 방지)
+    const seed = Math.floor(Math.random() * 1000000);
+    const res = await env.DB.prepare(
+      `UPDATE fortune_codes SET used_at = unixepoch(), fortune_seed = ? WHERE code = ? AND used_at IS NULL`
+    ).bind(seed, row.code).run();
+
+    if (!res.meta || res.meta.changes === 0) {
+      // 동시 스캔으로 다른 요청이 먼저 사용 처리 → 확정된 시드 반환
+      const again = await env.DB.prepare(
+        `SELECT fortune_seed FROM fortune_codes WHERE code = ?`
+      ).bind(row.code).first();
+      return cors(JSON.stringify({ success: true, seed: again?.fortune_seed ?? seed, revisit: true }), 200);
+    }
+
+    return cors(JSON.stringify({ success: true, seed, revisit: false }), 200);
   } catch (e) {
     return cors(JSON.stringify({ error: { message: e.message } }), 500);
   }

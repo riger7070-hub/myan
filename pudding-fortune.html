@@ -39,6 +39,31 @@ body {
   padding: 20px;
 }
 
+.lang-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.lang-btn {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  color: var(--pudding-text);
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.lang-btn.on {
+  border-color: var(--pudding-gold);
+  background: white;
+  opacity: 1;
+  font-weight: 600;
+}
+
 .pudding-logo {
   font-size: 3.5rem;
   margin-bottom: 12px;
@@ -169,161 +194,397 @@ body {
 <body>
 
 <div class="fortune-container">
+  <div class="lang-row">
+    <button class="lang-btn" data-lang="ko" onclick="setPLang('ko')">한국어</button>
+    <button class="lang-btn" data-lang="en" onclick="setPLang('en')">EN</button>
+    <button class="lang-btn" data-lang="zh" onclick="setPLang('zh')">中文</button>
+    <button class="lang-btn" data-lang="ja" onclick="setPLang('ja')">日本語</button>
+  </div>
+
   <div class="pudding-logo">🍮</div>
   <div class="brand-name">운기 푸딩</div>
-  <div class="brand-sub">오늘의 행운을 만나보세요</div>
+  <div class="brand-sub" id="brand-sub">오늘의 행운을 만나보세요</div>
 
   <div id="content">
-    <div class="loading">행운을 불러오는 중...</div>
+    <div class="loading" id="loading-text">행운을 불러오는 중...</div>
   </div>
 </div>
 
 <script>
+// ════════════════════════════════
+//  4개국어 UI 문구 (ko / en / zh / ja)
+// ════════════════════════════════
+const UI = {
+  ko: {
+    brandSub: '오늘의 행운을 만나보세요',
+    loading: '행운을 불러오는 중...',
+    label: "Today's Fortune",
+    labelRevisit: '오늘의 행운 (재확인)',
+    lockedTitle: '오늘의 행운은<br>운기 푸딩 구매 고객님께 드리는<br>특별한 선물이에요',
+    lockedSub: '푸딩에 붙어있는 QR 코드를 스캔해 주세요 🍮',
+    lockedCta: '지금 바로 운세가 궁금하다면?',
+    usedTitle: '이미 사용된 QR 코드예요',
+    usedSub: '행운 메시지는 푸딩 하나당 한 번만 열 수 있어요.<br>새 푸딩과 함께 새로운 행운을 만나보세요 💛',
+    invalidTitle: '유효하지 않은 QR 코드예요',
+    invalidSub: 'QR 코드를 다시 스캔해 주세요.',
+    busyTitle: '잠시 후 다시 시도해 주세요',
+    busySub: '요청이 너무 많아요. 조금만 기다려주세요.',
+    ctaTitle: '더 정확한 운세가 궁금하신가요?',
+    ctaBtn: '✨ AI 사주 풀이 받기',
+    footerNew: '푸딩 하나에 담긴 단 하나의 행운 메시지',
+    footerRevisit: '스캔 후 24시간 동안 다시 볼 수 있어요',
+    footer2: '운기 푸딩과 함께하는 특별한 하루 되세요 💛',
+    errGeneric: '행운을 불러오는 중 문제가 발생했어요<br>잠시 후 다시 시도해주세요'
+  },
+  en: {
+    brandSub: "Discover today's fortune",
+    loading: 'Loading your fortune...',
+    label: "Today's Fortune",
+    labelRevisit: "Today's Fortune (revisited)",
+    lockedTitle: "Today's fortune is<br>a special gift for<br>Ungi Pudding customers",
+    lockedSub: 'Please scan the QR code on your pudding 🍮',
+    lockedCta: 'Want a reading right now?',
+    usedTitle: 'This QR code has already been used',
+    usedSub: "Each pudding's fortune opens only once.<br>Meet a new fortune with a new pudding 💛",
+    invalidTitle: 'This QR code is not valid',
+    invalidSub: 'Please scan the QR code again.',
+    busyTitle: 'Please try again in a moment',
+    busySub: 'Too many requests. Please wait a little.',
+    ctaTitle: 'Curious about a deeper reading?',
+    ctaBtn: '✨ Get AI Saju Reading',
+    footerNew: 'One pudding, one unique fortune message',
+    footerRevisit: 'You can revisit your message for 24 hours after scanning',
+    footer2: 'Have a special day with Ungi Pudding 💛',
+    errGeneric: 'Something went wrong while loading your fortune<br>Please try again shortly'
+  },
+  zh: {
+    brandSub: '遇见今天的幸运',
+    loading: '正在召唤幸运...',
+    label: '今日幸运',
+    labelRevisit: '今日幸运（再次查看）',
+    lockedTitle: '今日的幸运是<br>送给运气布丁顾客的<br>特别礼物',
+    lockedSub: '请扫描布丁上的二维码 🍮',
+    lockedCta: '现在就想看运势？',
+    usedTitle: '此二维码已被使用',
+    usedSub: '每颗布丁的幸运讯息只能打开一次。<br>买一颗新布丁，遇见新的幸运吧 💛',
+    invalidTitle: '二维码无效',
+    invalidSub: '请重新扫描二维码。',
+    busyTitle: '请稍后再试',
+    busySub: '请求过多，请稍等片刻。',
+    ctaTitle: '想了解更准确的运势吗？',
+    ctaBtn: '✨ 获取AI四柱解读',
+    footerNew: '一颗布丁，一条专属的幸运讯息',
+    footerRevisit: '扫码后24小时内可再次查看',
+    footer2: '愿运气布丁带给你特别的一天 💛',
+    errGeneric: '加载幸运时出了点问题<br>请稍后再试'
+  },
+  ja: {
+    brandSub: '今日の幸運に出会いましょう',
+    loading: '幸運を呼び込んでいます...',
+    label: "Today's Fortune",
+    labelRevisit: '今日の幸運（再確認）',
+    lockedTitle: '今日の幸運は<br>ウンギプリンをご購入のお客様への<br>特別な贈り物です',
+    lockedSub: 'プリンに付いているQRコードをスキャンしてください 🍮',
+    lockedCta: '今すぐ運勢が気になるなら？',
+    usedTitle: 'このQRコードはすでに使用されています',
+    usedSub: '幸運メッセージはプリン1個につき1回だけ。<br>新しいプリンと一緒に新しい幸運を 💛',
+    invalidTitle: '無効なQRコードです',
+    invalidSub: 'QRコードをもう一度スキャンしてください。',
+    busyTitle: 'しばらくしてからもう一度お試しください',
+    busySub: 'リクエストが多すぎます。少しお待ちください。',
+    ctaTitle: 'もっと詳しい運勢が気になりますか？',
+    ctaBtn: '✨ AI四柱占いを受ける',
+    footerNew: 'プリンひとつに込められた、ひとつだけの幸運メッセージ',
+    footerRevisit: 'スキャン後24時間はもう一度見られます',
+    footer2: 'ウンギプリンと特別な一日を 💛',
+    errGeneric: '幸運の読み込み中に問題が発生しました<br>しばらくしてからもう一度お試しください'
+  }
+};
+
+// ════════════════════════════════
+//  행운 메시지 (6카테고리 × 4개 × 4개국어)
+//  시드 → 인덱스 매핑이므로 언어를 바꿔도 같은 메시지가 유지됨
+// ════════════════════════════════
 const FORTUNES = [
   {
-    category: '재물운',
+    category: { ko: '재물운', en: 'Wealth', zh: '财运', ja: '金運' },
     messages: [
-      '오늘은 작은 행운이 당신을 찾아옵니다',
-      '예상치 못한 기쁜 소식이 있을 거예요',
-      '금전적 여유가 생길 조짐이 보입니다',
-      '아껴둔 것이 빛을 발하는 날입니다'
+      { ko: '오늘은 작은 행운이 당신을 찾아옵니다',
+        en: 'A small fortune is on its way to you today',
+        zh: '今天会有小小的好运找上你',
+        ja: '今日は小さな幸運があなたを訪れます' },
+      { ko: '예상치 못한 기쁜 소식이 있을 거예요',
+        en: 'Unexpected good news is coming your way',
+        zh: '会有意想不到的好消息',
+        ja: '思いがけない嬉しい知らせがあるでしょう' },
+      { ko: '금전적 여유가 생길 조짐이 보입니다',
+        en: 'Signs of financial breathing room are appearing',
+        zh: '财务上将出现宽裕的迹象',
+        ja: '金銭的なゆとりが生まれる兆しが見えます' },
+      { ko: '아껴둔 것이 빛을 발하는 날입니다',
+        en: "What you've saved will shine today",
+        zh: '你珍藏的东西今天会发光',
+        ja: '大切にしてきたものが輝く日です' }
     ]
   },
   {
-    category: '사랑운',
+    category: { ko: '사랑운', en: 'Love', zh: '爱情运', ja: '恋愛運' },
     messages: [
-      '소중한 인연이 더욱 깊어지는 날입니다',
-      '따뜻한 말 한마디가 마음을 움직입니다',
-      '오늘 만나는 사람에게 진심을 전해보세요',
-      '작은 관심이 큰 사랑으로 돌아옵니다'
+      { ko: '소중한 인연이 더욱 깊어지는 날입니다',
+        en: 'A precious bond grows deeper today',
+        zh: '珍贵的缘分今天会更加深厚',
+        ja: '大切なご縁がより深まる日です' },
+      { ko: '따뜻한 말 한마디가 마음을 움직입니다',
+        en: 'One warm word can move a heart',
+        zh: '一句温暖的话能打动人心',
+        ja: '温かい一言が心を動かします' },
+      { ko: '오늘 만나는 사람에게 진심을 전해보세요',
+        en: 'Share your true feelings with someone you meet today',
+        zh: '向今天遇见的人传达你的真心吧',
+        ja: '今日出会う人に真心を伝えてみてください' },
+      { ko: '작은 관심이 큰 사랑으로 돌아옵니다',
+        en: 'Small acts of care return as great love',
+        zh: '小小的关心会化作大大的爱回到你身边',
+        ja: '小さな思いやりが大きな愛になって返ってきます' }
     ]
   },
   {
-    category: '건강운',
+    category: { ko: '건강운', en: 'Health', zh: '健康运', ja: '健康運' },
     messages: [
-      '몸과 마음이 가벼워지는 하루입니다',
-      '충분한 휴식이 행운을 부릅니다',
-      '오늘은 당신을 위한 시간을 가져보세요',
-      '건강한 선택이 미래를 밝게 합니다'
+      { ko: '몸과 마음이 가벼워지는 하루입니다',
+        en: 'A day when body and mind feel lighter',
+        zh: '今天身心都会变得轻盈',
+        ja: '心も体も軽くなる一日です' },
+      { ko: '충분한 휴식이 행운을 부릅니다',
+        en: 'Good rest invites good luck',
+        zh: '充分的休息会带来好运',
+        ja: '十分な休息が幸運を呼びます' },
+      { ko: '오늘은 당신을 위한 시간을 가져보세요',
+        en: 'Take some time just for yourself today',
+        zh: '今天请为自己留一点时间',
+        ja: '今日は自分のための時間を持ってみてください' },
+      { ko: '건강한 선택이 미래를 밝게 합니다',
+        en: 'Healthy choices brighten your future',
+        zh: '健康的选择会照亮你的未来',
+        ja: '健康的な選択が未来を明るくします' }
     ]
   },
   {
-    category: '행운',
+    category: { ko: '행운', en: 'Luck', zh: '幸运', ja: '幸運' },
     messages: [
-      '오늘 하루 모든 일이 순조롭게 풀립니다',
-      '긍정적인 에너지가 당신을 감싸줍니다',
-      '작은 기쁨들이 모여 큰 행복이 됩니다',
-      '오늘은 당신이 주인공입니다'
+      { ko: '오늘 하루 모든 일이 순조롭게 풀립니다',
+        en: 'Everything flows smoothly today',
+        zh: '今天一切都会顺顺利利',
+        ja: '今日は何もかも順調に進みます' },
+      { ko: '긍정적인 에너지가 당신을 감싸줍니다',
+        en: 'Positive energy surrounds you',
+        zh: '积极的能量正环绕着你',
+        ja: 'ポジティブなエネルギーがあなたを包みます' },
+      { ko: '작은 기쁨들이 모여 큰 행복이 됩니다',
+        en: 'Small joys gather into great happiness',
+        zh: '小小的快乐汇聚成大大的幸福',
+        ja: '小さな喜びが集まって大きな幸せになります' },
+      { ko: '오늘은 당신이 주인공입니다',
+        en: 'Today, you are the star',
+        zh: '今天你就是主角',
+        ja: '今日はあなたが主役です' }
     ]
   },
   {
-    category: '지혜',
+    category: { ko: '지혜', en: 'Wisdom', zh: '智慧', ja: '知恵' },
     messages: [
-      '느리게 가도 괜찮아요. 중요한 건 방향입니다',
-      '오늘의 작은 노력이 내일의 큰 결실이 됩니다',
-      '어려운 선택 앞에서 당신의 직감을 믿으세요',
-      '때로는 쉬어가는 것도 앞으로 나아가는 것입니다'
+      { ko: '느리게 가도 괜찮아요. 중요한 건 방향입니다',
+        en: "It's okay to go slow — what matters is direction",
+        zh: '慢一点也没关系，重要的是方向',
+        ja: 'ゆっくりでも大丈夫。大切なのは方向です' },
+      { ko: '오늘의 작은 노력이 내일의 큰 결실이 됩니다',
+        en: "Today's small effort becomes tomorrow's great harvest",
+        zh: '今天的小努力会成为明天的大收获',
+        ja: '今日の小さな努力が明日の大きな実りになります' },
+      { ko: '어려운 선택 앞에서 당신의 직감을 믿으세요',
+        en: 'Trust your intuition when choices are hard',
+        zh: '面对艰难的选择，请相信你的直觉',
+        ja: '難しい選択の前では直感を信じてください' },
+      { ko: '때로는 쉬어가는 것도 앞으로 나아가는 것입니다',
+        en: 'Sometimes resting is also moving forward',
+        zh: '有时候休息也是一种前进',
+        ja: '時には休むことも前へ進むことです' }
     ]
   },
   {
-    category: '행복',
+    category: { ko: '행복', en: 'Happiness', zh: '幸福', ja: '幸せ' },
     messages: [
-      '주변 사람들에게 감사함을 느끼는 하루',
-      '당신의 미소가 누군가에게 힘이 됩니다',
-      '오늘 하루를 소중히 기억하게 될 거예요',
-      '작은 행복이 곳곳에 숨어있습니다'
+      { ko: '주변 사람들에게 감사함을 느끼는 하루',
+        en: 'A day to feel grateful for those around you',
+        zh: '对身边的人心怀感激的一天',
+        ja: '周りの人への感謝を感じる一日' },
+      { ko: '당신의 미소가 누군가에게 힘이 됩니다',
+        en: 'Your smile gives someone strength',
+        zh: '你的微笑会成为某个人的力量',
+        ja: 'あなたの笑顔が誰かの力になります' },
+      { ko: '오늘 하루를 소중히 기억하게 될 거예요',
+        en: "You'll remember this day fondly",
+        zh: '你会珍藏今天的回忆',
+        ja: '今日という日を大切に思い出すでしょう' },
+      { ko: '작은 행복이 곳곳에 숨어있습니다',
+        en: 'Little happinesses are hiding everywhere',
+        zh: '小小的幸福藏在各个角落',
+        ja: '小さな幸せがあちこちに隠れています' }
     ]
   }
 ];
 
-function getRandomFortune() {
-  const category = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
-  const message = category.messages[Math.floor(Math.random() * category.messages.length)];
-  return { category: category.category, message };
+// ════════════════════════════════
+//  언어 감지 + 전환
+// ════════════════════════════════
+function detectLang() {
+  const saved = localStorage.getItem('pudding_lang');
+  if (saved && UI[saved]) return saved;
+  const nav = (navigator.language || 'ko').toLowerCase();
+  if (nav.startsWith('en')) return 'en';
+  if (nav.startsWith('zh')) return 'zh';
+  if (nav.startsWith('ja')) return 'ja';
+  return 'ko';
 }
 
-// IP 기반 하루 1회 제한 체크
-async function checkDailyLimit() {
-  const today = new Date().toISOString().slice(0, 10);
-  const lastVisit = localStorage.getItem('pudding_fortune_date');
+let plang = detectLang();
+let lastState = null; // 마지막 화면 상태 (언어 전환 시 재렌더용)
 
-  // 로컬스토리지 체크 (같은 기기에서 하루 1회)
-  if (lastVisit === today) {
-    return false;
-  }
+function t() { return UI[plang] || UI.ko; }
 
-  return true;
+function setPLang(l) {
+  if (!UI[l]) return;
+  plang = l;
+  localStorage.setItem('pudding_lang', l);
+  syncLangUI();
+  rerender();
 }
 
-async function showFortune() {
-  const content = document.getElementById('content');
-
-  try {
-    const canView = await checkDailyLimit();
-
-    if (!canView) {
-      const today = new Date().toISOString().slice(0, 10);
-      const savedFortune = localStorage.getItem('pudding_fortune_today');
-
-      if (savedFortune) {
-        const fortune = JSON.parse(savedFortune);
-        displayFortune(fortune, true);
-      } else {
-        content.innerHTML = `
-          <div class="error">
-            <div style="font-size:2rem;margin-bottom:8px">🍮</div>
-            <div>오늘의 행운은 이미 확인하셨어요!</div>
-            <div style="margin-top:8px;font-size:0.85rem;opacity:0.8">내일 다시 만나요 💛</div>
-          </div>
-        `;
-      }
-      return;
-    }
-
-    // 새로운 행운 생성
-    const fortune = getRandomFortune();
-    const today = new Date().toISOString().slice(0, 10);
-
-    localStorage.setItem('pudding_fortune_date', today);
-    localStorage.setItem('pudding_fortune_today', JSON.stringify(fortune));
-
-    displayFortune(fortune, false);
-
-  } catch (error) {
-    content.innerHTML = `
-      <div class="error">
-        행운을 불러오는 중 문제가 발생했어요<br>
-        잠시 후 다시 시도해주세요
-      </div>
-    `;
-  }
+function syncLangUI() {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.lang === plang);
+  });
+  document.getElementById('brand-sub').textContent = t().brandSub;
+  const loadingEl = document.getElementById('loading-text');
+  if (loadingEl) loadingEl.textContent = t().loading;
+  document.documentElement.lang = plang === 'zh' ? 'zh-CN' : plang;
 }
 
-function displayFortune(fortune, isRevisit) {
-  const content = document.getElementById('content');
+function rerender() {
+  if (!lastState) return;
+  if (lastState.type === 'fortune') displayFortune(lastState.seed, lastState.revisit);
+  else if (lastState.type === 'locked') showLocked();
+  else if (lastState.type === 'error') showCodeError(lastState.status);
+  else if (lastState.type === 'generic') showGenericError();
+}
 
-  content.innerHTML = `
+// ════════════════════════════════
+//  화면 렌더링
+// ════════════════════════════════
+// 시드 → 메시지 매핑 (서버가 코드당 1개 시드를 확정하므로 재방문·언어 전환 시 같은 메시지)
+function getFortuneBySeed(seed) {
+  const all = [];
+  FORTUNES.forEach(cat => cat.messages.forEach(msg => all.push({ category: cat.category, message: msg })));
+  return all[seed % all.length];
+}
+
+function showLocked() {
+  lastState = { type: 'locked' };
+  document.getElementById('content').innerHTML = `
     <div class="fortune-card">
-      <div class="fortune-label">${isRevisit ? '오늘의 행운 (재확인)' : 'Today\'s Fortune'}</div>
-      <div class="fortune-text">${fortune.message}</div>
-      <div class="fortune-category">${fortune.category}</div>
+      <div style="font-size:2.5rem;margin-bottom:12px">🔒</div>
+      <div class="fortune-text" style="font-size:1.05rem">${t().lockedTitle}</div>
+      <div style="font-size:0.85rem;color:var(--pudding-text);opacity:0.7;margin-top:8px">${t().lockedSub}</div>
     </div>
-
     <div class="cta-section">
-      <div class="cta-title">더 정확한 운세가 궁금하신가요?</div>
-      <a href="/" class="cta-btn">
-        ✨ AI 사주 풀이 받기
-      </a>
-    </div>
-
-    <div class="footer-note">
-      매일 새로운 행운 메시지가 준비됩니다<br>
-      운기 푸딩과 함께하는 특별한 하루 되세요 💛
+      <div class="cta-title">${t().lockedCta}</div>
+      <a href="/" class="cta-btn">${t().ctaBtn}</a>
     </div>
   `;
 }
 
+function showCodeError(status) {
+  lastState = { type: 'error', status };
+  let title, sub;
+  if (status === 410) { title = t().usedTitle; sub = t().usedSub; }
+  else if (status === 429) { title = t().busyTitle; sub = t().busySub; }
+  else { title = t().invalidTitle; sub = t().invalidSub; }
+
+  document.getElementById('content').innerHTML = `
+    <div class="error">
+      <div style="font-size:2rem;margin-bottom:8px">🍮</div>
+      <div>${title}</div>
+      <div style="margin-top:8px;font-size:0.85rem;opacity:0.8">${sub}</div>
+    </div>
+    <div class="cta-section">
+      <div class="cta-title">${t().ctaTitle}</div>
+      <a href="/" class="cta-btn">${t().ctaBtn}</a>
+    </div>
+  `;
+}
+
+function showGenericError() {
+  lastState = { type: 'generic' };
+  document.getElementById('content').innerHTML = `
+    <div class="error">${t().errGeneric}</div>
+  `;
+}
+
+function displayFortune(seed, isRevisit) {
+  lastState = { type: 'fortune', seed, revisit: isRevisit };
+  const fortune = getFortuneBySeed(seed);
+
+  document.getElementById('content').innerHTML = `
+    <div class="fortune-card">
+      <div class="fortune-label">${isRevisit ? t().labelRevisit : t().label}</div>
+      <div class="fortune-text">${fortune.message[plang] || fortune.message.ko}</div>
+      <div class="fortune-category">${fortune.category[plang] || fortune.category.ko}</div>
+    </div>
+
+    <div class="cta-section">
+      <div class="cta-title">${t().ctaTitle}</div>
+      <a href="/" class="cta-btn">${t().ctaBtn}</a>
+    </div>
+
+    <div class="footer-note">
+      ${isRevisit ? t().footerRevisit : t().footerNew}<br>
+      ${t().footer2}
+    </div>
+  `;
+}
+
+// ════════════════════════════════
+//  일회용 코드 검증
+// ════════════════════════════════
+async function showFortune() {
+  const code = new URLSearchParams(location.search).get('c');
+
+  if (!code) {
+    showLocked();
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/fortune-qr/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+      showCodeError(res.status);
+      return;
+    }
+
+    displayFortune(data.seed, !!data.revisit);
+  } catch (error) {
+    showGenericError();
+  }
+}
+
 // 페이지 로드 시 실행
+syncLangUI();
 window.addEventListener('load', () => {
   setTimeout(showFortune, 800);
 });

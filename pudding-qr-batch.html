@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>운기 푸딩 · 일회용 QR 라벨 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", 'Noto Sans KR', sans-serif;
+    background: linear-gradient(135deg, #fff8e7 0%, #ffe4c4 100%);
+    min-height: 100vh;
+    padding: 24px 16px;
+    color: #4a3520;
+  }
+  .panel {
+    background: white;
+    border-radius: 20px;
+    padding: 28px;
+    max-width: 520px;
+    margin: 0 auto 24px;
+    box-shadow: 0 8px 24px rgba(212,165,116,0.2);
+    text-align: center;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .sub { font-size: 0.85rem; opacity: 0.6; margin-bottom: 20px; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+  label { font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  input, select {
+    padding: 10px 12px; border: 1px solid #d4a574; border-radius: 10px;
+    font-size: 1rem; width: 130px;
+  }
+  .btn {
+    padding: 12px 28px; border: none; border-radius: 12px; cursor: pointer;
+    font-size: 1rem; font-weight: 700; color: white;
+    background: linear-gradient(135deg, #d4a574, #e8b88a);
+    margin: 6px;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-outline { background: white; color: #d4a574; border: 1px solid #d4a574; }
+  .msg { font-size: 0.85rem; margin-top: 10px; min-height: 1.2em; }
+  .msg.err { color: #e05a4a; }
+  .msg.ok { color: #4a9e5c; }
+
+  /* ── 라벨 미리보기/인쇄 영역 ── */
+  #labels { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .label {
+    background: white;
+    border: 1px dashed #d4a574;        /* 화면 미리보기용 (인쇄 시 제거) */
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .label .qr { display: flex; align-items: center; justify-content: center; }
+  .label .qr img, .label .qr canvas { display: block; }
+  .label .brand { font-weight: 700; color: #b8895a; white-space: nowrap; }
+  .label .code { color: #999; letter-spacing: 1px; white-space: nowrap; }
+
+  @media print {
+    body { background: white; padding: 0; }
+    .panel { display: none; }
+    #labels { display: block; }
+    .label {
+      border: none;
+      page-break-after: always;
+      width: 100% !important;
+      height: 100vh !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div style="font-size:2.2rem">🍮</div>
+  <h1>일회용 QR 라벨 생성기</h1>
+  <div class="sub">푸딩 1개당 QR 1장 · 한 번 스캔하면 끝나는 행운 코드</div>
+
+  <div class="row">
+    <label>관리자 PIN
+      <input type="password" id="pin" maxlength="8" placeholder="PIN">
+    </label>
+    <label>생성 수량 (1~100)
+      <input type="number" id="count" min="1" max="100" value="30">
+    </label>
+  </div>
+  <div class="row">
+    <label>라벨 크기
+      <select id="labelSize">
+        <option value="40x40">40 × 40 mm</option>
+        <option value="50x50" selected>50 × 50 mm</option>
+        <option value="50x30">50 × 30 mm</option>
+        <option value="60x40">60 × 40 mm</option>
+      </select>
+    </label>
+  </div>
+
+  <button class="btn" id="genBtn" onclick="generate()">QR 코드 생성</button>
+  <button class="btn btn-outline" id="printBtn" onclick="window.print()" style="display:none">🖨️ 라벨 인쇄</button>
+  <button class="btn btn-outline" id="pngBtn" onclick="downloadAll()" style="display:none">📥 PNG 전체 저장</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div id="labels"></div>
+
+<script>
+let currentCodes = [];
+
+function labelMM() {
+  const [w, h] = document.getElementById('labelSize').value.split('x').map(Number);
+  return { w, h };
+}
+
+// 인쇄 용지 크기를 라벨 크기에 맞춤 (라벨 프린터는 1장 = 1라벨)
+function applyPrintPageSize() {
+  const { w, h } = labelMM();
+  let st = document.getElementById('page-style');
+  if (!st) {
+    st = document.createElement('style');
+    st.id = 'page-style';
+    document.head.appendChild(st);
+  }
+  st.textContent = `@page { size: ${w}mm ${h}mm; margin: 0; }`;
+}
+
+async function generate() {
+  const pin = document.getElementById('pin').value.trim();
+  const count = parseInt(document.getElementById('count').value, 10);
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('genBtn');
+
+  if (!pin) { msg.className = 'msg err'; msg.textContent = 'PIN을 입력해 주세요.'; return; }
+  if (!count || count < 1 || count > 100) { msg.className = 'msg err'; msg.textContent = '수량은 1~100 사이로 입력해 주세요.'; return; }
+
+  btn.disabled = true;
+  msg.className = 'msg'; msg.textContent = '생성 중...';
+
+  try {
+    const res = await fetch('/api/fortune-qr/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, count })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      msg.className = 'msg err';
+      msg.textContent = data.error?.message || '생성에 실패했습니다.';
+      return;
+    }
+    currentCodes = data.codes;
+    renderLabels(data.codes);
+    msg.className = 'msg ok';
+    msg.textContent = `${data.codes.length}개 생성 완료! 아래에서 확인 후 인쇄하세요. (배치: ${data.batchId})`;
+    document.getElementById('printBtn').style.display = '';
+    document.getElementById('pngBtn').style.display = '';
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = '네트워크 오류가 발생했습니다.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderLabels(codes) {
+  const { w, h } = labelMM();
+  applyPrintPageSize();
+
+  const wrap = document.getElementById('labels');
+  wrap.innerHTML = '';
+
+  // 화면 미리보기: 1mm ≈ 3.78px
+  const pxW = Math.round(w * 3.78), pxH = Math.round(h * 3.78);
+  const qrSide = Math.round(Math.min(pxW, pxH) * 0.72);
+
+  codes.forEach(code => {
+    const url = `${location.origin}/pudding-fortune?c=${code}`;
+
+    const div = document.createElement('div');
+    div.className = 'label';
+    div.style.width = pxW + 'px';
+    div.style.height = pxH + 'px';
+
+    const qr = document.createElement('div');
+    qr.className = 'qr';
+    div.appendChild(qr);
+
+    const brand = document.createElement('div');
+    brand.className = 'brand';
+    brand.textContent = '🍮 운기 푸딩 · 오늘의 행운';
+    brand.style.fontSize = Math.max(Math.round(pxH * 0.055), 9) + 'px';
+    div.appendChild(brand);
+
+    const codeEl = document.createElement('div');
+    codeEl.className = 'code';
+    codeEl.textContent = code;
+    codeEl.style.fontSize = Math.max(Math.round(pxH * 0.045), 8) + 'px';
+    div.appendChild(codeEl);
+
+    wrap.appendChild(div);
+
+    new QRCode(qr, {
+      text: url,
+      width: qrSide,
+      height: qrSide,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+}
+
+// PNG 일괄 저장 (라벨 프린터 전용 앱으로 인쇄할 때 사용)
+async function downloadAll() {
+  const labels = document.querySelectorAll('#labels .label');
+  for (let i = 0; i < labels.length; i++) {
+    const canvas = labels[i].querySelector('canvas');
+    if (!canvas) continue;
+    const link = document.createElement('a');
+    link.download = `pudding_qr_${currentCodes[i]}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+    await new Promise(r => setTimeout(r, 250)); // 브라우저 다운로드 차단 방지
+  }
+}
+
+document.getElementById('labelSize').addEventListener('change', () => {
+  if (currentCodes.length) renderLabels(currentCodes);
+});
+</script>
+
+</body>
+</html>
