@@ -8,6 +8,7 @@ wrangler.toml
 .github/
 .git/
 .wrangler/
+.claude/
 
 # React Native 앱 빌드 디렉터리 (Workers 배포 불필요)
 myan-native/
