@@ -3859,6 +3859,15 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   color: var(--gold-light);
   animation: oracleEnter 2.2s ease-in-out infinite;
 }
+.oracle-character {
+  width: 92px;
+  animation: oracleEnter 2.2s ease-in-out infinite;
+}
+.oracle-character img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .oracle-caption {
   font-size: 0.82rem;
   color: var(--gold-light);

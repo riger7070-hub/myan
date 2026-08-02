@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 800" role="img" aria-label="안도령">
+<title>안도령</title>
+<rect x="495" y="370" width="50" height="190" rx="25" fill="#f6ead0" stroke="#2b1d10" stroke-width="10" transform="rotate(12 520 380)"/>
+<rect x="135" y="370" width="50" height="190" rx="25" fill="#f6ead0" stroke="#2b1d10" stroke-width="10" transform="rotate(-12 160 380)"/>
+<rect x="345" y="620" width="90" height="110" rx="45" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+<rect x="245" y="620" width="90" height="110" rx="45" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+<rect x="170" y="200" width="340" height="480" rx="140" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+<line x1="245" y1="452" x2="340" y2="505" stroke="#243b57" stroke-width="11" stroke-linecap="round"/>
+<line x1="435" y1="452" x2="340" y2="505" stroke="#243b57" stroke-width="11" stroke-linecap="round"/>
+<line x1="340" y1="520" x2="340" y2="585" stroke="#c9a96e" stroke-width="8" stroke-linecap="round"/>
+<circle cx="340" cy="522" r="15" fill="#c9a96e" stroke="#2b1d10" stroke-width="6"/>
+<ellipse cx="245" cy="402" rx="30" ry="22" fill="#f0b06a" opacity="0.75"/>
+<ellipse cx="435" cy="402" rx="30" ry="22" fill="#f0b06a" opacity="0.75"/>
+<circle cx="280" cy="345" r="27" fill="#2b1d10"/>
+<circle cx="400" cy="345" r="27" fill="#2b1d10"/>
+<circle cx="271" cy="334" r="9" fill="#ffffff"/>
+<circle cx="391" cy="334" r="9" fill="#ffffff"/>
+<path d="M 300 400 Q 340 432 380 400" fill="none" stroke="#2b1d10" stroke-width="10" stroke-linecap="round"/>
+<ellipse cx="340" cy="188" rx="152" ry="24" fill="#1c1c1c" stroke="#2b1d10" stroke-width="8"/>
+<rect x="298" y="104" width="84" height="94" rx="14" fill="#1c1c1c" stroke="#2b1d10" stroke-width="8"/>
+<line x1="298" y1="150" x2="382" y2="150" stroke="#3a3a3a" stroke-width="4"/>
+</svg>

@@ -366,7 +366,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
         </div>
       </div>
       <div class="oracle-beat">
-        <div class="oracle-sigil">✦</div>
+        <div class="oracle-character"><img src="/andoryeong.svg" alt="안도령"></div>
         <div class="oracle-caption">${t.oracleEnter || '문을 엽니다…'}</div>
       </div>
       <div class="oracle-beat">
