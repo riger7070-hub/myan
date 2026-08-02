@@ -705,8 +705,8 @@ async function send() {
         💰 토큰 충전하러 가기
       </button>
     `;
-    chats.appendChild(bubble);
-    chats.scrollTop = chats.scrollHeight;
+    cw().appendChild(bubble);
+    scrollToBottom();
     return;
   }
 
