@@ -1,5 +1,5 @@
-// M;Y 安 — Service Worker v4.1 (Fix clone error & force refresh)
-const VERSION = '4.1';
+// M;Y 安 — Service Worker v4.2 (Fix Google Fonts CSP)
+const VERSION = '4.2';
 const CACHE_NAME = `myan-v10-${VERSION}`;
 const CACHE_IMAGES = `myan-images-v7`;
 const CACHE_STATIC = `myan-static-v7`;
@@ -177,6 +177,7 @@ self.addEventListener('fetch', event => {
 
   // 외부 API는 캐싱 안 함
   if (url.includes('googleapis.com') ||
+      url.includes('gstatic.com') ||
       url.includes('accounts.google.com') ||
       url.includes('tosspayments.com') ||
       url.includes('portone.io') ||
