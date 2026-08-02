@@ -1771,8 +1771,8 @@ function addSecurityHeaders(response) {
     "font-src 'self' https://fonts.gstatic.com",
     // 이미지: self, data URI
     "img-src 'self' data: https:",
-    // API 통신 허용 출처 (토스페이먼츠 API + GIS gsi 엔드포인트 추가)
-    "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.tosspayments.com https://script.google.com",
+    // API 통신 허용 출처 (토스페이먼츠 API + GIS gsi 엔드포인트 + Google Fonts)
+    "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.tosspayments.com https://script.google.com https://fonts.gstatic.com",
     // 구글 로그인 팝업 + 토스 결제 페이지 iframe 허용
     "frame-src https://accounts.google.com https://tosspayments.com https://*.tosspayments.com",
   ].join('; '));
