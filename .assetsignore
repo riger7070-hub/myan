@@ -12,6 +12,12 @@ wrangler.toml
 # React Native 앱 빌드 디렉터리 (Workers 배포 불필요)
 myan-native/
 
+# 프로젝트 무관 작업 파일 (외부 노출 금지)
+buyma/
+
+# 노드 모듈 (Workers 배포 불필요, 업로드 크기 절감)
+node_modules/
+
 # 문서/아카이브 (서빙 불필요)
 SECURITY.md
 icon-usage-guide.md

@@ -221,13 +221,10 @@ const scrollToBottom = (() => {
   };
 })();
 
-function addBubble(text, who) {
+function addBubble(text, who, { sentenceReveal = false } = {}) {
   const d = document.createElement('div');
   d.className = `bubble bubble-${who}`;
   if (who === 'ai') {
-    // 텍스트 노드를 별도 관리 → 타이핑 효과 적용 & 복사 버튼 충돌 방지
-    const tn = document.createTextNode('');
-    d.appendChild(tn);
     const btn = document.createElement('button');
     btn.className = 'bubble-copy-btn';
     btn.title = '복사';
@@ -238,12 +235,27 @@ function addBubble(text, who) {
       clearTimeout(btn._hideTimer);
       btn._hideTimer = setTimeout(() => btn.classList.remove('visible'), 2500);
     });
-    d.appendChild(btn);
-    cw().appendChild(d);
-    scrollToBottom();
-    // 이전 타이핑 중단 후 새 타이핑 시작
-    if (_typingAbort) _typingAbort.abort();
-    _typeIntoNode(tn, text, 22);
+
+    if (sentenceReveal) {
+      // 첫 리딩 전달 — 문장 단위 순차 공개 (오라클 오버레이와 짝을 이루는 연출)
+      const contentEl = document.createElement('div');
+      contentEl.className = 'bubble-reveal-content';
+      d.appendChild(contentEl);
+      d.appendChild(btn);
+      cw().appendChild(d);
+      scrollToBottom();
+      revealSentences(contentEl, text, getLang(), { scrollEl: cw() });
+    } else {
+      // 텍스트 노드를 별도 관리 → 타이핑 효과 적용 & 복사 버튼 충돌 방지
+      const tn = document.createTextNode('');
+      d.appendChild(tn);
+      d.appendChild(btn);
+      cw().appendChild(d);
+      scrollToBottom();
+      // 이전 타이핑 중단 후 새 타이핑 시작
+      if (_typingAbort) _typingAbort.abort();
+      _typeIntoNode(tn, text, 22);
+    }
   } else {
     d.textContent = text;
     cw().appendChild(d);
@@ -327,6 +339,170 @@ function addLoader() {
   d.remove = () => { clearInterval(d._msgTimer); _origRemove(); };
 
   return d;
+}
+
+// ══════════════════════════════════════════
+//  신탁 연출 — 사주집 방문 오버레이 + 문장 단위 순차 공개
+// ══════════════════════════════════════════
+const minDelay = (ms) => new Promise(r => setTimeout(r, ms));
+
+// apiPromise를 넘기면: 최소 6초 연출 + API 응답을 함께 기다린 뒤 resolve/reject.
+// contained:true + target 지정 시 전체화면이 아닌 해당 요소 내부에 축소 렌더(상세 풀이 모달용).
+function openOracleOverlay({ apiPromise, contained = false, target = null } = {}) {
+  const t = getT();
+  const langNow = getLang();
+  const msgs = _LOAD_MSGS[langNow] || _LOAD_MSGS.ko;
+
+  const wrap = document.createElement('div');
+  wrap.className = contained ? 'oracle-stage' : 'oracle-overlay active';
+  wrap.innerHTML = `
+    <div class="oracle-inner">
+      <div class="oracle-beat show">
+        <div class="oracle-sigil">✦</div>
+        <div class="oracle-caption">${t.oracleEnter || '문을 엽니다…'}</div>
+      </div>
+      <div class="oracle-beat">
+        <div class="oracle-pages">
+          <div class="oracle-page"></div><div class="oracle-page"></div><div class="oracle-page"></div>
+        </div>
+        <div class="oracle-caption">${t.oracleFlip || '만세력을 넘깁니다…'}</div>
+      </div>
+      <div class="oracle-beat">
+        <div class="oracle-pillars">
+          <div class="oracle-pillar"></div><div class="oracle-pillar"></div><div class="oracle-pillar"></div><div class="oracle-pillar"></div>
+        </div>
+        <div class="oracle-caption">${t.oraclePillars || '사주 네 기둥을 세웁니다…'}</div>
+      </div>
+      <div class="oracle-beat">
+        <span class="oracle-loop-text">${msgs[0]}</span>
+        <div class="loader-progress"><div class="loader-progress-bar oracle-loop-bar"></div></div>
+      </div>
+    </div>`;
+
+  const targetEl = (contained && target)
+    ? (typeof target === 'string' ? document.querySelector(target) : target)
+    : null;
+  if (targetEl) {
+    targetEl.innerHTML = '';
+    targetEl.appendChild(wrap);
+  } else {
+    document.body.appendChild(wrap);
+    document.body.style.overflow = 'hidden';
+  }
+
+  const beats = wrap.querySelectorAll('.oracle-beat');
+  const schedule = [0, 1500, 3500, 5200]; // 마지막 비트는 도착 전까지 무한 루프
+  const beatTimers = schedule.map((delay, i) => setTimeout(() => {
+    beats.forEach((b, j) => b.classList.toggle('show', j === i));
+  }, delay));
+
+  let loopIdx = 0;
+  const loopSpan = wrap.querySelector('.oracle-loop-text');
+  const loopTimer = setInterval(() => {
+    loopIdx = (loopIdx + 1) % msgs.length;
+    if (!loopSpan) return;
+    loopSpan.style.opacity = '0';
+    setTimeout(() => { loopSpan.textContent = msgs[loopIdx]; loopSpan.style.opacity = '1'; }, 250);
+  }, 1800);
+
+  function cleanup() {
+    beatTimers.forEach(clearTimeout);
+    clearInterval(loopTimer);
+  }
+  function close() {
+    cleanup();
+    wrap.classList.add('oracle-closing');
+    setTimeout(() => {
+      wrap.remove();
+      if (!targetEl) document.body.style.overflow = '';
+    }, 300);
+  }
+
+  return (async () => {
+    const MIN_MS = 6000;
+    const started = Date.now();
+    let ok = true, payload;
+    try { payload = await apiPromise; }
+    catch (e) { ok = false; payload = e; }
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await minDelay(remain);
+    close();
+    if (ok) return payload;
+    throw payload;
+  })();
+}
+
+// 문장 분리 — 전각 구두점(중국어/일본어)은 공백 없이 바로 다음 문장이 이어지므로 즉시 분할,
+// 반각 구두점(한국어/영어)은 소수점·약어 보호를 위해 다음 글자가 공백/닫는 괄호/끝일 때만 분할
+function _splitSentences(text, langNow) {
+  if (!text) return [];
+  const paragraphs = String(text).split('\n').map(p => p.trim()).filter(Boolean);
+  const wideEnders = new Set(['。', '！', '？']);
+  const halfEnders = new Set(['.', '!', '?']);
+  const out = [];
+  for (const p of paragraphs) {
+    let buf = '';
+    for (let i = 0; i < p.length; i++) {
+      const ch = p[i];
+      buf += ch;
+      const next = p[i + 1];
+      if (wideEnders.has(ch)) {
+        if (next && /\d/.test(next)) continue; // 소수점 보호
+        out.push(buf.trim());
+        buf = '';
+        continue;
+      }
+      if (halfEnders.has(ch)) {
+        if (next && /\d/.test(next)) continue; // 소수점 보호
+        if (next && !/[\s"'）」』)\]]/.test(next)) continue; // 약어 등 — 공백/닫는 괄호/끝이 아니면 계속 이어붙임
+        out.push(buf.trim());
+        buf = '';
+      }
+    }
+    if (buf.trim()) out.push(buf.trim());
+  }
+  return out.length ? out : [String(text).trim()].filter(Boolean);
+}
+
+// 문장 단위 순차 공개 — 기존 fadeIn 키프레임 재사용, animation-delay로 stagger
+function revealSentences(container, text, langNow, { stagger = 1700, onComplete, scrollEl } = {}) {
+  if (!container) { if (onComplete) onComplete(); return; }
+  container.innerHTML = '';
+  const sentences = _splitSentences(text, langNow);
+  if (!sentences.length) { if (onComplete) onComplete(); return; }
+
+  let done = false;
+  const scroller = scrollEl || container;
+  const onVisChange = () => {
+    if (!document.hidden || done) return;
+    container.querySelectorAll('.reveal-sentence').forEach(el => {
+      el.style.animation = 'none';
+      el.style.opacity = '1';
+    });
+  };
+  document.addEventListener('visibilitychange', onVisChange);
+
+  sentences.forEach((sentence, i) => {
+    const el = document.createElement('div');
+    el.className = 'reveal-sentence';
+    el.textContent = sentence;
+    el.style.animationDelay = `${(i * stagger) / 1000}s`;
+    container.appendChild(el);
+    setTimeout(() => { try { scroller.scrollTop = scroller.scrollHeight; } catch {} }, i * stagger + 550);
+  });
+
+  const totalMs = (sentences.length - 1) * stagger + 550;
+  setTimeout(() => {
+    done = true;
+    document.removeEventListener('visibilitychange', onVisChange);
+    if (onComplete) onComplete();
+  }, totalMs);
+}
+
+// 문장 리빌 총 소요 시간(ms) — 게이지 등 후행 연출 타이밍 계산용
+function _sentenceRevealMs(text, langNow, stagger = 1700) {
+  const n = _splitSentences(text, langNow).length;
+  return n ? (n - 1) * stagger + 550 : 500;
 }
 
 function addRxCard(o) {
@@ -541,24 +717,28 @@ async function send() {
   }
 
   btn.disabled = true; inp.disabled = true;
+  const isFirstTurn = hist.length === 0; // 첫 리딩만 신탁 연출(전체화면 오버레이 + 문장 리빌) 적용
   addBubble(txt, 'user'); inp.value = '';
   hist.push({role:'user', parts:[{text:processedTxt}]});
-  const loader = addLoader();
+  const loader = isFirstTurn ? null : addLoader();
+  const oracleReady = isFirstTurn ? openOracleOverlay({ apiPromise: callGemini(trimmedHist()) }) : null;
 
   try {
-    const data = await callGemini(trimmedHist());
+    const data = isFirstTurn ? await oracleReady : await callGemini(trimmedHist());
     const cand = data?.candidates?.[0];
     const raw  = cand?.content?.parts?.[0]?.text;
     if (!raw) throw { refund: true, reason: cand?.finishReason };
     hist.push({role:'model', parts:[{text:raw}]});
     const clean = raw.replace(/#[木火土金水]\s*/g,'').replace(/\*\*/g,'').trim();
-    addBubble(clean, 'ai');
+    addBubble(clean, 'ai', { sentenceReveal: isFirstTurn });
     const tag = ['木','火','土','金','水'].find(k => raw.includes('#'+k));
     if (tag) addRxCard(tag);
     // solo 모드: 클리프행어 연출
     if (mode === 'solo' && data._ohaeng) {
       try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
-      const revealMs = clean.length <= 300 ? clean.length * 22 + 500 : 1800;
+      const revealMs = isFirstTurn
+        ? _sentenceRevealMs(clean, getLang())
+        : (clean.length <= 300 ? clean.length * 22 + 500 : 1800);
       _renderSajuGaugeFromGemini(data._ohaeng, revealMs);
     }
     showSuggestChips();
@@ -579,7 +759,8 @@ async function send() {
     hist.pop();
     showSuggestChips();
   } finally {
-    loader.remove(); btn.disabled = false; inp.disabled = false;
+    if (loader) loader.remove();
+    btn.disabled = false; inp.disabled = false;
     inp.focus(); cw().scrollTop = 99999;
   }
 }
@@ -3163,25 +3344,26 @@ async function submitSajuInput(m) {
   if (err) err.style.display = 'none';
   const btn = document.getElementById('sjSubmitBtn');
   if (btn) { btn.disabled = true; btn.textContent = '계산 중...'; }
-  try {
-    const headers = {'Content-Type':'application/json'};
-    const token = getGoogleIdToken();
-    const body = { mode:m, lang, p1, p2 };
 
-    // 로그인한 사용자는 기록 저장
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-      body.save = true;
-    }
+  const headers = {'Content-Type':'application/json'};
+  const token = getGoogleIdToken();
+  const body = { mode:m, lang, p1, p2 };
 
-    const res = await fetch(EP + 'saju-reading', {
-      method:'POST', headers, body: JSON.stringify(body)
+  // 로그인한 사용자는 기록 저장
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    body.save = true;
+  }
+
+  const apiPromise = fetch(EP + 'saju-reading', { method:'POST', headers, body: JSON.stringify(body) })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.ok) throw new Error(data.error?.message || '풀이 생성에 실패했습니다.');
+      return data;
     });
-    const data = await res.json();
-    if (!data.ok) {
-      const errMsg = data.error?.message || '풀이 생성에 실패했습니다.';
-      throw new Error(errMsg);
-    }
+
+  try {
+    const data = await openOracleOverlay({ apiPromise });
     _lastSaju = { mode:m, p1, p2, dayElem: data.dayElem };
     renderSajuResult(data, m);
   } catch(e) {
@@ -3209,20 +3391,26 @@ function renderSajuResult(data, m) {
   if (!cw) return;
   const today = new Date().toISOString().slice(0,10);
   const ohaeng = data.dayElem || '土';
-  const readingHtml = (data.reading||'').split('\n').map(line =>
-    `<div style="margin:8px 0;font-size:0.95rem;line-height:1.8">${_escHtml(line)}</div>`
-  ).join('');
   cw.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
       <div style="max-width:640px;width:100%;margin:0 auto">
         <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:20px">✨ 간단 풀이</div>
         ${_ohaengGaugeHtml(data.ohaeng||{})}
-        <div style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px">${readingHtml}</div>
-        <button onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:18px;padding:16px;font-size:1rem">🔍 상세 풀이 보기 (토큰 2)</button>
-        <button onclick="showSajuInput('${m}')" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem">다시 입력</button>
+        <div id="sjReadingBody" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px"></div>
+        <button id="sjDetailBtn" onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:18px;padding:16px;font-size:1rem;opacity:0.4;pointer-events:none;transition:opacity .3s">🔍 상세 풀이 보기 (토큰 2)</button>
+        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
       </div>
     </div>`;
   cw.scrollTop = 0;
+  revealSentences(document.getElementById('sjReadingBody'), data.reading || '', getLang(), {
+    scrollEl: cw,
+    onComplete: () => {
+      ['sjDetailBtn', 'sjRetryBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; }
+      });
+    }
+  });
 }
 
 function _detailFromSaju(date, ohaeng) {
@@ -3251,9 +3439,7 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
       <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
       <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${t.detailSub||date}</div>
-      <div id="detail-loading" style="text-align:center;padding:24px;color:var(--text-dim)">
-        ${t.detailLoading||'AI가 상세 분석 중... (약 10초)'}
-      </div>
+      <div id="detail-loading"></div>
       <div id="detail-content" style="display:none"></div>
       <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
     </div>`;
@@ -3268,13 +3454,15 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
       : undefined;
   }
 
+  // 모달 내부에 축소 렌더되는 신탁 연출(전체화면 오버레이는 이미 열린 모달과 중첩되므로 contained 모드 사용)
+  const apiPromise = fetch('/chat-detail', {
+    method: 'POST',
+    headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({ date, ohaeng, lang, birth, p2 })
+  }).then(r => r.json());
+
   try {
-    const r = await fetch('/chat-detail', {
-      method: 'POST',
-      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ date, ohaeng, lang, birth, p2 })
-    });
-    const data = await r.json();
+    const data = await openOracleOverlay({ apiPromise, contained: true, target: '#detail-loading' });
     const loadEl = document.getElementById('detail-loading');
     const contEl = document.getElementById('detail-content');
     if (loadEl) loadEl.style.display = 'none';
@@ -3288,12 +3476,17 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
       contEl.innerHTML = areas.map(a => `
         <div class="detail-area-card">
           <div class="detail-area-title">${a.icon} ${a.label}</div>
-          <div class="detail-area-body">${data.detail[a.key]||''}</div>
+          <div class="detail-area-body" id="detailBody-${a.key}"></div>
         </div>`).join('');
       if (data.remaining !== undefined) {
         contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
       }
       contEl.style.display = '';
+      // 4개 영역을 병렬로 문장 단위 순차 공개 (순차 누적하면 상세 풀이가 가장 긴 플로우가 됨)
+      areas.forEach(a => {
+        const bodyEl = document.getElementById(`detailBody-${a.key}`);
+        if (bodyEl) revealSentences(bodyEl, data.detail[a.key] || '', lang, { scrollEl: contEl });
+      });
 
       // 상세 풀이 저장 (나중에 다시 보기 위해)
       try {
@@ -3304,7 +3497,7 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
         localStorage.setItem('myan_detail_readings', JSON.stringify(saved));
       } catch(e) { /* Ignore save error */ }
     } else if (data.error) {
-      if (loadEl) loadEl.textContent = data.error.message;
+      if (loadEl) { loadEl.style.display = ''; loadEl.textContent = data.error.message; }
     }
   } catch(e) {
     const loadEl = document.getElementById('detail-loading');
@@ -3842,60 +4035,57 @@ async function submitGuestReading() {
 
   errDiv.style.display = 'none';
   submitBtn.disabled = true;
-  submitBtn.textContent = 'AI 분석 중...';
 
   // 게스트 제출 트래킹
   if (typeof Analytics !== 'undefined') {
     Analytics.trackGuest('submit');
   }
 
+  // URL 파라미터에서 ref 확인
+  const urlParams = new URLSearchParams(window.location.search);
+  const ref = urlParams.get('ref');
+
+  const apiPromise = fetch(EP + 'chat-guest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ birth, name, lang, ref })
+  }).then(async res => ({ status: res.status, ok: res.ok, data: await res.json() }));
+
   try {
-    // URL 파라미터에서 ref 확인
-    const urlParams = new URLSearchParams(window.location.search);
-    const ref = urlParams.get('ref');
+    const { status, ok, data } = await openOracleOverlay({ apiPromise });
 
-    const res = await fetch(EP + 'chat-guest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ birth, name, lang, ref })
-    });
-
-    const data = await res.json();
-
-    if (res.status === 429) {
-      if (data.error?.code === 'GUEST_LIMIT') {
-        // 게스트 제한 도달 트래킹
-        if (typeof Analytics !== 'undefined') {
-          Analytics.trackGuest('limit');
-        }
-        const resetHours = data.error.resetIn || 24;
-        const now = new Date();
-        const resetTime = new Date(now.getTime() + resetHours * 60 * 60 * 1000);
-        const resetStr = resetTime.toLocaleString('ko-KR', {
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-
-        errDiv.innerHTML = `
-          오늘의 무료 체험은 이미 사용하셨습니다.<br>
-          <strong style="color: var(--gold)">${resetStr}</strong>에 다시 이용 가능합니다.<br>
-          <span style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; display: inline-block;">
-            (약 ${resetHours}시간 후)
-          </span><br>
-          <span style="color: var(--gold); margin-top: 8px; display: inline-block;">
-            💡 회원가입하면 무제한 이용 가능!
-          </span>
-        `;
-        errDiv.style.display = 'block';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'AI 풀이 받기';
-        return;
+    if (status === 429 && data.error?.code === 'GUEST_LIMIT') {
+      // 게스트 제한 도달 트래킹
+      if (typeof Analytics !== 'undefined') {
+        Analytics.trackGuest('limit');
       }
+      const resetHours = data.error.resetIn || 24;
+      const now = new Date();
+      const resetTime = new Date(now.getTime() + resetHours * 60 * 60 * 1000);
+      const resetStr = resetTime.toLocaleString('ko-KR', {
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      errDiv.innerHTML = `
+        오늘의 무료 체험은 이미 사용하셨습니다.<br>
+        <strong style="color: var(--gold)">${resetStr}</strong>에 다시 이용 가능합니다.<br>
+        <span style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; display: inline-block;">
+          (약 ${resetHours}시간 후)
+        </span><br>
+        <span style="color: var(--gold); margin-top: 8px; display: inline-block;">
+          💡 회원가입하면 무제한 이용 가능!
+        </span>
+      `;
+      errDiv.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'AI 풀이 받기';
+      return;
     }
 
-    if (!res.ok || !data.success) {
+    if (!ok || !data.success) {
       throw new Error(data.error?.message || 'AI 연결 실패');
     }
 
@@ -3903,16 +4093,12 @@ async function submitGuestReading() {
     showScreen('GUEST_RESULT');
     const readingContent = document.getElementById('guestReadingContent');
     if (readingContent) {
-      readingContent.textContent = data.reading || '풀이 결과를 가져오지 못했습니다.';
+      revealSentences(readingContent, data.reading || '풀이 결과를 가져오지 못했습니다.', lang);
     }
 
     // 운기 푸딩 카드 표시
-    console.log('[UNGI] Response data:', { isUngi: data.isUngi, ohaeng: data.ohaeng });
     if (data.isUngi && data.ohaeng) {
-      console.log('[UNGI] Rendering pudding card');
       renderUngiPuddingCard(data.ohaeng);
-    } else {
-      console.log('[UNGI] Pudding card not shown:', { isUngi: data.isUngi, hasOhaeng: !!data.ohaeng });
     }
 
   } catch (e) {
