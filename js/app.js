@@ -358,6 +358,14 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   wrap.innerHTML = `
     <div class="oracle-inner">
       <div class="oracle-beat show">
+        <div class="oracle-door opening">
+          <div class="oracle-door-frame">
+            <div class="oracle-door-left"></div>
+            <div class="oracle-door-right"></div>
+          </div>
+        </div>
+      </div>
+      <div class="oracle-beat">
         <div class="oracle-sigil">✦</div>
         <div class="oracle-caption">${t.oracleEnter || '문을 엽니다…'}</div>
       </div>
@@ -391,7 +399,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   }
 
   const beats = wrap.querySelectorAll('.oracle-beat');
-  const schedule = [0, 1500, 3500, 5200]; // 마지막 비트는 도착 전까지 무한 루프
+  const schedule = [0, 1800, 3500, 5500, 7200]; // 문 열림 → 시길 → 만세력 → 기둥 → 분석 루프
   const beatTimers = schedule.map((delay, i) => setTimeout(() => {
     beats.forEach((b, j) => b.classList.toggle('show', j === i));
   }, delay));
@@ -419,7 +427,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   }
 
   return (async () => {
-    const MIN_MS = 6000;
+    const MIN_MS = 8000;
     const started = Date.now();
     let ok = true, payload;
     try { payload = await apiPromise; }
