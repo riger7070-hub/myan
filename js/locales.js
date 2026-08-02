@@ -125,6 +125,19 @@ const TX = {
     mpZeroNote:'토큰이 없습니다. 아래에서 충전하시면 리딩을 계속하실 수 있어요 ✦',
     mpBotCharge:'토큰 충전', mpBotChargeDesc:'잔여 토큰 충전하기',
     mpBotSupport:'1:1 카카오 상담', mpBotSupportDesc:'궁금한 점을 바로 물어보세요',
+    // 멤버십 구독
+    subSecTitle:'멤버십 구독 · 매월 토큰 자동 지급',
+    subTokenLabel:'월 구독',
+    subBasicName:'베이직', subPremName:'프리미엄',
+    subBasicPrice:'월 9,900원', subPremPrice:'월 19,900원',
+    subSubscribeBtn:'구독하기', subPremBest:'BEST',
+    subPlanNames:{ basic:'베이직 멤버십', premium:'프리미엄 멤버십' },
+    subTokensPerMonth:'매월 {n} 토큰', subNextBilling:'다음 결제일: {date}',
+    subCancelBtn:'구독 해지',
+    subCancelConfirm:'정말 구독을 해지하시겠어요? 다음 결제일부터 자동 결제가 중단됩니다.',
+    subCanceledToast:'구독이 해지되었습니다.',
+    subStartedMsg:'✦ 구독이 시작되었습니다! 매월 토큰이 자동 지급됩니다.',
+    subFailMsg:'구독 처리에 실패했습니다.',
 
   },
   en:{
@@ -250,6 +263,19 @@ const TX = {
     mpZeroNote:'No tokens left. Charge below to continue your reading ✦',
     mpBotCharge:'Buy Tokens', mpBotChargeDesc:'Top up to continue readings',
     mpBotSupport:'KakaoTalk Support', mpBotSupportDesc:'Ask us anything, anytime',
+    // Membership subscription
+    subSecTitle:'Membership · monthly tokens auto-credited',
+    subTokenLabel:'Monthly',
+    subBasicName:'Basic', subPremName:'Premium',
+    subBasicPrice:'₩9,900 / mo', subPremPrice:'₩19,900 / mo',
+    subSubscribeBtn:'Subscribe', subPremBest:'BEST',
+    subPlanNames:{ basic:'Basic Membership', premium:'Premium Membership' },
+    subTokensPerMonth:'{n} tokens / month', subNextBilling:'Next billing: {date}',
+    subCancelBtn:'Cancel',
+    subCancelConfirm:'Cancel your subscription? Auto-renewal will stop from the next billing date.',
+    subCanceledToast:'Subscription canceled.',
+    subStartedMsg:'✦ Subscription started! Tokens will be credited every month.',
+    subFailMsg:'Subscription failed.',
 
   },
   zh:{
@@ -375,6 +401,19 @@ const TX = {
     mpZeroNote:'代币不足，请在下方充值后继续解读 ✦',
     mpBotCharge:'充值代币', mpBotChargeDesc:'充值后继续解读',
     mpBotSupport:'1:1 客服咨询', mpBotSupportDesc:'随时欢迎咨询',
+    // 会员订阅
+    subSecTitle:'会员订阅 · 每月自动赠送代币',
+    subTokenLabel:'月订阅',
+    subBasicName:'基础', subPremName:'高级',
+    subBasicPrice:'每月 9,900韩元', subPremPrice:'每月 19,900韩元',
+    subSubscribeBtn:'订阅', subPremBest:'BEST',
+    subPlanNames:{ basic:'基础会员', premium:'高级会员' },
+    subTokensPerMonth:'每月 {n} 代币', subNextBilling:'下次扣款日: {date}',
+    subCancelBtn:'取消订阅',
+    subCancelConfirm:'确定要取消订阅吗？将从下次扣款日起停止自动续费。',
+    subCanceledToast:'订阅已取消。',
+    subStartedMsg:'✦ 订阅已开始！每月将自动赠送代币。',
+    subFailMsg:'订阅处理失败。',
 
   },
   ja:{
@@ -497,6 +536,19 @@ const TX = {
     mpZeroNote:'トークンがありません。以下から充電してリーディングを続けましょう ✦',
     mpBotCharge:'トークン充電', mpBotChargeDesc:'続けるために充電する',
     mpBotSupport:'1:1 カカオ相談', mpBotSupportDesc:'いつでもお気軽にどうぞ',
+    // メンバーシップ定期購読
+    subSecTitle:'メンバーシップ · 毎月トークン自動付与',
+    subTokenLabel:'月額',
+    subBasicName:'ベーシック', subPremName:'プレミアム',
+    subBasicPrice:'月 9,900ウォン', subPremPrice:'月 19,900ウォン',
+    subSubscribeBtn:'購読する', subPremBest:'BEST',
+    subPlanNames:{ basic:'ベーシック会員', premium:'プレミアム会員' },
+    subTokensPerMonth:'毎月 {n} トークン', subNextBilling:'次回決済日: {date}',
+    subCancelBtn:'解約',
+    subCancelConfirm:'定期購読を解約しますか？次回決済日から自動決済が停止されます。',
+    subCanceledToast:'定期購読を解約しました。',
+    subStartedMsg:'✦ 購読を開始しました！毎月トークンが自動付与されます。',
+    subFailMsg:'購読処理に失敗しました。',
 
   },
 };
@@ -602,6 +654,19 @@ function _renderTokenModal() {
   _s('tmBtn2',       t.tkPayBtn || 'Toss로 결제하기');
   const noteEl = document.getElementById('tmNote');
   if (noteEl) noteEl.innerHTML = (t.tmNote || '').replace(/\n/g, '<br>');
+  // 멤버십 구독 라벨
+  _s('subSecTitle',  t.subSecTitle    || '멤버십 구독');
+  _s('subBasicLabel',t.subTokenLabel  || '월 구독');
+  _s('subPremLabel', t.subTokenLabel  || '월 구독');
+  _s('subBasicName', t.subBasicName   || '베이직');
+  _s('subPremName',  t.subPremName    || '프리미엄');
+  _s('subBasicPrice',t.subBasicPrice  || '월 9,900원');
+  _s('subPremPrice', t.subPremPrice   || '월 19,900원');
+  _s('subBasicBtn',  t.subSubscribeBtn|| '구독하기');
+  _s('subPremBtn',   t.subSubscribeBtn|| '구독하기');
+  _s('subPremBest',  t.subPremBest    || 'BEST');
+  // 활성 구독 상태 영역은 refreshSubscription()이 갱신
+  if (typeof refreshSubscription === 'function') refreshSubscription();
 }
 
 /* 자정 자동 갱신 */

@@ -1475,6 +1475,56 @@ body::-webkit-scrollbar {
   letter-spacing: 0.5px;
 }
 
+/* ── 멤버십 구독 섹션 ── */
+.sub-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.sub-section-title {
+  font-size: 0.82rem;
+  color: var(--gold-light);
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.sub-grid { margin-bottom: 0; }
+.sub-active-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--gold-dim);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(201,169,110,0.06);
+}
+.sub-active-plan {
+  font-size: 0.92rem;
+  color: var(--gold-light);
+  margin-bottom: 3px;
+}
+.sub-active-next {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+}
+.sub-cancel-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  font-family: 'Pretendard', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+}
+.sub-cancel-btn:hover {
+  border-color: #c0504d;
+  color: #d96a67;
+}
+
 
 /* ── 퀵액세스 바 (메인 화면 하단) ── */
 .quick-access-row {

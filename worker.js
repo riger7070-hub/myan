@@ -641,6 +641,22 @@ async function ensureDBExt(env) {
     );
     CREATE INDEX IF NOT EXISTS idx_login_events_email ON login_events (email, at DESC);
     CREATE INDEX IF NOT EXISTS idx_login_events_at ON login_events (at DESC);
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      user_email           TEXT PRIMARY KEY,
+      plan                 TEXT NOT NULL,                 -- 'basic' | 'premium'
+      billing_key          TEXT NOT NULL,                 -- 토스 빌링키 (정기결제 수단)
+      customer_key         TEXT NOT NULL,                 -- 토스 customerKey
+      status               TEXT NOT NULL DEFAULT 'active',-- active | canceled | past_due
+      amount               INTEGER NOT NULL,              -- 월 결제 금액(원)
+      monthly_tokens       INTEGER NOT NULL,              -- 매월 지급 토큰 수
+      created_at           INTEGER NOT NULL DEFAULT (unixepoch()),
+      current_period_start INTEGER NOT NULL,
+      current_period_end   INTEGER NOT NULL,              -- 다음 결제 예정일(이 시점 이후 cron이 재결제)
+      last_charged_at      INTEGER,
+      fail_count           INTEGER NOT NULL DEFAULT 0,    -- 연속 결제 실패 횟수 (dunning)
+      canceled_at          INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
   `).catch(() => {});
   _dbExtReady = true;
 }
@@ -700,6 +716,10 @@ export default {
     if (path === '/api/promo/current'    && method === 'GET')  { await ensureDBExt(env); return handlePromoCurrent(request, env); }
     if (path === '/promo-display'        && method === 'GET')  { return handlePromoDisplay(request, env); }
     if (path === '/api/feedback'         && method === 'POST') { await ensureDBExt(env); return handleFeedback(request, env); }
+    // ── 구독(멤버십) ──
+    if (path === '/api/subscription'         && method === 'GET')  { await ensureDBExt(env); return handleSubscriptionGet(request, env); }
+    if (path === '/api/subscription/confirm' && method === 'POST') { await ensureDBExt(env); return handleSubscriptionConfirm(request, env); }
+    if (path === '/api/subscription/cancel'  && method === 'POST') { await ensureDBExt(env); return handleSubscriptionCancel(request, env); }
     // ── 추천인 ──
     if (path === '/api/referral/generate' && method === 'POST') { await ensureDBExt(env); return handleReferralGenerate(request, env); }
     if (path === '/api/referral/claim'    && method === 'POST') { await ensureDBExt(env); return handleReferralClaim(request, env); }
@@ -767,6 +787,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sendDailyPush(env));
+    ctx.waitUntil((async () => { await ensureDBExt(env); await processSubscriptionRenewals(env); })());
   }
 };
 
@@ -1495,6 +1516,223 @@ async function handlePaymentVerify(request, env) {
 
   } catch (err) {
     return cors(JSON.stringify({ error: { message: '결제 처리 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════
+//  구독(멤버십) — 토스 빌링(정기결제)
+// ════════════════════════════
+// 요금제: 금액·지급 토큰은 서버에서 결정 (클라이언트 조작 차단)
+const SUB_PLANS = {
+  basic:   { amount: 9900,  tokens: 120, name: '마이안 베이직 멤버십' },
+  premium: { amount: 19900, tokens: 280, name: '마이안 프리미엄 멤버십' },
+};
+const SUB_PERIOD_SEC = 30 * 24 * 60 * 60; // 결제 주기(30일)
+const SUB_MAX_FAILS  = 3;                  // 연속 결제 실패 허용 횟수 (이후 past_due)
+
+// 구독 토큰 지급 — 기존 잔액 계산(payment_requests, status='approved')과 동일 경로로 적립
+async function grantSubscriptionTokens(env, email, plan, tokens, amount, orderId) {
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(`
+    INSERT INTO payment_requests
+      (id, user_email, pkg, amount, tokens, status, created_at, approved_at)
+    VALUES (?, ?, ?, ?, ?, 'approved', ?, ?)
+  `).bind(orderId, email, `sub_${plan}`, amount, tokens, now, now).run();
+}
+
+// 토스 빌링키로 정기결제 1회 실행
+async function tossBillingCharge(env, { billingKey, customerKey, amount, orderId, orderName, email }) {
+  const cred = btoa(env.TOSS_SECRET_KEY + ':');
+  const res = await fetch(`https://api.tosspayments.com/v1/billing/${billingKey}`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${cred}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customerKey, amount, orderId, orderName, customerEmail: email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok && data.status === 'DONE', data };
+}
+
+// 구독 신청·승인 (authKey → billingKey 발급 후 첫 결제)
+async function handleSubscriptionConfirm(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    if (!await cfRateLimit(env.RL_PAYMENT, email)) {
+      return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' } }), 429);
+    }
+    if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+    if (!env.TOSS_SECRET_KEY) return cors(JSON.stringify({ error: { message: '결제 서버 설정 오류' } }), 500);
+
+    let body;
+    try { body = await request.json(); } catch {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 JSON 요청 형식입니다.' } }), 400);
+    }
+    const { authKey, customerKey, plan } = body;
+    if (!authKey || typeof authKey !== 'string' || authKey.length > 300) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 인증 키입니다.' } }), 400);
+    }
+    if (!customerKey || typeof customerKey !== 'string' || customerKey.length > 300) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 고객 키입니다.' } }), 400);
+    }
+    const planInfo = SUB_PLANS[plan];
+    if (!planInfo) return cors(JSON.stringify({ error: { message: '유효하지 않은 구독 상품입니다.' } }), 400);
+
+    // 이미 활성 구독이 있으면 중복 결제 차단
+    const existing = await env.DB.prepare(
+      'SELECT status FROM subscriptions WHERE user_email = ?'
+    ).bind(email).first();
+    if (existing && existing.status === 'active') {
+      return cors(JSON.stringify({ error: { message: '이미 활성화된 구독이 있습니다.' } }), 409);
+    }
+
+    // 1. authKey → billingKey 발급 (정기결제 수단 등록)
+    const cred = btoa(env.TOSS_SECRET_KEY + ':');
+    const issueRes = await fetch('https://api.tosspayments.com/v1/billing/authorizations/issue', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${cred}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ authKey, customerKey }),
+    });
+    if (!issueRes.ok) {
+      let m = '결제 수단 등록에 실패했습니다.';
+      try { m = (await issueRes.json()).message || m; } catch {}
+      return cors(JSON.stringify({ error: { message: m } }), 400);
+    }
+    const billing = await issueRes.json();
+    const billingKey = billing.billingKey;
+    if (!billingKey) return cors(JSON.stringify({ error: { message: '빌링키 발급에 실패했습니다.' } }), 400);
+
+    // 2. 첫 회 결제
+    const orderId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const charge = await tossBillingCharge(env, {
+      billingKey, customerKey, amount: planInfo.amount, orderId,
+      orderName: planInfo.name, email,
+    });
+    if (!charge.ok) {
+      return cors(JSON.stringify({ error: { message: charge.data.message || '구독 결제에 실패했습니다.' } }), 400);
+    }
+
+    // 3. 구독 레코드 저장(있으면 갱신) + 토큰 지급
+    const now = Math.floor(Date.now() / 1000);
+    const periodEnd = now + SUB_PERIOD_SEC;
+    await env.DB.prepare(`
+      INSERT INTO subscriptions
+        (user_email, plan, billing_key, customer_key, status, amount, monthly_tokens,
+         created_at, current_period_start, current_period_end, last_charged_at, fail_count, canceled_at)
+      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, NULL)
+      ON CONFLICT(user_email) DO UPDATE SET
+        plan=excluded.plan, billing_key=excluded.billing_key, customer_key=excluded.customer_key,
+        status='active', amount=excluded.amount, monthly_tokens=excluded.monthly_tokens,
+        current_period_start=excluded.current_period_start, current_period_end=excluded.current_period_end,
+        last_charged_at=excluded.last_charged_at, fail_count=0, canceled_at=NULL
+    `).bind(email, plan, billingKey, customerKey, planInfo.amount, planInfo.tokens,
+            now, now, periodEnd, now).run();
+
+    await grantSubscriptionTokens(env, email, plan, planInfo.tokens, planInfo.amount, orderId);
+
+    const bal = await env.DB.prepare(`
+      SELECT COALESCE(SUM(tokens), 0) AS balance
+      FROM payment_requests WHERE user_email = ? AND status = 'approved'
+    `).bind(email).first();
+
+    return cors(JSON.stringify({
+      success: true, plan, tokens: planInfo.tokens,
+      balance: bal ? bal.balance : planInfo.tokens,
+      currentPeriodEnd: periodEnd,
+    }));
+  } catch (err) {
+    return cors(JSON.stringify({ error: { message: '구독 처리 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// 현재 구독 상태 조회
+async function handleSubscriptionGet(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 필요' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 토큰' } }), 401);
+    if (!env.DB) return cors(JSON.stringify({ active: false }));
+    const sub = await env.DB.prepare(
+      'SELECT plan, status, amount, monthly_tokens, current_period_end FROM subscriptions WHERE user_email = ?'
+    ).bind(email).first();
+    if (!sub || sub.status !== 'active') {
+      return cors(JSON.stringify({ active: false, status: sub ? sub.status : null }));
+    }
+    return cors(JSON.stringify({
+      active: true,
+      plan: sub.plan,
+      status: sub.status,
+      amount: sub.amount,
+      monthlyTokens: sub.monthly_tokens,
+      currentPeriodEnd: sub.current_period_end,
+    }));
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '구독 조회 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// 구독 해지 (이미 지급된 토큰은 유지, 다음 주기부터 자동결제 중단)
+async function handleSubscriptionCancel(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 필요' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 토큰' } }), 401);
+    if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+    const now = Math.floor(Date.now() / 1000);
+    const res = await env.DB.prepare(
+      "UPDATE subscriptions SET status='canceled', canceled_at=? WHERE user_email=? AND status='active'"
+    ).bind(now, email).run();
+    if (!(res.meta && res.meta.changes)) {
+      return cors(JSON.stringify({ error: { message: '활성 구독이 없습니다.' } }), 404);
+    }
+    return cors(JSON.stringify({ success: true }));
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '구독 해지 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// cron: 만기 도래한 활성 구독 자동 재결제 + dunning(실패 재시도)
+async function processSubscriptionRenewals(env) {
+  if (!env.DB || !env.TOSS_SECRET_KEY) return;
+  const now = Math.floor(Date.now() / 1000);
+  const due = await env.DB.prepare(
+    "SELECT * FROM subscriptions WHERE status='active' AND current_period_end <= ?"
+  ).bind(now).all().catch(() => ({ results: [] }));
+
+  for (const sub of due.results || []) {
+    const planInfo = SUB_PLANS[sub.plan];
+    if (!planInfo) continue;
+    const orderId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let charge;
+    try {
+      charge = await tossBillingCharge(env, {
+        billingKey: sub.billing_key, customerKey: sub.customer_key,
+        amount: sub.amount, orderId, orderName: planInfo.name, email: sub.user_email,
+      });
+    } catch { charge = { ok: false, data: {} }; }
+
+    if (charge.ok) {
+      const periodEnd = now + SUB_PERIOD_SEC;
+      await env.DB.prepare(
+        "UPDATE subscriptions SET current_period_start=?, current_period_end=?, last_charged_at=?, fail_count=0 WHERE user_email=?"
+      ).bind(now, periodEnd, now, sub.user_email).run();
+      await grantSubscriptionTokens(env, sub.user_email, sub.plan, sub.monthly_tokens, sub.amount, orderId);
+    } else {
+      const fails = (sub.fail_count || 0) + 1;
+      if (fails >= SUB_MAX_FAILS) {
+        await env.DB.prepare(
+          "UPDATE subscriptions SET status='past_due', fail_count=? WHERE user_email=?"
+        ).bind(fails, sub.user_email).run();
+      } else {
+        // 다음 날 재시도 (cron이 매일 실행되므로 current_period_end를 하루 뒤로)
+        await env.DB.prepare(
+          "UPDATE subscriptions SET fail_count=?, current_period_end=? WHERE user_email=?"
+        ).bind(fails, now + 86400, sub.user_email).run();
+      }
+    }
   }
 }
 

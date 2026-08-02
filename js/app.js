@@ -965,6 +965,116 @@ async function buyToken(pkg) {
   }
 }
 
+// ── 멤버십 구독 (토스 빌링/정기결제) ──
+const SUB_PLANS_FE = {
+  basic:   { name: '마이안 베이직 멤버십',   amount: 9900,  tokens: 120 },
+  premium: { name: '마이안 프리미엄 멤버십', amount: 19900, tokens: 280 },
+};
+let _subState = null;
+
+// 구독 신청 — 빌링 인증창 호출 (성공 시 ?subAuth=1&authKey=&customerKey= 로 복귀)
+async function subscribeMembership(plan) {
+  const user = getUser();
+  if (!user || !isLoggedIn()) { showLogin(); return; }
+  const info = SUB_PLANS_FE[plan];
+  if (!info) return;
+  if (typeof Analytics !== 'undefined') Analytics.trackPayment('start', info.amount, info.tokens);
+
+  sessionStorage.setItem('myan_pending_sub_plan', plan);
+  try {
+    const tossPayments = TossPayments(TOSS_CLIENT_KEY);
+    const payment = tossPayments.payment({ customerKey: user.email });
+    await payment.requestBillingAuth({
+      method: 'CARD',
+      successUrl: 'https://myan.riger7070.workers.dev/?subAuth=1',
+      failUrl:    'https://myan.riger7070.workers.dev/?payFailed=1',
+      customerEmail: user.email,
+      customerName:  user.name || '고객',
+    });
+    // requestBillingAuth는 항상 페이지 이동 — 아래 코드는 실행되지 않음
+  } catch (err) {
+    if (err?.code === 'USER_CANCEL') return;
+    console.error('[subscribeMembership]', err);
+    alert('구독 신청 중 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
+  }
+}
+
+// 빌링 인증 복귀 후 서버에 구독 확정 요청
+async function _confirmSubscription({ authKey, customerKey, plan }) {
+  try {
+    const res = await fetch(`${EP}api/subscription/confirm`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ authKey, customerKey, plan })
+    });
+    const result = await res.json();
+    if (result.success) {
+      await refreshTokens();
+      await refreshSubscription();
+      if (typeof Analytics !== 'undefined') Analytics.trackPayment('success', SUB_PLANS_FE[plan]?.amount, result.tokens);
+      const t = getT();
+      alert(t.subStartedMsg || '✦ 구독이 시작되었습니다! 매월 토큰이 자동 지급됩니다.');
+    } else {
+      if (typeof Analytics !== 'undefined') Analytics.trackPayment('fail', SUB_PLANS_FE[plan]?.amount, null, result.error?.message);
+      alert(`${(getT().subFailMsg || '구독 처리 실패')}: ${result.error?.message || '고객센터(riger7070@naver.com)로 문의해 주세요.'}`);
+    }
+  } catch (e) {
+    alert('구독 확인 중 오류가 발생했습니다. 고객센터(riger7070@naver.com)로 문의 바랍니다.');
+  }
+}
+
+// 현재 구독 상태 조회 + UI 갱신
+async function refreshSubscription() {
+  if (!getGoogleIdToken()) { _subState = null; _renderSubUI(); return; }
+  try {
+    const res = await fetch(`${EP}api/subscription`, { headers: authHeaders() });
+    _subState = await res.json();
+  } catch { _subState = null; }
+  _renderSubUI();
+}
+
+// 구독 영역 렌더 (활성: 상태 박스 / 미구독: 상품 카드)
+function _renderSubUI() {
+  const box   = document.getElementById('sub-active-box');
+  const plans = document.getElementById('sub-plans');
+  if (!box || !plans) return;
+  const t = getT();
+  if (_subState && _subState.active) {
+    const planName = (t.subPlanNames && t.subPlanNames[_subState.plan]) || _subState.plan;
+    const date = _subState.currentPeriodEnd
+      ? new Date(_subState.currentPeriodEnd * 1000).toLocaleDateString(getLang() === 'ko' ? 'ko-KR' : getLang())
+      : '';
+    document.getElementById('subActivePlan').textContent =
+      `✦ ${planName} (${(t.subTokensPerMonth || '매월 {n} 토큰').replace('{n}', _subState.monthlyTokens)})`;
+    document.getElementById('subActiveNext').textContent =
+      (t.subNextBilling || '다음 결제일: {date}').replace('{date}', date);
+    document.getElementById('subCancelBtn').textContent = t.subCancelBtn || '구독 해지';
+    box.style.display = 'flex';
+    plans.style.display = 'none';
+  } else {
+    box.style.display = 'none';
+    plans.style.display = '';
+  }
+}
+
+// 구독 해지
+async function cancelSubscription() {
+  const t = getT();
+  if (!confirm(t.subCancelConfirm || '정말 구독을 해지하시겠어요? 다음 결제일부터 자동 결제가 중단됩니다.')) return;
+  try {
+    const res = await fetch(`${EP}api/subscription/cancel`, { method: 'POST', headers: authHeaders() });
+    const r = await res.json();
+    if (r.success) {
+      showToast(t.subCanceledToast || '구독이 해지되었습니다.');
+      await refreshSubscription();
+    } else {
+      showToast(r.error?.message || (t.subFailMsg || '해지에 실패했습니다.'));
+    }
+  } catch {
+    showToast(t.subFailMsg || '해지 중 오류가 발생했습니다.');
+  }
+}
+
 // ── 관리자 패널 ──
 async function openAdminPanel() {
   const user = getUser();
@@ -1376,6 +1486,16 @@ function handleGoogleCredential(response) {
       try {
         const _td = JSON.parse(_pendingToss);
         setTimeout(() => _confirmTossPayment(_td), 600);
+      } catch {}
+    }
+
+    // 구독 빌링 인증 후 로그인이 늦은 경우 → pending 구독 확인
+    const _pendingSub = sessionStorage.getItem('myan_pending_sub_confirm');
+    if (_pendingSub) {
+      sessionStorage.removeItem('myan_pending_sub_confirm');
+      try {
+        const _sd = JSON.parse(_pendingSub);
+        setTimeout(() => _confirmSubscription(_sd), 600);
       } catch {}
     }
   } catch(e) {
@@ -1819,6 +1939,7 @@ function openTokenModal() {
   document.body.style.overflow = 'hidden';
   updateAllTokenDisplays(); // 잔액 최신화
   if (typeof _renderTokenModal === 'function') _renderTokenModal(); // 다국어 라벨 갱신
+  if (typeof refreshSubscription === 'function') refreshSubscription(); // 구독 상태 갱신
 }
 
 function closeTokenModal() {
@@ -2608,8 +2729,26 @@ window.addEventListener('DOMContentLoaded', () => {
   const _orderId    = _rsp.get('orderId');
   const _amount     = _rsp.get('amount');
   const _payFailed  = _rsp.get('payFailed');
+  const _subAuth     = _rsp.get('subAuth');
+  const _authKey     = _rsp.get('authKey');
+  const _customerKey = _rsp.get('customerKey');
 
-  if (_paymentKey && _orderId && _amount) {
+  if (_subAuth && _authKey && _customerKey) {
+    // ✅ 구독 빌링 인증 성공 리다이렉트
+    history.replaceState({}, '', window.location.pathname);
+    const _plan = sessionStorage.getItem('myan_pending_sub_plan') || 'basic';
+    sessionStorage.removeItem('myan_pending_sub_plan');
+    const _subData = { authKey: _authKey, customerKey: _customerKey, plan: _plan };
+
+    setTimeout(async () => {
+      if (getGoogleIdToken()) {
+        await _confirmSubscription(_subData);
+      } else {
+        sessionStorage.setItem('myan_pending_sub_confirm', JSON.stringify(_subData));
+      }
+    }, 800);
+
+  } else if (_paymentKey && _orderId && _amount) {
     // ✅ 결제 성공 리다이렉트
     history.replaceState({}, '', window.location.pathname);
     const _tossData = { paymentKey: _paymentKey, orderId: _orderId, amount: Number(_amount) };
