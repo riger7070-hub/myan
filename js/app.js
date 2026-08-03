@@ -1,6 +1,78 @@
 // M;Y 安 — app.js  (API·채팅·결제·마이페이지 메인 로직)
 
 // ══════════════════════════════════════════════════════════════════════
+//  사운드 효과 (Web Audio API)
+// ══════════════════════════════════════════════════════════════════════
+let audioEnabled = true; // localStorage에서 불러오기
+try {
+  const saved = localStorage.getItem('myan_audio_enabled');
+  if (saved !== null) audioEnabled = saved === 'true';
+} catch {}
+
+function toggleAudio() {
+  audioEnabled = !audioEnabled;
+  try { localStorage.setItem('myan_audio_enabled', audioEnabled); } catch {}
+  return audioEnabled;
+}
+
+// 🔔 종소리 효과
+function playBellSound() {
+  if (!audioEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.8);
+  } catch {}
+}
+
+// 📜 페이지 넘기는 소리
+function playPageFlipSound() {
+  if (!audioEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 300;
+    osc.type = 'triangle';
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch {}
+}
+
+// ✨ 성공 소리
+function playSuccessSound() {
+  if (!audioEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [523, 659, 784].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      const t = ctx.currentTime + i * 0.1;
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    });
+  } catch {}
+}
+
+// ══════════════════════════════════════════════════════════════════════
 //  유틸리티 함수
 // ══════════════════════════════════════════════════════════════════════
 
@@ -361,12 +433,19 @@ const minDelay = (ms) => new Promise(r => setTimeout(r, ms));
 function openOracleOverlay({ apiPromise, contained = false, target = null } = {}) {
   const t = getT();
   const langNow = getLang();
-  const msgs = _LOAD_MSGS[langNow] || _LOAD_MSGS.ko;
+  const allMsgs = _LOAD_MSGS[langNow] || _LOAD_MSGS.ko;
+
+  // 🎲 문구 랜덤 섞기
+  const msgs = [...allMsgs].sort(() => Math.random() - 0.5);
+
+  // 🔔 문구별 아이콘 매핑
+  const msgIcons = ['🔔', '🌾', '✨', '🌏', '☯️', '⛩️', '📜'];
 
   const wrap = document.createElement('div');
   wrap.className = contained ? 'oracle-stage' : 'oracle-overlay active';
   wrap.innerHTML = `
     <div class="oracle-inner">
+      <button class="oracle-audio-toggle" title="${audioEnabled ? '🔊 음소거' : '🔇 소리켜기'}">${audioEnabled ? '🔊' : '🔇'}</button>
       <div class="oracle-beat show">
         <div class="oracle-door opening">
           <div class="oracle-door-frame">
@@ -376,7 +455,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
         </div>
       </div>
       <div class="oracle-beat">
-        <div class="oracle-character"><img src="/andoryeong.svg" alt="안도령"></div>
+        <div class="oracle-character clickable"><img src="/andoryeong.svg" alt="안도령"></div>
         <div class="oracle-caption">${t.oracleEnter || '문을 엽니다…'}</div>
       </div>
       <div class="oracle-beat">
@@ -392,8 +471,12 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
         <div class="oracle-caption">${t.oraclePillars || '사주 네 기둥을 세웁니다…'}</div>
       </div>
       <div class="oracle-beat">
+        <div class="oracle-effect-icon">🔔</div>
         <span class="oracle-loop-text">${msgs[0]}</span>
-        <div class="loader-progress"><div class="loader-progress-bar oracle-loop-bar"></div></div>
+        <div class="loader-progress">
+          <div class="loader-progress-bar oracle-loop-bar" style="width: 0%"></div>
+        </div>
+        <button class="oracle-skip-btn">${{ko:'⏩ 건너뛰기',en:'⏩ Skip',zh:'⏩ 跳过',ja:'⏩ スキップ'}[langNow] || '⏩ 건너뛰기'}</button>
       </div>
     </div>`;
 
@@ -409,23 +492,84 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   }
 
   const beats = wrap.querySelectorAll('.oracle-beat');
-  const schedule = [0, 1800, 3500, 5500, 7200]; // 문 열림 → 시길 → 만세력 → 기둥 → 분석 루프
+  const schedule = [0, 1800, 3500, 5500, 7200];
   const beatTimers = schedule.map((delay, i) => setTimeout(() => {
     beats.forEach((b, j) => b.classList.toggle('show', j === i));
+    // 🔊 단계별 사운드
+    if (i === 1) playBellSound(); // 안도령 등장
+    if (i === 2) playPageFlipSound(); // 만세력 넘김
+    if (i === 3) playBellSound(); // 기둥 세움
   }, delay));
+
+  // 🎭 안도령 클릭 반응
+  const charEl = wrap.querySelector('.oracle-character');
+  if (charEl) {
+    charEl.addEventListener('click', () => {
+      playBellSound(); // 클릭 시 종소리
+      charEl.style.transform = 'scale(1.15) rotate(5deg)';
+      setTimeout(() => { charEl.style.transform = ''; }, 200);
+    });
+  }
 
   let loopIdx = 0;
   const loopSpan = wrap.querySelector('.oracle-loop-text');
+  const iconSpan = wrap.querySelector('.oracle-effect-icon');
   const loopTimer = setInterval(() => {
     loopIdx = (loopIdx + 1) % msgs.length;
     if (!loopSpan) return;
     loopSpan.style.opacity = '0';
-    setTimeout(() => { loopSpan.textContent = msgs[loopIdx]; loopSpan.style.opacity = '1'; }, 250);
+    if (iconSpan) iconSpan.style.opacity = '0';
+    setTimeout(() => {
+      loopSpan.textContent = msgs[loopIdx];
+      loopSpan.style.opacity = '1';
+      if (iconSpan) {
+        iconSpan.textContent = msgIcons[loopIdx % msgIcons.length];
+        iconSpan.style.opacity = '1';
+      }
+      // 🔊 문구 변경 시 작은 소리
+      if (loopIdx === 0) playPageFlipSound();
+    }, 250);
   }, 1800);
+
+  // ⏱️ 실제 프로그레스 바 (0% → 100%)
+  const MIN_MS = 12000;
+  const started = Date.now();
+  const progressBar = wrap.querySelector('.oracle-loop-bar');
+  let progressInterval;
+  if (progressBar) {
+    progressInterval = setInterval(() => {
+      const elapsed = Date.now() - started;
+      const progress = Math.min(100, (elapsed / MIN_MS) * 100);
+      progressBar.style.width = `${progress}%`;
+    }, 50);
+  }
+
+  // ⏩ 스킵 버튼
+  let skipRequested = false;
+  const skipBtn = wrap.querySelector('.oracle-skip-btn');
+  if (skipBtn) {
+    skipBtn.addEventListener('click', () => {
+      skipRequested = true;
+      playSuccessSound();
+      close();
+    });
+  }
+
+  // 🔊 오디오 토글 버튼
+  const audioBtn = wrap.querySelector('.oracle-audio-toggle');
+  if (audioBtn) {
+    audioBtn.addEventListener('click', () => {
+      const enabled = toggleAudio();
+      audioBtn.textContent = enabled ? '🔊' : '🔇';
+      audioBtn.title = enabled ? '🔊 음소거' : '🔇 소리켜기';
+      if (enabled) playBellSound();
+    });
+  }
 
   function cleanup() {
     beatTimers.forEach(clearTimeout);
     clearInterval(loopTimer);
+    if (progressInterval) clearInterval(progressInterval);
   }
   function close() {
     cleanup();
@@ -437,13 +581,19 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   }
 
   return (async () => {
-    const MIN_MS = 12000;
-    const started = Date.now();
     let ok = true, payload;
     try { payload = await apiPromise; }
     catch (e) { ok = false; payload = e; }
-    const remain = MIN_MS - (Date.now() - started);
-    if (remain > 0) await minDelay(remain);
+
+    // 스킵 안 했으면 최소 시간 대기
+    if (!skipRequested) {
+      const remain = MIN_MS - (Date.now() - started);
+      if (remain > 0) await minDelay(remain);
+    }
+
+    // 🎉 완료 시 성공 사운드
+    if (ok) playSuccessSound();
+
     close();
     if (ok) return payload;
     throw payload;
