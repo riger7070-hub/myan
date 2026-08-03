@@ -427,7 +427,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   }
 
   return (async () => {
-    const MIN_MS = 8000;
+    const MIN_MS = 12000;
     const started = Date.now();
     let ok = true, payload;
     try { payload = await apiPromise; }
@@ -490,21 +490,25 @@ function revealSentences(container, text, langNow, { stagger = 1700, onComplete,
   };
   document.addEventListener('visibilitychange', onVisChange);
 
+  // 모든 문장을 한번에 표시 (delay 0으로 설정)
   sentences.forEach((sentence, i) => {
     const el = document.createElement('div');
     el.className = 'reveal-sentence';
     el.textContent = sentence;
-    el.style.animationDelay = `${(i * stagger) / 1000}s`;
+    el.style.animationDelay = '0s';  // 모든 문장 즉시 표시
+    el.style.opacity = '1';           // 즉시 보이도록
     container.appendChild(el);
-    setTimeout(() => { try { scroller.scrollTop = scroller.scrollHeight; } catch {} }, i * stagger + 550);
   });
 
-  const totalMs = (sentences.length - 1) * stagger + 550;
+  // 즉시 스크롤
+  setTimeout(() => { try { scroller.scrollTop = scroller.scrollHeight; } catch {} }, 50);
+
+  // 즉시 완료
   setTimeout(() => {
     done = true;
     document.removeEventListener('visibilitychange', onVisChange);
     if (onComplete) onComplete();
-  }, totalMs);
+  }, 100);
 }
 
 // 문장 리빌 총 소요 시간(ms) — 게이지 등 후행 연출 타이밍 계산용
