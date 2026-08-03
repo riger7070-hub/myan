@@ -3861,7 +3861,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 }
 .oracle-character {
   width: 92px;
-  animation: oracleEnter 2.2s ease-in-out infinite;
+  animation: oracleDance 1.8s ease-in-out infinite;
 }
 .oracle-character img {
   display: block;
@@ -3928,6 +3928,16 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 @keyframes oracleEnter {
   0%, 100% { transform: scale(1); opacity: .75; }
   50%      { transform: scale(1.08); opacity: 1; }
+}
+@keyframes oracleDance {
+  0%   { transform: translateY(0) rotate(0deg); opacity: .85; }
+  15%  { transform: translateY(-8px) rotate(-3deg); opacity: 1; }
+  30%  { transform: translateY(-4px) rotate(3deg); opacity: .95; }
+  45%  { transform: translateY(-10px) rotate(-2deg); opacity: 1; }
+  60%  { transform: translateY(-5px) rotate(2deg); opacity: .9; }
+  75%  { transform: translateY(-7px) rotate(-1deg); opacity: 1; }
+  90%  { transform: translateY(-3px) rotate(1deg); opacity: .95; }
+  100% { transform: translateY(0) rotate(0deg); opacity: .85; }
 }
 @keyframes pageFlip {
   0%   { opacity: 0; transform: translateY(6px); }
