@@ -73,6 +73,230 @@ function playSuccessSound() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+//  연속 방문 스트릭 시스템
+// ══════════════════════════════════════════════════════════════════════
+function updateStreak() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const stored = localStorage.getItem('myan_streak');
+    let streak = stored ? JSON.parse(stored) : { count: 0, lastDate: null };
+
+    if (streak.lastDate === today) {
+      // 오늘 이미 방문함
+      return streak.count;
+    }
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+    if (streak.lastDate === yesterdayStr) {
+      // 연속 방문
+      streak.count++;
+    } else if (streak.lastDate !== today) {
+      // 중간에 끊김
+      streak.count = 1;
+    }
+
+    streak.lastDate = today;
+    localStorage.setItem('myan_streak', JSON.stringify(streak));
+
+    // 특별 스트릭 달성 시 축하
+    if ([3, 7, 14, 30, 100].includes(streak.count)) {
+      setTimeout(() => showStreakAchievement(streak.count), 1000);
+    }
+
+    return streak.count;
+  } catch {
+    return 0;
+  }
+}
+
+function getStreak() {
+  try {
+    const stored = localStorage.getItem('myan_streak');
+    if (!stored) return 0;
+    const streak = JSON.parse(stored);
+    const today = new Date().toISOString().slice(0, 10);
+    return streak.lastDate === today ? streak.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function showStreakAchievement(count) {
+  const messages = {
+    ko: { 3: '🔥 3일 연속!', 7: '🔥 일주일 달성!', 14: '🔥 2주 연속!', 30: '🎉 한 달 달성!', 100: '👑 100일 달성!' },
+    en: { 3: '🔥 3 days!', 7: '🔥 1 week!', 14: '🔥 2 weeks!', 30: '🎉 1 month!', 100: '👑 100 days!' },
+    zh: { 3: '🔥 连续3天!', 7: '🔥 连续一周!', 14: '🔥 连续两周!', 30: '🎉 连续一月!', 100: '👑 连续100天!' },
+    ja: { 3: '🔥 3日連続!', 7: '🔥 1週間達成!', 14: '🔥 2週間連続!', 30: '🎉 1ヶ月達成!', 100: '👑 100日達成!' }
+  };
+  const lang = getLang();
+  const msg = messages[lang]?.[count] || messages.ko[count];
+  if (msg) {
+    showToast(msg, 4000);
+    hapticSuccess();
+    playSuccessSound();
+    if (window.M_Effect) {
+      const colors = ['木', '火', '土', '金', '水'];
+      window.M_Effect.spawnParticles(null, colors[Math.floor(Math.random() * colors.length)]);
+    }
+  }
+}
+
+function showStreakBanner(count) {
+  const banner = document.getElementById('streakBanner');
+  const text = document.getElementById('streakText');
+  if (!banner || !text || count < 1) {
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+
+  const messages = {
+    ko: count === 1 ? '오늘 첫 방문!' : `${count}일 연속 방문 중!`,
+    en: count === 1 ? 'First visit today!' : `${count} day streak!`,
+    zh: count === 1 ? '今日首次访问!' : `连续访问${count}天!`,
+    ja: count === 1 ? '今日初訪問!' : `${count}日連続!`
+  };
+  const lang = getLang();
+  text.textContent = messages[lang] || messages.ko;
+  banner.style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  햅틱 피드백
+// ══════════════════════════════════════════════════════════════════════
+function hapticLight() {
+  try {
+    if (navigator.vibrate) navigator.vibrate(10);
+  } catch {}
+}
+
+function hapticMedium() {
+  try {
+    if (navigator.vibrate) navigator.vibrate(20);
+  } catch {}
+}
+
+function hapticHeavy() {
+  try {
+    if (navigator.vibrate) navigator.vibrate([30, 10, 30]);
+  } catch {}
+}
+
+function hapticSuccess() {
+  try {
+    if (navigator.vibrate) navigator.vibrate([10, 30, 20, 30, 30]);
+  } catch {}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  공유 카드 생성 (Canvas)
+// ══════════════════════════════════════════════════════════════════════
+async function shareOhaengCard(ohaeng) {
+  const lang = getLang();
+  const t = TX[lang];
+  const dk = DK[lang][ohaeng];
+  const col = OC[ohaeng];
+  const kiName = ON[lang][ohaeng];
+  const today = new Date().toLocaleDateString(lang === 'ko' ? 'ko-KR' : lang === 'ja' ? 'ja-JP' : lang === 'zh' ? 'zh-CN' : 'en-US');
+
+  // 캔버스 생성
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 630;
+  const ctx = canvas.getContext('2d');
+
+  // 배경 그라데이션
+  const gradient = ctx.createLinearGradient(0, 0, 0, 630);
+  gradient.addColorStop(0, '#0d0e12');
+  gradient.addColorStop(1, '#1a1b20');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 1200, 630);
+
+  // 오행 색깔 글로우
+  const glowGrad = ctx.createRadialGradient(600, 315, 50, 600, 315, 400);
+  glowGrad.addColorStop(0, `${col}40`);
+  glowGrad.addColorStop(1, `${col}00`);
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, 1200, 630);
+
+  // 제목
+  ctx.fillStyle = '#c9a96e';
+  ctx.font = 'bold 48px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('M;Y 安', 600, 100);
+
+  // 날짜
+  ctx.fillStyle = '#8a8479';
+  ctx.font = '24px sans-serif';
+  ctx.fillText(today, 600, 140);
+
+  // 오행 한자 (큰 글씨)
+  ctx.fillStyle = col;
+  ctx.font = 'bold 180px serif';
+  ctx.fillText(ohaeng, 600, 320);
+
+  // 오행 이름
+  ctx.fillStyle = '#e8dcc8';
+  ctx.font = 'bold 40px sans-serif';
+  ctx.fillText(kiName, 600, 380);
+
+  // 아이콘
+  ctx.font = '80px sans-serif';
+  ctx.fillText(dk.icon, 600, 480);
+
+  // 활동 이름
+  ctx.fillStyle = col;
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText(dk.name, 600, 540);
+
+  // URL
+  ctx.fillStyle = '#6a6a5a';
+  ctx.font = '20px sans-serif';
+  ctx.fillText('myan.riger7070.workers.dev', 600, 600);
+
+  // 이미지로 변환
+  canvas.toBlob(async (blob) => {
+    if (!blob) {
+      showToast(t.err || '오류가 발생했습니다');
+      return;
+    }
+
+    try {
+      // Web Share API 지원 확인
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], 'myan-ohaeng.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `M;Y 安 - ${kiName}`,
+            text: `오늘(${today})의 오행 기운은 ${kiName}입니다!`,
+            files: [file]
+          });
+          hapticLight();
+          return;
+        }
+      }
+
+      // 폴백: 다운로드
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `myan-${ohaeng}-${new Date().toISOString().slice(0,10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast({ko:'이미지가 저장되었습니다!',en:'Image saved!',zh:'图片已保存!',ja:'画像を保存しました!'}[lang] || '이미지가 저장되었습니다!');
+      hapticMedium();
+    } catch (err) {
+      console.error(err);
+      showToast(t.err || '공유에 실패했습니다');
+    }
+  }, 'image/png');
+}
+
+window.shareOhaengCard = shareOhaengCard;
+
+// ══════════════════════════════════════════════════════════════════════
 //  유틸리티 함수
 // ══════════════════════════════════════════════════════════════════════
 
@@ -495,10 +719,10 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   const schedule = [0, 1800, 3500, 5500, 7200];
   const beatTimers = schedule.map((delay, i) => setTimeout(() => {
     beats.forEach((b, j) => b.classList.toggle('show', j === i));
-    // 🔊 단계별 사운드
-    if (i === 1) playBellSound(); // 안도령 등장
-    if (i === 2) playPageFlipSound(); // 만세력 넘김
-    if (i === 3) playBellSound(); // 기둥 세움
+    // 🔊 단계별 사운드 & 햅틱
+    if (i === 1) { playBellSound(); hapticLight(); } // 안도령 등장
+    if (i === 2) { playPageFlipSound(); hapticLight(); } // 만세력 넘김
+    if (i === 3) { playBellSound(); hapticMedium(); } // 기둥 세움
   }, delay));
 
   // 🎭 안도령 클릭 반응
@@ -506,6 +730,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   if (charEl) {
     charEl.addEventListener('click', () => {
       playBellSound(); // 클릭 시 종소리
+      hapticLight(); // 가벼운 진동
       charEl.style.transform = 'scale(1.15) rotate(5deg)';
       setTimeout(() => { charEl.style.transform = ''; }, 200);
     });
@@ -551,6 +776,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
     skipBtn.addEventListener('click', () => {
       skipRequested = true;
       playSuccessSound();
+      hapticMedium();
       close();
     });
   }
@@ -563,6 +789,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
       audioBtn.textContent = enabled ? '🔊' : '🔇';
       audioBtn.title = enabled ? '🔊 음소거' : '🔇 소리켜기';
       if (enabled) playBellSound();
+      hapticLight();
     });
   }
 
@@ -591,8 +818,17 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
       if (remain > 0) await minDelay(remain);
     }
 
-    // 🎉 완료 시 성공 사운드
-    if (ok) playSuccessSound();
+    // 🎉 완료 시 성공 사운드 & 파티클 & 햅틱
+    if (ok) {
+      playSuccessSound();
+      hapticSuccess(); // 성공 진동 패턴
+      // 랜덤 오행 색깔로 축하 파티클
+      const colors = ['木', '火', '土', '金', '水'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      if (window.M_Effect) {
+        window.M_Effect.spawnParticles(null, randomColor);
+      }
+    }
 
     close();
     if (ok) return payload;
@@ -716,6 +952,9 @@ function addRxCard(o) {
   btnRow.innerHTML = `
     <button class="rx-detail-btn" onclick="_openDetailReading('${today}','${o}')">
       🔍 ${t.detailTitle || '상세 풀이'}
+    </button>
+    <button class="rx-share-btn" onclick="shareOhaengCard('${o}')">
+      📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}
     </button>`;
   cw().appendChild(btnRow);
 
@@ -3074,6 +3313,10 @@ window.addEventListener('DOMContentLoaded', () => {
   // ?promo= URL 파라미터 감지
   _checkPromoParam();
 
+  // 🔥 스트릭 업데이트 및 표시
+  const streak = updateStreak();
+  showStreakBanner(streak);
+
   // ── 토스페이먼츠 결제 후 리다이렉트 처리 ──
   // 결제 성공: ?paymentKey=xxx&orderId=yyy&amount=4900
   // 결제 실패: ?payFailed=1&orderId=yyy  (또는 Toss 자체 failUrl)
@@ -3272,11 +3515,98 @@ async function renderOhaengHeatmap() {
       const color = o ? HEATMAP_COLORS[o] : null;
       cells.push(`<div class="heatmap-cell${o?'':' heatmap-empty'}" title="${d}${o?' ('+o+')':''}" style="${color?'background:'+color+';':''}"></div>`);
     }
-    section.innerHTML = `<div class="heatmap-section-title">${t.heatmapTitle||'90일 오행 기록'}</div><div class="heatmap-grid">${cells.join('')}</div>`;
+    section.innerHTML = `
+      <div class="heatmap-section-title">${t.heatmapTitle||'90일 오행 기록'}</div>
+      <div class="heatmap-grid">${cells.join('')}</div>
+      <button class="calendar-toggle-btn" onclick="toggleMonthlyCalendar()" style="margin-top:16px">
+        📅 ${{ko:'월간 캘린더 보기',en:'Monthly Calendar',zh:'月历',ja:'月間カレンダー'}[getLang()] || '월간 캘린더 보기'}
+      </button>
+      <div id="monthly-calendar" style="display:none; margin-top:16px"></div>
+    `;
     section.style.display = '';
+    renderMonthlyCalendar(map); // 캘린더 미리 생성 (숨김 상태)
   } catch { section.style.display = 'none'; }
 }
 
+
+// ════════════════════════════════════════════
+//  월간 캘린더
+// ════════════════════════════════════════════
+function toggleMonthlyCalendar() {
+  const cal = document.getElementById('monthly-calendar');
+  if (!cal) return;
+  cal.style.display = cal.style.display === 'none' ? 'block' : 'none';
+  hapticLight();
+}
+
+function renderMonthlyCalendar(ohaengMap) {
+  const cal = document.getElementById('monthly-calendar');
+  if (!cal) return;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+  const lang = getLang();
+
+  // 월 이름
+  const monthNames = {
+    ko: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    zh: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
+    ja: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+  };
+  const monthName = (monthNames[lang] || monthNames.ko)[month];
+
+  // 요일 이름
+  const dayNames = {
+    ko: ['일','월','화','수','목','금','토'],
+    en: ['Su','Mo','Tu','We','Th','Fr','Sa'],
+    zh: ['日','一','二','三','四','五','六'],
+    ja: ['日','月','火','水','木','金','土']
+  };
+  const days = dayNames[lang] || dayNames.ko;
+
+  // 이번 달 첫날, 마지막날
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const firstWeekday = firstDay.getDay(); // 0=일요일
+  const daysInMonth = lastDay.getDate();
+
+  let html = `
+    <div class="calendar-header">${year} ${monthName}</div>
+    <div class="calendar-weekdays">
+      ${days.map(d => `<div class="calendar-weekday">${d}</div>`).join('')}
+    </div>
+    <div class="calendar-days">
+  `;
+
+  // 빈 칸 (이전 달)
+  for (let i = 0; i < firstWeekday; i++) {
+    html += '<div class="calendar-day calendar-day-empty"></div>';
+  }
+
+  // 날짜 칸
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const ohaeng = ohaengMap[dateStr];
+    const color = ohaeng ? HEATMAP_COLORS[ohaeng] : null;
+    const isToday = dateStr === _todayKST();
+
+    html += `
+      <div class="calendar-day${isToday ? ' calendar-day-today' : ''}${ohaeng ? ' calendar-day-has-ohaeng' : ''}"
+           title="${dateStr}${ohaeng ? ' ('+ohaeng+')' : ''}"
+           style="${color ? 'background:'+color+';' : ''}">
+        <div class="calendar-day-num">${day}</div>
+        ${ohaeng ? `<div class="calendar-day-ohaeng">${ohaeng}</div>` : ''}
+      </div>
+    `;
+  }
+
+  html += '</div>';
+  cal.innerHTML = html;
+}
+
+window.toggleMonthlyCalendar = toggleMonthlyCalendar;
 
 // ════════════════════════════════════════════
 //  레퍼럴 섹션
