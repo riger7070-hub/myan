@@ -99,11 +99,28 @@ function updateStreak() {
     }
 
     streak.lastDate = today;
+
+    // 🎁 7일 연속 보너스 (아직 받지 않았으면)
+    const bonusMilestones = [7, 14, 30, 100];
+    let bonusGranted = false;
+    for (const milestone of bonusMilestones) {
+      if (streak.count === milestone && !streak[`bonus_${milestone}`]) {
+        streak[`bonus_${milestone}`] = true;
+        bonusGranted = milestone;
+        break;
+      }
+    }
+
     localStorage.setItem('myan_streak', JSON.stringify(streak));
 
     // 특별 스트릭 달성 시 축하
     if ([3, 7, 14, 30, 100].includes(streak.count)) {
-      setTimeout(() => showStreakAchievement(streak.count), 1000);
+      setTimeout(() => showStreakAchievement(streak.count, bonusGranted), 1000);
+    }
+
+    // 보너스 토큰 지급 (서버에 요청)
+    if (bonusGranted) {
+      grantStreakBonus(bonusGranted);
     }
 
     return streak.count;
@@ -124,23 +141,70 @@ function getStreak() {
   }
 }
 
-function showStreakAchievement(count) {
+function showStreakAchievement(count, bonusGranted = false) {
   const messages = {
-    ko: { 3: '🔥 3일 연속!', 7: '🔥 일주일 달성!', 14: '🔥 2주 연속!', 30: '🎉 한 달 달성!', 100: '👑 100일 달성!' },
-    en: { 3: '🔥 3 days!', 7: '🔥 1 week!', 14: '🔥 2 weeks!', 30: '🎉 1 month!', 100: '👑 100 days!' },
-    zh: { 3: '🔥 连续3天!', 7: '🔥 连续一周!', 14: '🔥 连续两周!', 30: '🎉 连续一月!', 100: '👑 连续100天!' },
-    ja: { 3: '🔥 3日連続!', 7: '🔥 1週間達成!', 14: '🔥 2週間連続!', 30: '🎉 1ヶ月達成!', 100: '👑 100日達成!' }
+    ko: {
+      3: '🔥 3일 연속!',
+      7: '🔥 일주일 달성! 🎁 토큰 +1',
+      14: '🔥 2주 연속! 🎁 토큰 +2',
+      30: '🎉 한 달 달성! 🎁 토큰 +3',
+      100: '👑 100일 달성! 🎁 토큰 +5'
+    },
+    en: {
+      3: '🔥 3 days!',
+      7: '🔥 1 week! 🎁 +1 Token',
+      14: '🔥 2 weeks! 🎁 +2 Tokens',
+      30: '🎉 1 month! 🎁 +3 Tokens',
+      100: '👑 100 days! 🎁 +5 Tokens'
+    },
+    zh: {
+      3: '🔥 连续3天!',
+      7: '🔥 连续一周! 🎁 代币+1',
+      14: '🔥 连续两周! 🎁 代币+2',
+      30: '🎉 连续一月! 🎁 代币+3',
+      100: '👑 连续100天! 🎁 代币+5'
+    },
+    ja: {
+      3: '🔥 3日連続!',
+      7: '🔥 1週間達成! 🎁 トークン+1',
+      14: '🔥 2週間連続! 🎁 トークン+2',
+      30: '🎉 1ヶ月達成! 🎁 トークン+3',
+      100: '👑 100日達成! 🎁 トークン+5'
+    }
   };
   const lang = getLang();
   const msg = messages[lang]?.[count] || messages.ko[count];
   if (msg) {
-    showToast(msg, 4000);
+    showToast(msg, bonusGranted ? 6000 : 4000);
     hapticSuccess();
     playSuccessSound();
     if (window.M_Effect) {
       const colors = ['木', '火', '土', '金', '水'];
       window.M_Effect.spawnParticles(null, colors[Math.floor(Math.random() * colors.length)]);
     }
+  }
+}
+
+async function grantStreakBonus(milestone) {
+  const bonusTokens = { 7: 1, 14: 2, 30: 3, 100: 5 };
+  const tokens = bonusTokens[milestone] || 0;
+  if (!tokens) return;
+
+  const token = getGoogleIdToken();
+  if (!token) return;
+
+  try {
+    const res = await fetch(EP + 'api/streak-bonus', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ milestone, tokens })
+    });
+    if (res.ok) {
+      await refreshTokens();
+      updateAllTokenDisplays();
+    }
+  } catch (e) {
+    console.error('Streak bonus grant failed:', e);
   }
 }
 
@@ -200,6 +264,9 @@ async function shareOhaengCard(ohaeng) {
   const col = OC[ohaeng];
   const kiName = ON[lang][ohaeng];
   const today = new Date().toLocaleDateString(lang === 'ko' ? 'ko-KR' : lang === 'ja' ? 'ja-JP' : lang === 'zh' ? 'zh-CN' : 'en-US');
+
+  // 🎁 공유 보너스 체크 (일 1회)
+  const canGetBonus = await checkShareBonus();
 
   // 캔버스 생성
   const canvas = document.createElement('canvas');
@@ -274,6 +341,12 @@ async function shareOhaengCard(ohaeng) {
             files: [file]
           });
           hapticLight();
+
+          // 🎁 공유 보너스 지급
+          if (canGetBonus) {
+            await grantShareBonus();
+          }
+
           return;
         }
       }
@@ -285,13 +358,64 @@ async function shareOhaengCard(ohaeng) {
       a.download = `myan-${ohaeng}-${new Date().toISOString().slice(0,10)}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast({ko:'이미지가 저장되었습니다!',en:'Image saved!',zh:'图片已保存!',ja:'画像を保存しました!'}[lang] || '이미지가 저장되었습니다!');
+
+      const msg = canGetBonus
+        ? {ko:'이미지가 저장되었습니다! 🎁 토큰 +1',en:'Image saved! 🎁 +1 Token',zh:'图片已保存! 🎁 代币+1',ja:'画像を保存しました! 🎁 トークン+1'}[lang]
+        : {ko:'이미지가 저장되었습니다!',en:'Image saved!',zh:'图片已保存!',ja:'画像を保存しました!'}[lang];
+
+      showToast(msg || '이미지가 저장되었습니다!');
       hapticMedium();
+
+      // 🎁 공유 보너스 지급
+      if (canGetBonus) {
+        await grantShareBonus();
+      }
     } catch (err) {
       console.error(err);
       showToast(t.err || '공유에 실패했습니다');
     }
   }, 'image/png');
+}
+
+async function checkShareBonus() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const stored = localStorage.getItem('myan_last_share_bonus');
+    return stored !== today;
+  } catch {
+    return true;
+  }
+}
+
+async function grantShareBonus() {
+  const token = getGoogleIdToken();
+  if (!token) return;
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await fetch(EP + 'api/share-bonus', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: today })
+    });
+
+    if (res.ok) {
+      localStorage.setItem('myan_last_share_bonus', today);
+      await refreshTokens();
+      updateAllTokenDisplays();
+
+      // 공유 횟수 증가
+      const shareCount = parseInt(localStorage.getItem('myan_share_count') || '0') + 1;
+      localStorage.setItem('myan_share_count', shareCount);
+
+      // 공유 10회 업적
+      if (shareCount >= 10) {
+        unlockAchievement('share_10');
+      }
+    }
+  } catch (e) {
+    console.error('Share bonus grant failed:', e);
+  }
 }
 
 window.shareOhaengCard = shareOhaengCard;
@@ -3607,6 +3731,249 @@ function renderMonthlyCalendar(ohaengMap) {
 }
 
 window.toggleMonthlyCalendar = toggleMonthlyCalendar;
+
+// ════════════════════════════════════════════
+//  주간 리포트
+// ════════════════════════════════════════════
+async function showWeeklyReport() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast({ko:'로그인이 필요합니다',en:'Login required',zh:'需要登录',ja:'ログインが必要です'}[getLang()] || '로그인이 필요합니다');
+    return;
+  }
+
+  try {
+    const res = await fetch(EP + 'api/weekly-report', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) throw new Error('Failed to fetch report');
+
+    const data = await res.json();
+    displayWeeklyReport(data);
+  } catch (e) {
+    console.error('Weekly report error:', e);
+    showToast({ko:'리포트를 불러올 수 없습니다',en:'Cannot load report',zh:'无法加载报告',ja:'レポートを読み込めません'}[getLang()] || '리포트를 불러올 수 없습니다');
+  }
+}
+
+function displayWeeklyReport(data) {
+  const lang = getLang();
+  const { mostFrequent, distribution, totalDays, streak } = data;
+
+  const ohaengNames = {
+    ko: { '木':'목(木)', '火':'화(火)', '土':'토(土)', '金':'금(金)', '水':'수(水)' },
+    en: { '木':'Wood', '火':'Fire', '土':'Earth', '金':'Metal', '水':'Water' },
+    zh: { '木':'木气', '火':'火气', '土':'土气', '金':'金气', '水':'水气' },
+    ja: { '木':'木(もく)', '火':'火(ひ)', '土':'土(つち)', '金':'金(きん)', '水':'水(すい)' }
+  };
+
+  const titles = {
+    ko: '📊 이번 주 리포트',
+    en: '📊 Weekly Report',
+    zh: '📊 本周报告',
+    ja: '📊 今週のレポート'
+  };
+
+  const mostText = {
+    ko: `가장 많이 나온 오행: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`,
+    en: `Most frequent: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`,
+    zh: `最常见的五行: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`,
+    ja: `最も多い五行: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`
+  };
+
+  const daysText = {
+    ko: `총 ${totalDays}일 기록`,
+    en: `${totalDays} days recorded`,
+    zh: `共${totalDays}天记录`,
+    ja: `合計${totalDays}日記録`
+  };
+
+  // 모달 생성
+  const modal = document.createElement('div');
+  modal.className = 'weekly-report-modal';
+  modal.innerHTML = `
+    <div class="weekly-report-content">
+      <div class="weekly-report-header">
+        <div class="weekly-report-title">${titles[lang] || titles.ko}</div>
+        <button class="weekly-report-close" onclick="this.closest('.weekly-report-modal').remove()">✕</button>
+      </div>
+      <div class="weekly-report-body">
+        <div class="weekly-report-stat">
+          <div class="weekly-report-icon">🔥</div>
+          <div class="weekly-report-label">${{ko:'연속 방문',en:'Streak',zh:'连续访问',ja:'連続訪問'}[lang]}</div>
+          <div class="weekly-report-value">${streak}일</div>
+        </div>
+        <div class="weekly-report-stat">
+          <div class="weekly-report-icon">📅</div>
+          <div class="weekly-report-label">${daysText[lang] || daysText.ko}</div>
+          <div class="weekly-report-value">${totalDays}</div>
+        </div>
+        <div class="weekly-report-most">
+          ${mostText[lang] || mostText.ko}
+        </div>
+        <div class="weekly-report-chart">
+          ${Object.entries(distribution).map(([o, count]) => {
+            const pct = totalDays > 0 ? Math.round((count / totalDays) * 100) : 0;
+            const color = HEATMAP_COLORS[o] || '#888';
+            return `
+              <div class="weekly-report-bar">
+                <div class="weekly-report-bar-label">${o}</div>
+                <div class="weekly-report-bar-bg">
+                  <div class="weekly-report-bar-fill" style="width: ${pct}%; background: ${color}"></div>
+                </div>
+                <div class="weekly-report-bar-pct">${pct}%</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      <button class="weekly-report-btn" onclick="this.closest('.weekly-report-modal').remove()">
+        ${{ko:'닫기',en:'Close',zh:'关闭',ja:'閉じる'}[lang] || '닫기'}
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('active'), 50);
+
+  hapticMedium();
+  playBellSound();
+}
+
+window.showWeeklyReport = showWeeklyReport;
+
+// ════════════════════════════════════════════
+//  업적 시스템
+// ════════════════════════════════════════════
+const ACHIEVEMENTS = {
+  first_visit: { icon: '🎉', ko: '첫 방문', en: 'First Visit', zh: '首次访问', ja: '初訪問' },
+  all_elements: { icon: '☯️', ko: '오행 마스터', en: 'Element Master', zh: '五行大师', ja: '五行マスター' },
+  streak_7: { icon: '🔥', ko: '일주일 연속', en: '7-Day Streak', zh: '连续一周', ja: '7日連続' },
+  streak_30: { icon: '💪', ko: '한 달 연속', en: '30-Day Streak', zh: '连续一月', ja: '30日連続' },
+  streak_100: { icon: '👑', ko: '백일 달성', en: '100-Day Streak', zh: '百日达成', ja: '百日達成' },
+  share_10: { icon: '📤', ko: '공유 전문가', en: 'Share Expert', zh: '分享专家', ja: '共有エキスパート' },
+  tokens_50: { icon: '💰', ko: '토큰 부자', en: 'Token Rich', zh: '代币富翁', ja: 'トークン富豪' }
+};
+
+function getAchievements() {
+  try {
+    const stored = localStorage.getItem('myan_achievements');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function unlockAchievement(key) {
+  const achievements = getAchievements();
+  if (achievements[key]) return; // 이미 달성
+
+  achievements[key] = Date.now();
+  try {
+    localStorage.setItem('myan_achievements', JSON.stringify(achievements));
+  } catch {}
+
+  showAchievementToast(key);
+}
+
+function showAchievementToast(key) {
+  const achievement = ACHIEVEMENTS[key];
+  if (!achievement) return;
+
+  const lang = getLang();
+  const name = achievement[lang] || achievement.ko;
+
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `
+    <div class="achievement-icon">${achievement.icon}</div>
+    <div class="achievement-content">
+      <div class="achievement-label">${{ko:'업적 달성!',en:'Achievement!',zh:'成就达成!',ja:'実績解除!'}[lang]}</div>
+      <div class="achievement-name">${name}</div>
+    </div>
+  `;
+
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('active'), 50);
+
+  hapticSuccess();
+  playSuccessSound();
+  if (window.M_Effect) {
+    const colors = ['木', '火', '土', '金', '水'];
+    window.M_Effect.spawnParticles(null, colors[Math.floor(Math.random() * colors.length)]);
+  }
+
+  setTimeout(() => {
+    toast.classList.remove('active');
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+function checkAchievements() {
+  // 첫 방문
+  unlockAchievement('first_visit');
+
+  // 오행 마스터 (모든 오행 경험)
+  try {
+    const history = JSON.parse(localStorage.getItem('myan_ohaeng_history') || '{}');
+    const uniqueElements = new Set(Object.values(history));
+    if (uniqueElements.size >= 5) {
+      unlockAchievement('all_elements');
+    }
+  } catch {}
+
+  // 스트릭 업적
+  const streak = getStreak();
+  if (streak >= 7) unlockAchievement('streak_7');
+  if (streak >= 30) unlockAchievement('streak_30');
+  if (streak >= 100) unlockAchievement('streak_100');
+}
+
+function showAchievementsModal() {
+  const lang = getLang();
+  const unlocked = getAchievements();
+  const total = Object.keys(ACHIEVEMENTS).length;
+  const count = Object.keys(unlocked).length;
+
+  const modal = document.createElement('div');
+  modal.className = 'achievements-modal';
+  modal.innerHTML = `
+    <div class="achievements-content">
+      <div class="achievements-header">
+        <div class="achievements-title">🏆 ${{ko:'업적',en:'Achievements',zh:'成就',ja:'実績'}[lang]}</div>
+        <button class="achievements-close" onclick="this.closest('.achievements-modal').remove()">✕</button>
+      </div>
+      <div class="achievements-progress">
+        <div class="achievements-progress-text">${count} / ${total}</div>
+        <div class="achievements-progress-bar">
+          <div class="achievements-progress-fill" style="width: ${(count/total)*100}%"></div>
+        </div>
+      </div>
+      <div class="achievements-grid">
+        ${Object.entries(ACHIEVEMENTS).map(([key, ach]) => {
+          const isUnlocked = unlocked[key];
+          const name = ach[lang] || ach.ko;
+          return `
+            <div class="achievement-card${isUnlocked ? ' unlocked' : ''}">
+              <div class="achievement-card-icon">${isUnlocked ? ach.icon : '🔒'}</div>
+              <div class="achievement-card-name">${name}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('active'), 50);
+  hapticMedium();
+}
+
+window.showAchievementsModal = showAchievementsModal;
+
+// 페이지 로드 시 업적 체크
+setTimeout(() => checkAchievements(), 2000);
 
 // ════════════════════════════════════════════
 //  레퍼럴 섹션

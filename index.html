@@ -452,6 +452,12 @@
 
       <div class="mypage-actions">
         <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)" style="width: 100%; cursor: pointer;"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
+        <button class="mypage-action-btn" onclick="showWeeklyReport()" style="background: rgba(90,168,224,0.15); border: 1px solid rgba(90,168,224,0.3);">
+          📊 <span id="weeklyReportBtnText">주간 리포트</span>
+        </button>
+        <button class="mypage-action-btn" onclick="showAchievementsModal()" style="background: rgba(212,160,64,0.15); border: 1px solid rgba(212,160,64,0.3);">
+          🏆 <span id="achievementsBtnText">업적</span>
+        </button>
         <button class="mypage-action-btn" onclick="showSajuHistory()" style="background: rgba(201,169,110,0.15); border: 1px solid rgba(201,169,110,0.3);">
           ☯️ 내 사주 기록
         </button>
@@ -821,6 +827,7 @@ if ('serviceWorker' in navigator) {
 <script src="/js/saju-engine.js"></script>
 <script src="/js/effect.js"></script>
 <script src="/js/fortunes.js"></script>
+<script src="/js/onboarding.js"></script>
 <script src="/js/app.js"></script>
 
 <!-- 사업자 정보 푸터 -->
