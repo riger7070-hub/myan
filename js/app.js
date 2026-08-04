@@ -4624,7 +4624,7 @@ async function showSajuHistory() {
   modal.innerHTML = `
     <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
       <div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ 내 사주 기록</div>
+        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ 내 기록</div>
         <button onclick="document.getElementById('saju-history-modal').remove()" style="background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; padding: 0; width: 32px; height: 32px;">×</button>
       </div>
       <div id="saju-history-content" style="flex: 1; overflow-y: auto; padding: 20px;">
@@ -4638,50 +4638,94 @@ async function showSajuHistory() {
 
   document.body.appendChild(modal);
 
-  // 기록 조회
+  // 사주 기록 + 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 기록을 함께 조회해 하나의 타임라인으로 합침
   try {
-    const res = await fetch(EP + 'api/saju-history?limit=20', {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const [sajuRes, featureRes] = await Promise.all([
+      fetch(EP + 'api/saju-history?limit=20', { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch(EP + 'api/feature-history?limit=20', { headers: { 'Authorization': `Bearer ${token}` } }),
+    ]);
+    const sajuData    = await sajuRes.json().catch(() => ({}));
+    const featureData = await featureRes.json().catch(() => ({}));
+
+    const entries = [];
+
+    (sajuData.history || []).forEach(h => {
+      const modeIcon = h.mode === 'duo' ? '💞' : '☯';
+      const modeText = h.mode === 'duo' ? '우리의 조화' : '나만의 리딩';
+      const names = h.mode === 'duo'
+        ? `${h.p1.name || '첫 번째 분'} & ${h.p2?.name || '두 번째 분'}`
+        : (h.p1.name || '나');
+      entries.push({
+        createdAt: h.createdAt, icon: modeIcon, title: modeText, sub: names,
+        body: h.reading,
+      });
     });
-    const data = await res.json();
+
+    const FEATURE_META = {
+      detail:     { icon: null, label: '상세풀이' },
+      tarot:      { icon: '🔮', label: '타로' },
+      zodiac:     { icon: '🐉', label: '띠·별자리' },
+      lucky:      { icon: '🍀', label: '오늘의 럭키 아이템' },
+      typecompat: { icon: '🔯', label: '오행 궁합' },
+    };
+    (featureData.history || []).forEach(h => {
+      const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
+      let icon = fm.icon;
+      let title = h.title ? `${fm.label} · ${h.title}` : fm.label;
+      let body = h.content;
+
+      if (h.feature === 'detail') {
+        const cat = (typeof DETAIL_CATS !== 'undefined' ? DETAIL_CATS : []).find(c => c.key === h.meta?.category);
+        icon = cat?.icon || '📖';
+      } else if (h.feature === 'lucky') {
+        try {
+          const picks = JSON.parse(h.content);
+          body = [
+            picks.color ? `🎨 ${picks.color.name} — ${picks.color.reason}` : '',
+            picks.food  ? `🍽 ${picks.food.name} — ${picks.food.reason}`  : '',
+            picks.song  ? `🎵 ${picks.song.name} — ${picks.song.reason}`  : '',
+          ].filter(Boolean).join('\n');
+        } catch { body = h.content; }
+      } else if (h.feature === 'tarot' && h.meta?.upright === false) {
+        title += ' (역방향)';
+      }
+
+      entries.push({ createdAt: h.createdAt, icon, title, sub: null, body });
+    });
+
+    entries.sort((a, b) => b.createdAt - a.createdAt);
 
     const content = document.getElementById('saju-history-content');
-    if (!data.ok || !data.history || data.history.length === 0) {
+    if (entries.length === 0) {
       content.innerHTML = `
         <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
           <div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;">📜</div>
           <div style="font-size: 1.1rem; margin-bottom: 8px;">아직 기록이 없습니다</div>
-          <div style="font-size: 0.9rem; opacity: 0.7;">사주 풀이를 받으면 자동으로 저장됩니다</div>
+          <div style="font-size: 0.9rem; opacity: 0.7;">풀이를 받으면 자동으로 저장됩니다</div>
         </div>
       `;
       return;
     }
 
     // 기록 렌더링
-    content.innerHTML = data.history.map(h => {
-      const date = new Date(h.createdAt * 1000);
+    content.innerHTML = entries.map(en => {
+      const date = new Date(en.createdAt * 1000);
       const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
       const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-      
-      const modeIcon = h.mode === 'duo' ? '💞' : '☯';
-      const modeText = h.mode === 'duo' ? '우리의 조화' : '나만의 리딩';
-      const names = h.mode === 'duo' 
-        ? `${h.p1.name || '첫 번째 분'} & ${h.p2?.name || '두 번째 분'}`
-        : (h.p1.name || '나');
 
       return `
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
             <div>
-              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${modeIcon} ${modeText}</div>
-              <div style="font-size: 0.85rem; color: var(--text-dim);">${names}</div>
+              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${en.icon} ${en.title}</div>
+              ${en.sub ? `<div style="font-size: 0.85rem; color: var(--text-dim);">${en.sub}</div>` : ''}
             </div>
             <div style="text-align: right; font-size: 0.75rem; color: var(--text-dim);">
               <div>${dateStr}</div>
               <div>${timeStr}</div>
             </div>
           </div>
-          <div style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.8;">${h.reading.split('\n').slice(0, 2).join('\n')}</div>
+          <div style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.8;">${(en.body || '').split('\n').slice(0, 2).join('\n')}</div>
         </div>
       `;
     }).join('');
