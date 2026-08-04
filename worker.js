@@ -547,7 +547,8 @@ async function ensureDBExt(env) {
     CREATE TABLE IF NOT EXISTS user_streaks (
       user_email TEXT PRIMARY KEY, current_streak INTEGER NOT NULL DEFAULT 0,
       max_streak INTEGER NOT NULL DEFAULT 0, last_checkin TEXT,
-      total_checkins INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+      total_checkins INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      last_share_bonus TEXT
     );
     CREATE TABLE IF NOT EXISTS ohaeng_history (
       id TEXT PRIMARY KEY, user_email TEXT NOT NULL, date TEXT NOT NULL,
@@ -658,6 +659,9 @@ async function ensureDBExt(env) {
     );
     CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
   `).catch(() => {});
+  // user_streaks.last_share_bonus: 기존 배포 DB에 컬럼이 없을 수 있어 별도 ALTER로 보정.
+  // 이미 컬럼이 있으면 매 콜드스타트마다 에러가 나지만 위 배치와 분리돼 있어 다른 테이블 생성에 영향 없음.
+  await env.DB.exec(`ALTER TABLE user_streaks ADD COLUMN last_share_bonus TEXT;`).catch(() => {});
   _dbExtReady = true;
 }
 
@@ -710,6 +714,9 @@ export default {
     // ── 오행 히스토리 ──
     if (path === '/api/ohaeng-history'   && method === 'GET')  { await ensureDBExt(env); return handleOhaengHistory(request, env); }
     if (path === '/api/ohaeng-history'   && method === 'POST') { await ensureDBExt(env); return handleOhaengHistorySave(request, env); }
+    // ── 주간 리포트 & 공유 보너스 ──
+    if (path === '/api/weekly-report'    && method === 'GET')  { await ensureDBExt(env); return handleWeeklyReport(request, env); }
+    if (path === '/api/share-bonus'      && method === 'POST') { await ensureDBExt(env); return handleShareBonus(request, env); }
     // ── 프로모 & 피드백 ──
     if (path === '/api/promo/claim'      && method === 'POST') { await ensureDBExt(env); return handlePromoClaim(request, env); }
     if (path === '/api/promo/generate'   && method === 'POST') { await ensureDBExt(env); return handlePromoGenerate(request, env); }
@@ -2294,11 +2301,13 @@ async function handleStreakCheckin(request, env) {
        total_checkins=excluded.total_checkins,updated_at=excluded.updated_at`
     ).bind(email,current,max,today,total).run();
 
-    // 7일 스트릭 보너스
+    // 7일 스트릭 보너스 (승인된 새 지급 row를 추가 — 기존 row를 UPDATE하면 결제 이력
+    // 개수만큼 중복 지급되거나, 결제 이력이 없는 유저는 지급이 누락되는 문제가 있었음)
     if (current%7===0) {
       await env.DB.prepare(
-        `UPDATE payment_requests SET tokens=tokens+5 WHERE user_email=?`
-      ).bind(email).run();
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'streak_bonus', 0, 5, 'approved', unixepoch())`
+      ).bind(`streak_${email}_${today}`, email).run();
     }
 
     return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0}),200);
@@ -2334,6 +2343,76 @@ async function handleOhaengHistory(request, env) {
       'SELECT date,ohaeng FROM ohaeng_history WHERE user_email=? ORDER BY date DESC LIMIT 90'
     ).bind(email).all();
     return cors(JSON.stringify({history: rows.results||[]}),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  주간 리포트 핸들러
+// ════════════════════════════
+async function handleWeeklyReport(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+
+    const cutoff = new Date(Date.now()+9*3600000-6*86400000).toISOString().slice(0,10);
+    const rows = await env.DB.prepare(
+      'SELECT date,ohaeng FROM ohaeng_history WHERE user_email=? AND date>=? ORDER BY date DESC'
+    ).bind(email, cutoff).all();
+    const history = rows.results||[];
+
+    const distribution = {};
+    for (const r of history) distribution[r.ohaeng] = (distribution[r.ohaeng]||0)+1;
+    let mostFrequent = '';
+    let maxCount = 0;
+    for (const [o, c] of Object.entries(distribution)) {
+      if (c > maxCount) { maxCount = c; mostFrequent = o; }
+    }
+
+    const streakRow = await env.DB.prepare('SELECT current_streak FROM user_streaks WHERE user_email=?').bind(email).first();
+
+    return cors(JSON.stringify({
+      mostFrequent,
+      distribution,
+      totalDays: history.length,
+      streak: streakRow?.current_streak || 0
+    }),200);
+  } catch(e) {
+    return cors(JSON.stringify({error:{message:e.message}}),500);
+  }
+}
+
+// ════════════════════════════
+//  공유 보너스 핸들러
+// ════════════════════════════
+async function handleShareBonus(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+
+    const today = _todayKST();
+    const row = await env.DB.prepare('SELECT last_share_bonus FROM user_streaks WHERE user_email=?').bind(email).first();
+    if (row?.last_share_bonus === today) {
+      return cors(JSON.stringify({error:{message:'오늘은 이미 공유 보너스를 받았습니다'}}),400);
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO user_streaks (user_email,last_share_bonus,updated_at)
+       VALUES (?,?,unixepoch())
+       ON CONFLICT(user_email) DO UPDATE SET last_share_bonus=excluded.last_share_bonus,updated_at=excluded.updated_at`
+    ).bind(email, today).run();
+
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'share_bonus', 0, 1, 'approved', unixepoch())`
+    ).bind(`share_${email}_${today}`, email).run();
+
+    return cors(JSON.stringify({success:true, tokens:1}),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
   }

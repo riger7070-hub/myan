@@ -73,145 +73,12 @@ function playSuccessSound() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  연속 방문 스트릭 시스템
+//  연속 방문 스트릭 배너 (서버 검증 스트릭 — fetchStreak()/_streakCache 기반)
 // ══════════════════════════════════════════════════════════════════════
-function updateStreak() {
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    const stored = localStorage.getItem('myan_streak');
-    let streak = stored ? JSON.parse(stored) : { count: 0, lastDate: null };
-
-    if (streak.lastDate === today) {
-      // 오늘 이미 방문함
-      return streak.count;
-    }
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
-
-    if (streak.lastDate === yesterdayStr) {
-      // 연속 방문
-      streak.count++;
-    } else if (streak.lastDate !== today) {
-      // 중간에 끊김
-      streak.count = 1;
-    }
-
-    streak.lastDate = today;
-
-    // 🎁 7일 연속 보너스 (아직 받지 않았으면)
-    const bonusMilestones = [7, 14, 30, 100];
-    let bonusGranted = false;
-    for (const milestone of bonusMilestones) {
-      if (streak.count === milestone && !streak[`bonus_${milestone}`]) {
-        streak[`bonus_${milestone}`] = true;
-        bonusGranted = milestone;
-        break;
-      }
-    }
-
-    localStorage.setItem('myan_streak', JSON.stringify(streak));
-
-    // 특별 스트릭 달성 시 축하
-    if ([3, 7, 14, 30, 100].includes(streak.count)) {
-      setTimeout(() => showStreakAchievement(streak.count, bonusGranted), 1000);
-    }
-
-    // 보너스 토큰 지급 (서버에 요청)
-    if (bonusGranted) {
-      grantStreakBonus(bonusGranted);
-    }
-
-    return streak.count;
-  } catch {
-    return 0;
-  }
-}
-
-function getStreak() {
-  try {
-    const stored = localStorage.getItem('myan_streak');
-    if (!stored) return 0;
-    const streak = JSON.parse(stored);
-    const today = new Date().toISOString().slice(0, 10);
-    return streak.lastDate === today ? streak.count : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function showStreakAchievement(count, bonusGranted = false) {
-  const messages = {
-    ko: {
-      3: '🔥 3일 연속!',
-      7: '🔥 일주일 달성! 🎁 토큰 +1',
-      14: '🔥 2주 연속! 🎁 토큰 +2',
-      30: '🎉 한 달 달성! 🎁 토큰 +3',
-      100: '👑 100일 달성! 🎁 토큰 +5'
-    },
-    en: {
-      3: '🔥 3 days!',
-      7: '🔥 1 week! 🎁 +1 Token',
-      14: '🔥 2 weeks! 🎁 +2 Tokens',
-      30: '🎉 1 month! 🎁 +3 Tokens',
-      100: '👑 100 days! 🎁 +5 Tokens'
-    },
-    zh: {
-      3: '🔥 连续3天!',
-      7: '🔥 连续一周! 🎁 代币+1',
-      14: '🔥 连续两周! 🎁 代币+2',
-      30: '🎉 连续一月! 🎁 代币+3',
-      100: '👑 连续100天! 🎁 代币+5'
-    },
-    ja: {
-      3: '🔥 3日連続!',
-      7: '🔥 1週間達成! 🎁 トークン+1',
-      14: '🔥 2週間連続! 🎁 トークン+2',
-      30: '🎉 1ヶ月達成! 🎁 トークン+3',
-      100: '👑 100日達成! 🎁 トークン+5'
-    }
-  };
-  const lang = getLang();
-  const msg = messages[lang]?.[count] || messages.ko[count];
-  if (msg) {
-    showToast(msg, bonusGranted ? 6000 : 4000);
-    hapticSuccess();
-    playSuccessSound();
-    if (window.M_Effect) {
-      const colors = ['木', '火', '土', '金', '水'];
-      window.M_Effect.spawnParticles(null, colors[Math.floor(Math.random() * colors.length)]);
-    }
-  }
-}
-
-async function grantStreakBonus(milestone) {
-  const bonusTokens = { 7: 1, 14: 2, 30: 3, 100: 5 };
-  const tokens = bonusTokens[milestone] || 0;
-  if (!tokens) return;
-
-  const token = getGoogleIdToken();
-  if (!token) return;
-
-  try {
-    const res = await fetch(EP + 'api/streak-bonus', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ milestone, tokens })
-    });
-    if (res.ok) {
-      await refreshTokens();
-      updateAllTokenDisplays();
-    }
-  } catch (e) {
-    console.error('Streak bonus grant failed:', e);
-  }
-}
-
 function showStreakBanner(count) {
   const banner = document.getElementById('streakBanner');
   const text = document.getElementById('streakText');
-  if (!banner || !text || count < 1) {
+  if (!banner || !text || !count || count < 1) {
     if (banner) banner.style.display = 'none';
     return;
   }
@@ -225,6 +92,42 @@ function showStreakBanner(count) {
   const lang = getLang();
   text.textContent = messages[lang] || messages.ko;
   banner.style.display = 'flex';
+
+  celebrateStreakMilestone(count);
+}
+
+// 마일스톤(3/7/14/30/100일) 도달 시 순수 축하 연출만 한다.
+// 실제 토큰 지급 여부는 서버 체크인 응답의 bonus 플래그(doCheckin())로만 안내한다 —
+// 여기서 클라이언트가 임의로 "🎁 토큰 +N"을 약속하지 않는다.
+function celebrateStreakMilestone(count) {
+  const milestones = [3, 7, 14, 30, 100];
+  if (!milestones.includes(count)) return;
+  try {
+    const key = 'myan_streak_celebrated';
+    const celebrated = JSON.parse(localStorage.getItem(key) || '{}');
+    if (celebrated[count]) return;
+    celebrated[count] = true;
+    localStorage.setItem(key, JSON.stringify(celebrated));
+  } catch { return; }
+
+  const messages = {
+    ko: { 3: '🔥 3일 연속!', 7: '🔥 일주일 달성!', 14: '🔥 2주 연속!', 30: '🎉 한 달 달성!', 100: '👑 100일 달성!' },
+    en: { 3: '🔥 3 days!', 7: '🔥 1 week!', 14: '🔥 2 weeks!', 30: '🎉 1 month!', 100: '👑 100 days!' },
+    zh: { 3: '🔥 连续3天!', 7: '🔥 连续一周!', 14: '🔥 连续两周!', 30: '🎉 连续一月!', 100: '👑 连续100天!' },
+    ja: { 3: '🔥 3日連続!', 7: '🔥 1週間達成!', 14: '🔥 2週間連続!', 30: '🎉 1ヶ月達成!', 100: '👑 100日達成!' }
+  };
+  const lang = getLang();
+  const msg = messages[lang]?.[count] || messages.ko[count];
+  if (!msg) return;
+  setTimeout(() => {
+    showToast(msg, 4000);
+    hapticSuccess();
+    playSuccessSound();
+    if (window.M_Effect) {
+      const colors = ['木', '火', '土', '金', '水'];
+      window.M_Effect.spawnParticles(null, colors[Math.floor(Math.random() * colors.length)]);
+    }
+  }, 1000);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -342,9 +245,9 @@ async function shareOhaengCard(ohaeng) {
           });
           hapticLight();
 
-          // 🎁 공유 보너스 지급
-          if (canGetBonus) {
-            await grantShareBonus();
+          // 🎁 공유 보너스 지급 (서버가 실제로 지급을 확정한 경우에만 안내)
+          if (canGetBonus && await grantShareBonus()) {
+            showToast({ko:'🎁 공유 보너스 토큰 +1',en:'🎁 +1 Share Bonus Token',zh:'🎁 分享奖励代币+1',ja:'🎁 共有ボーナス トークン+1'}[lang]);
           }
 
           return;
@@ -359,17 +262,14 @@ async function shareOhaengCard(ohaeng) {
       a.click();
       URL.revokeObjectURL(url);
 
-      const msg = canGetBonus
+      // 🎁 공유 보너스 지급 — 서버가 실제로 지급을 확정한 경우에만 문구에 반영
+      const granted = canGetBonus && await grantShareBonus();
+      const msg = granted
         ? {ko:'이미지가 저장되었습니다! 🎁 토큰 +1',en:'Image saved! 🎁 +1 Token',zh:'图片已保存! 🎁 代币+1',ja:'画像を保存しました! 🎁 トークン+1'}[lang]
         : {ko:'이미지가 저장되었습니다!',en:'Image saved!',zh:'图片已保存!',ja:'画像を保存しました!'}[lang];
 
       showToast(msg || '이미지가 저장되었습니다!');
       hapticMedium();
-
-      // 🎁 공유 보너스 지급
-      if (canGetBonus) {
-        await grantShareBonus();
-      }
     } catch (err) {
       console.error(err);
       showToast(t.err || '공유에 실패했습니다');
@@ -387,9 +287,10 @@ async function checkShareBonus() {
   }
 }
 
+// 실제로 토큰이 지급됐을 때만 true를 반환한다 — 호출부는 이 값으로만 보상 문구를 노출해야 한다.
 async function grantShareBonus() {
   const token = getGoogleIdToken();
-  if (!token) return;
+  if (!token) return false;
 
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -399,22 +300,24 @@ async function grantShareBonus() {
       body: JSON.stringify({ date: today })
     });
 
-    if (res.ok) {
-      localStorage.setItem('myan_last_share_bonus', today);
-      await refreshTokens();
-      updateAllTokenDisplays();
+    if (!res.ok) return false;
 
-      // 공유 횟수 증가
-      const shareCount = parseInt(localStorage.getItem('myan_share_count') || '0') + 1;
-      localStorage.setItem('myan_share_count', shareCount);
+    localStorage.setItem('myan_last_share_bonus', today);
+    await refreshTokens();
+    updateAllTokenDisplays();
 
-      // 공유 10회 업적
-      if (shareCount >= 10) {
-        unlockAchievement('share_10');
-      }
+    // 공유 횟수 증가
+    const shareCount = parseInt(localStorage.getItem('myan_share_count') || '0') + 1;
+    localStorage.setItem('myan_share_count', shareCount);
+
+    // 공유 10회 업적
+    if (shareCount >= 10) {
+      unlockAchievement('share_10');
     }
+    return true;
   } catch (e) {
     console.error('Share bonus grant failed:', e);
+    return false;
   }
 }
 
@@ -1031,10 +934,11 @@ function revealSentences(container, text, langNow, { stagger = 1700, onComplete,
   }, 100);
 }
 
-// 문장 리빌 총 소요 시간(ms) — 게이지 등 후행 연출 타이밍 계산용
-function _sentenceRevealMs(text, langNow, stagger = 1700) {
-  const n = _splitSentences(text, langNow).length;
-  return n ? (n - 1) * stagger + 550 : 500;
+// 문장 리빌 총 소요 시간(ms) — 게이지 등 후행 연출 타이밍 계산용.
+// revealSentences()가 문장을 즉시(약 100ms) 전부 표시하므로, 여기도 그에 맞춰
+// 텍스트를 잠깐 읽을 시간만 준 뒤 게이지가 나타나는 짧은 고정 지연을 쓴다.
+function _sentenceRevealMs() {
+  return 700;
 }
 
 function addRxCard(o) {
@@ -3437,9 +3341,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // ?promo= URL 파라미터 감지
   _checkPromoParam();
 
-  // 🔥 스트릭 업데이트 및 표시
-  const streak = updateStreak();
-  showStreakBanner(streak);
+  // 🔥 서버 검증 스트릭을 불러와 배너에 반영 (로그인 전이면 조용히 스킵)
+  fetchStreak(true);
 
   // ── 토스페이먼츠 결제 후 리다이렉트 처리 ──
   // 결제 성공: ?paymentKey=xxx&orderId=yyy&amount=4900
@@ -3548,10 +3451,11 @@ function _refreshHomeExtras(ohaeng) {
 // ════════════════════════════════════════════
 //  스트릭 UI
 // ════════════════════════════════════════════
-async function fetchStreak() {
+async function fetchStreak(silent = false) {
   const token = getGoogleIdToken();
   if (!token) {
-    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    if (!silent) showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    showStreakBanner(0);
     return;
   }
   try {
@@ -3560,6 +3464,8 @@ async function fetchStreak() {
     _streakCache = await r.json();
     renderStreakUI(_streakCache);
     renderStreakBadge(_streakCache.current);
+    showStreakBanner(_streakCache.current);
+    if (typeof checkAchievements === 'function') checkAchievements();
   } catch {}
 }
 
@@ -3604,6 +3510,7 @@ async function doCheckin() {
     _streakCache = d;
     renderStreakUI(d);
     renderStreakBadge(d.current);
+    showStreakBanner(d.current);
     if (d.bonus) {
       const msg = document.getElementById('streak-bonus-msg');
       if (msg) { msg.style.display = ''; setTimeout(()=>{ msg.style.display='none'; }, 3000); }
@@ -3923,8 +3830,8 @@ function checkAchievements() {
     }
   } catch {}
 
-  // 스트릭 업적
-  const streak = getStreak();
+  // 스트릭 업적 (서버 검증 스트릭 캐시 기준)
+  const streak = _streakCache?.current || 0;
   if (streak >= 7) unlockAchievement('streak_7');
   if (streak >= 30) unlockAchievement('streak_30');
   if (streak >= 100) unlockAchievement('streak_100');
