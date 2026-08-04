@@ -2622,6 +2622,7 @@ function _syncDrawerLangs() {
   _t('drTxtCouple',  t.drCoupleTitle); _t('drSubCouple', t.drCoupleSub);
   _t('drTxtMypage',  t.drMypageTitle); _t('drSubMypage', t.drMypageSub);
   _t('drTxtCal',     t.drCalTitle);  _t('drSubCal',    t.drCalSub);
+  _t('drTxtTarot',   t.drTarotTitle); _t('drSubTarot', t.drTarotSub);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -3582,6 +3583,71 @@ function showDetailReadingHistory() {
       <button onclick="this.closest('.modal-overlay').remove()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════
+//  타로카드 뽑기 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openTarotDraw() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🔮 ${t.tarotTitle || '오늘의 타로'}</div>
+      <div class="tarot-card-back" id="tarotCardBack">🂠</div>
+      <div id="tarotStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.tarotShuffling || '카드를 섞는 중...'}</div>
+      <div id="tarotResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1800; // 오라클 연출보다 훨씬 짧게 — 재미 콘텐츠는 즉각적인 만족감이 중요
+  try {
+    const res = await fetch('/api/tarot-draw', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const backEl = document.getElementById('tarotCardBack');
+    const statusEl = document.getElementById('tarotStatus');
+    const resultEl = document.getElementById('tarotResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (backEl) {
+      backEl.classList.add('tarot-flipped');
+      backEl.textContent = data.card.icon;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.card.name}${data.upright ? '' : ` (${t.tarotReversed || '역방향'})`}</div>
+        <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="tarotReadingBody"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('tarotReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('tarotStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
 }
 
 // ════════════════════════════════════════════

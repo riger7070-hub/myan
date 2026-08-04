@@ -1689,6 +1689,33 @@ body::-webkit-scrollbar {
   -webkit-user-select: text;
 }
 
+/* 타로카드 뽑기 — CSS만 사용, 3D 없이 가벼운 스케일 펄스 + 페이드 전환 */
+.tarot-card-back {
+  width: 100px;
+  height: 150px;
+  margin: 20px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.6rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(201,169,110,0.15), rgba(201,169,110,0.05));
+  border: 1px solid var(--gold);
+  animation: tarotPulse 1.6s ease-in-out infinite;
+}
+.tarot-card-back.tarot-flipped {
+  animation: tarotReveal 0.5s ease forwards;
+}
+@keyframes tarotPulse {
+  0%, 100% { transform: scale(1); opacity: .85; }
+  50%      { transform: scale(1.05); opacity: 1; }
+}
+@keyframes tarotReveal {
+  0%   { transform: scale(0.9); opacity: .4; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1.05); opacity: 1; }
+}
+
 .legal-modal-overlay {
   position: fixed; inset: 0;
   background: rgba(6,6,8,0.88);

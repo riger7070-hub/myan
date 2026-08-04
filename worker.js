@@ -689,6 +689,8 @@ export default {
 
     // ── 상세 풀이 ──
     if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
+    // ── 타로카드 뽑기 (재미 콘텐츠) ──
+    if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return handleTarotDraw(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -2183,6 +2185,78 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
     return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  타로카드 뽑기 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+// key는 프론트 js/constants.js의 TAROT_CARDS와 순서를 맞출 것
+const TAROT_CARDS = [
+  { name:'광대',           icon:'🃏' }, { name:'마법사',           icon:'🎩' },
+  { name:'여사제',         icon:'🌙' }, { name:'여황제',           icon:'👑' },
+  { name:'황제',           icon:'♚' }, { name:'교황',             icon:'🔔' },
+  { name:'연인',           icon:'💞' }, { name:'전차',             icon:'🏇' },
+  { name:'힘',             icon:'🦁' }, { name:'은둔자',           icon:'🏮' },
+  { name:'운명의 수레바퀴', icon:'🎡' }, { name:'정의',             icon:'⚖️' },
+  { name:'매달린 사람',    icon:'🙃' }, { name:'죽음(변화)',       icon:'🦋' },
+  { name:'절제',           icon:'⚗️' }, { name:'악마',             icon:'😈' },
+  { name:'탑',             icon:'🗼' }, { name:'별',               icon:'⭐' },
+  { name:'달',             icon:'🌕' }, { name:'태양',             icon:'☀️' },
+  { name:'심판',           icon:'📯' }, { name:'세계',             icon:'🌍' },
+];
+
+async function handleTarotDraw(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko' } = await request.json().catch(() => ({}));
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `tarot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'tarot_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '타로카드 뽑기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const cardIdx = Math.floor(Math.random() * TAROT_CARDS.length);
+    const card = TAROT_CARDS[cardIdx];
+    const upright = Math.random() < 0.65; // 정방향에 약간 더 무게 — 지나치게 부정적인 결과가 잦지 않도록
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 타로 마스터입니다. 오늘 뽑힌 카드는 "${card.name}" — ${upright ? '정방향' : '역방향'}입니다.
+
+이 카드가 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 재미있게 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 카드여도 균형을 찾는 조언으로 전환해서 표현하세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    return cors(JSON.stringify({
+      success:true,
+      card: { index: cardIdx, name: card.name, icon: card.icon },
+      upright, reading, remaining: remainingTokens
+    }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }

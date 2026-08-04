@@ -111,6 +111,8 @@ const TX = {
     drCoupleTitle:'우리의 조화', drCoupleSub:'두 사람의 오행 궁합 풀이',
     drMypageTitle:'마이페이지', drMypageSub:'토큰 · 생년월일 · 설정',
     drCalTitle:'나의 기운 캘린더', drCalSub:'리딩 기록 · 오행 색 달력',
+    drTarotTitle:'오늘의 타로', drTarotSub:'재미로 보는 카드 한 장 (토큰 1)',
+    tarotTitle:'오늘의 타로', tarotShuffling:'카드를 섞는 중...', tarotReversed:'역방향',
     drThemeTitle:'테마', drDark:'🌙 다크', drLight:'☀️ 라이트',
     drSupportTitle:'1:1 카카오 상담', drLogoutTitle:'로그아웃',
     // 첫 입력 폼
@@ -250,6 +252,8 @@ const TX = {
     drCoupleTitle:'Our Harmony', drCoupleSub:"Two people's Ohaeng compatibility",
     drMypageTitle:'My Page', drMypageSub:'Tokens · Profile · Settings',
     drCalTitle:'Energy Calendar', drCalSub:'Reading history · Calendar',
+    drTarotTitle:"Today's Tarot", drTarotSub:'A fun card pull (1 token)',
+    tarotTitle:"Today's Tarot", tarotShuffling:'Shuffling the cards...', tarotReversed:'Reversed',
     drThemeTitle:'Theme', drDark:'🌙 Dark', drLight:'☀️ Light',
     drSupportTitle:'1:1 KakaoTalk Chat', drLogoutTitle:'Log out',
     // First input form
@@ -389,6 +393,8 @@ const TX = {
     drCoupleTitle:'缘分和谐', drCoupleSub:'两人五行宫合解析',
     drMypageTitle:'我的页面', drMypageSub:'代币 · 生日 · 设置',
     drCalTitle:'气运日历', drCalSub:'解读记录 · 五行色彩日历',
+    drTarotTitle:'今日塔罗', drTarotSub:'趣味抽卡一张（1代币）',
+    tarotTitle:'今日塔罗', tarotShuffling:'正在洗牌...', tarotReversed:'逆位',
     drThemeTitle:'主题', drDark:'🌙 深色', drLight:'☀️ 浅色',
     drSupportTitle:'1:1 客服咨询', drLogoutTitle:'退出登录',
     // 首次输入表单
@@ -528,6 +534,8 @@ const TX = {
     drCoupleTitle:'ふたりの調和', drCoupleSub:'二人の五行相性解読',
     drMypageTitle:'マイページ', drMypageSub:'トークン · 生年月日 · 設定',
     drCalTitle:'エネルギーカレンダー', drCalSub:'リーディング履歴 · 五行カレンダー',
+    drTarotTitle:'今日のタロット', drTarotSub:'お楽しみカード1枚（トークン1）',
+    tarotTitle:'今日のタロット', tarotShuffling:'カードをシャッフル中...', tarotReversed:'逆位置',
     drThemeTitle:'テーマ', drDark:'🌙 ダーク', drLight:'☀️ ライト',
     drSupportTitle:'1:1 カカオ相談', drLogoutTitle:'ログアウト',
     fifLblName:'お名前', fifLblYear:'生まれ年', fifLblMonth:'月', fifLblDay:'日',
