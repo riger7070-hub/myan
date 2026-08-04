@@ -2116,6 +2116,14 @@ async function handleWithdraw(request, env) {
 // ════════════════════════════
 //  상세 풀이 핸들러
 // ════════════════════════════
+// 상세 풀이 개별 카테고리 — 프론트 js/locales.js의 detailCardTitle과 키를 맞출 것
+const DETAIL_CATEGORIES = {
+  wealth: { icon:'💰', title:'재물운', guide:'오늘 돈·투자·지출과 관련해 주의할 점과 좋은 기회' },
+  love:   { icon:'💕', title:'연애운', guide:'오늘 연인·이성 관계·소개팅 등에서 특히 신경 쓸 점과 좋은 기회' },
+  career: { icon:'💼', title:'직장·사업운', guide:'오늘 직장·이직·사업과 관련해 주의할 점과 좋은 기회' },
+  health: { icon:'🏥', title:'건강운', guide:'오늘 몸과 마음을 어떻게 챙기면 좋을지 구체적인 행동 조언' },
+};
+
 async function handleDetailReading(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
@@ -2123,8 +2131,10 @@ async function handleDetailReading(request, env) {
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
-    const { date, ohaeng, lang = 'ko', birth, p2 } = await request.json().catch(() => ({}));
+    const { date, ohaeng, lang = 'ko', birth, p2, category } = await request.json().catch(() => ({}));
     if (!date || !ohaeng) return cors(JSON.stringify({ error: { message: 'date, ohaeng 필수' } }), 400);
+    const cat = DETAIL_CATEGORIES[category];
+    if (!cat) return cors(JSON.stringify({ error: { message: '올바르지 않은 카테고리입니다.' } }), 400);
 
     // 사용자 사주 원국(만세력) — 생년월일시가 오면 서버에서 정확히 계산 (AI 재계산 금지)
     const saju  = (birth && birth.year) ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
@@ -2132,7 +2142,7 @@ async function handleDetailReading(request, env) {
     let sajuBlock = '';
     if (saju && saju2) {
       // 우리의 조화(2인) 상세풀이 — 두 사람의 확정 사주 기반 관계 풀이
-      sajuBlock = `\n\n[두 사람의 사주 원국 — 서버 만세력 계산 확정값. 재계산·추측 금지]\n첫 번째 분: ${saju.text}\n두 번째 분: ${saju2.text}\n반드시 두 사람의 일간(본질)과 오행 분포를 비교·반영하여, 오늘(${date}) 기운 속에서 두 사람의 관계를 개인 맞춤으로 풀어주세요. 아래 4영역은 '두 사람의 관계' 관점으로 해석하세요.`;
+      sajuBlock = `\n\n[두 사람의 사주 원국 — 서버 만세력 계산 확정값. 재계산·추측 금지]\n첫 번째 분: ${saju.text}\n두 번째 분: ${saju2.text}\n반드시 두 사람의 일간(본질)과 오행 분포를 비교·반영하여, 오늘(${date}) 기운 속에서 두 사람의 관계를 개인 맞춤으로 풀어주세요. 아래 주제를 '두 사람의 관계' 관점으로 해석하세요.`;
     } else if (saju) {
       sajuBlock = `\n\n[이 사람의 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n반드시 위 사주의 일간(日干=본질)과 오행 분포를 반영하여, 오늘(${date})의 ${ohaeng} 기운이 이 사람에게 어떻게 작용하는지 개인 맞춤으로 풀어주세요.`;
     }
@@ -2157,27 +2167,22 @@ async function handleDetailReading(request, env) {
     const langLabel = LANG_LABEL[lang] || '한국어';
     const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 오늘(${date})의 기운은 "${ohaeng}"(${ohaeng==='木'?'나무':ohaeng==='火'?'불':ohaeng==='土'?'흙':ohaeng==='金'?'쇠':'물'} 기운)입니다.${sajuBlock}
 
-아래 4가지 영역에 대해 ${langLabel}로 조언해주세요.
-중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요. 따뜻하고 친근한 말투로, 각 영역 150자 이상.
+아래 주제 하나에 대해서만 ${langLabel}로 조언해주세요. 250자 이상, 따뜻하고 친근한 말투로 작성하고 마지막엔 오늘 바로 실천할 수 있는 구체적인 행동 하나를 제안하세요.
+주제: ${cat.icon} ${cat.title} — ${cat.guide}
 
-1. 🏥 건강: 오늘 몸과 마음을 어떻게 챙기면 좋을지 구체적인 행동 조언
-2. 💰 재물: 오늘 돈·일·사업과 관련해 주의할 점과 좋은 기회
-3. 💝 관계: 가족·친구·연인 관계에서 오늘 특히 신경 쓸 점과 좋은 기회
-4. 🎯 행운: 오늘 특히 좋은 시간대, 색깔, 숫자와 그 이유를 알기 쉽게
+중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요.
 
-JSON 형식으로 답하세요:
-{"health":"...","wealth":"...","relationships":"...","fortune":"..."}`;
+JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트로 답하세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ responseMimeType:'application/json', temperature:0.8 } }) }
+          generationConfig:{ temperature:0.8 } }) }
     );
     const data = await resp.json();
-    const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const detail = JSON.parse(raw);
-    return cors(JSON.stringify({ success:true, detail, remaining: remainingTokens }), 200);
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }

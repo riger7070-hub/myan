@@ -28,6 +28,14 @@ const ON = {
   ja:{木:'木(もく)',火:'火(か)',土:'土(ど)',金:'金(きん)',水:'水(すい)'},
 };
 
+// 상세 풀이 개별 카테고리 — 백엔드 worker.js의 DETAIL_CATEGORIES와 키를 맞출 것
+const DETAIL_CATS = [
+  { key:'wealth', icon:'💰' },
+  { key:'love',   icon:'💕' },
+  { key:'career', icon:'💼' },
+  { key:'health', icon:'🏥' },
+];
+
 // 한글 단독 이름 (일반인용)
 const ON_KR = { 木:'목', 火:'화', 土:'토', 金:'금', 水:'수' };
 // 오행 한글 설명

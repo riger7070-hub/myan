@@ -549,10 +549,10 @@ function addRxCard(o) {
   const today = _todayKST ? _todayKST() : new Date().toISOString().slice(0,10);
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;gap:8px;margin:6px 0 2px;flex-wrap:wrap;';
-  btnRow.innerHTML = `
-    <button class="rx-detail-btn" onclick="_openDetailReading('${today}','${o}')">
-      🔍 ${t.detailTitle || '상세 풀이'}
-    </button>`;
+  btnRow.innerHTML = DETAIL_CATS.map(c => `
+    <button class="rx-detail-btn" onclick="_openDetailReading('${today}','${o}','${c.key}')">
+      ${c.icon} ${t.detailCardTitle?.[c.key] || c.key}
+    </button>`).join('');
   cw().appendChild(btnRow);
 
   // 피드백 행 제거됨
@@ -3397,23 +3397,27 @@ function _ohaengGaugeHtml(ohaeng) {
 function renderSajuResult(data, m) {
   const cw = document.getElementById('chat-window');
   if (!cw) return;
+  const t = getT();
   const today = new Date().toISOString().slice(0,10);
   const ohaeng = data.dayElem || '土';
+  const detailBtnsHtml = DETAIL_CATS.map(c => `
+    <button class="rx-detail-btn" onclick="_detailFromSaju('${today}','${ohaeng}','${c.key}')">${c.icon} ${t.detailCardTitle?.[c.key] || c.key}</button>`).join('');
   cw.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
       <div style="max-width:640px;width:100%;margin:0 auto">
         <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:20px">✨ 간단 풀이</div>
         ${_ohaengGaugeHtml(data.ohaeng||{})}
         <div id="sjReadingBody" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px"></div>
-        <button id="sjDetailBtn" onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:18px;padding:16px;font-size:1rem;opacity:0.4;pointer-events:none;transition:opacity .3s">🔍 상세 풀이 보기 (토큰 2)</button>
-        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin:16px 0 6px">${t.detailTitle||'상세 풀이'} (토큰 2)</div>
+        <div id="sjDetailBtns" style="display:flex;gap:8px;flex-wrap:wrap;opacity:0.4;pointer-events:none;transition:opacity .3s">${detailBtnsHtml}</div>
+        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
       </div>
     </div>`;
   cw.scrollTop = 0;
   revealSentences(document.getElementById('sjReadingBody'), data.reading || '', getLang(), {
     scrollEl: cw,
     onComplete: () => {
-      ['sjDetailBtn', 'sjRetryBtn'].forEach(id => {
+      ['sjDetailBtns', 'sjRetryBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; }
       });
@@ -3421,16 +3425,16 @@ function renderSajuResult(data, m) {
   });
 }
 
-function _detailFromSaju(date, ohaeng) {
+function _detailFromSaju(date, ohaeng, category) {
   if (!_lastSaju) return;
   if (!getGoogleIdToken()) { showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.'); return; }
-  _openDetailReading(date, ohaeng, _lastSaju.p1, _lastSaju.mode==='duo' ? _lastSaju.p2 : null);
+  _openDetailReading(date, ohaeng, category, _lastSaju.p1, _lastSaju.mode==='duo' ? _lastSaju.p2 : null);
 }
 
 // ════════════════════════════════════════════
 //  상세 풀이 모달
 // ════════════════════════════════════════════
-async function _openDetailReading(date, ohaeng, birthOverride, p2) {
+async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
   const token = getGoogleIdToken();
   if (!token) {
     showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
@@ -3438,6 +3442,8 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   }
   const t = getT();
   const lang = getLang();
+  const catMeta = DETAIL_CATS.find(c => c.key === category);
+  const catLabel = t.detailCardTitle?.[category] || category;
 
   // 모달 열기
   const overlay = document.createElement('div');
@@ -3445,7 +3451,7 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
+      <div class="modal-title">${catMeta?.icon || '🔍'} ${catLabel}</div>
       <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${t.detailSub||date}</div>
       <div id="detail-loading"></div>
       <div id="detail-content" style="display:none"></div>
@@ -3466,7 +3472,7 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   const apiPromise = fetch('/chat-detail', {
     method: 'POST',
     headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-    body: JSON.stringify({ date, ohaeng, lang, birth, p2 })
+    body: JSON.stringify({ date, ohaeng, lang, birth, p2, category })
   }).then(r => r.json());
 
   try {
@@ -3474,32 +3480,20 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
     const loadEl = document.getElementById('detail-loading');
     const contEl = document.getElementById('detail-content');
     if (loadEl) loadEl.style.display = 'none';
-    if (contEl && data.detail) {
-      const areas = [
-        { key:'health',       icon:'🏥', label: t.detailCardTitle?.health        || '건강' },
-        { key:'wealth',       icon:'💰', label: t.detailCardTitle?.wealth        || '재물' },
-        { key:'relationships',icon:'💝', label: t.detailCardTitle?.relationships  || '관계' },
-        { key:'fortune',      icon:'🎯', label: t.detailCardTitle?.fortune       || '행운' }
-      ];
-      contEl.innerHTML = areas.map(a => `
-        <div class="detail-area-card">
-          <div class="detail-area-title">${a.icon} ${a.label}</div>
-          <div class="detail-area-body" id="detailBody-${a.key}"></div>
-        </div>`).join('');
+    if (contEl && data.reading) {
+      contEl.innerHTML = `<div class="detail-area-card"><div class="detail-area-body" id="detailBody-${category}"></div></div>`;
       if (data.remaining !== undefined) {
         contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
       }
       contEl.style.display = '';
-      // 4개 영역을 병렬로 한 번에 페이드인 (오라클 연출로 이미 충분히 기다렸으므로 stagger:0)
-      areas.forEach(a => {
-        const bodyEl = document.getElementById(`detailBody-${a.key}`);
-        if (bodyEl) revealSentences(bodyEl, data.detail[a.key] || '', lang, { scrollEl: contEl, stagger: 0 });
-      });
+      // 오라클 연출로 이미 충분히 기다렸으므로 stagger:0(한 번에 페이드인)
+      const bodyEl = document.getElementById(`detailBody-${category}`);
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: contEl, stagger: 0 });
 
       // 상세 풀이 저장 (나중에 다시 보기 위해)
       try {
         const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
-        saved.unshift({ date, ohaeng, detail: data.detail, timestamp: Date.now() });
+        saved.unshift({ date, ohaeng, category, reading: data.reading, timestamp: Date.now() });
         // 최근 10개만 보관
         if (saved.length > 10) saved.splice(10);
         localStorage.setItem('myan_detail_readings', JSON.stringify(saved));
@@ -3516,33 +3510,46 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
 // ════════════════════════════════════════════
 //  저장된 상세 풀이 다시 보기
 // ════════════════════════════════════════════
-function showSavedDetailReading(date, ohaeng, detail) {
+function showSavedDetailReading(index) {
   const t = getT();
+  const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
+  const item = saved[index];
+  if (!item) return;
+
+  let bodyHtml;
+  if (item.category && item.reading) {
+    // 신규 포맷 — 카테고리 단독
+    const catMeta = DETAIL_CATS.find(c => c.key === item.category);
+    const label = t.detailCardTitle?.[item.category] || item.category;
+    bodyHtml = `<div class="detail-area-card"><div class="detail-area-title">${catMeta?.icon || '🔍'} ${label}</div><div class="detail-area-body">${item.reading}</div></div>`;
+  } else if (item.detail) {
+    // 구 포맷(4영역 통합) — 저장된 과거 기록 호환용
+    const legacyAreas = [
+      { key:'health',        icon:'🏥', label: t.detailCardTitle?.health || '건강' },
+      { key:'wealth',        icon:'💰', label: t.detailCardTitle?.wealth || '재물' },
+      { key:'relationships', icon:'💝', label: '관계' },
+      { key:'fortune',       icon:'🎯', label: '행운' }
+    ];
+    bodyHtml = legacyAreas.map(a => `
+      <div class="detail-area-card">
+        <div class="detail-area-title">${a.icon} ${a.label}</div>
+        <div class="detail-area-body">${item.detail[a.key]||''}</div>
+      </div>`).join('');
+  } else {
+    bodyHtml = '';
+  }
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay active';
   overlay.style.zIndex = '1200';
-
-  const areas = [
-    { key:'health',       icon:'🏥', label: t.detailCardTitle?.health        || '건강' },
-    { key:'wealth',       icon:'💰', label: t.detailCardTitle?.wealth        || '재물' },
-    { key:'relationships',icon:'💝', label: t.detailCardTitle?.relationships  || '관계' },
-    { key:'fortune',      icon:'🎯', label: t.detailCardTitle?.fortune       || '행운' }
-  ];
-
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
-      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${date}</div>
-      <div id="detail-content">
-        ${areas.map(a => `
-          <div class="detail-area-card">
-            <div class="detail-area-title">${a.icon} ${a.label}</div>
-            <div class="detail-area-body">${detail[a.key]||''}</div>
-          </div>`).join('')}
-      </div>
-      <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
+      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${item.ohaeng}</div>
+      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${item.date}</div>
+      <div id="detail-content">${bodyHtml}</div>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 function showDetailReadingHistory() {
@@ -3561,13 +3568,16 @@ function showDetailReadingHistory() {
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
       <div class="modal-title">📖 상세 풀이 기록</div>
       <div style="max-height:400px;overflow-y:auto;margin:16px 0">
-        ${saved.map(item => `
-          <div onclick="showSavedDetailReading('${item.date}', '${item.ohaeng}', ${JSON.stringify(item.detail).replace(/"/g, '&quot;')}); this.closest('.modal-overlay').remove();"
+        ${saved.map((item, i) => {
+          const catMeta = DETAIL_CATS.find(c => c.key === item.category);
+          const label = catMeta ? `${catMeta.icon} ${t.detailCardTitle?.[item.category] || item.category}` : (t.detailTitle || '상세 풀이');
+          return `
+          <div onclick="showSavedDetailReading(${i}); this.closest('.modal-overlay').remove();"
                style="padding:12px;margin-bottom:8px;border-radius:8px;background:var(--card);border:1px solid var(--border);cursor:pointer">
-            <div style="font-weight:600;color:var(--gold)">${item.ohaeng}</div>
+            <div style="font-weight:600;color:var(--gold)">${label} · ${item.ohaeng}</div>
             <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">${item.date}</div>
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
       </div>
       <button onclick="this.closest('.modal-overlay').remove()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
     </div>`;
