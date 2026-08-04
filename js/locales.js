@@ -113,6 +113,8 @@ const TX = {
     drCalTitle:'나의 기운 캘린더', drCalSub:'리딩 기록 · 오행 색 달력',
     drTarotTitle:'오늘의 타로', drTarotSub:'재미로 보는 카드 한 장 (토큰 1)',
     tarotTitle:'오늘의 타로', tarotShuffling:'카드를 섞는 중...', tarotReversed:'역방향',
+    drZodiacTitle:'띠·별자리 운세', drZodiacSub:'오늘의 띠·별자리 운세 (토큰 1)',
+    zodiacTitle:'띠·별자리 운세', zodiacLoading:'운세를 계산하는 중...', zodiacNeedBirth:'먼저 마이페이지에서 생년월일을 등록해 주세요.',
     drThemeTitle:'테마', drDark:'🌙 다크', drLight:'☀️ 라이트',
     drSupportTitle:'1:1 카카오 상담', drLogoutTitle:'로그아웃',
     // 첫 입력 폼
@@ -254,6 +256,8 @@ const TX = {
     drCalTitle:'Energy Calendar', drCalSub:'Reading history · Calendar',
     drTarotTitle:"Today's Tarot", drTarotSub:'A fun card pull (1 token)',
     tarotTitle:"Today's Tarot", tarotShuffling:'Shuffling the cards...', tarotReversed:'Reversed',
+    drZodiacTitle:'Zodiac Fortune', drZodiacSub:"Today's animal & star sign fortune (1 token)",
+    zodiacTitle:'Zodiac Fortune', zodiacLoading:'Calculating your fortune...', zodiacNeedBirth:'Please add your birth date in My Page first.',
     drThemeTitle:'Theme', drDark:'🌙 Dark', drLight:'☀️ Light',
     drSupportTitle:'1:1 KakaoTalk Chat', drLogoutTitle:'Log out',
     // First input form
@@ -395,6 +399,8 @@ const TX = {
     drCalTitle:'气运日历', drCalSub:'解读记录 · 五行色彩日历',
     drTarotTitle:'今日塔罗', drTarotSub:'趣味抽卡一张（1代币）',
     tarotTitle:'今日塔罗', tarotShuffling:'正在洗牌...', tarotReversed:'逆位',
+    drZodiacTitle:'生肖·星座运势', drZodiacSub:'今日生肖·星座运势（1代币）',
+    zodiacTitle:'生肖·星座运势', zodiacLoading:'正在计算运势...', zodiacNeedBirth:'请先在个人主页登记出生日期。',
     drThemeTitle:'主题', drDark:'🌙 深色', drLight:'☀️ 浅色',
     drSupportTitle:'1:1 客服咨询', drLogoutTitle:'退出登录',
     // 首次输入表单
@@ -536,6 +542,8 @@ const TX = {
     drCalTitle:'エネルギーカレンダー', drCalSub:'リーディング履歴 · 五行カレンダー',
     drTarotTitle:'今日のタロット', drTarotSub:'お楽しみカード1枚（トークン1）',
     tarotTitle:'今日のタロット', tarotShuffling:'カードをシャッフル中...', tarotReversed:'逆位置',
+    drZodiacTitle:'干支・星座占い', drZodiacSub:'今日の干支・星座占い（トークン1）',
+    zodiacTitle:'干支・星座占い', zodiacLoading:'占いを計算中...', zodiacNeedBirth:'先にマイページで生年月日を登録してください。',
     drThemeTitle:'テーマ', drDark:'🌙 ダーク', drLight:'☀️ ライト',
     drSupportTitle:'1:1 カカオ相談', drLogoutTitle:'ログアウト',
     fifLblName:'お名前', fifLblYear:'生まれ年', fifLblMonth:'月', fifLblDay:'日',

@@ -691,6 +691,8 @@ export default {
     if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
     // ── 타로카드 뽑기 (재미 콘텐츠) ──
     if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return handleTarotDraw(request, env); }
+    // ── 띠·별자리 운세 (재미 콘텐츠) ──
+    if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -2257,6 +2259,90 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       card: { index: cardIdx, name: card.name, icon: card.icon },
       upright, reading, remaining: remainingTokens
     }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  띠·별자리 운세 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+// 인덱스는 프론트 js/constants.js의 ZODIAC_ANIMAL_NAMES/WESTERN_ZODIAC_NAMES와 순서를 맞출 것
+const ZODIAC_ANIMALS_KO = ['원숭이','닭','개','돼지','쥐','소','호랑이','토끼','용','뱀','말','양'];
+function _getZodiacAnimalIndex(year) {
+  return ((year % 12) + 12) % 12;
+}
+const WESTERN_ZODIAC_KO = ['염소자리','물병자리','물고기자리','양자리','황소자리','쌍둥이자리','게자리','사자자리','처녀자리','천칭자리','전갈자리','사수자리'];
+function _getWesternZodiacIndex(month, day) {
+  const md = month * 100 + day;
+  if (md >= 1222 || md <= 119) return 0;  // 염소자리
+  if (md <= 218) return 1;                // 물병자리
+  if (md <= 320) return 2;                // 물고기자리
+  if (md <= 419) return 3;                // 양자리
+  if (md <= 520) return 4;                // 황소자리
+  if (md <= 621) return 5;                // 쌍둥이자리
+  if (md <= 722) return 6;                // 게자리
+  if (md <= 822) return 7;                // 사자자리
+  if (md <= 922) return 8;                // 처녀자리
+  if (md <= 1023) return 9;               // 천칭자리
+  if (md <= 1122) return 10;              // 전갈자리
+  return 11;                              // 사수자리
+}
+
+async function handleZodiacFortune(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth } = await request.json().catch(() => ({}));
+    const by = birth ? parseInt(birth.year, 10) : NaN;
+    const bm = birth ? parseInt(birth.month, 10) : NaN;
+    const bd = birth ? parseInt(birth.day, 10) : NaN;
+    if (!by || !bm || !bd) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
+    }
+
+    const animalIndex = _getZodiacAnimalIndex(by);
+    const animal = ZODIAC_ANIMALS_KO[animalIndex];
+    const zodiacIndex = _getWesternZodiacIndex(bm, bd);
+    const zodiac = WESTERN_ZODIAC_KO[zodiacIndex];
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `zodiac_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'zodiac_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '띠·별자리 운세는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 이 사람은 "${animal}띠"이고 서양 별자리는 "${zodiac}"입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+띠와 별자리, 오늘의 오행 기운을 재미있게 엮어서 ${langLabel}로 3~4문장의 짧고 유쾌한 오늘의 운세를 알려주세요. 진지한 예언이 아니라 가볍게 웃으며 읽을 수 있는 톤으로, 마지막엔 오늘 실천하면 좋을 작은 팁 하나를 더해주세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    return cors(JSON.stringify({ success:true, animal, animalIndex, zodiac, zodiacIndex, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }

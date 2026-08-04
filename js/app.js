@@ -2623,6 +2623,7 @@ function _syncDrawerLangs() {
   _t('drTxtMypage',  t.drMypageTitle); _t('drSubMypage', t.drMypageSub);
   _t('drTxtCal',     t.drCalTitle);  _t('drSubCal',    t.drCalSub);
   _t('drTxtTarot',   t.drTarotTitle); _t('drSubTarot', t.drTarotSub);
+  _t('drTxtZodiac',  t.drZodiacTitle); _t('drSubZodiac', t.drZodiacSub);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -3646,6 +3647,75 @@ async function openTarotDraw() {
     }
   } catch (e) {
     const statusEl = document.getElementById('tarotStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  띠·별자리 운세 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openZodiacFortune() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.zodiacNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const lang = getLang();
+  const birth = { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🐉 ${t.zodiacTitle || '띠·별자리 운세'}</div>
+      <div id="zodiacStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.zodiacLoading || '운세를 계산하는 중...'}</div>
+      <div id="zodiacResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/zodiac-fortune', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, birth })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('zodiacStatus');
+    const resultEl = document.getElementById('zodiacResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      const animalLabel = ZODIAC_ANIMAL_NAMES[lang]?.[data.animalIndex] || data.animal;
+      const zodiacLabel = WESTERN_ZODIAC_NAMES[lang]?.[data.zodiacIndex] || data.zodiac;
+      const animalSuffix = lang === 'ko' ? '띠' : '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${animalLabel}${animalSuffix} · ${zodiacLabel}</div>
+        <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="zodiacReadingBody"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('zodiacReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('zodiacStatus');
     if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
   }
 }
