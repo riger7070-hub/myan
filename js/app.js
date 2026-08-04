@@ -238,19 +238,25 @@ async function shareOhaengCard(ohaeng) {
       if (navigator.share && navigator.canShare) {
         const file = new File([blob], 'myan-ohaeng.png', { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: `M;Y 安 - ${kiName}`,
-            text: `오늘(${today})의 오행 기운은 ${kiName}입니다!`,
-            files: [file]
-          });
-          hapticLight();
+          try {
+            await navigator.share({
+              title: `M;Y 安 - ${kiName}`,
+              text: `오늘(${today})의 오행 기운은 ${kiName}입니다!`,
+              files: [file]
+            });
+            hapticLight();
 
-          // 🎁 공유 보너스 지급 (서버가 실제로 지급을 확정한 경우에만 안내)
-          if (canGetBonus && await grantShareBonus()) {
-            showToast({ko:'🎁 공유 보너스 토큰 +1',en:'🎁 +1 Share Bonus Token',zh:'🎁 分享奖励代币+1',ja:'🎁 共有ボーナス トークン+1'}[lang]);
+            // 🎁 공유 보너스 지급 (서버가 실제로 지급을 확정한 경우에만 안내)
+            if (canGetBonus && await grantShareBonus()) {
+              showToast({ko:'🎁 공유 보너스 토큰 +1',en:'🎁 +1 Share Bonus Token',zh:'🎁 分享奖励代币+1',ja:'🎁 共有ボーナス トークン+1'}[lang]);
+            }
+
+            return;
+          } catch (shareErr) {
+            // 사용자가 공유 시트를 취소한 경우 — 실패가 아니므로 조용히 종료
+            if (shareErr?.name === 'AbortError') return;
+            // 그 외 오류(권한 거부 등)는 아래 다운로드 폴백으로 계속 진행
           }
-
-          return;
         }
       }
 
