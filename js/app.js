@@ -3449,9 +3449,9 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
       <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${t.detailSub||date}</div>
       <div id="detail-loading"></div>
       <div id="detail-content" style="display:none"></div>
-      <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   // 사용자 사주 계산용 생년월일시 (입력폼에서 넘어온 값 우선, 없으면 프로필)
   let birth = birthOverride;

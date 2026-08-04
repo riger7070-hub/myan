@@ -999,6 +999,19 @@ async function handleGeminiChat(request, env) {
           data.candidates[0].content.parts[0].text = stripped || rawText;
         }
       }
+
+      // 정식 리딩(사주 원국 계산됨)이면 기록 저장 — 실패해도 응답에는 영향 없음(비차단)
+      if (saju && mode === 'solo' && data._ohaeng) {
+        const finalReading = data.candidates[0]?.content?.parts?.[0]?.text;
+        if (finalReading) {
+          saveSajuHistory(
+            env, email, 'solo',
+            { year: birth.year, month: birth.month, day: birth.day, hour: birth.hour },
+            null,
+            finalReading, data._ohaeng, il.o
+          ).catch(() => {});
+        }
+      }
     }
 
     return cors(JSON.stringify(data), 200);
