@@ -28,6 +28,32 @@ const ON = {
   ja:{木:'木(もく)',火:'火(か)',土:'土(ど)',金:'金(きん)',水:'水(すい)'},
 };
 
+// 상세 풀이 개별 카테고리 — 백엔드 worker.js의 DETAIL_CATEGORIES와 키를 맞출 것
+const DETAIL_CATS = [
+  { key:'wealth', icon:'💰' },
+  { key:'love',   icon:'💕' },
+  { key:'career', icon:'💼' },
+  { key:'health', icon:'🏥' },
+];
+
+// 띠(12지) 이름 — 인덱스는 백엔드 worker.js의 ZODIAC_ANIMALS_KO와 순서를 맞출 것
+const ZODIAC_ANIMAL_NAMES = {
+  ko: ['원숭이','닭','개','돼지','쥐','소','호랑이','토끼','용','뱀','말','양'],
+  en: ['Monkey','Rooster','Dog','Pig','Rat','Ox','Tiger','Rabbit','Dragon','Snake','Horse','Goat'],
+  zh: ['猴','鸡','狗','猪','鼠','牛','虎','兔','龙','蛇','马','羊'],
+  ja: ['申(猿)','酉(鶏)','戌(犬)','亥(猪)','子(鼠)','丑(牛)','寅(虎)','卯(兎)','辰(龍)','巳(蛇)','午(馬)','未(羊)'],
+};
+// 서양 별자리 이름 — 인덱스는 백엔드 worker.js의 WESTERN_ZODIAC_KO와 순서를 맞출 것
+const WESTERN_ZODIAC_NAMES = {
+  ko: ['염소자리','물병자리','물고기자리','양자리','황소자리','쌍둥이자리','게자리','사자자리','처녀자리','천칭자리','전갈자리','사수자리'],
+  en: ['Capricorn','Aquarius','Pisces','Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius'],
+  zh: ['摩羯座','水瓶座','双鱼座','白羊座','金牛座','双子座','巨蟹座','狮子座','处女座','天秤座','天蝎座','射手座'],
+  ja: ['やぎ座','みずがめ座','うお座','おひつじ座','おうし座','ふたご座','かに座','しし座','おとめ座','てんびん座','さそり座','いて座'],
+};
+
+// 오행 유형 테스트 — 질문 옵션 순서와 백엔드 worker.js의 TYPE_ELEMENTS 순서를 맞출 것
+const TYPE_ORDER = ['木','火','土','金','水'];
+
 // 한글 단독 이름 (일반인용)
 const ON_KR = { 木:'목', 火:'화', 土:'토', 金:'금', 水:'수' };
 // 오행 한글 설명

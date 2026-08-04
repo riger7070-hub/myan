@@ -560,14 +560,14 @@ function addBubble(text, who, { sentenceReveal = false } = {}) {
     });
 
     if (sentenceReveal) {
-      // 첫 리딩 전달 — 문장 단위 순차 공개 (오라클 오버레이와 짝을 이루는 연출)
+      // 첫 리딩 전달 — 오라클 연출(대기)이 끝나면 리딩 전문을 한 번에 페이드인 (stagger:0 = 문장 순차공개 없이 동시 표시)
       const contentEl = document.createElement('div');
       contentEl.className = 'bubble-reveal-content';
       d.appendChild(contentEl);
       d.appendChild(btn);
       cw().appendChild(d);
       scrollToBottom();
-      revealSentences(contentEl, text, getLang(), { scrollEl: cw() });
+      revealSentences(contentEl, text, getLang(), { scrollEl: cw(), stagger: 0 });
     } else {
       // 텍스트 노드를 별도 관리 → 타이핑 효과 적용 & 복사 버튼 충돌 방지
       const tn = document.createTextNode('');
@@ -977,10 +977,10 @@ function addRxCard(o) {
   const today = _todayKST ? _todayKST() : new Date().toISOString().slice(0,10);
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;gap:8px;margin:6px 0 2px;flex-wrap:wrap;';
-  btnRow.innerHTML = `
-    <button class="rx-detail-btn" onclick="_openDetailReading('${today}','${o}')">
-      🔍 ${t.detailTitle || '상세 풀이'}
-    </button>
+  btnRow.innerHTML = DETAIL_CATS.map(c => `
+    <button class="rx-detail-btn" onclick="_openDetailReading('${today}','${o}','${c.key}')">
+      ${c.icon} ${t.detailCardTitle?.[c.key] || c.key}
+    </button>`).join('') + `
     <button class="rx-share-btn" onclick="shareOhaengCard('${o}')">
       📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}
     </button>`;
@@ -1176,7 +1176,7 @@ async function send() {
     if (mode === 'solo' && data._ohaeng) {
       try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
       const revealMs = isFirstTurn
-        ? _sentenceRevealMs(clean, getLang())
+        ? _sentenceRevealMs(clean, getLang(), 0)
         : (clean.length <= 300 ? clean.length * 22 + 500 : 1800);
       _renderSajuGaugeFromGemini(data._ohaeng, revealMs);
     }
@@ -1452,6 +1452,7 @@ function setSessionToken(token, expSec) {
 }
 
 // Google ID 토큰을 서버에서 자체 세션 토큰으로 교환 (로그인 직후 1회)
+// 반환값: 서버 응답 data(세션 발급 성공 시 profile 포함) 또는 null(실패)
 async function _exchangeSession(googleCredential) {
   try {
     const res = await fetch(EP + 'auth/login', {
@@ -1460,11 +1461,26 @@ async function _exchangeSession(googleCredential) {
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.session) { setSessionToken(data.session, data.exp); return true; }
+      if (data && data.session) { setSessionToken(data.session, data.exp); return data; }
     }
   } catch (e) {}
   // 폴백: 세션 발급 실패 시 Google 토큰을 그대로 사용 (서버가 둘 다 수용)
-  return false;
+  return null;
+}
+
+// 생년월일 프로필을 서버에 저장 (기기 변경·스토리지 초기화 후에도 로그인 시 복원할 수 있도록)
+function _syncProfileToServer(user) {
+  const token = getGoogleIdToken();
+  if (!token || !user) return;
+  fetch(EP + 'api/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      birthYear: user.birthYear || '', birthMonth: user.birthMonth || '',
+      birthDay: user.birthDay || '', birthHour: user.birthHour || '',
+      gender: user.gender || '', region: user.region || '',
+    }),
+  }).catch(() => {});
 }
 
 function getGoogleIdToken() {
@@ -2007,7 +2023,7 @@ function initGoogleSignin() {
   });
 }
 
-function handleGoogleCredential(response) {
+async function handleGoogleCredential(response) {
   try {
     localStorage.removeItem('myan_signed_out'); // 명시적 로그인 → 자동로그인 차단 해제
     setGoogleIdToken(response.credential);  // ⭐ ID Token 저장
@@ -2055,13 +2071,22 @@ function handleGoogleCredential(response) {
       });
     }
 
+    // Google 토큰 → 자체 세션 토큰 교환 (로그인 기록 + 30일 세션 발급)
+    // 성공 시 setSessionToken이 myan_session으로 교체 → 이후 요청은 로컬 검증
+    // 서버에 저장된 생년월일 프로필이 있으면(기기 변경·스토리지 초기화로 로컬이 비어있는 경우) 복원
+    const sessionData = await _exchangeSession(response.credential);
+    if (sessionData?.profile) {
+      const sp = sessionData.profile;
+      let restored = false;
+      ['birthYear', 'birthMonth', 'birthDay', 'birthHour', 'gender', 'region'].forEach(k => {
+        if (!profile[k] && sp[k]) { profile[k] = sp[k]; restored = true; }
+      });
+      if (restored) localStorage.setItem('myan_user', JSON.stringify(profile));
+    }
+
     // 유저 버튼 업데이트
     updateUserBtn(profile);
     refreshTokens();  // 서버 토큰 잔액 동기화
-
-    // Google 토큰 → 자체 세션 토큰 교환 (로그인 기록 + 30일 세션 발급, 백그라운드)
-    // 성공 시 setSessionToken이 myan_session으로 교체 → 이후 요청은 로컬 검증
-    _exchangeSession(response.credential);
 
     // 관리자 배지 확인
     _checkAdminBadge();
@@ -2204,6 +2229,7 @@ async function submitProfile() {
   user.birthMonth = mon;
   user.birthDay   = day;
   localStorage.setItem('myan_user', JSON.stringify(user));
+  _syncProfileToServer(user);
 
   // Sheets에 프로필 완성 기록 (백그라운드, 실패해도 무시)
   if (SHEETS_EP) {
@@ -2425,6 +2451,7 @@ async function saveMyPage() {
     birthHour: hour, gender: selGenderMp, region,
   };
   localStorage.setItem('myan_user', JSON.stringify(updated));
+  _syncProfileToServer(updated);
 
   if (SHEETS_EP) {
     fetch(SHEETS_EP, {
@@ -3053,6 +3080,10 @@ function _syncDrawerLangs() {
   _t('drTxtCouple',  t.drCoupleTitle); _t('drSubCouple', t.drCoupleSub);
   _t('drTxtMypage',  t.drMypageTitle); _t('drSubMypage', t.drMypageSub);
   _t('drTxtCal',     t.drCalTitle);  _t('drSubCal',    t.drCalSub);
+  _t('drTxtTarot',   t.drTarotTitle); _t('drSubTarot', t.drTarotSub);
+  _t('drTxtZodiac',  t.drZodiacTitle); _t('drSubZodiac', t.drZodiacSub);
+  _t('drTxtLucky',   t.drLuckyTitle);  _t('drSubLucky', t.drLuckySub);
+  _t('drTxtType',    t.drTypeTitle);   _t('drSubType', t.drTypeSub);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -4165,23 +4196,27 @@ function _ohaengGaugeHtml(ohaeng) {
 function renderSajuResult(data, m) {
   const cw = document.getElementById('chat-window');
   if (!cw) return;
+  const t = getT();
   const today = new Date().toISOString().slice(0,10);
   const ohaeng = data.dayElem || '土';
+  const detailBtnsHtml = DETAIL_CATS.map(c => `
+    <button class="rx-detail-btn" onclick="_detailFromSaju('${today}','${ohaeng}','${c.key}')">${c.icon} ${t.detailCardTitle?.[c.key] || c.key}</button>`).join('');
   cw.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
       <div style="max-width:640px;width:100%;margin:0 auto">
         <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:20px">✨ 간단 풀이</div>
         ${_ohaengGaugeHtml(data.ohaeng||{})}
         <div id="sjReadingBody" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px"></div>
-        <button id="sjDetailBtn" onclick="_detailFromSaju('${today}','${ohaeng}')" class="fif-submit" style="width:100%;margin-top:18px;padding:16px;font-size:1rem;opacity:0.4;pointer-events:none;transition:opacity .3s">🔍 상세 풀이 보기 (토큰 2)</button>
-        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin:16px 0 6px">${t.detailTitle||'상세 풀이'} (토큰 2)</div>
+        <div id="sjDetailBtns" style="display:flex;gap:8px;flex-wrap:wrap;opacity:0.4;pointer-events:none;transition:opacity .3s">${detailBtnsHtml}</div>
+        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
       </div>
     </div>`;
   cw.scrollTop = 0;
   revealSentences(document.getElementById('sjReadingBody'), data.reading || '', getLang(), {
     scrollEl: cw,
     onComplete: () => {
-      ['sjDetailBtn', 'sjRetryBtn'].forEach(id => {
+      ['sjDetailBtns', 'sjRetryBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; }
       });
@@ -4189,16 +4224,16 @@ function renderSajuResult(data, m) {
   });
 }
 
-function _detailFromSaju(date, ohaeng) {
+function _detailFromSaju(date, ohaeng, category) {
   if (!_lastSaju) return;
   if (!getGoogleIdToken()) { showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.'); return; }
-  _openDetailReading(date, ohaeng, _lastSaju.p1, _lastSaju.mode==='duo' ? _lastSaju.p2 : null);
+  _openDetailReading(date, ohaeng, category, _lastSaju.p1, _lastSaju.mode==='duo' ? _lastSaju.p2 : null);
 }
 
 // ════════════════════════════════════════════
 //  상세 풀이 모달
 // ════════════════════════════════════════════
-async function _openDetailReading(date, ohaeng, birthOverride, p2) {
+async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
   const token = getGoogleIdToken();
   if (!token) {
     showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
@@ -4206,6 +4241,8 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   }
   const t = getT();
   const lang = getLang();
+  const catMeta = DETAIL_CATS.find(c => c.key === category);
+  const catLabel = t.detailCardTitle?.[category] || category;
 
   // 모달 열기
   const overlay = document.createElement('div');
@@ -4213,13 +4250,13 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
+      <div class="modal-title">${catMeta?.icon || '🔍'} ${catLabel}</div>
       <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${t.detailSub||date}</div>
       <div id="detail-loading"></div>
       <div id="detail-content" style="display:none"></div>
-      <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   // 사용자 사주 계산용 생년월일시 (입력폼에서 넘어온 값 우선, 없으면 프로필)
   let birth = birthOverride;
@@ -4234,7 +4271,7 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
   const apiPromise = fetch('/chat-detail', {
     method: 'POST',
     headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-    body: JSON.stringify({ date, ohaeng, lang, birth, p2 })
+    body: JSON.stringify({ date, ohaeng, lang, birth, p2, category })
   }).then(r => r.json());
 
   try {
@@ -4242,32 +4279,20 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
     const loadEl = document.getElementById('detail-loading');
     const contEl = document.getElementById('detail-content');
     if (loadEl) loadEl.style.display = 'none';
-    if (contEl && data.detail) {
-      const areas = [
-        { key:'health',       icon:'🏥', label: t.detailCardTitle?.health        || '건강' },
-        { key:'wealth',       icon:'💰', label: t.detailCardTitle?.wealth        || '재물' },
-        { key:'relationships',icon:'💝', label: t.detailCardTitle?.relationships  || '관계' },
-        { key:'fortune',      icon:'🎯', label: t.detailCardTitle?.fortune       || '행운' }
-      ];
-      contEl.innerHTML = areas.map(a => `
-        <div class="detail-area-card">
-          <div class="detail-area-title">${a.icon} ${a.label}</div>
-          <div class="detail-area-body" id="detailBody-${a.key}"></div>
-        </div>`).join('');
+    if (contEl && data.reading) {
+      contEl.innerHTML = `<div class="detail-area-card"><div class="detail-area-body" id="detailBody-${category}"></div></div>`;
       if (data.remaining !== undefined) {
         contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
       }
       contEl.style.display = '';
-      // 4개 영역을 병렬로 문장 단위 순차 공개 (순차 누적하면 상세 풀이가 가장 긴 플로우가 됨)
-      areas.forEach(a => {
-        const bodyEl = document.getElementById(`detailBody-${a.key}`);
-        if (bodyEl) revealSentences(bodyEl, data.detail[a.key] || '', lang, { scrollEl: contEl });
-      });
+      // 오라클 연출로 이미 충분히 기다렸으므로 stagger:0(한 번에 페이드인)
+      const bodyEl = document.getElementById(`detailBody-${category}`);
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: contEl, stagger: 0 });
 
       // 상세 풀이 저장 (나중에 다시 보기 위해)
       try {
         const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
-        saved.unshift({ date, ohaeng, detail: data.detail, timestamp: Date.now() });
+        saved.unshift({ date, ohaeng, category, reading: data.reading, timestamp: Date.now() });
         // 최근 10개만 보관
         if (saved.length > 10) saved.splice(10);
         localStorage.setItem('myan_detail_readings', JSON.stringify(saved));
@@ -4284,33 +4309,46 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
 // ════════════════════════════════════════════
 //  저장된 상세 풀이 다시 보기
 // ════════════════════════════════════════════
-function showSavedDetailReading(date, ohaeng, detail) {
+function showSavedDetailReading(index) {
   const t = getT();
+  const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
+  const item = saved[index];
+  if (!item) return;
+
+  let bodyHtml;
+  if (item.category && item.reading) {
+    // 신규 포맷 — 카테고리 단독
+    const catMeta = DETAIL_CATS.find(c => c.key === item.category);
+    const label = t.detailCardTitle?.[item.category] || item.category;
+    bodyHtml = `<div class="detail-area-card"><div class="detail-area-title">${catMeta?.icon || '🔍'} ${label}</div><div class="detail-area-body">${item.reading}</div></div>`;
+  } else if (item.detail) {
+    // 구 포맷(4영역 통합) — 저장된 과거 기록 호환용
+    const legacyAreas = [
+      { key:'health',        icon:'🏥', label: t.detailCardTitle?.health || '건강' },
+      { key:'wealth',        icon:'💰', label: t.detailCardTitle?.wealth || '재물' },
+      { key:'relationships', icon:'💝', label: '관계' },
+      { key:'fortune',       icon:'🎯', label: '행운' }
+    ];
+    bodyHtml = legacyAreas.map(a => `
+      <div class="detail-area-card">
+        <div class="detail-area-title">${a.icon} ${a.label}</div>
+        <div class="detail-area-body">${item.detail[a.key]||''}</div>
+      </div>`).join('');
+  } else {
+    bodyHtml = '';
+  }
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay active';
   overlay.style.zIndex = '1200';
-
-  const areas = [
-    { key:'health',       icon:'🏥', label: t.detailCardTitle?.health        || '건강' },
-    { key:'wealth',       icon:'💰', label: t.detailCardTitle?.wealth        || '재물' },
-    { key:'relationships',icon:'💝', label: t.detailCardTitle?.relationships  || '관계' },
-    { key:'fortune',      icon:'🎯', label: t.detailCardTitle?.fortune       || '행운' }
-  ];
-
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${ohaeng}</div>
-      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${date}</div>
-      <div id="detail-content">
-        ${areas.map(a => `
-          <div class="detail-area-card">
-            <div class="detail-area-title">${a.icon} ${a.label}</div>
-            <div class="detail-area-body">${detail[a.key]||''}</div>
-          </div>`).join('')}
-      </div>
-      <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
+      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${item.ohaeng}</div>
+      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${item.date}</div>
+      <div id="detail-content">${bodyHtml}</div>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 function showDetailReadingHistory() {
@@ -4329,17 +4367,358 @@ function showDetailReadingHistory() {
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
       <div class="modal-title">📖 상세 풀이 기록</div>
       <div style="max-height:400px;overflow-y:auto;margin:16px 0">
-        ${saved.map(item => `
-          <div onclick="showSavedDetailReading('${item.date}', '${item.ohaeng}', ${JSON.stringify(item.detail).replace(/"/g, '&quot;')}); this.closest('.modal-overlay').remove();"
+        ${saved.map((item, i) => {
+          const catMeta = DETAIL_CATS.find(c => c.key === item.category);
+          const label = catMeta ? `${catMeta.icon} ${t.detailCardTitle?.[item.category] || item.category}` : (t.detailTitle || '상세 풀이');
+          return `
+          <div onclick="showSavedDetailReading(${i}); this.closest('.modal-overlay').remove();"
                style="padding:12px;margin-bottom:8px;border-radius:8px;background:var(--card);border:1px solid var(--border);cursor:pointer">
-            <div style="font-weight:600;color:var(--gold)">${item.ohaeng}</div>
+            <div style="font-weight:600;color:var(--gold)">${label} · ${item.ohaeng}</div>
             <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">${item.date}</div>
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
       </div>
       <button onclick="this.closest('.modal-overlay').remove()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════
+//  타로카드 뽑기 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+let _tarotPicking = false;
+
+function openTarotDraw() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  _tarotPicking = false;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🔮 ${t.tarotTitle || '오늘의 타로'}</div>
+      <div style="font-size:0.8rem;color:var(--text-dim);margin:8px 0 22px">${t.tarotPickCard || '마음에 드는 카드를 한 장 골라보세요'}</div>
+      <div id="tarotSpread" style="display:flex;justify-content:center;align-items:flex-end;gap:10px">
+        <div class="tarot-card-back tarot-spread-card" style="transform:rotate(-8deg)" onclick="_tarotPick(0)">🂠</div>
+        <div class="tarot-card-back tarot-spread-card" onclick="_tarotPick(1)">🂠</div>
+        <div class="tarot-card-back tarot-spread-card" style="transform:rotate(8deg)" onclick="_tarotPick(2)">🂠</div>
+      </div>
+      <div id="tarotStatus" style="display:none;font-size:0.8rem;color:var(--text-dim);margin-top:14px"></div>
+      <div id="tarotResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function _tarotPick(idx) {
+  if (_tarotPicking) return;
+  _tarotPicking = true;
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+
+  const spreadEl = document.getElementById('tarotSpread');
+  const statusEl = document.getElementById('tarotStatus');
+  let backEl = null;
+  if (spreadEl) {
+    Array.from(spreadEl.children).forEach((el, i) => {
+      el.onclick = null;
+      if (i === idx) {
+        el.style.transform = 'rotate(0deg) scale(1.08)';
+        el.id = 'tarotCardBack';
+        backEl = el;
+      } else {
+        el.style.opacity = '0';
+        el.style.pointerEvents = 'none';
+      }
+    });
+  }
+  if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.tarotShuffling || '카드를 섞는 중...'; }
+
+  const started = Date.now();
+  const MIN_MS = 1800; // 오라클 연출보다 훨씬 짧게 — 재미 콘텐츠는 즉각적인 만족감이 중요
+  try {
+    const res = await fetch('/api/tarot-draw', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const resultEl = document.getElementById('tarotResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (backEl) {
+      backEl.classList.add('tarot-flipped');
+      backEl.textContent = data.card.icon;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.card.name}${data.upright ? '' : ` (${t.tarotReversed || '역방향'})`}</div>
+        <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="tarotReadingBody"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('tarotReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  띠·별자리 운세 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openZodiacFortune() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.zodiacNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const lang = getLang();
+  const birth = { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🐉 ${t.zodiacTitle || '띠·별자리 운세'}</div>
+      <div id="zodiacStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.zodiacLoading || '운세를 계산하는 중...'}</div>
+      <div id="zodiacResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/zodiac-fortune', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, birth })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('zodiacStatus');
+    const resultEl = document.getElementById('zodiacResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      const animalLabel = ZODIAC_ANIMAL_NAMES[lang]?.[data.animalIndex] || data.animal;
+      const zodiacLabel = WESTERN_ZODIAC_NAMES[lang]?.[data.zodiacIndex] || data.zodiac;
+      const animalSuffix = lang === 'ko' ? '띠' : '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${animalLabel}${animalSuffix} · ${zodiacLabel}</div>
+        <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="zodiacReadingBody"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('zodiacReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('zodiacStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openLuckyPicks() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🍀 ${t.luckyTitle || '오늘의 럭키 아이템'}</div>
+      <div id="luckyStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.luckyLoading || '오늘의 행운을 찾는 중...'}</div>
+      <div id="luckyResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/lucky-picks', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('luckyStatus');
+    const resultEl = document.getElementById('luckyResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      const p = data.picks || {};
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div class="detail-area-card"><div class="detail-area-title">🎨 ${t.luckyColor||'럭키 컬러'}${p.color?.name ? ' · ' + p.color.name : ''}</div><div class="detail-area-body">${p.color?.reason||''}</div></div>
+        <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🍽️ ${t.luckyFood||'럭키 음식'}${p.food?.name ? ' · ' + p.food.name : ''}</div><div class="detail-area-body">${p.food?.reason||''}</div></div>
+        <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🎵 ${t.luckySong||'럭키 무드'}${p.song?.name ? ' · ' + p.song.name : ''}</div><div class="detail-area-body">${p.song?.reason||''}</div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('luckyStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  오행 유형 궁합 테스트 (재미 콘텐츠) — 퀴즈는 무료, 궁합 해석만 1토큰
+// ════════════════════════════════════════════
+let _typeTestState = null;
+
+function openTypeTest() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const questions = t.typeQ || [];
+  if (!questions.length) return;
+
+  _typeTestState = { scores: { 木:0, 火:0, 土:0, 金:0, 水:0 }, qIdx: 0, questions, myType: null };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:400px;padding:32px 24px" id="typeTestBox"></div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  _renderTypeQuestion();
+}
+
+function _renderTypeQuestion() {
+  const s = _typeTestState;
+  const box = document.getElementById('typeTestBox');
+  if (!s || !box) return;
+  const t = getT();
+  const q = s.questions[s.qIdx];
+  const progress = (t.typeProgress || '{n} / {total}').replace('{n}', s.qIdx + 1).replace('{total}', s.questions.length);
+  box.innerHTML = `
+    <div class="modal-title" style="text-align:center">🔯 ${t.typeTitle || '오행 유형 테스트'}</div>
+    <div style="text-align:center;font-size:0.72rem;color:var(--text-dim);margin:4px 0 18px">${progress}</div>
+    <div style="text-align:center;font-weight:600;margin-bottom:16px">${q.q}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${q.opts.map((opt, i) => `<button class="rx-detail-btn" style="justify-content:center;padding:12px 14px" onclick="_typeTestAnswer(${i})">${opt}</button>`).join('')}
+    </div>`;
+}
+
+function _typeTestAnswer(i) {
+  const s = _typeTestState;
+  if (!s) return;
+  s.scores[TYPE_ORDER[i]] += 1;
+  s.qIdx++;
+  if (s.qIdx < s.questions.length) {
+    _renderTypeQuestion();
+  } else {
+    let best = TYPE_ORDER[0];
+    TYPE_ORDER.forEach(k => { if (s.scores[k] > s.scores[best]) best = k; });
+    s.myType = best;
+    _renderTypeResult();
+  }
+}
+
+function _renderTypeResult() {
+  const s = _typeTestState;
+  const box = document.getElementById('typeTestBox');
+  if (!s || !box) return;
+  const t = getT();
+  const lg = getLang();
+  const desc = t.typeDesc?.[s.myType] || '';
+  const elemLabel = ON[lg]?.[s.myType] || s.myType;
+  box.innerHTML = `
+    <div class="modal-title" style="text-align:center">${t.typeResultTitle || '당신의 유형은'}</div>
+    <div style="text-align:center;font-size:1.6rem;font-weight:700;color:var(--gold);margin:12px 0 8px">${elemLabel}</div>
+    <div class="detail-area-card" style="margin-bottom:18px"><div class="detail-area-body" style="text-align:center">${desc}</div></div>
+    <div style="text-align:center;font-size:0.85rem;font-weight:600;margin-bottom:10px">${t.typePickPartner || '궁합 볼 상대의 유형을 골라주세요'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px">
+      ${TYPE_ORDER.map(el => `<button class="rx-detail-btn" onclick="_typeTestPickPartner('${el}')">${ON[lg]?.[el] || el}</button>`).join('')}
+    </div>
+    <button onclick="openTypeTest()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.85rem">${t.typeRetake || '다시 하기'}</button>
+    <div id="typeCompatArea" style="margin-top:16px"></div>`;
+}
+
+async function _typeTestPickPartner(partnerType) {
+  const s = _typeTestState;
+  if (!s) return;
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const areaEl = document.getElementById('typeCompatArea');
+  if (!areaEl) return;
+  areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.typeCompatLoading || '궁합을 분석하는 중...'}</div>`;
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/type-compat', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, myType: s.myType, partnerType })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      return;
+    }
+    areaEl.innerHTML = `
+      <div class="detail-area-card"><div class="detail-area-body" id="typeCompatBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+    `;
+    const bodyEl = document.getElementById('typeCompatBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: areaEl, stagger: 0 });
+  } catch (e) {
+    areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
+  }
 }
 
 // ════════════════════════════════════════════
@@ -5013,7 +5392,7 @@ async function showSajuHistory() {
   modal.innerHTML = `
     <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
       <div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ 내 사주 기록</div>
+        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ 내 기록</div>
         <button onclick="document.getElementById('saju-history-modal').remove()" style="background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; padding: 0; width: 32px; height: 32px;">×</button>
       </div>
       <div id="saju-history-content" style="flex: 1; overflow-y: auto; padding: 20px;">
@@ -5027,50 +5406,94 @@ async function showSajuHistory() {
 
   document.body.appendChild(modal);
 
-  // 기록 조회
+  // 사주 기록 + 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 기록을 함께 조회해 하나의 타임라인으로 합침
   try {
-    const res = await fetch(EP + 'api/saju-history?limit=20', {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const [sajuRes, featureRes] = await Promise.all([
+      fetch(EP + 'api/saju-history?limit=20', { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch(EP + 'api/feature-history?limit=20', { headers: { 'Authorization': `Bearer ${token}` } }),
+    ]);
+    const sajuData    = await sajuRes.json().catch(() => ({}));
+    const featureData = await featureRes.json().catch(() => ({}));
+
+    const entries = [];
+
+    (sajuData.history || []).forEach(h => {
+      const modeIcon = h.mode === 'duo' ? '💞' : '☯';
+      const modeText = h.mode === 'duo' ? '우리의 조화' : '나만의 리딩';
+      const names = h.mode === 'duo'
+        ? `${h.p1.name || '첫 번째 분'} & ${h.p2?.name || '두 번째 분'}`
+        : (h.p1.name || '나');
+      entries.push({
+        createdAt: h.createdAt, icon: modeIcon, title: modeText, sub: names,
+        body: h.reading,
+      });
     });
-    const data = await res.json();
+
+    const FEATURE_META = {
+      detail:     { icon: null, label: '상세풀이' },
+      tarot:      { icon: '🔮', label: '타로' },
+      zodiac:     { icon: '🐉', label: '띠·별자리' },
+      lucky:      { icon: '🍀', label: '오늘의 럭키 아이템' },
+      typecompat: { icon: '🔯', label: '오행 궁합' },
+    };
+    (featureData.history || []).forEach(h => {
+      const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
+      let icon = fm.icon;
+      let title = h.title ? `${fm.label} · ${h.title}` : fm.label;
+      let body = h.content;
+
+      if (h.feature === 'detail') {
+        const cat = (typeof DETAIL_CATS !== 'undefined' ? DETAIL_CATS : []).find(c => c.key === h.meta?.category);
+        icon = cat?.icon || '📖';
+      } else if (h.feature === 'lucky') {
+        try {
+          const picks = JSON.parse(h.content);
+          body = [
+            picks.color ? `🎨 ${picks.color.name} — ${picks.color.reason}` : '',
+            picks.food  ? `🍽 ${picks.food.name} — ${picks.food.reason}`  : '',
+            picks.song  ? `🎵 ${picks.song.name} — ${picks.song.reason}`  : '',
+          ].filter(Boolean).join('\n');
+        } catch { body = h.content; }
+      } else if (h.feature === 'tarot' && h.meta?.upright === false) {
+        title += ' (역방향)';
+      }
+
+      entries.push({ createdAt: h.createdAt, icon, title, sub: null, body });
+    });
+
+    entries.sort((a, b) => b.createdAt - a.createdAt);
 
     const content = document.getElementById('saju-history-content');
-    if (!data.ok || !data.history || data.history.length === 0) {
+    if (entries.length === 0) {
       content.innerHTML = `
         <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
           <div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;">📜</div>
           <div style="font-size: 1.1rem; margin-bottom: 8px;">아직 기록이 없습니다</div>
-          <div style="font-size: 0.9rem; opacity: 0.7;">사주 풀이를 받으면 자동으로 저장됩니다</div>
+          <div style="font-size: 0.9rem; opacity: 0.7;">풀이를 받으면 자동으로 저장됩니다</div>
         </div>
       `;
       return;
     }
 
     // 기록 렌더링
-    content.innerHTML = data.history.map(h => {
-      const date = new Date(h.createdAt * 1000);
+    content.innerHTML = entries.map(en => {
+      const date = new Date(en.createdAt * 1000);
       const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
       const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-      
-      const modeIcon = h.mode === 'duo' ? '💞' : '☯';
-      const modeText = h.mode === 'duo' ? '우리의 조화' : '나만의 리딩';
-      const names = h.mode === 'duo' 
-        ? `${h.p1.name || '첫 번째 분'} & ${h.p2?.name || '두 번째 분'}`
-        : (h.p1.name || '나');
 
       return `
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
             <div>
-              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${modeIcon} ${modeText}</div>
-              <div style="font-size: 0.85rem; color: var(--text-dim);">${names}</div>
+              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${en.icon} ${en.title}</div>
+              ${en.sub ? `<div style="font-size: 0.85rem; color: var(--text-dim);">${en.sub}</div>` : ''}
             </div>
             <div style="text-align: right; font-size: 0.75rem; color: var(--text-dim);">
               <div>${dateStr}</div>
               <div>${timeStr}</div>
             </div>
           </div>
-          <div style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.8;">${h.reading.split('\n').slice(0, 2).join('\n')}</div>
+          <div style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.8;">${(en.body || '').split('\n').slice(0, 2).join('\n')}</div>
         </div>
       `;
     }).join('');

@@ -453,6 +453,65 @@ async function handleGetSajuHistory(request, env) {
   }
 }
 
+// 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 기록 저장 (비동기, 비차단)
+async function saveFeatureHistory(env, email, feature, title, content, meta) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO feature_history (user_email, feature, title, content, meta) VALUES (?, ?, ?, ?, ?)`
+    ).bind(email, feature, title || null, content, meta ? JSON.stringify(meta) : null).run();
+
+    // 용량 관리: 사용자당 최대 200개 기록만 유지
+    const { results } = await env.DB.prepare(
+      `SELECT id FROM feature_history WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 200`
+    ).bind(email).all();
+    if (results && results.length > 0) {
+      await env.DB.prepare(`DELETE FROM feature_history WHERE user_email = ? AND id < ?`).bind(email, results[0].id).run();
+    }
+  } catch (e) {
+    console.error('Failed to save feature history:', e);
+  }
+}
+
+// 유료 콘텐츠 기록 조회 (최신순, 페이징)
+async function handleGetFeatureHistory(request, env) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return cors(JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
+  }
+  const idToken = authHeader.slice(7);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) {
+    return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT id, feature, title, content, meta, created_at
+      FROM feature_history
+      WHERE user_email = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(email, limit, offset).all();
+
+    const history = results.map(row => ({
+      id: row.id,
+      feature: row.feature,
+      title: row.title,
+      content: row.content,
+      meta: row.meta ? JSON.parse(row.meta) : null,
+      createdAt: row.created_at,
+    }));
+
+    return cors(JSON.stringify({ ok: true, history, count: history.length }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '기록 조회에 실패했습니다.' } }), 500);
+  }
+}
+
 // ════════════════════════════
 //  보안 헬퍼 함수
 // ════════════════════════════
@@ -658,10 +717,30 @@ async function ensureDBExt(env) {
       canceled_at          INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
+    CREATE TABLE IF NOT EXISTS feature_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_email TEXT NOT NULL,
+      feature TEXT NOT NULL,
+      title TEXT,
+      content TEXT NOT NULL,
+      meta TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_fh_email_created ON feature_history (user_email, created_at DESC);
   `).catch(() => {});
   // user_streaks.last_share_bonus: 기존 배포 DB에 컬럼이 없을 수 있어 별도 ALTER로 보정.
   // 이미 컬럼이 있으면 매 콜드스타트마다 에러가 나지만 위 배치와 분리돼 있어 다른 테이블 생성에 영향 없음.
   await env.DB.exec(`ALTER TABLE user_streaks ADD COLUMN last_share_bonus TEXT;`).catch(() => {});
+
+  // users 테이블 확장: 생년월일 프로필(서버 저장) — 기존 프로덕션 테이블이라 ALTER TABLE로 개별 추가.
+  // 이미 컬럼이 있으면 각각 개별 실패(중복 컬럼)하지만 .catch로 무시되고 다음 컬럼은 계속 진행됨.
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_year INTEGER`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_month INTEGER`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_day INTEGER`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_hour TEXT`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN gender TEXT`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN region TEXT`).catch(() => {});
+
   _dbExtReady = true;
 }
 
@@ -693,6 +772,14 @@ export default {
 
     // ── 상세 풀이 ──
     if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
+    // ── 타로카드 뽑기 (재미 콘텐츠) ──
+    if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return handleTarotDraw(request, env); }
+    // ── 띠·별자리 운세 (재미 콘텐츠) ──
+    if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
+    // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
+    if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
+    // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
+    if (path === '/api/type-compat' && method === 'POST') { await ensureDBExt(env); return handleTypeCompat(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -704,6 +791,10 @@ export default {
     }
     // ── 사주 기록 조회 ──
     if (path === '/api/saju-history' && method === 'GET') { await ensureDBExt(env); return handleGetSajuHistory(request, env); }
+    // ── 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 통합 기록 조회 ──
+    if (path === '/api/feature-history' && method === 'GET') { await ensureDBExt(env); return handleGetFeatureHistory(request, env); }
+    // ── 생년월일 프로필 서버 저장 ──
+    if (path === '/api/profile' && method === 'POST') { await ensureDBExt(env); return handleSaveProfile(request, env); }
     // ── 푸시 알림 API ──
     if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
     if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }
@@ -1006,6 +1097,19 @@ async function handleGeminiChat(request, env) {
           data.candidates[0].content.parts[0].text = stripped || rawText;
         }
       }
+
+      // 정식 리딩(사주 원국 계산됨)이면 기록 저장 — 실패해도 응답에는 영향 없음(비차단)
+      if (saju && mode === 'solo' && data._ohaeng) {
+        const finalReading = data.candidates[0]?.content?.parts?.[0]?.text;
+        if (finalReading) {
+          saveSajuHistory(
+            env, email, 'solo',
+            { year: birth.year, month: birth.month, day: birth.day, hour: birth.hour },
+            null,
+            finalReading, data._ohaeng, il.o
+          ).catch(() => {});
+        }
+      }
     }
 
     return cors(JSON.stringify(data), 200);
@@ -1119,6 +1223,7 @@ async function handleAuthLogin(request, env) {
   const ua      = request.headers.get('User-Agent') || null;
 
   // 로그인 기록 (DB 있을 때만, 실패해도 세션 발급은 진행)
+  let profile = null;
   if (env.DB) {
     try {
       // users upsert: 최초면 생성(가입), 재로그인이면 last_login/count 갱신 + 프로필 최신화
@@ -1137,6 +1242,21 @@ async function handleAuthLogin(request, env) {
       await env.DB.prepare(
         `INSERT INTO login_events (id, email, ip, country, user_agent) VALUES (?, ?, ?, ?, ?)`
       ).bind(crypto.randomUUID(), email, ip, country, ua).run();
+
+      // 서버에 저장된 생년월일 프로필 조회 — 새 기기/스토리지 초기화 후에도 복원할 수 있도록 로그인 응답에 포함
+      const row = await env.DB.prepare(
+        `SELECT birth_year, birth_month, birth_day, birth_hour, gender, region FROM users WHERE email = ?`
+      ).bind(email).first().catch(() => null);
+      if (row && (row.birth_year || row.gender || row.region)) {
+        profile = {
+          birthYear:  row.birth_year  || '',
+          birthMonth: row.birth_month || '',
+          birthDay:   row.birth_day   || '',
+          birthHour:  row.birth_hour  || '',
+          gender:     row.gender      || '',
+          region:     row.region      || '',
+        };
+      }
     } catch (e) {
       console.error('[AUTH LOGIN]', e); // 로깅 실패는 무시
     }
@@ -1148,7 +1268,34 @@ async function handleAuthLogin(request, env) {
     ok: true,
     session,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL,
+    profile,
   }), 200);
+}
+
+// 생년월일 프로필 서버 저장 (마이페이지/온보딩에서 호출 — 로그아웃·기기 변경 후에도 복원 가능하게)
+async function handleSaveProfile(request, env) {
+  const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+  if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const body = await request.json().catch(() => ({}));
+  const birthYear  = body.birthYear  ? parseInt(body.birthYear, 10)  : null;
+  const birthMonth = body.birthMonth ? parseInt(body.birthMonth, 10) : null;
+  const birthDay   = body.birthDay   ? parseInt(body.birthDay, 10)   : null;
+  const birthHour  = body.birthHour  || null;
+  const gender     = body.gender     || null;
+  const region      = body.region    || null;
+
+  try {
+    await env.DB.prepare(
+      `UPDATE users SET birth_year = ?, birth_month = ?, birth_day = ?, birth_hour = ?, gender = ?, region = ? WHERE email = ?`
+    ).bind(birthYear, birthMonth, birthDay, birthHour, gender, region, email).run();
+    return cors(JSON.stringify({ ok: true }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '프로필 저장에 실패했습니다.' } }), 500);
+  }
 }
 
 // 관리자: 회원/로그인 기록 조회 (통계 + 회원 목록 + 최근 접속 로그)
@@ -2110,6 +2257,14 @@ async function handleWithdraw(request, env) {
 // ════════════════════════════
 //  상세 풀이 핸들러
 // ════════════════════════════
+// 상세 풀이 개별 카테고리 — 프론트 js/locales.js의 detailCardTitle과 키를 맞출 것
+const DETAIL_CATEGORIES = {
+  wealth: { icon:'💰', title:'재물운', guide:'오늘 돈·투자·지출과 관련해 주의할 점과 좋은 기회' },
+  love:   { icon:'💕', title:'연애운', guide:'오늘 연인·이성 관계·소개팅 등에서 특히 신경 쓸 점과 좋은 기회' },
+  career: { icon:'💼', title:'직장·사업운', guide:'오늘 직장·이직·사업과 관련해 주의할 점과 좋은 기회' },
+  health: { icon:'🏥', title:'건강운', guide:'오늘 몸과 마음을 어떻게 챙기면 좋을지 구체적인 행동 조언' },
+};
+
 async function handleDetailReading(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
@@ -2117,8 +2272,10 @@ async function handleDetailReading(request, env) {
     const email = await getEmailFromToken(idToken, env);
     if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
-    const { date, ohaeng, lang = 'ko', birth, p2 } = await request.json().catch(() => ({}));
+    const { date, ohaeng, lang = 'ko', birth, p2, category } = await request.json().catch(() => ({}));
     if (!date || !ohaeng) return cors(JSON.stringify({ error: { message: 'date, ohaeng 필수' } }), 400);
+    const cat = DETAIL_CATEGORIES[category];
+    if (!cat) return cors(JSON.stringify({ error: { message: '올바르지 않은 카테고리입니다.' } }), 400);
 
     // 사용자 사주 원국(만세력) — 생년월일시가 오면 서버에서 정확히 계산 (AI 재계산 금지)
     const saju  = (birth && birth.year) ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
@@ -2126,7 +2283,7 @@ async function handleDetailReading(request, env) {
     let sajuBlock = '';
     if (saju && saju2) {
       // 우리의 조화(2인) 상세풀이 — 두 사람의 확정 사주 기반 관계 풀이
-      sajuBlock = `\n\n[두 사람의 사주 원국 — 서버 만세력 계산 확정값. 재계산·추측 금지]\n첫 번째 분: ${saju.text}\n두 번째 분: ${saju2.text}\n반드시 두 사람의 일간(본질)과 오행 분포를 비교·반영하여, 오늘(${date}) 기운 속에서 두 사람의 관계를 개인 맞춤으로 풀어주세요. 아래 4영역은 '두 사람의 관계' 관점으로 해석하세요.`;
+      sajuBlock = `\n\n[두 사람의 사주 원국 — 서버 만세력 계산 확정값. 재계산·추측 금지]\n첫 번째 분: ${saju.text}\n두 번째 분: ${saju2.text}\n반드시 두 사람의 일간(본질)과 오행 분포를 비교·반영하여, 오늘(${date}) 기운 속에서 두 사람의 관계를 개인 맞춤으로 풀어주세요. 아래 주제를 '두 사람의 관계' 관점으로 해석하세요.`;
     } else if (saju) {
       sajuBlock = `\n\n[이 사람의 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n반드시 위 사주의 일간(日干=본질)과 오행 분포를 반영하여, 오늘(${date})의 ${ohaeng} 기운이 이 사람에게 어떻게 작용하는지 개인 맞춤으로 풀어주세요.`;
     }
@@ -2151,27 +2308,306 @@ async function handleDetailReading(request, env) {
     const langLabel = LANG_LABEL[lang] || '한국어';
     const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 오늘(${date})의 기운은 "${ohaeng}"(${ohaeng==='木'?'나무':ohaeng==='火'?'불':ohaeng==='土'?'흙':ohaeng==='金'?'쇠':'물'} 기운)입니다.${sajuBlock}
 
-아래 4가지 영역에 대해 ${langLabel}로 조언해주세요.
-중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요. 따뜻하고 친근한 말투로, 각 영역 150자 이상.
+아래 주제 하나에 대해서만 ${langLabel}로 조언해주세요. 250자 이상, 따뜻하고 친근한 말투로 작성하고 마지막엔 오늘 바로 실천할 수 있는 구체적인 행동 하나를 제안하세요.
+주제: ${cat.icon} ${cat.title} — ${cat.guide}
 
-1. 🏥 건강: 오늘 몸과 마음을 어떻게 챙기면 좋을지 구체적인 행동 조언
-2. 💰 재물: 오늘 돈·일·사업과 관련해 주의할 점과 좋은 기회
-3. 💝 관계: 가족·친구·연인 관계에서 오늘 특히 신경 쓸 점과 좋은 기회
-4. 🎯 행운: 오늘 특히 좋은 시간대, 색깔, 숫자와 그 이유를 알기 쉽게
+중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요.
 
-JSON 형식으로 답하세요:
-{"health":"...","wealth":"...","relationships":"...","fortune":"..."}`;
+JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트로 답하세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ responseMimeType:'application/json', temperature:0.8 } }) }
+          generationConfig:{ temperature:0.8 } }) }
     );
     const data = await resp.json();
-    const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const detail = JSON.parse(raw);
-    return cors(JSON.stringify({ success:true, detail, remaining: remainingTokens }), 200);
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  타로카드 뽑기 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+// key는 프론트 js/constants.js의 TAROT_CARDS와 순서를 맞출 것
+const TAROT_CARDS = [
+  { name:'광대',           icon:'🃏' }, { name:'마법사',           icon:'🎩' },
+  { name:'여사제',         icon:'🌙' }, { name:'여황제',           icon:'👑' },
+  { name:'황제',           icon:'♚' }, { name:'교황',             icon:'🔔' },
+  { name:'연인',           icon:'💞' }, { name:'전차',             icon:'🏇' },
+  { name:'힘',             icon:'🦁' }, { name:'은둔자',           icon:'🏮' },
+  { name:'운명의 수레바퀴', icon:'🎡' }, { name:'정의',             icon:'⚖️' },
+  { name:'매달린 사람',    icon:'🙃' }, { name:'죽음(변화)',       icon:'🦋' },
+  { name:'절제',           icon:'⚗️' }, { name:'악마',             icon:'😈' },
+  { name:'탑',             icon:'🗼' }, { name:'별',               icon:'⭐' },
+  { name:'달',             icon:'🌕' }, { name:'태양',             icon:'☀️' },
+  { name:'심판',           icon:'📯' }, { name:'세계',             icon:'🌍' },
+];
+
+async function handleTarotDraw(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko' } = await request.json().catch(() => ({}));
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `tarot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'tarot_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '타로카드 뽑기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const cardIdx = Math.floor(Math.random() * TAROT_CARDS.length);
+    const card = TAROT_CARDS[cardIdx];
+    const upright = Math.random() < 0.65; // 정방향에 약간 더 무게 — 지나치게 부정적인 결과가 잦지 않도록
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 타로 마스터입니다. 오늘 뽑힌 카드는 "${card.name}" — ${upright ? '정방향' : '역방향'}입니다.
+
+이 카드가 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 재미있게 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 카드여도 균형을 찾는 조언으로 전환해서 표현하세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success:true,
+      card: { index: cardIdx, name: card.name, icon: card.icon },
+      upright, reading, remaining: remainingTokens
+    }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  띠·별자리 운세 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+// 인덱스는 프론트 js/constants.js의 ZODIAC_ANIMAL_NAMES/WESTERN_ZODIAC_NAMES와 순서를 맞출 것
+const ZODIAC_ANIMALS_KO = ['원숭이','닭','개','돼지','쥐','소','호랑이','토끼','용','뱀','말','양'];
+function _getZodiacAnimalIndex(year) {
+  return ((year % 12) + 12) % 12;
+}
+const WESTERN_ZODIAC_KO = ['염소자리','물병자리','물고기자리','양자리','황소자리','쌍둥이자리','게자리','사자자리','처녀자리','천칭자리','전갈자리','사수자리'];
+function _getWesternZodiacIndex(month, day) {
+  const md = month * 100 + day;
+  if (md >= 1222 || md <= 119) return 0;  // 염소자리
+  if (md <= 218) return 1;                // 물병자리
+  if (md <= 320) return 2;                // 물고기자리
+  if (md <= 419) return 3;                // 양자리
+  if (md <= 520) return 4;                // 황소자리
+  if (md <= 621) return 5;                // 쌍둥이자리
+  if (md <= 722) return 6;                // 게자리
+  if (md <= 822) return 7;                // 사자자리
+  if (md <= 922) return 8;                // 처녀자리
+  if (md <= 1023) return 9;               // 천칭자리
+  if (md <= 1122) return 10;              // 전갈자리
+  return 11;                              // 사수자리
+}
+
+async function handleZodiacFortune(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth } = await request.json().catch(() => ({}));
+    const by = birth ? parseInt(birth.year, 10) : NaN;
+    const bm = birth ? parseInt(birth.month, 10) : NaN;
+    const bd = birth ? parseInt(birth.day, 10) : NaN;
+    if (!by || !bm || !bd) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
+    }
+
+    const animalIndex = _getZodiacAnimalIndex(by);
+    const animal = ZODIAC_ANIMALS_KO[animalIndex];
+    const zodiacIndex = _getWesternZodiacIndex(bm, bd);
+    const zodiac = WESTERN_ZODIAC_KO[zodiacIndex];
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `zodiac_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'zodiac_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '띠·별자리 운세는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 이 사람은 "${animal}띠"이고 서양 별자리는 "${zodiac}"입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+띠와 별자리, 오늘의 오행 기운을 재미있게 엮어서 ${langLabel}로 3~4문장의 짧고 유쾌한 오늘의 운세를 알려주세요. 진지한 예언이 아니라 가볍게 웃으며 읽을 수 있는 톤으로, 마지막엔 오늘 실천하면 좋을 작은 팁 하나를 더해주세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, animal, animalIndex, zodiac, zodiacIndex, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function handleLuckyPicks(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko' } = await request.json().catch(() => ({}));
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `lucky_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'lucky_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '오늘의 럭키 아이템은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 바탕으로 행운 아이템을 추천해주는 재미있는 상담사입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+이 기운에 어울리는 오늘의 행운 아이템 3가지를 ${langLabel}로 추천해주세요. 각 항목은 이름과 짧고 유쾌한 이유(1~2문장)로 구성하세요.
+1. 럭키 컬러 — 구체적인 색깔 이름
+2. 럭키 음식 — 구체적인 음식 이름
+3. 럭키 무드 — 음악 장르나 분위기 (실제 곡 강요보다는 무드 위주)
+
+JSON 형식으로만 답하세요, 다른 텍스트 없이:
+{"color":{"name":"...","reason":"..."},"food":{"name":"...","reason":"..."},"song":{"name":"...","reason":"..."}}`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ responseMimeType:'application/json', temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let picks;
+    try { picks = JSON.parse(raw); } catch { picks = {}; }
+
+    saveFeatureHistory(env, email, 'lucky', null, JSON.stringify(picks), null).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, picks, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  오행 유형 궁합 테스트 (재미 콘텐츠, 1토큰)
+//  유형 판정(퀴즈)은 프론트에서 무료로 처리, 궁합 해석만 여기서 1토큰
+// ════════════════════════════════════════════
+const TYPE_ELEMENTS = ['木','火','土','金','水'];
+
+async function handleTypeCompat(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', myType, partnerType } = await request.json().catch(() => ({}));
+    if (!TYPE_ELEMENTS.includes(myType) || !TYPE_ELEMENTS.includes(partnerType)) {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 유형입니다.' } }), 400);
+    }
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `typecompat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'typecompat_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '궁합 보기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 재미있는 궁합 상담사입니다. 오행 성격 유형 테스트에서 한 사람은 "${on[myType]}" 유형, 다른 사람은 "${on[partnerType]}" 유형이 나왔습니다.
+
+두 유형의 궁합을 ${langLabel}로 3~4문장, 가볍고 유쾌하게 풀어주세요. 두 사람이 함께하면 어떤 케미가 나는지, 서로에게 좋은 점이나 함께 하면 좋을 활동을 재미있게 알려주세요. 안 맞는 조합처럼 보여도 유쾌하게 표현하세요(예: "티격태격하지만 그게 매력!").
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, myType, partnerType, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
@@ -2301,13 +2737,13 @@ async function handleStreakCheckin(request, env) {
        total_checkins=excluded.total_checkins,updated_at=excluded.updated_at`
     ).bind(email,current,max,today,total).run();
 
-    // 7일 스트릭 보너스 (승인된 새 지급 row를 추가 — 기존 row를 UPDATE하면 결제 이력
-    // 개수만큼 중복 지급되거나, 결제 이력이 없는 유저는 지급이 누락되는 문제가 있었음)
+    // 7일 스트릭 보너스 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
     if (current%7===0) {
+      const bonusId = `streak_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
       await env.DB.prepare(
         `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
          VALUES (?, ?, 'streak_bonus', 0, 5, 'approved', unixepoch())`
-      ).bind(`streak_${email}_${today}`, email).run();
+      ).bind(bonusId, email).run();
     }
 
     return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0}),200);
@@ -2473,10 +2909,24 @@ async function handleReferralClaim(request, env) {
     if (!ref) return cors(JSON.stringify({error:{message:'유효하지 않은 코드'}}),404);
     if (ref.referee_email) return cors(JSON.stringify({error:{message:'이미 사용된 코드'}}),409);
     if (ref.referrer_email===email) return cors(JSON.stringify({error:{message:'본인 코드 사용 불가'}}),400);
-    // 보상: 양쪽 3토큰
-    await env.DB.prepare('UPDATE referrals SET referee_email=?,rewarded_at=unixepoch() WHERE code=?').bind(email,code.toUpperCase()).run();
-    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+3 WHERE user_email=?').bind(email).run();
-    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+3 WHERE user_email=?').bind(ref.referrer_email).run();
+    // 코드 소비 (동시 요청으로 한 코드가 두 번 보상되지 않도록 referee_email IS NULL 조건으로 원자적 처리)
+    const claimRes = await env.DB.prepare(
+      'UPDATE referrals SET referee_email=?,rewarded_at=unixepoch() WHERE code=? AND referee_email IS NULL'
+    ).bind(email,code.toUpperCase()).run();
+    if (!claimRes.meta?.rows_written) {
+      return cors(JSON.stringify({error:{message:'이미 사용된 코드'}}),409);
+    }
+    // 보상: 양쪽 3토큰 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    const refId1 = `ref_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const refId2 = `ref_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'referral_bonus', 0, 3, 'approved', unixepoch())`
+    ).bind(refId1, email).run();
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'referral_bonus', 0, 3, 'approved', unixepoch())`
+    ).bind(refId2, ref.referrer_email).run();
     return cors(JSON.stringify({success:true,bonus:3}),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
@@ -2659,9 +3109,8 @@ async function handleUngiGiveTokens(request, env) {
         return cors(JSON.stringify({ error: { message: '관리자 권한이 없습니다' } }), 403);
       }
     } else if (pin) {
-      // 방법 1: PIN 인증
-      const UNGI_PIN = env.UNGI_PIN || '5984'; // fallback
-      const pinMatch = pin === UNGI_PIN;
+      // 방법 1: PIN 인증 (UNGI_PIN 시크릿 미설정 시 하드코딩 폴백 금지 — PIN 로그인 자체를 비활성화)
+      const pinMatch = !!env.UNGI_PIN && pin === env.UNGI_PIN;
 
       // 시도 기록
       await env.DB.prepare('INSERT INTO ungi_admin_attempts (ip, attempt_at, success) VALUES (?, ?, ?)')
@@ -2690,9 +3139,12 @@ async function handleUngiGiveTokens(request, env) {
       return cors(JSON.stringify({ error: { message: '존재하지 않는 사용자' } }), 404);
     }
 
-    // 토큰 지급
-    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+? WHERE user_email=?')
-      .bind(tokens, email).run();
+    // 토큰 지급 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    const grantId = `ungi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'ungi_admin_grant', 0, ?, 'approved', unixepoch())`
+    ).bind(grantId, email, tokens).run();
 
     // 로그 기록
     await env.DB.prepare('INSERT INTO ungi_token_gifts (user_email, tokens_given, gifted_by) VALUES (?, ?, ?)')
@@ -2728,8 +3180,7 @@ async function handleFortuneQrGenerate(request, env) {
     if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
 
     const { pin, count } = await request.json().catch(() => ({}));
-    const UNGI_PIN = env.UNGI_PIN || '5984';
-    if (!pin || String(pin).length > 8 || String(pin) !== UNGI_PIN) {
+    if (!env.UNGI_PIN || !pin || String(pin).length > 8 || String(pin) !== env.UNGI_PIN) {
       return cors(JSON.stringify({ error: { message: 'PIN이 올바르지 않습니다.' } }), 403);
     }
 
@@ -2822,9 +3273,7 @@ async function handleOhaengHistorySave(request, env) {
 // ════════════════════════════════════════════
 //  프로모 QR 코드 클레임 핸들러
 // ════════════════════════════════════════════
-// 카페 직원 PIN — 변경하려면 이 숫자를 수정 후 재배포
-const CAFE_STAFF_PIN = '7777';
-
+// 카페 직원 PIN — 소스에 하드코딩하지 않고 `wrangler secret put CAFE_STAFF_PIN`으로 설정
 const PROMO_CODES = {
   'MYAN_CAFE': { tokens: 3, label: '카페 방문 혜택' },
 };
@@ -2833,14 +3282,9 @@ async function handlePromoClaim(request, env) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return cors(JSON.stringify({ error: '로그인이 필요합니다.' }), 401);
 
-  let email;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    email = payload.email;
-    if (!email) throw new Error('no email');
-  } catch {
-    return cors(JSON.stringify({ error: '인증 오류입니다.' }), 401);
-  }
+  // 서명 검증 없이 payload만 디코드하면 누구나 임의 이메일로 위장 가능 — getEmailFromToken으로 반드시 검증
+  const email = await getEmailFromToken(token, env);
+  if (!email) return cors(JSON.stringify({ error: '인증 오류입니다.' }), 401);
 
   const { code, pin, promo_token } = await request.json().catch(() => ({}));
 
@@ -2854,10 +3298,10 @@ async function handlePromoClaim(request, env) {
 
   // PIN 검증 (브루트포스 방지: 입력값 길이 제한)
   if (promo.requirePin) {
-    if (!pin || String(pin).length > 8) {
+    if (!env.CAFE_STAFF_PIN || !pin || String(pin).length > 8) {
       return cors(JSON.stringify({ error: '직원 확인 PIN을 입력해 주세요.' }), 400);
     }
-    if (String(pin) !== CAFE_STAFF_PIN) {
+    if (String(pin) !== env.CAFE_STAFF_PIN) {
       return cors(JSON.stringify({ error: 'PIN이 올바르지 않습니다. 직원에게 다시 확인해 주세요.' }), 403);
     }
   }
@@ -2899,7 +3343,7 @@ async function handlePromoClaim(request, env) {
 // ════════════════════════════════════════════
 //  다이나믹 QR 프로모 (1회용 토큰 시스템)
 // ════════════════════════════════════════════
-const PROMO_ADMIN_PIN = '9999'; // 카운터 태블릿용 관리자 PIN (변경 가능)
+// 카운터 태블릿용 관리자 PIN — 소스에 하드코딩하지 않고 `wrangler secret put PROMO_ADMIN_PIN`으로 설정
 const PROMO_TOKEN_TTL = 600;   // 토큰 유효시간: 10분 (초)
 const PROMO_TOKENS_REWARD = 3; // 지급 토큰 수
 
@@ -2912,7 +3356,7 @@ function _genToken() {
 // [관리자] 새 1회용 토큰 생성 (카운터 태블릿에서 호출)
 async function handlePromoGenerate(request, env) {
   const { adminPin } = await request.json().catch(() => ({}));
-  if (adminPin !== PROMO_ADMIN_PIN) {
+  if (!env.PROMO_ADMIN_PIN || adminPin !== env.PROMO_ADMIN_PIN) {
     return cors(JSON.stringify({ error: '관리자 PIN이 올바르지 않습니다.' }), 403);
   }
   // 기존 미사용 토큰 무효화
@@ -2933,7 +3377,7 @@ async function handlePromoGenerate(request, env) {
 // [관리자] 현재 유효한 토큰 조회
 async function handlePromoCurrent(request, env) {
   const adminPin = new URL(request.url).searchParams.get('pin');
-  if (adminPin !== PROMO_ADMIN_PIN) {
+  if (!env.PROMO_ADMIN_PIN || adminPin !== env.PROMO_ADMIN_PIN) {
     return cors(JSON.stringify({ error: '인증 오류' }), 403);
   }
   const row = await env.DB.prepare(
@@ -2997,7 +3441,7 @@ async function handleDynamicPromoClaim(request, env, email, token) {
 async function handlePromoDisplay(request, env) {
   const url = new URL(request.url);
   const pin = url.searchParams.get('pin') || '';
-  const authed = pin === PROMO_ADMIN_PIN;
+  const authed = !!env.PROMO_ADMIN_PIN && pin === env.PROMO_ADMIN_PIN;
 
   const html = `<!DOCTYPE html>
 <html lang="ko">

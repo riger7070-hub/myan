@@ -52,8 +52,15 @@ TOSS_CLIENT_KEY = "test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb"
 # wrangler secret put GEMINI_API_KEY
 # wrangler secret put TOSS_SECRET_KEY
 # wrangler secret put ADMIN_SECRET
+# wrangler secret put SESSION_SECRET
 # wrangler secret put VAPID_PRIVATE_KEY
 # wrangler secret put VAPID_PUBLIC_KEY
 # wrangler secret put VAPID_EMAIL
 # wrangler secret put TELEGRAM_BOT_TOKEN
 # wrangler secret put TELEGRAM_CHAT_ID
+# wrangler secret put UNGI_PIN
+# wrangler secret put CAFE_STAFF_PIN
+# wrangler secret put PROMO_ADMIN_PIN
+#
+# ⚠️ 위 세 PIN 시크릿(UNGI_PIN/CAFE_STAFF_PIN/PROMO_ADMIN_PIN)은 하드코딩 폴백을
+# 제거했으므로, 설정 전까지 해당 PIN 인증 경로는 항상 거부됩니다(안전한 기본값).

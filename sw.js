@@ -1,5 +1,5 @@
-// M;Y 安 — Service Worker v4.2 (Fix Google Fonts CSP)
-const VERSION = '4.2';
+// M;Y 安 — Service Worker v4.3 (Google Fonts CSP 수정 + 오라클 연출·재미 콘텐츠 반영 병합)
+const VERSION = '4.3';
 const CACHE_NAME = `myan-v10-${VERSION}`;
 const CACHE_IMAGES = `myan-images-v7`;
 const CACHE_STATIC = `myan-static-v7`;
