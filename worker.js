@@ -453,6 +453,65 @@ async function handleGetSajuHistory(request, env) {
   }
 }
 
+// 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 기록 저장 (비동기, 비차단)
+async function saveFeatureHistory(env, email, feature, title, content, meta) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO feature_history (user_email, feature, title, content, meta) VALUES (?, ?, ?, ?, ?)`
+    ).bind(email, feature, title || null, content, meta ? JSON.stringify(meta) : null).run();
+
+    // 용량 관리: 사용자당 최대 200개 기록만 유지
+    const { results } = await env.DB.prepare(
+      `SELECT id FROM feature_history WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 200`
+    ).bind(email).all();
+    if (results && results.length > 0) {
+      await env.DB.prepare(`DELETE FROM feature_history WHERE user_email = ? AND id < ?`).bind(email, results[0].id).run();
+    }
+  } catch (e) {
+    console.error('Failed to save feature history:', e);
+  }
+}
+
+// 유료 콘텐츠 기록 조회 (최신순, 페이징)
+async function handleGetFeatureHistory(request, env) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return cors(JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
+  }
+  const idToken = authHeader.slice(7);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) {
+    return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT id, feature, title, content, meta, created_at
+      FROM feature_history
+      WHERE user_email = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(email, limit, offset).all();
+
+    const history = results.map(row => ({
+      id: row.id,
+      feature: row.feature,
+      title: row.title,
+      content: row.content,
+      meta: row.meta ? JSON.parse(row.meta) : null,
+      createdAt: row.created_at,
+    }));
+
+    return cors(JSON.stringify({ ok: true, history, count: history.length }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '기록 조회에 실패했습니다.' } }), 500);
+  }
+}
+
 // ════════════════════════════
 //  보안 헬퍼 함수
 // ════════════════════════════
@@ -657,7 +716,27 @@ async function ensureDBExt(env) {
       canceled_at          INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
+    CREATE TABLE IF NOT EXISTS feature_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_email TEXT NOT NULL,
+      feature TEXT NOT NULL,
+      title TEXT,
+      content TEXT NOT NULL,
+      meta TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_fh_email_created ON feature_history (user_email, created_at DESC);
   `).catch(() => {});
+
+  // users 테이블 확장: 생년월일 프로필(서버 저장) — 기존 프로덕션 테이블이라 ALTER TABLE로 개별 추가.
+  // 이미 컬럼이 있으면 각각 개별 실패(중복 컬럼)하지만 .catch로 무시되고 다음 컬럼은 계속 진행됨.
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_year INTEGER`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_month INTEGER`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_day INTEGER`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_hour TEXT`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN gender TEXT`).catch(() => {});
+  await env.DB.exec(`ALTER TABLE users ADD COLUMN region TEXT`).catch(() => {});
+
   _dbExtReady = true;
 }
 
@@ -708,6 +787,10 @@ export default {
     }
     // ── 사주 기록 조회 ──
     if (path === '/api/saju-history' && method === 'GET') { await ensureDBExt(env); return handleGetSajuHistory(request, env); }
+    // ── 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 통합 기록 조회 ──
+    if (path === '/api/feature-history' && method === 'GET') { await ensureDBExt(env); return handleGetFeatureHistory(request, env); }
+    // ── 생년월일 프로필 서버 저장 ──
+    if (path === '/api/profile' && method === 'POST') { await ensureDBExt(env); return handleSaveProfile(request, env); }
     // ── 푸시 알림 API ──
     if (path === '/api/push/vapid-key'   && method === 'GET')  { await ensureDBExt(env); return handlePushVapidKey(env); }
     if (path === '/api/push/subscribe'   && method === 'POST') { await ensureDBExt(env); return handlePushSubscribe(request, env); }
@@ -1133,6 +1216,7 @@ async function handleAuthLogin(request, env) {
   const ua      = request.headers.get('User-Agent') || null;
 
   // 로그인 기록 (DB 있을 때만, 실패해도 세션 발급은 진행)
+  let profile = null;
   if (env.DB) {
     try {
       // users upsert: 최초면 생성(가입), 재로그인이면 last_login/count 갱신 + 프로필 최신화
@@ -1151,6 +1235,21 @@ async function handleAuthLogin(request, env) {
       await env.DB.prepare(
         `INSERT INTO login_events (id, email, ip, country, user_agent) VALUES (?, ?, ?, ?, ?)`
       ).bind(crypto.randomUUID(), email, ip, country, ua).run();
+
+      // 서버에 저장된 생년월일 프로필 조회 — 새 기기/스토리지 초기화 후에도 복원할 수 있도록 로그인 응답에 포함
+      const row = await env.DB.prepare(
+        `SELECT birth_year, birth_month, birth_day, birth_hour, gender, region FROM users WHERE email = ?`
+      ).bind(email).first().catch(() => null);
+      if (row && (row.birth_year || row.gender || row.region)) {
+        profile = {
+          birthYear:  row.birth_year  || '',
+          birthMonth: row.birth_month || '',
+          birthDay:   row.birth_day   || '',
+          birthHour:  row.birth_hour  || '',
+          gender:     row.gender      || '',
+          region:     row.region      || '',
+        };
+      }
     } catch (e) {
       console.error('[AUTH LOGIN]', e); // 로깅 실패는 무시
     }
@@ -1162,7 +1261,34 @@ async function handleAuthLogin(request, env) {
     ok: true,
     session,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL,
+    profile,
   }), 200);
+}
+
+// 생년월일 프로필 서버 저장 (마이페이지/온보딩에서 호출 — 로그아웃·기기 변경 후에도 복원 가능하게)
+async function handleSaveProfile(request, env) {
+  const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+  if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const body = await request.json().catch(() => ({}));
+  const birthYear  = body.birthYear  ? parseInt(body.birthYear, 10)  : null;
+  const birthMonth = body.birthMonth ? parseInt(body.birthMonth, 10) : null;
+  const birthDay   = body.birthDay   ? parseInt(body.birthDay, 10)   : null;
+  const birthHour  = body.birthHour  || null;
+  const gender     = body.gender     || null;
+  const region      = body.region    || null;
+
+  try {
+    await env.DB.prepare(
+      `UPDATE users SET birth_year = ?, birth_month = ?, birth_day = ?, birth_hour = ?, gender = ?, region = ? WHERE email = ?`
+    ).bind(birthYear, birthMonth, birthDay, birthHour, gender, region, email).run();
+    return cors(JSON.stringify({ ok: true }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '프로필 저장에 실패했습니다.' } }), 500);
+  }
 }
 
 // 관리자: 회원/로그인 기록 조회 (통계 + 회원 목록 + 최근 접속 로그)
@@ -2190,6 +2316,9 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
     );
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
+
     return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
@@ -2258,6 +2387,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
+
     return cors(JSON.stringify({
       success:true,
       card: { index: cardIdx, name: card.name, icon: card.icon },
@@ -2346,6 +2478,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
+
     return cors(JSON.stringify({ success:true, animal, animalIndex, zodiac, zodiacIndex, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
@@ -2403,6 +2538,9 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     let picks;
     try { picks = JSON.parse(raw); } catch { picks = {}; }
+
+    saveFeatureHistory(env, email, 'lucky', null, JSON.stringify(picks), null).catch(() => {});
+
     return cors(JSON.stringify({ success:true, picks, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
@@ -2459,6 +2597,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
+
     return cors(JSON.stringify({ success:true, myType, partnerType, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);

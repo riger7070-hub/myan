@@ -1021,6 +1021,7 @@ function setSessionToken(token, expSec) {
 }
 
 // Google ID 토큰을 서버에서 자체 세션 토큰으로 교환 (로그인 직후 1회)
+// 반환값: 서버 응답 data(세션 발급 성공 시 profile 포함) 또는 null(실패)
 async function _exchangeSession(googleCredential) {
   try {
     const res = await fetch(EP + 'auth/login', {
@@ -1029,11 +1030,26 @@ async function _exchangeSession(googleCredential) {
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.session) { setSessionToken(data.session, data.exp); return true; }
+      if (data && data.session) { setSessionToken(data.session, data.exp); return data; }
     }
   } catch (e) {}
   // 폴백: 세션 발급 실패 시 Google 토큰을 그대로 사용 (서버가 둘 다 수용)
-  return false;
+  return null;
+}
+
+// 생년월일 프로필을 서버에 저장 (기기 변경·스토리지 초기화 후에도 로그인 시 복원할 수 있도록)
+function _syncProfileToServer(user) {
+  const token = getGoogleIdToken();
+  if (!token || !user) return;
+  fetch(EP + 'api/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      birthYear: user.birthYear || '', birthMonth: user.birthMonth || '',
+      birthDay: user.birthDay || '', birthHour: user.birthHour || '',
+      gender: user.gender || '', region: user.region || '',
+    }),
+  }).catch(() => {});
 }
 
 function getGoogleIdToken() {
@@ -1576,7 +1592,7 @@ function initGoogleSignin() {
   });
 }
 
-function handleGoogleCredential(response) {
+async function handleGoogleCredential(response) {
   try {
     localStorage.removeItem('myan_signed_out'); // 명시적 로그인 → 자동로그인 차단 해제
     setGoogleIdToken(response.credential);  // ⭐ ID Token 저장
@@ -1624,13 +1640,22 @@ function handleGoogleCredential(response) {
       });
     }
 
+    // Google 토큰 → 자체 세션 토큰 교환 (로그인 기록 + 30일 세션 발급)
+    // 성공 시 setSessionToken이 myan_session으로 교체 → 이후 요청은 로컬 검증
+    // 서버에 저장된 생년월일 프로필이 있으면(기기 변경·스토리지 초기화로 로컬이 비어있는 경우) 복원
+    const sessionData = await _exchangeSession(response.credential);
+    if (sessionData?.profile) {
+      const sp = sessionData.profile;
+      let restored = false;
+      ['birthYear', 'birthMonth', 'birthDay', 'birthHour', 'gender', 'region'].forEach(k => {
+        if (!profile[k] && sp[k]) { profile[k] = sp[k]; restored = true; }
+      });
+      if (restored) localStorage.setItem('myan_user', JSON.stringify(profile));
+    }
+
     // 유저 버튼 업데이트
     updateUserBtn(profile);
     refreshTokens();  // 서버 토큰 잔액 동기화
-
-    // Google 토큰 → 자체 세션 토큰 교환 (로그인 기록 + 30일 세션 발급, 백그라운드)
-    // 성공 시 setSessionToken이 myan_session으로 교체 → 이후 요청은 로컬 검증
-    _exchangeSession(response.credential);
 
     // 관리자 배지 확인
     _checkAdminBadge();
@@ -1773,6 +1798,7 @@ async function submitProfile() {
   user.birthMonth = mon;
   user.birthDay   = day;
   localStorage.setItem('myan_user', JSON.stringify(user));
+  _syncProfileToServer(user);
 
   // Sheets에 프로필 완성 기록 (백그라운드, 실패해도 무시)
   if (SHEETS_EP) {
@@ -1994,6 +2020,7 @@ async function saveMyPage() {
     birthHour: hour, gender: selGenderMp, region,
   };
   localStorage.setItem('myan_user', JSON.stringify(updated));
+  _syncProfileToServer(updated);
 
   if (SHEETS_EP) {
     fetch(SHEETS_EP, {
