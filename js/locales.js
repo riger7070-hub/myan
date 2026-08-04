@@ -115,6 +115,8 @@ const TX = {
     tarotTitle:'오늘의 타로', tarotShuffling:'카드를 섞는 중...', tarotReversed:'역방향',
     drZodiacTitle:'띠·별자리 운세', drZodiacSub:'오늘의 띠·별자리 운세 (토큰 1)',
     zodiacTitle:'띠·별자리 운세', zodiacLoading:'운세를 계산하는 중...', zodiacNeedBirth:'먼저 마이페이지에서 생년월일을 등록해 주세요.',
+    drLuckyTitle:'오늘의 럭키 아이템', drLuckySub:'럭키 컬러·음식·노래 추천 (토큰 1)',
+    luckyTitle:'오늘의 럭키 아이템', luckyLoading:'오늘의 행운을 찾는 중...', luckyColor:'럭키 컬러', luckyFood:'럭키 음식', luckySong:'럭키 무드',
     drThemeTitle:'테마', drDark:'🌙 다크', drLight:'☀️ 라이트',
     drSupportTitle:'1:1 카카오 상담', drLogoutTitle:'로그아웃',
     // 첫 입력 폼
@@ -258,6 +260,8 @@ const TX = {
     tarotTitle:"Today's Tarot", tarotShuffling:'Shuffling the cards...', tarotReversed:'Reversed',
     drZodiacTitle:'Zodiac Fortune', drZodiacSub:"Today's animal & star sign fortune (1 token)",
     zodiacTitle:'Zodiac Fortune', zodiacLoading:'Calculating your fortune...', zodiacNeedBirth:'Please add your birth date in My Page first.',
+    drLuckyTitle:"Today's Lucky Picks", drLuckySub:'Lucky color · food · mood (1 token)',
+    luckyTitle:"Today's Lucky Picks", luckyLoading:'Finding your luck...', luckyColor:'Lucky Color', luckyFood:'Lucky Food', luckySong:'Lucky Mood',
     drThemeTitle:'Theme', drDark:'🌙 Dark', drLight:'☀️ Light',
     drSupportTitle:'1:1 KakaoTalk Chat', drLogoutTitle:'Log out',
     // First input form
@@ -401,6 +405,8 @@ const TX = {
     tarotTitle:'今日塔罗', tarotShuffling:'正在洗牌...', tarotReversed:'逆位',
     drZodiacTitle:'生肖·星座运势', drZodiacSub:'今日生肖·星座运势（1代币）',
     zodiacTitle:'生肖·星座运势', zodiacLoading:'正在计算运势...', zodiacNeedBirth:'请先在个人主页登记出生日期。',
+    drLuckyTitle:'今日幸运单品', drLuckySub:'幸运颜色·食物·音乐推荐（1代币）',
+    luckyTitle:'今日幸运单品', luckyLoading:'正在寻找今日好运...', luckyColor:'幸运颜色', luckyFood:'幸运食物', luckySong:'幸运情绪',
     drThemeTitle:'主题', drDark:'🌙 深色', drLight:'☀️ 浅色',
     drSupportTitle:'1:1 客服咨询', drLogoutTitle:'退出登录',
     // 首次输入表单
@@ -544,6 +550,8 @@ const TX = {
     tarotTitle:'今日のタロット', tarotShuffling:'カードをシャッフル中...', tarotReversed:'逆位置',
     drZodiacTitle:'干支・星座占い', drZodiacSub:'今日の干支・星座占い（トークン1）',
     zodiacTitle:'干支・星座占い', zodiacLoading:'占いを計算中...', zodiacNeedBirth:'先にマイページで生年月日を登録してください。',
+    drLuckyTitle:'今日のラッキーアイテム', drLuckySub:'ラッキーカラー・フード・ムード（トークン1）',
+    luckyTitle:'今日のラッキーアイテム', luckyLoading:'今日の運を探しています...', luckyColor:'ラッキーカラー', luckyFood:'ラッキーフード', luckySong:'ラッキームード',
     drThemeTitle:'テーマ', drDark:'🌙 ダーク', drLight:'☀️ ライト',
     drSupportTitle:'1:1 カカオ相談', drLogoutTitle:'ログアウト',
     fifLblName:'お名前', fifLblYear:'生まれ年', fifLblMonth:'月', fifLblDay:'日',

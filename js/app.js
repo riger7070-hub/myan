@@ -2624,6 +2624,7 @@ function _syncDrawerLangs() {
   _t('drTxtCal',     t.drCalTitle);  _t('drSubCal',    t.drCalSub);
   _t('drTxtTarot',   t.drTarotTitle); _t('drSubTarot', t.drTarotSub);
   _t('drTxtZodiac',  t.drZodiacTitle); _t('drSubZodiac', t.drZodiacSub);
+  _t('drTxtLucky',   t.drLuckyTitle);  _t('drSubLucky', t.drLuckySub);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -3716,6 +3717,65 @@ async function openZodiacFortune() {
     }
   } catch (e) {
     const statusEl = document.getElementById('zodiacStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openLuckyPicks() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🍀 ${t.luckyTitle || '오늘의 럭키 아이템'}</div>
+      <div id="luckyStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.luckyLoading || '오늘의 행운을 찾는 중...'}</div>
+      <div id="luckyResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/lucky-picks', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('luckyStatus');
+    const resultEl = document.getElementById('luckyResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      const p = data.picks || {};
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div class="detail-area-card"><div class="detail-area-title">🎨 ${t.luckyColor||'럭키 컬러'}${p.color?.name ? ' · ' + p.color.name : ''}</div><div class="detail-area-body">${p.color?.reason||''}</div></div>
+        <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🍽️ ${t.luckyFood||'럭키 음식'}${p.food?.name ? ' · ' + p.food.name : ''}</div><div class="detail-area-body">${p.food?.reason||''}</div></div>
+        <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🎵 ${t.luckySong||'럭키 무드'}${p.song?.name ? ' · ' + p.song.name : ''}</div><div class="detail-area-body">${p.song?.reason||''}</div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('luckyStatus');
     if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
   }
 }

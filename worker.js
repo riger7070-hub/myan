@@ -693,6 +693,8 @@ export default {
     if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return handleTarotDraw(request, env); }
     // ── 띠·별자리 운세 (재미 콘텐츠) ──
     if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
+    // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
+    if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -2343,6 +2345,63 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
     return cors(JSON.stringify({ success:true, animal, animalIndex, zodiac, zodiacIndex, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function handleLuckyPicks(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko' } = await request.json().catch(() => ({}));
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `lucky_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'lucky_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '오늘의 럭키 아이템은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 바탕으로 행운 아이템을 추천해주는 재미있는 상담사입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+이 기운에 어울리는 오늘의 행운 아이템 3가지를 ${langLabel}로 추천해주세요. 각 항목은 이름과 짧고 유쾌한 이유(1~2문장)로 구성하세요.
+1. 럭키 컬러 — 구체적인 색깔 이름
+2. 럭키 음식 — 구체적인 음식 이름
+3. 럭키 무드 — 음악 장르나 분위기 (실제 곡 강요보다는 무드 위주)
+
+JSON 형식으로만 답하세요, 다른 텍스트 없이:
+{"color":{"name":"...","reason":"..."},"food":{"name":"...","reason":"..."},"song":{"name":"...","reason":"..."}}`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ responseMimeType:'application/json', temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let picks;
+    try { picks = JSON.parse(raw); } catch { picks = {}; }
+    return cors(JSON.stringify({ success:true, picks, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
