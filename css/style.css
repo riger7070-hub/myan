@@ -1706,6 +1706,15 @@ body::-webkit-scrollbar {
 .tarot-card-back.tarot-flipped {
   animation: tarotReveal 0.5s ease forwards;
 }
+/* 3장 펼쳐놓고 직접 고르는 스프레드 — 고르지 않은 카드는 JS가 opacity로 페이드아웃 */
+.tarot-spread-card {
+  width: 76px;
+  height: 114px;
+  margin: 0;
+  font-size: 2rem;
+  cursor: pointer;
+  transition: transform .25s ease, opacity .4s ease;
+}
 @keyframes tarotPulse {
   0%, 100% { transform: scale(1); opacity: .85; }
   50%      { transform: scale(1.05); opacity: 1; }

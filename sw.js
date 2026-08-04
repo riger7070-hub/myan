@@ -1,5 +1,5 @@
-// M;Y 安 — Service Worker v4.1 (Fix clone error & force refresh)
-const VERSION = '4.1';
+// M;Y 安 — Service Worker v4.2 (오라클 연출·재미 콘텐츠 반영을 위한 강제 캐시 갱신)
+const VERSION = '4.2';
 const CACHE_NAME = `myan-v10-${VERSION}`;
 const CACHE_IMAGES = `myan-images-v7`;
 const CACHE_STATIC = `myan-static-v7`;
