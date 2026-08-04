@@ -2722,7 +2722,7 @@ async function handleStreakCheckin(request, env) {
 
     let current=1, max=1, total=1;
     if (row) {
-      if (row.last_checkin === today) return cors(JSON.stringify({alreadyDone:true, current:row.current_streak, max:row.max_streak, total:row.total_checkins}),200);
+      if (row.last_checkin === today) return cors(JSON.stringify({alreadyDone:true, current:row.current_streak, max:row.max_streak, total:row.total_checkins, lastCheckin:today}),200);
       const yesterday = new Date(Date.now()+9*3600000-86400000).toISOString().slice(0,10);
       current = (row.last_checkin === yesterday) ? row.current_streak+1 : 1;
       max = Math.max(current, row.max_streak||0);
@@ -2746,7 +2746,7 @@ async function handleStreakCheckin(request, env) {
       ).bind(bonusId, email).run();
     }
 
-    return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0}),200);
+    return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0,lastCheckin:today}),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
   }
