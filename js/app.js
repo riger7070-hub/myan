@@ -237,14 +237,14 @@ function addBubble(text, who, { sentenceReveal = false } = {}) {
     });
 
     if (sentenceReveal) {
-      // 첫 리딩 전달 — 문장 단위 순차 공개 (오라클 오버레이와 짝을 이루는 연출)
+      // 첫 리딩 전달 — 오라클 연출(대기)이 끝나면 리딩 전문을 한 번에 페이드인 (stagger:0 = 문장 순차공개 없이 동시 표시)
       const contentEl = document.createElement('div');
       contentEl.className = 'bubble-reveal-content';
       d.appendChild(contentEl);
       d.appendChild(btn);
       cw().appendChild(d);
       scrollToBottom();
-      revealSentences(contentEl, text, getLang(), { scrollEl: cw() });
+      revealSentences(contentEl, text, getLang(), { scrollEl: cw(), stagger: 0 });
     } else {
       // 텍스트 노드를 별도 관리 → 타이핑 효과 적용 & 복사 버튼 충돌 방지
       const tn = document.createTextNode('');
@@ -745,7 +745,7 @@ async function send() {
     if (mode === 'solo' && data._ohaeng) {
       try { localStorage.setItem('myan_ohaeng', JSON.stringify(data._ohaeng)); } catch {}
       const revealMs = isFirstTurn
-        ? _sentenceRevealMs(clean, getLang())
+        ? _sentenceRevealMs(clean, getLang(), 0)
         : (clean.length <= 300 ? clean.length * 22 + 500 : 1800);
       _renderSajuGaugeFromGemini(data._ohaeng, revealMs);
     }
@@ -3490,10 +3490,10 @@ async function _openDetailReading(date, ohaeng, birthOverride, p2) {
         contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
       }
       contEl.style.display = '';
-      // 4개 영역을 병렬로 문장 단위 순차 공개 (순차 누적하면 상세 풀이가 가장 긴 플로우가 됨)
+      // 4개 영역을 병렬로 한 번에 페이드인 (오라클 연출로 이미 충분히 기다렸으므로 stagger:0)
       areas.forEach(a => {
         const bodyEl = document.getElementById(`detailBody-${a.key}`);
-        if (bodyEl) revealSentences(bodyEl, data.detail[a.key] || '', lang, { scrollEl: contEl });
+        if (bodyEl) revealSentences(bodyEl, data.detail[a.key] || '', lang, { scrollEl: contEl, stagger: 0 });
       });
 
       // 상세 풀이 저장 (나중에 다시 보기 위해)
