@@ -3713,11 +3713,16 @@ function displayWeeklyReport(data) {
     ja: '📊 今週のレポート'
   };
 
-  const mostText = {
+  const mostText = mostFrequent ? {
     ko: `가장 많이 나온 오행: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`,
     en: `Most frequent: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`,
     zh: `最常见的五行: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`,
     ja: `最も多い五行: <strong>${ohaengNames[lang][mostFrequent] || mostFrequent}</strong>`
+  } : {
+    ko: '아직 기록이 없어요',
+    en: 'No records yet',
+    zh: '暂无记录',
+    ja: 'まだ記録がありません'
   };
 
   const daysText = {
@@ -4200,7 +4205,8 @@ function renderSajuResult(data, m) {
   const today = new Date().toISOString().slice(0,10);
   const ohaeng = data.dayElem || '土';
   const detailBtnsHtml = DETAIL_CATS.map(c => `
-    <button class="rx-detail-btn" onclick="_detailFromSaju('${today}','${ohaeng}','${c.key}')">${c.icon} ${t.detailCardTitle?.[c.key] || c.key}</button>`).join('');
+    <button class="rx-detail-btn" onclick="_detailFromSaju('${today}','${ohaeng}','${c.key}')">${c.icon} ${t.detailCardTitle?.[c.key] || c.key}</button>`).join('') + `
+    <button class="rx-share-btn" onclick="shareOhaengCard('${ohaeng}')">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[getLang()] || '공유하기'}</button>`;
   cw.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
       <div style="max-width:640px;width:100%;margin:0 auto">
