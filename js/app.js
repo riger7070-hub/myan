@@ -2625,6 +2625,7 @@ function _syncDrawerLangs() {
   _t('drTxtTarot',   t.drTarotTitle); _t('drSubTarot', t.drTarotSub);
   _t('drTxtZodiac',  t.drZodiacTitle); _t('drSubZodiac', t.drZodiacSub);
   _t('drTxtLucky',   t.drLuckyTitle);  _t('drSubLucky', t.drLuckySub);
+  _t('drTxtType',    t.drTypeTitle);   _t('drSubType', t.drTypeSub);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -3777,6 +3778,121 @@ async function openLuckyPicks() {
   } catch (e) {
     const statusEl = document.getElementById('luckyStatus');
     if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  오행 유형 궁합 테스트 (재미 콘텐츠) — 퀴즈는 무료, 궁합 해석만 1토큰
+// ════════════════════════════════════════════
+let _typeTestState = null;
+
+function openTypeTest() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const questions = t.typeQ || [];
+  if (!questions.length) return;
+
+  _typeTestState = { scores: { 木:0, 火:0, 土:0, 金:0, 水:0 }, qIdx: 0, questions, myType: null };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:400px;padding:32px 24px" id="typeTestBox"></div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  _renderTypeQuestion();
+}
+
+function _renderTypeQuestion() {
+  const s = _typeTestState;
+  const box = document.getElementById('typeTestBox');
+  if (!s || !box) return;
+  const t = getT();
+  const q = s.questions[s.qIdx];
+  const progress = (t.typeProgress || '{n} / {total}').replace('{n}', s.qIdx + 1).replace('{total}', s.questions.length);
+  box.innerHTML = `
+    <div class="modal-title" style="text-align:center">🔯 ${t.typeTitle || '오행 유형 테스트'}</div>
+    <div style="text-align:center;font-size:0.72rem;color:var(--text-dim);margin:4px 0 18px">${progress}</div>
+    <div style="text-align:center;font-weight:600;margin-bottom:16px">${q.q}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${q.opts.map((opt, i) => `<button class="rx-detail-btn" style="justify-content:center;padding:12px 14px" onclick="_typeTestAnswer(${i})">${opt}</button>`).join('')}
+    </div>`;
+}
+
+function _typeTestAnswer(i) {
+  const s = _typeTestState;
+  if (!s) return;
+  s.scores[TYPE_ORDER[i]] += 1;
+  s.qIdx++;
+  if (s.qIdx < s.questions.length) {
+    _renderTypeQuestion();
+  } else {
+    let best = TYPE_ORDER[0];
+    TYPE_ORDER.forEach(k => { if (s.scores[k] > s.scores[best]) best = k; });
+    s.myType = best;
+    _renderTypeResult();
+  }
+}
+
+function _renderTypeResult() {
+  const s = _typeTestState;
+  const box = document.getElementById('typeTestBox');
+  if (!s || !box) return;
+  const t = getT();
+  const lg = getLang();
+  const desc = t.typeDesc?.[s.myType] || '';
+  const elemLabel = ON[lg]?.[s.myType] || s.myType;
+  box.innerHTML = `
+    <div class="modal-title" style="text-align:center">${t.typeResultTitle || '당신의 유형은'}</div>
+    <div style="text-align:center;font-size:1.6rem;font-weight:700;color:var(--gold);margin:12px 0 8px">${elemLabel}</div>
+    <div class="detail-area-card" style="margin-bottom:18px"><div class="detail-area-body" style="text-align:center">${desc}</div></div>
+    <div style="text-align:center;font-size:0.85rem;font-weight:600;margin-bottom:10px">${t.typePickPartner || '궁합 볼 상대의 유형을 골라주세요'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px">
+      ${TYPE_ORDER.map(el => `<button class="rx-detail-btn" onclick="_typeTestPickPartner('${el}')">${ON[lg]?.[el] || el}</button>`).join('')}
+    </div>
+    <button onclick="openTypeTest()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.85rem">${t.typeRetake || '다시 하기'}</button>
+    <div id="typeCompatArea" style="margin-top:16px"></div>`;
+}
+
+async function _typeTestPickPartner(partnerType) {
+  const s = _typeTestState;
+  if (!s) return;
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const areaEl = document.getElementById('typeCompatArea');
+  if (!areaEl) return;
+  areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.typeCompatLoading || '궁합을 분석하는 중...'}</div>`;
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/type-compat', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, myType: s.myType, partnerType })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      return;
+    }
+    areaEl.innerHTML = `
+      <div class="detail-area-card"><div class="detail-area-body" id="typeCompatBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+    `;
+    const bodyEl = document.getElementById('typeCompatBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: areaEl, stagger: 0 });
+  } catch (e) {
+    areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
   }
 }
 
