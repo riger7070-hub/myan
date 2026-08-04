@@ -3862,7 +3862,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 .oracle-character {
   width: 92px;
   transform-origin: bottom center;
-  animation: oracleDance 1.4s ease-in-out infinite;
+  animation: oracleDance 0.9s ease-in-out infinite;
 }
 .oracle-character img {
   display: block;
@@ -3933,11 +3933,11 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 /* 안도령 캐릭터 춤 — 좌우 스텝 + 리듬감 있는 바운스 (CSS만 사용, 3D/무거운 연출 금지 원칙 준수) */
 @keyframes oracleDance {
   0%, 100%  { transform: translateX(0) rotate(0deg) scale(1); }
-  15%       { transform: translateX(-7px) rotate(-8deg) scale(1.05); }
-  35%       { transform: translateX(0) rotate(0deg) scale(0.98); }
-  50%       { transform: translateX(7px) rotate(8deg) scale(1.05); }
-  70%       { transform: translateX(0) rotate(0deg) scale(0.98); }
-  85%       { transform: translateX(-3px) rotate(-3deg) scale(1.02); }
+  15%       { transform: translateX(-15px) rotate(-16deg) scale(1.1); }
+  35%       { transform: translateX(0) rotate(0deg) scale(0.95); }
+  50%       { transform: translateX(15px) rotate(16deg) scale(1.1); }
+  70%       { transform: translateX(0) rotate(0deg) scale(0.95); }
+  85%       { transform: translateX(-7px) rotate(-6deg) scale(1.04); }
 }
 @keyframes pageFlip {
   0%   { opacity: 0; transform: translateY(6px); }
