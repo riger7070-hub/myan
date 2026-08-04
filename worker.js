@@ -2294,11 +2294,13 @@ async function handleStreakCheckin(request, env) {
        total_checkins=excluded.total_checkins,updated_at=excluded.updated_at`
     ).bind(email,current,max,today,total).run();
 
-    // 7일 스트릭 보너스
+    // 7일 스트릭 보너스 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
     if (current%7===0) {
+      const bonusId = `streak_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
       await env.DB.prepare(
-        `UPDATE payment_requests SET tokens=tokens+5 WHERE user_email=?`
-      ).bind(email).run();
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'streak_bonus', 0, 5, 'approved', unixepoch())`
+      ).bind(bonusId, email).run();
     }
 
     return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0}),200);
@@ -2394,10 +2396,24 @@ async function handleReferralClaim(request, env) {
     if (!ref) return cors(JSON.stringify({error:{message:'유효하지 않은 코드'}}),404);
     if (ref.referee_email) return cors(JSON.stringify({error:{message:'이미 사용된 코드'}}),409);
     if (ref.referrer_email===email) return cors(JSON.stringify({error:{message:'본인 코드 사용 불가'}}),400);
-    // 보상: 양쪽 3토큰
-    await env.DB.prepare('UPDATE referrals SET referee_email=?,rewarded_at=unixepoch() WHERE code=?').bind(email,code.toUpperCase()).run();
-    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+3 WHERE user_email=?').bind(email).run();
-    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+3 WHERE user_email=?').bind(ref.referrer_email).run();
+    // 코드 소비 (동시 요청으로 한 코드가 두 번 보상되지 않도록 referee_email IS NULL 조건으로 원자적 처리)
+    const claimRes = await env.DB.prepare(
+      'UPDATE referrals SET referee_email=?,rewarded_at=unixepoch() WHERE code=? AND referee_email IS NULL'
+    ).bind(email,code.toUpperCase()).run();
+    if (!claimRes.meta?.rows_written) {
+      return cors(JSON.stringify({error:{message:'이미 사용된 코드'}}),409);
+    }
+    // 보상: 양쪽 3토큰 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    const refId1 = `ref_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const refId2 = `ref_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'referral_bonus', 0, 3, 'approved', unixepoch())`
+    ).bind(refId1, email).run();
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'referral_bonus', 0, 3, 'approved', unixepoch())`
+    ).bind(refId2, ref.referrer_email).run();
     return cors(JSON.stringify({success:true,bonus:3}),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
@@ -2580,9 +2596,8 @@ async function handleUngiGiveTokens(request, env) {
         return cors(JSON.stringify({ error: { message: '관리자 권한이 없습니다' } }), 403);
       }
     } else if (pin) {
-      // 방법 1: PIN 인증
-      const UNGI_PIN = env.UNGI_PIN || '5984'; // fallback
-      const pinMatch = pin === UNGI_PIN;
+      // 방법 1: PIN 인증 (UNGI_PIN 시크릿 미설정 시 하드코딩 폴백 금지 — PIN 로그인 자체를 비활성화)
+      const pinMatch = !!env.UNGI_PIN && pin === env.UNGI_PIN;
 
       // 시도 기록
       await env.DB.prepare('INSERT INTO ungi_admin_attempts (ip, attempt_at, success) VALUES (?, ?, ?)')
@@ -2611,9 +2626,12 @@ async function handleUngiGiveTokens(request, env) {
       return cors(JSON.stringify({ error: { message: '존재하지 않는 사용자' } }), 404);
     }
 
-    // 토큰 지급
-    await env.DB.prepare('UPDATE payment_requests SET tokens=tokens+? WHERE user_email=?')
-      .bind(tokens, email).run();
+    // 토큰 지급 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    const grantId = `ungi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'ungi_admin_grant', 0, ?, 'approved', unixepoch())`
+    ).bind(grantId, email, tokens).run();
 
     // 로그 기록
     await env.DB.prepare('INSERT INTO ungi_token_gifts (user_email, tokens_given, gifted_by) VALUES (?, ?, ?)')
@@ -2649,8 +2667,7 @@ async function handleFortuneQrGenerate(request, env) {
     if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
 
     const { pin, count } = await request.json().catch(() => ({}));
-    const UNGI_PIN = env.UNGI_PIN || '5984';
-    if (!pin || String(pin).length > 8 || String(pin) !== UNGI_PIN) {
+    if (!env.UNGI_PIN || !pin || String(pin).length > 8 || String(pin) !== env.UNGI_PIN) {
       return cors(JSON.stringify({ error: { message: 'PIN이 올바르지 않습니다.' } }), 403);
     }
 
@@ -2743,9 +2760,7 @@ async function handleOhaengHistorySave(request, env) {
 // ════════════════════════════════════════════
 //  프로모 QR 코드 클레임 핸들러
 // ════════════════════════════════════════════
-// 카페 직원 PIN — 변경하려면 이 숫자를 수정 후 재배포
-const CAFE_STAFF_PIN = '7777';
-
+// 카페 직원 PIN — 소스에 하드코딩하지 않고 `wrangler secret put CAFE_STAFF_PIN`으로 설정
 const PROMO_CODES = {
   'MYAN_CAFE': { tokens: 3, label: '카페 방문 혜택' },
 };
@@ -2754,14 +2769,9 @@ async function handlePromoClaim(request, env) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return cors(JSON.stringify({ error: '로그인이 필요합니다.' }), 401);
 
-  let email;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    email = payload.email;
-    if (!email) throw new Error('no email');
-  } catch {
-    return cors(JSON.stringify({ error: '인증 오류입니다.' }), 401);
-  }
+  // 서명 검증 없이 payload만 디코드하면 누구나 임의 이메일로 위장 가능 — getEmailFromToken으로 반드시 검증
+  const email = await getEmailFromToken(token, env);
+  if (!email) return cors(JSON.stringify({ error: '인증 오류입니다.' }), 401);
 
   const { code, pin, promo_token } = await request.json().catch(() => ({}));
 
@@ -2775,10 +2785,10 @@ async function handlePromoClaim(request, env) {
 
   // PIN 검증 (브루트포스 방지: 입력값 길이 제한)
   if (promo.requirePin) {
-    if (!pin || String(pin).length > 8) {
+    if (!env.CAFE_STAFF_PIN || !pin || String(pin).length > 8) {
       return cors(JSON.stringify({ error: '직원 확인 PIN을 입력해 주세요.' }), 400);
     }
-    if (String(pin) !== CAFE_STAFF_PIN) {
+    if (String(pin) !== env.CAFE_STAFF_PIN) {
       return cors(JSON.stringify({ error: 'PIN이 올바르지 않습니다. 직원에게 다시 확인해 주세요.' }), 403);
     }
   }
@@ -2820,7 +2830,7 @@ async function handlePromoClaim(request, env) {
 // ════════════════════════════════════════════
 //  다이나믹 QR 프로모 (1회용 토큰 시스템)
 // ════════════════════════════════════════════
-const PROMO_ADMIN_PIN = '9999'; // 카운터 태블릿용 관리자 PIN (변경 가능)
+// 카운터 태블릿용 관리자 PIN — 소스에 하드코딩하지 않고 `wrangler secret put PROMO_ADMIN_PIN`으로 설정
 const PROMO_TOKEN_TTL = 600;   // 토큰 유효시간: 10분 (초)
 const PROMO_TOKENS_REWARD = 3; // 지급 토큰 수
 
@@ -2833,7 +2843,7 @@ function _genToken() {
 // [관리자] 새 1회용 토큰 생성 (카운터 태블릿에서 호출)
 async function handlePromoGenerate(request, env) {
   const { adminPin } = await request.json().catch(() => ({}));
-  if (adminPin !== PROMO_ADMIN_PIN) {
+  if (!env.PROMO_ADMIN_PIN || adminPin !== env.PROMO_ADMIN_PIN) {
     return cors(JSON.stringify({ error: '관리자 PIN이 올바르지 않습니다.' }), 403);
   }
   // 기존 미사용 토큰 무효화
@@ -2854,7 +2864,7 @@ async function handlePromoGenerate(request, env) {
 // [관리자] 현재 유효한 토큰 조회
 async function handlePromoCurrent(request, env) {
   const adminPin = new URL(request.url).searchParams.get('pin');
-  if (adminPin !== PROMO_ADMIN_PIN) {
+  if (!env.PROMO_ADMIN_PIN || adminPin !== env.PROMO_ADMIN_PIN) {
     return cors(JSON.stringify({ error: '인증 오류' }), 403);
   }
   const row = await env.DB.prepare(
@@ -2918,7 +2928,7 @@ async function handleDynamicPromoClaim(request, env, email, token) {
 async function handlePromoDisplay(request, env) {
   const url = new URL(request.url);
   const pin = url.searchParams.get('pin') || '';
-  const authed = pin === PROMO_ADMIN_PIN;
+  const authed = !!env.PROMO_ADMIN_PIN && pin === env.PROMO_ADMIN_PIN;
 
   const html = `<!DOCTYPE html>
 <html lang="ko">
