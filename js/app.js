@@ -4769,7 +4769,10 @@ function openFortuneTopics() {
     return;
   }
   const t = getT();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  const hasBirth = !!_u?.birthYear;
   const overlay = document.createElement('div');
+  overlay.id = 'fortuneTopicsOverlay';
   overlay.className = 'modal-overlay active';
   overlay.style.zIndex = '1200';
   const topicBtnsHtml = FORTUNE_TOPICS.map(f => `
@@ -4777,10 +4780,16 @@ function openFortuneTopics() {
       <span class="fortune-topic-icon">${f.icon}</span>
       <span class="fortune-topic-label">${t.fortuneTopicTitle?.[f.key] || f.key}</span>
     </button>`).join('');
+  const birthHint = hasBirth ? '' : `
+    <div onclick="document.getElementById('fortuneTopicsOverlay')?.remove(); openMyPage();"
+      style="font-size:0.75rem;color:var(--gold-light);background:rgba(201,169,110,0.08);border:1px solid rgba(201,169,110,0.25);border-radius:8px;padding:10px 12px;margin-bottom:14px;cursor:pointer;text-align:center">
+      ${t.fortuneNeedBirthHint || '생년월일을 등록하면 사주를 반영한 더 정확한 풀이를 받을 수 있어요 →'}
+    </div>`;
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
       <div class="modal-title">🔮 ${t.fortuneModalTitle || '오늘의 운세 모음'}</div>
       <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.fortuneModalSub || '궁금한 주제를 골라보세요'}</div>
+      ${birthHint}
       <div id="fortuneTopicGrid" class="fortune-topic-grid">${topicBtnsHtml}</div>
       <div id="fortuneTopicResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
