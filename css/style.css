@@ -1570,11 +1570,13 @@ body::-webkit-scrollbar {
 .fortune-box::before{ background: linear-gradient(135deg, rgba(212,165,116,0.1), transparent 70%); }
 .token-box::before  { background: linear-gradient(135deg, rgba(201,169,110,0.1), transparent 70%); }
 .support-box::before{ background: linear-gradient(135deg, rgba(90,168,224,0.1),  transparent 70%); }
+.experience-box::before{ background: linear-gradient(135deg, rgba(160,120,200,0.12), transparent 70%); }
 .quick-box:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
 .quick-box:hover::before { opacity: 1; }
 .fortune-box:hover{ border-color: rgba(212,165,116,0.5); }
 .token-box:hover  { border-color: rgba(201,169,110,0.5); }
 .support-box:hover{ border-color: rgba(90,168,224,0.4); }
+.experience-box:hover{ border-color: rgba(160,120,200,0.5); }
 .quick-icon { font-size: 1.6rem; flex-shrink: 0; line-height: 1; }
 .quick-body { flex: 1; min-width: 0; }
 .quick-title {
@@ -1605,6 +1607,7 @@ body::-webkit-scrollbar {
 .fortune-box:hover .quick-arrow { color: #d4a574; }
 .token-box:hover  .quick-arrow { color: var(--gold); }
 .support-box:hover .quick-arrow { color: #7ec8f0; }
+.experience-box:hover .quick-arrow { color: #b088d0; }
 @media (max-width: 400px) {
   .quick-box { padding: 14px 12px; gap: 10px; }
   .quick-title { font-size: 0.82rem; }

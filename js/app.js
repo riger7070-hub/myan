@@ -3111,6 +3111,7 @@ function _syncDrawerLangs() {
   _t('drTxtTojeong',   t.drTojeongTitle);   _t('drSubTojeong', t.drTojeongSub);
   _t('drTxtPhoto',    t.drPhotoTitle);      _t('drSubPhoto', t.drPhotoSub);
   _t('photoGalleryBtnText', t.photoGalleryTitle);
+  _t('quickExperienceTitle', t.quickExperienceTitle); _t('quickExperienceDesc', t.quickExperienceDesc);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -5259,6 +5260,49 @@ async function _deletePhotoReading(id) {
     document.getElementById('photo-gallery-modal')?.remove();
     showPhotoGallery();
   } catch (e) {}
+}
+
+// ════════════════════════════════════════════
+//  각종 체험 허브 — 홈 화면 카드에서 모든 재미 콘텐츠를 한곳에서 고르는 진입점
+//  (각 항목은 이미 존재하는 open* 함수를 그대로 호출 — 신규 백엔드 없음)
+// ════════════════════════════════════════════
+function openExperienceHub() {
+  const t = getT();
+  const items = [
+    { icon:'🔮', label: t.tarotTitle || '오늘의 타로', fn: openTarotDraw },
+    { icon:'🐉', label: t.zodiacTitle || '띠·별자리 운세', fn: openZodiacFortune },
+    { icon:'🍀', label: t.luckyTitle || '오늘의 럭키 아이템', fn: openLuckyPicks },
+    { icon:'🔯', label: t.typeTitle || '오행 유형·궁합', fn: openTypeTest },
+    { icon:'✨', label: t.fortuneModalTitle || '오늘의 운세 모음', fn: openFortuneTopics },
+    { icon:'🀄', label: t.ichingTitle || '주역 괘 풀이', fn: openIching },
+    { icon:'🔢', label: t.numerologyTitle || '수비학', fn: openNumerology },
+    { icon:'🧧', label: t.tojeongTitle || '토정비결풍 신년운세', fn: openTojeong },
+    { icon:'🖐️', label: t.photoModalTitle || '관상·손금', fn: openPhotoReading },
+  ];
+  const overlay = document.createElement('div');
+  overlay.id = 'experienceHubOverlay';
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  const itemsHtml = items.map((it, i) => `
+    <button class="fortune-topic-btn" onclick="_experienceHubPick(${i})">
+      <span class="fortune-topic-icon">${it.icon}</span>
+      <span class="fortune-topic-label">${it.label}</span>
+    </button>`).join('');
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:440px;padding:28px 22px">
+      <div class="modal-title">🎴 ${t.experienceHubTitle || '각종 체험'}</div>
+      <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.experienceHubSub || '궁금한 콘텐츠를 골라보세요'}</div>
+      <div class="fortune-topic-grid">${itemsHtml}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  _experienceHubItems = items;
+}
+let _experienceHubItems = [];
+function _experienceHubPick(i) {
+  document.getElementById('experienceHubOverlay')?.remove();
+  const fn = _experienceHubItems[i]?.fn;
+  if (typeof fn === 'function') fn();
 }
 
 // ════════════════════════════════════════════
