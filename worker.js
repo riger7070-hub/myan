@@ -860,6 +860,23 @@ export default {
     if (path === '/api/fortune-qr/generate' && method === 'POST') { await ensureDBExt(env); return handleFortuneQrGenerate(request, env); }
     if (path === '/api/fortune-qr/redeem'   && method === 'POST') { await ensureDBExt(env); return handleFortuneQrRedeem(request, env); }
 
+    // 서비스워커 스크립트: 배포마다 고유한 CF_VERSION_METADATA.id를 VERSION 상수에 주입해
+    // 캐시 이름이 배포마다 확실히 바뀌게 하고, 응답 자체도 캐시되지 않게 강제.
+    // (CI에서 sw.js 파일을 sed로 직접 고치는 방식은 CDN 엣지 캐시 때문에 반영이 안 되는 문제가 있었음)
+    if (path === '/sw.js' && method === 'GET') {
+      const raw = await env.SITE_ASSETS.fetch(request);
+      let text = await raw.text();
+      const deployId = env.CF_VERSION_METADATA?.id || 'dev';
+      text = text.replace(/const VERSION = '[^']*';/, `const VERSION = '${deployId}';`);
+      return new Response(text, {
+        status: raw.status,
+        headers: {
+          'Content-Type': 'text/javascript; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      });
+    }
+
     // 루트 경로: Worker Assets에서 index.html 직접 서빙 (보안 헤더 주입 + ENV 주입)
     if (method === 'GET') {
       const res = await env.SITE_ASSETS.fetch(request);

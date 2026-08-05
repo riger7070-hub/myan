@@ -15,6 +15,11 @@ binding = "DB"
 database_name = "myan-db"
 database_id = "ef511379-fa0b-45c7-b14e-6ccb842c719f"
 
+# 배포마다 고유한 버전 ID 제공 — 서비스워커 캐시 버전을 여기서 직접 읽어와
+# CI의 sed 스크립트(sw.js VERSION 수동 치환) 없이도 배포마다 확실히 갱신되게 함
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 # ── 일일 푸시 알림: 매일 오전 8시 KST = 23:00 UTC ──
 [triggers]
 crons = ["0 23 * * *"]

@@ -22,12 +22,6 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler@latest
 
-      - name: Stamp service worker cache version with commit SHA
-        run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
-          sed -i "s/const VERSION = '[^']*';/const VERSION = '${SHORT_SHA}';/" sw.js
-          grep VERSION sw.js
-
       - name: Deploy to Cloudflare Workers
         run: wrangler deploy
         env:

@@ -1,5 +1,7 @@
-// M;Y 安 — Service Worker v4.3 (Google Fonts CSP 수정 + 오라클 연출·재미 콘텐츠 반영 병합)
-const VERSION = '4.3';
+// M;Y 安 — Service Worker
+// VERSION은 worker.js가 /sw.js 응답 시 CF_VERSION_METADATA.id로 실시간 치환함(배포마다 자동 갱신).
+// 아래 값은 그 치환이 없는 로컬(wrangler dev) 환경에서만 쓰이는 기본값.
+const VERSION = 'local-dev';
 const CACHE_NAME = `myan-v10-${VERSION}`;
 const CACHE_IMAGES = `myan-images-v7`;
 const CACHE_STATIC = `myan-static-v7`;
