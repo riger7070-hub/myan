@@ -5290,7 +5290,7 @@ function openExperienceHub() {
     </button>`).join('');
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:440px;padding:28px 22px">
-      <div class="modal-title">🎴 ${t.experienceHubTitle || '각종 체험'}</div>
+      <div class="modal-title">🎴 ${t.experienceHubTitle || '재미로 보는 운세'}</div>
       <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.experienceHubSub || '궁금한 콘텐츠를 골라보세요'}</div>
       <div class="fortune-topic-grid">${itemsHtml}</div>
     </div>`;
