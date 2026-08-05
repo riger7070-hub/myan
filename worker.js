@@ -2716,8 +2716,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `fortune_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'fortune_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'fortune', t.title, reading, { topic }).catch(() => {});
 
@@ -2794,8 +2804,18 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `iching_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'iching_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
 
@@ -2872,8 +2892,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `numerology_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'numerology_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
 
@@ -2940,8 +2970,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8, maxOutputTokens: 4096, thinkingConfig:{ thinkingBudget: 0 } } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `tojeong_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'tojeong_refund', 0, 2, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
 
@@ -3179,10 +3219,11 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
-    if (!reading) {
+    if (!resp.ok || !reading) {
       const refundId = `dream_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await env.DB.prepare(
         `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
@@ -3250,8 +3291,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `lotto_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'lotto_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
 
@@ -3321,8 +3372,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `rune_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'rune_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
 
