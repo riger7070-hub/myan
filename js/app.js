@@ -283,6 +283,86 @@ async function shareOhaengCard(ohaeng) {
   }, 'image/png');
 }
 
+// 범용 결과 공유 카드 — 타로/주역/수비학/토정비결/룬/꿈해몽/로또 등 모든 재미 콘텐츠 결과에서 재사용.
+// shareOhaengCard()와 같은 톤(어두운 배경+골드 글로우)이지만 임의의 아이콘·제목·부제를 그린다.
+async function shareResultCard({ icon, title, subtitle, filename }) {
+  const lang = getLang();
+  const t = TX[lang];
+  const today = new Date().toLocaleDateString(lang === 'ko' ? 'ko-KR' : lang === 'ja' ? 'ja-JP' : lang === 'zh' ? 'zh-CN' : 'en-US');
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 630;
+  const ctx = canvas.getContext('2d');
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, 630);
+  gradient.addColorStop(0, '#0d0e12');
+  gradient.addColorStop(1, '#1a1b20');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 1200, 630);
+
+  const glowGrad = ctx.createRadialGradient(600, 315, 50, 600, 315, 400);
+  glowGrad.addColorStop(0, '#c9a96e40');
+  glowGrad.addColorStop(1, '#c9a96e00');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, 1200, 630);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c9a96e';
+  ctx.font = 'bold 44px sans-serif';
+  ctx.fillText('M;Y 安', 600, 96);
+
+  ctx.fillStyle = '#8a8479';
+  ctx.font = '22px sans-serif';
+  ctx.fillText(today, 600, 134);
+
+  ctx.font = '140px sans-serif';
+  ctx.fillText(icon || '✨', 600, 330);
+
+  ctx.fillStyle = '#e8dcc8';
+  ctx.font = 'bold 40px sans-serif';
+  ctx.fillText((title || '').slice(0, 24), 600, 420);
+
+  if (subtitle) {
+    ctx.fillStyle = '#a89a80';
+    ctx.font = '26px sans-serif';
+    ctx.fillText(subtitle.slice(0, 34), 600, 470);
+  }
+
+  ctx.fillStyle = '#6a6a5a';
+  ctx.font = '20px sans-serif';
+  ctx.fillText('myan.riger7070.workers.dev', 600, 600);
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) { showToast(t.err || '오류가 발생했습니다'); return; }
+    try {
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], `${filename || 'myan-result'}.png`, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: `M;Y 安 - ${title}`, text: title, files: [file] });
+            hapticLight();
+            return;
+          } catch (shareErr) {
+            if (shareErr?.name === 'AbortError') return;
+          }
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename || 'myan-result'}-${new Date().toISOString().slice(0,10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast({ko:'이미지가 저장되었습니다!',en:'Image saved!',zh:'图片已保存!',ja:'画像を保存しました!'}[lang] || '이미지가 저장되었습니다!');
+      hapticMedium();
+    } catch (err) {
+      console.error(err);
+      showToast(t.err || '공유에 실패했습니다');
+    }
+  }, 'image/png');
+}
+
 async function checkShareBonus() {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -4324,6 +4404,7 @@ async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
       if (data.remaining !== undefined) {
         contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
       }
+      contEl.innerHTML += `<button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:${JSON.stringify(catMeta?.icon || "🔍")},title:${JSON.stringify(catLabel)},filename:"myan-detail"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>`;
       contEl.style.display = '';
       // 오라클 연출로 이미 충분히 기다렸으므로 stagger:0(한 번에 페이드인)
       const bodyEl = document.getElementById(`detailBody-${category}`);
@@ -4509,6 +4590,7 @@ async function _tarotPick(idx) {
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.card.name}${data.upright ? '' : ` (${t.tarotReversed || '역방향'})`}</div>
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="tarotReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:${JSON.stringify(data.card.icon)},title:${JSON.stringify(data.card.name + (data.upright ? "" : " (" + (t.tarotReversed||"역방향") + ")"))},filename:"myan-tarot"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('tarotReadingBody');
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -4577,6 +4659,7 @@ async function openZodiacFortune() {
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${animalLabel}${animalSuffix} · ${zodiacLabel}</div>
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="zodiacReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🐉",title:${JSON.stringify(animalLabel + animalSuffix + " · " + zodiacLabel)},filename:"myan-zodiac"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('zodiacReadingBody');
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -4638,6 +4721,7 @@ async function openLuckyPicks() {
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🍽️ ${t.luckyFood||'럭키 음식'}${p.food?.name ? ' · ' + p.food.name : ''}</div><div class="detail-area-body">${p.food?.reason||''}</div></div>
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🎵 ${t.luckySong||'럭키 무드'}${p.song?.name ? ' · ' + p.song.name : ''}</div><div class="detail-area-body">${p.song?.reason||''}</div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🍀",title:${JSON.stringify(t.luckyTitle || "오늘의 럭키 아이템")},subtitle:${JSON.stringify([p.color?.name,p.food?.name,p.song?.name].filter(Boolean).join(" · ").replace(/'/g, "’"))},filename:"myan-lucky"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
     }
   } catch (e) {
@@ -4753,6 +4837,7 @@ async function _typeTestPickPartner(partnerType) {
     areaEl.innerHTML = `
       <div class="detail-area-card"><div class="detail-area-body" id="typeCompatBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🔯",title:${JSON.stringify((ON_KR[s.myType]||s.myType) + " × " + (ON_KR[partnerType]||partnerType))},filename:"myan-typecompat"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('typeCompatBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: areaEl, stagger: 0 });
@@ -4842,7 +4927,8 @@ async function _fortuneTopicPick(key) {
       <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.icon || ''} ${topicLabel}</div>
       <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="fortuneTopicBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
-      <button class="oracle-skip-btn" style="width:100%;margin-top:14px" onclick="_fortuneTopicBack()">${backLabel}</button>
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:${JSON.stringify(data.icon || "✨")},title:${JSON.stringify(topicLabel)},filename:"myan-fortune"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+      <button class="oracle-skip-btn" style="width:100%;margin-top:8px" onclick="_fortuneTopicBack()">${backLabel}</button>
     `;
     const bodyEl = document.getElementById('fortuneTopicBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -4927,6 +5013,7 @@ async function _ichingCast() {
       <div style="margin-bottom:14px">${barsHtml}</div>
       <div class="detail-area-card"><div class="detail-area-body" id="ichingReadingBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🀄",title:${JSON.stringify(t.ichingTitle || "주역 괘 풀이")},filename:"myan-iching"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('ichingReadingBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -4993,6 +5080,7 @@ async function openNumerology() {
         <div style="text-align:center;font-size:0.78rem;color:var(--text-dim);margin-bottom:10px">${t.numerologyYourNumber || '당신의 라이프패스 넘버'}</div>
         <div class="detail-area-card"><div class="detail-area-body" id="numerologyReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🔢",title:${JSON.stringify((t.numerologyYourNumber || "라이프패스 넘버") + " " + data.lifePath)},filename:"myan-numerology"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('numerologyReadingBody');
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -5059,6 +5147,7 @@ async function openTojeong() {
       resultEl.innerHTML = `
         <div class="detail-area-card"><div class="detail-area-body" id="tojeongReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🧧",title:${JSON.stringify((data.year || "") + " " + (t.tojeongTitle || "토정비결풍 신년운세"))},filename:"myan-tojeong"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('tojeongReadingBody');
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -5335,6 +5424,7 @@ async function _dreamSubmit() {
     resultEl.innerHTML = `
       <div class="detail-area-card"><div class="detail-area-body" id="dreamReadingBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🌙",title:${JSON.stringify(t.dreamTitle || "꿈해몽")},filename:"myan-dream"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('dreamReadingBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -5396,6 +5486,7 @@ async function openLottoNumbers() {
         <div class="detail-area-card" style="margin-top:14px;text-align:left"><div class="detail-area-body" id="lottoReadingBody"></div></div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:10px">${t.lottoDisclaimer || '재미로 보는 참고용입니다. 당첨을 보장하지 않아요.'}</div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🎱",title:${JSON.stringify(t.lottoTitle || "오늘의 로또번호")},subtitle:${JSON.stringify(data.numbers.join(" · "))},filename:"myan-lotto"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('lottoReadingBody');
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -5470,6 +5561,7 @@ async function _runeDraw() {
       <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.name}(${data.nameKo})${data.upright ? '' : ` · ${t.runeReversed || '역방향'}`}</div>
       <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="runeReadingBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"ᚱ",title:${JSON.stringify(data.name + "(" + data.nameKo + ")" + (data.upright ? "" : " · " + (t.runeReversed||"역방향")))},filename:"myan-rune"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('runeReadingBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
