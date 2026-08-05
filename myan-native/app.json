@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon-app-store-1024.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash-1200.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#060608"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.myan.app",
