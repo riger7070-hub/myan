@@ -1998,6 +1998,21 @@ function _ensureGisInit() {
   }
 }
 
+// 자동 로그인: 로그인/로그아웃 상태가 애매한 첫 진입 시점에 사용자가 아무것도 클릭하지 않아도
+// 브라우저에 활성 구글 세션이 남아있으면 조용히 로그인시킨다(Google One Tap silent sign-in).
+// 이미 로그인돼 있거나(myan_logged_in) 명시적으로 로그아웃한 경우(myan_signed_out)는 시도하지 않음.
+function _tryAutoLogin(attempts) {
+  if (isLoggedIn()) return;
+  if (localStorage.getItem('myan_signed_out') === 'true') return;
+  if (!GOOGLE_CID) return;
+  if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+    if (attempts > 0) setTimeout(() => _tryAutoLogin(attempts - 1), 300);
+    return;
+  }
+  _ensureGisInit();
+  try { google.accounts.id.prompt(); } catch (e) {}
+}
+
 function initGoogleSignin() {
   const wrap = document.getElementById('googleBtnEl');
   if (!wrap) return;
@@ -3380,6 +3395,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // 🔥 서버 검증 스트릭을 불러와 배너에 반영 (로그인 전이면 조용히 스킵)
   fetchStreak(true);
+
+  // 자동 로그인 시도 (로그인 화면 진입 없이도 활성 구글 세션이면 조용히 로그인)
+  _tryAutoLogin(15);
 
   // ── 토스페이먼츠 결제 후 리다이렉트 처리 ──
   // 결제 성공: ?paymentKey=xxx&orderId=yyy&amount=4900
