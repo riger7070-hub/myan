@@ -3105,6 +3105,7 @@ function _syncDrawerLangs() {
   _t('drTxtZodiac',  t.drZodiacTitle); _t('drSubZodiac', t.drZodiacSub);
   _t('drTxtLucky',   t.drLuckyTitle);  _t('drSubLucky', t.drLuckySub);
   _t('drTxtType',    t.drTypeTitle);   _t('drSubType', t.drTypeSub);
+  _t('drTxtFortune', t.drFortuneTitle); _t('drSubFortune', t.drFortuneSub);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -4749,6 +4750,95 @@ async function _typeTestPickPartner(partnerType) {
   } catch (e) {
     areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
   }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 운세 모음 (재미 콘텐츠, 1토큰)
+//  짝사랑 / 관계 신뢰 / 가족 / 미래 / 학업 / 성격 / 인상 / 성공
+// ════════════════════════════════════════════
+function openFortuneTopics() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  const topicBtnsHtml = FORTUNE_TOPICS.map(f => `
+    <button class="fortune-topic-btn" onclick="_fortuneTopicPick('${f.key}')">
+      <span class="fortune-topic-icon">${f.icon}</span>
+      <span class="fortune-topic-label">${t.fortuneTopicTitle?.[f.key] || f.key}</span>
+    </button>`).join('');
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:28px 22px">
+      <div class="modal-title">🔮 ${t.fortuneModalTitle || '오늘의 운세 모음'}</div>
+      <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.fortuneModalSub || '궁금한 주제를 골라보세요'}</div>
+      <div id="fortuneTopicGrid" class="fortune-topic-grid">${topicBtnsHtml}</div>
+      <div id="fortuneTopicResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+let _fortunePicking = false;
+async function _fortuneTopicPick(key) {
+  if (_fortunePicking) return;
+  _fortunePicking = true;
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const grid = document.getElementById('fortuneTopicGrid');
+  const resultEl = document.getElementById('fortuneTopicResult');
+  if (!grid || !resultEl) { _fortunePicking = false; return; }
+
+  grid.style.display = 'none';
+  resultEl.style.display = '';
+  resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.fortuneLoading || '기운을 살펴보는 중...'}</div>`;
+
+  // 프로필에 생년월일이 있으면 개인 맞춤(사주 반영), 없어도 오늘의 기운만으로 동작
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  const birth = _u?.birthYear ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour||'' } : undefined;
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/fortune-topic', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, topic: key, birth })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      _fortunePicking = false;
+      return;
+    }
+    const topicLabel = t.fortuneTopicTitle?.[key] || data.title;
+    const backLabel = { ko:'‹ 다른 주제 보기', en:'‹ Pick another topic', zh:'‹ 选择其他主题', ja:'‹ 他のテーマを見る' }[lang] || '‹ 다른 주제 보기';
+    resultEl.innerHTML = `
+      <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.icon || ''} ${topicLabel}</div>
+      <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="fortuneTopicBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:14px" onclick="_fortuneTopicBack()">${backLabel}</button>
+    `;
+    const bodyEl = document.getElementById('fortuneTopicBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+  } catch (e) {
+    resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
+  }
+  _fortunePicking = false;
+}
+
+function _fortuneTopicBack() {
+  const grid = document.getElementById('fortuneTopicGrid');
+  const resultEl = document.getElementById('fortuneTopicResult');
+  if (grid) grid.style.display = '';
+  if (resultEl) { resultEl.style.display = 'none'; resultEl.innerHTML = ''; }
 }
 
 // ════════════════════════════════════════════

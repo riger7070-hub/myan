@@ -780,6 +780,7 @@ export default {
     if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
     if (path === '/api/type-compat' && method === 'POST') { await ensureDBExt(env); return handleTypeCompat(request, env); }
+    if (path === '/api/fortune-topic' && method === 'POST') { await ensureDBExt(env); return handleFortuneTopic(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -2608,6 +2609,84 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, myType, partnerType, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 운세 모음 (재미 콘텐츠, 1토큰)
+//  짝사랑 / 관계 신뢰 / 가족 / 미래 / 학업 / 성격 / 인상 / 성공
+//  key는 프론트 js/constants.js의 FORTUNE_TOPICS와 순서를 맞출 것
+//  ※ '외도'는 관계 신뢰 기운으로 순화 — 단정적 의심/예언 대신 신뢰를 키우는 방향으로 안내(브랜드 원칙 준수)
+// ════════════════════════════════════════════
+const FORTUNE_TOPICS = {
+  crush:       { icon:'💌', title:'짝사랑운',      guide:'짝사랑 중인 상대와의 오늘 기운 흐름, 다가가기 좋은 타이밍이나 자연스러운 방법' },
+  trust:       { icon:'🕊️', title:'관계 신뢰 기운', guide:'연인·배우자와의 신뢰와 소통 기운. 오늘 관계를 더 단단하게 만들 수 있는 대화나 행동 — 의심이나 단정적 예언이 아니라 신뢰를 키우는 방향으로' },
+  family:      { icon:'👪', title:'가족운',        guide:'가족과의 관계에서 오늘 신경 쓰면 좋을 점과 화목을 다지는 작은 실천' },
+  future:      { icon:'🌠', title:'미래운',        guide:'앞으로 다가올 흐름 중 지금부터 준비해두면 좋을 것 — 막연한 예언이 아니라 구체적인 준비 팁' },
+  grades:      { icon:'📚', title:'학업·성적운',   guide:'공부·시험·자기계발과 관련해 오늘 집중하면 좋을 점' },
+  personality: { icon:'🎭', title:'성격 분석',     guide:'사주에 드러난 성격의 강점과 스스로 다듬으면 좋을 부분' },
+  appearance:  { icon:'💫', title:'인상·이미지운', guide:'오늘 좋은 인상을 주는 데 도움이 되는 스타일링이나 태도 팁' },
+  success:     { icon:'🚀', title:'성공운',        guide:'목표 달성과 성공을 위해 오늘 취하면 좋을 태도나 행동' },
+};
+
+async function handleFortuneTopic(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', topic, birth } = await request.json().catch(() => ({}));
+    const t = FORTUNE_TOPICS[topic];
+    if (!t) return cors(JSON.stringify({ error: { message: '올바르지 않은 주제입니다.' } }), 400);
+
+    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    const useId = `fortune_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'fortune_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: `${t.title}은(는) 토큰 1개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+    const saju = (birth && birth.year) ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    const sajuBlock = saju
+      ? `\n\n[이 사람의 사주 원국 — 서버에서 만세력으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n이 사주의 일간(본질)과 오행 분포를 반영해 개인 맞춤으로 풀어주세요.`
+      : '';
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.${sajuBlock}
+
+다음 주제에 대해서만 ${langLabel}로 3~5문장, 따뜻하고 친근한 말투로 조언해주세요. 딱딱한 단정적 예언이 아니라 오늘 실천할 수 있는 구체적인 태도나 행동으로 풀어주세요. 부정적으로 보일 수 있는 부분도 균형을 찾는 조언으로 전환해서 표현하세요. "바람을 피운다/피우지 않는다", "성공한다/못한다"처럼 단정하지 말고, 항상 본인이 취할 수 있는 태도와 행동 중심으로 안내하세요.
+주제: ${t.icon} ${t.title} — ${t.guide}
+
+중요: 한자나 어려운 사주 용어를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.85 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'fortune', t.title, reading, { topic }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, topic, title: t.title, icon: t.icon, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }

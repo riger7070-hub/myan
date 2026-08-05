@@ -54,6 +54,18 @@ const WESTERN_ZODIAC_NAMES = {
 // 오행 유형 테스트 — 질문 옵션 순서와 백엔드 worker.js의 TYPE_ELEMENTS 순서를 맞출 것
 const TYPE_ORDER = ['木','火','土','金','水'];
 
+// 오늘의 운세 모음 — 키는 백엔드 worker.js의 FORTUNE_TOPICS와 맞출 것. 라벨은 locales.js의 fortuneTopicTitle에서.
+const FORTUNE_TOPICS = [
+  { key:'crush',       icon:'💌' },
+  { key:'trust',       icon:'🕊️' },
+  { key:'family',      icon:'👪' },
+  { key:'future',      icon:'🌠' },
+  { key:'grades',      icon:'📚' },
+  { key:'personality', icon:'🎭' },
+  { key:'appearance',  icon:'💫' },
+  { key:'success',     icon:'🚀' },
+];
+
 // 한글 단독 이름 (일반인용)
 const ON_KR = { 木:'목', 火:'화', 土:'토', 金:'금', 水:'수' };
 // 오행 한글 설명
