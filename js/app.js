@@ -604,40 +604,40 @@ function _copyBubble(btn, text) {
 // ── 로딩 문구 사이클 (AI 분석 중 심리적 몰입 유도) ──
 const _LOAD_MSGS = {
   ko: [
-    '종을 흔들며 신령을 부르고 있습니다…',
-    '쌀알을 세어 운명을 점치고 있습니다…',
-    '신기(神氣)를 모아 사주를 읽고 있습니다…',
-    '천지의 기운을 살피고 있습니다…',
-    '오행의 조화를 맞추고 있습니다…',
-    '사주 네 기둥을 세우고 있습니다…',
-    '만세력을 펼쳐 운명을 풀어내고 있습니다…',
+    '고요히 기운의 흐름을 살피고 있습니다…',
+    '오늘의 일진과 사주를 견주어 봅니다…',
+    '오행의 균형을 가늠하고 있습니다…',
+    '천지의 기운을 헤아리고 있습니다…',
+    '사주 네 기둥을 정성껏 세우고 있습니다…',
+    '만세력을 살펴 결을 찾고 있습니다…',
+    '오늘에 맞는 처방을 다듬고 있습니다…',
   ],
   en: [
-    'Shaking the ritual bell to call the spirits…',
-    'Counting rice grains to divine your fate…',
-    'Gathering divine energy to read your Saju…',
-    'Observing the energy of heaven and earth…',
-    'Balancing the Five Elements…',
-    'Erecting the Four Pillars of Destiny…',
-    'Unfolding the calendar of ten thousand years…',
+    'Quietly tracing the flow of your energy…',
+    'Comparing today\'s day-pillar with your Saju…',
+    'Weighing the balance of the Five Elements…',
+    'Discerning the energy of heaven and earth…',
+    'Carefully raising the Four Pillars…',
+    'Consulting the ten-thousand-year calendar…',
+    'Refining today\'s prescription…',
   ],
   zh: [
-    '摇铃召唤神灵…',
-    '数米粒占卜命运…',
-    '聚集神气解读四柱…',
-    '观察天地气运…',
-    '调和五行之气…',
-    '立起命运四柱…',
-    '展开万年历解命…',
+    '静静地探寻气运的流动…',
+    '比对今日日干与四柱…',
+    '权衡五行的平衡…',
+    '体察天地之气…',
+    '细致地排列四柱…',
+    '查阅万年历，寻找脉络…',
+    '为今日调配处方…',
   ],
   ja: [
-    '鈴を鳴らして神霊を呼んでいます…',
-    '米粒を数えて運命を占っています…',
-    '神気を集めて四柱を読んでいます…',
-    '天地の気運を見ています…',
-    '五行の調和を整えています…',
-    '運命の四柱を立てています…',
-    '万年暦を開いて運命を解いています…',
+    '静かに気の流れを見つめています…',
+    '今日の日干と四柱を照らし合わせています…',
+    '五行のバランスを見極めています…',
+    '天地の気運を察しています…',
+    '四柱を丁寧に立てています…',
+    '万歳暦を紐解いています…',
+    '今日の処方を仕上げています…',
   ],
 };
 
@@ -695,8 +695,8 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   // 🎲 문구 랜덤 섞기
   const msgs = [...allMsgs].sort(() => Math.random() - 0.5);
 
-  // 🔔 문구별 아이콘 매핑
-  const msgIcons = ['🔔', '🌾', '✨', '🌏', '☯️', '⛩️', '📜'];
+  // 🕯️ 문구별 아이콘 매핑 (차분하고 정제된 이미지로 통일)
+  const msgIcons = ['🕯️', '☯️', '⚖️', '🌌', '🏛️', '📜', '✨'];
 
   const wrap = document.createElement('div');
   wrap.className = contained ? 'oracle-stage' : 'oracle-overlay active';
