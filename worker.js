@@ -796,6 +796,9 @@ export default {
     if (path === '/api/photo-reading' && method === 'POST') { await ensureDBExt(env); return handlePhotoReading(request, env); }
     if (path === '/api/photo-readings' && method === 'GET') { await ensureDBExt(env); return handleGetPhotoReadings(request, env); }
     if (path === '/api/photo-reading' && method === 'DELETE') { await ensureDBExt(env); return handleDeletePhotoReading(request, env); }
+    if (path === '/api/dream-interpretation' && method === 'POST') { await ensureDBExt(env); return handleDreamInterpretation(request, env); }
+    if (path === '/api/lotto-numbers' && method === 'POST') { await ensureDBExt(env); return handleLottoNumbers(request, env); }
+    if (path === '/api/rune-reading' && method === 'POST') { await ensureDBExt(env); return handleRuneReading(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -3126,6 +3129,206 @@ async function handleDeletePhotoReading(request, env) {
     return cors(JSON.stringify({ ok: true }), 200);
   } catch (e) {
     return cors(JSON.stringify({ error: { message: '삭제에 실패했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  꿈해몽 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function handleDreamInterpretation(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', dream } = await request.json().catch(() => ({}));
+    const cleanDream = String(dream || '').trim().slice(0, 500);
+    if (!cleanDream) return cors(JSON.stringify({ error: { message: '꿈 내용을 입력해 주세요.' } }), 400);
+
+    // 1토큰 차감 (atomic INSERT)
+    const useId = `dream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'dream_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '꿈해몽은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 따뜻하고 통찰력 있는 꿈해몽 상담사입니다. 다음 꿈 내용을 해몽해주세요: "${cleanDream}"
+
+오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+${langLabel}로 4~6문장, 꿈에 나온 상징들의 전통적인 해몽 의미를 오늘의 기운과 엮어서 따뜻하고 희망적으로 풀어주세요. 단정적 예언이 아니라 태도와 행동으로 연결되는 조언으로 마무리하세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.85 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!reading) {
+      const refundId = `dream_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'dream_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    saveFeatureHistory(env, email, 'dream', cleanDream.slice(0, 30), reading, { dream: cleanDream }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 로또번호 추천 (재미 콘텐츠, 1토큰)
+//  숫자 자체는 서버에서 진짜 무작위로 뽑음(AI는 재계산·해석만) — 참고용 오락 콘텐츠
+// ════════════════════════════════════════════
+function _lottoNumbers() {
+  const nums = new Set();
+  while (nums.size < 6) nums.add(1 + Math.floor(Math.random() * 45));
+  return [...nums].sort((a, b) => a - b);
+}
+
+async function handleLottoNumbers(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko' } = await request.json().catch(() => ({}));
+
+    // 1토큰 차감 (atomic INSERT)
+    const useId = `lotto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'lotto_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '오늘의 로또번호는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const numbers = _lottoNumbers();
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 오늘의 기운을 바탕으로 행운 번호에 재미있는 의미를 붙여주는 상담사입니다. 오늘 뽑힌 번호는 ${numbers.join(', ')}이고, 오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+이 번호들과 오늘의 기운을 재미있게 엮어서 ${langLabel}로 2~3문장, 가볍고 유쾌한 코멘트를 해주세요. 당첨을 보장하거나 확신을 주는 표현은 절대 쓰지 말고, 어디까지나 재미로 보는 참고용이라는 톤을 유지하세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, numbers, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  룬 문자 점 (재미 콘텐츠, 1토큰) — 엘더 푸타르크 24개 룬
+// ════════════════════════════════════════════
+const RUNE_NAMES = [
+  { en:'Fehu',     ko:'페후' },   { en:'Uruz',     ko:'우루즈' },
+  { en:'Thurisaz', ko:'수리사즈' }, { en:'Ansuz',    ko:'안수즈' },
+  { en:'Raidho',   ko:'라이도' },  { en:'Kenaz',    ko:'케나즈' },
+  { en:'Gebo',     ko:'게보' },   { en:'Wunjo',    ko:'운요' },
+  { en:'Hagalaz',  ko:'하갈라즈' }, { en:'Nauthiz',  ko:'나우디즈' },
+  { en:'Isa',      ko:'이사' },   { en:'Jera',     ko:'예라' },
+  { en:'Eihwaz',   ko:'에이와즈' }, { en:'Perthro',  ko:'페르쏘' },
+  { en:'Algiz',    ko:'알기즈' },  { en:'Sowilo',   ko:'소윌로' },
+  { en:'Tiwaz',    ko:'티와즈' },  { en:'Berkano',  ko:'베르카노' },
+  { en:'Ehwaz',    ko:'에와즈' },  { en:'Mannaz',   ko:'만나즈' },
+  { en:'Laguz',    ko:'라구즈' },  { en:'Ingwaz',   ko:'잉와즈' },
+  { en:'Dagaz',    ko:'다가즈' },  { en:'Othala',   ko:'오달라' },
+];
+
+async function handleRuneReading(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko' } = await request.json().catch(() => ({}));
+
+    // 1토큰 차감 (atomic INSERT)
+    const useId = `rune_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'rune_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '룬 문자 점은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const idx = Math.floor(Math.random() * RUNE_NAMES.length);
+    const rune = RUNE_NAMES[idx];
+    const upright = Math.random() < 0.7;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 룬 문자(Rune) 점을 봐주는 상담사입니다. 오늘 뽑힌 룬은 "${rune.en}(${rune.ko})" — ${upright ? '정방향' : '역방향'}입니다.
+
+이 룬이 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 신비로운 톤으로 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 룬이어도 균형을 찾는 조언으로 전환해서 표현하세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, index: idx, name: rune.en, nameKo: rune.ko, upright, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
 

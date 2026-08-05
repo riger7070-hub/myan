@@ -3110,6 +3110,9 @@ function _syncDrawerLangs() {
   _t('drTxtNumerology', t.drNumerologyTitle); _t('drSubNumerology', t.drNumerologySub);
   _t('drTxtTojeong',   t.drTojeongTitle);   _t('drSubTojeong', t.drTojeongSub);
   _t('drTxtPhoto',    t.drPhotoTitle);      _t('drSubPhoto', t.drPhotoSub);
+  _t('drTxtDream',    t.drDreamTitle);      _t('drSubDream', t.drDreamSub);
+  _t('drTxtLotto',    t.drLottoTitle);      _t('drSubLotto', t.drLottoSub);
+  _t('drTxtRune',     t.drRuneTitle);       _t('drSubRune', t.drRuneSub);
   _t('photoGalleryBtnText', t.photoGalleryTitle);
   _t('quickExperienceTitle', t.quickExperienceTitle); _t('quickExperienceDesc', t.quickExperienceDesc);
   _t('drTxtTheme',   t.drThemeTitle);
@@ -5272,6 +5275,213 @@ async function _deletePhotoReading(id) {
 }
 
 // ════════════════════════════════════════════
+//  꿈해몽 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+function openDreamInterpretation() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const overlay = document.createElement('div');
+  overlay.id = 'dreamOverlay';
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:400px;padding:28px 22px;text-align:center">
+      <div class="modal-title">🌙 ${t.dreamTitle || '꿈해몽'}</div>
+      <textarea id="dreamInput" placeholder="${t.dreamPlaceholder || '어떤 꿈을 꾸셨나요?'}" maxlength="500" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text);font-size:0.9rem;box-sizing:border-box;min-height:90px;resize:vertical"></textarea>
+      <button class="fif-submit" style="width:100%;margin-top:14px;padding:12px" id="dreamSubmitBtn" onclick="_dreamSubmit()">${t.dreamSubmitBtn || '해몽 보기'}</button>
+      <div id="dreamResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function _dreamSubmit() {
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const btn = document.getElementById('dreamSubmitBtn');
+  const dream = (document.getElementById('dreamInput')?.value || '').trim();
+  const resultEl = document.getElementById('dreamResult');
+  if (!btn || !resultEl) return;
+  if (!dream) { showToast(t.dreamPlaceholder || '꿈 내용을 입력해 주세요.'); return; }
+  btn.disabled = true;
+  btn.textContent = t.dreamLoading || '꿈을 해몽하는 중...';
+  resultEl.style.display = '';
+  resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.dreamLoading || '꿈을 해몽하는 중...'}</div>`;
+
+  const started = Date.now();
+  const MIN_MS = 1800;
+  try {
+    const res = await fetch('/api/dream-interpretation', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, dream })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      btn.disabled = false; btn.textContent = t.dreamSubmitBtn || '해몽 보기';
+      return;
+    }
+    document.getElementById('dreamInput')?.remove();
+    btn.style.display = 'none';
+    resultEl.innerHTML = `
+      <div class="detail-area-card"><div class="detail-area-body" id="dreamReadingBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+    `;
+    const bodyEl = document.getElementById('dreamReadingBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+  } catch (e) {
+    resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
+    btn.disabled = false; btn.textContent = t.dreamSubmitBtn || '해몽 보기';
+  }
+}
+
+// ════════════════════════════════════════════
+//  오늘의 로또번호 추천 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openLottoNumbers() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:400px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🍀 ${t.lottoTitle || '오늘의 로또번호'}</div>
+      <div id="lottoStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.lottoLoading || '번호를 뽑는 중...'}</div>
+      <div id="lottoResult" style="display:none;text-align:center;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1800;
+  try {
+    const res = await fetch('/api/lotto-numbers', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('lottoStatus');
+    const resultEl = document.getElementById('lottoResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      const ballsHtml = data.numbers.map(n => `
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:linear-gradient(180deg,var(--gold),var(--gold-dim));color:#1a1410;font-weight:700;font-size:0.95rem;margin:4px">${n}</div>`).join('');
+      resultEl.innerHTML = `
+        <div>${ballsHtml}</div>
+        <div class="detail-area-card" style="margin-top:14px;text-align:left"><div class="detail-area-body" id="lottoReadingBody"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:10px">${t.lottoDisclaimer || '재미로 보는 참고용입니다. 당첨을 보장하지 않아요.'}</div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('lottoReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('lottoStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  룬 문자 점 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+function openRuneReading() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const overlay = document.createElement('div');
+  overlay.id = 'runeOverlay';
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">ᚦ ${t.runeTitle || '룬 문자 점'}</div>
+      <div class="tarot-card-back" id="runeCardBack" style="margin:20px auto;font-size:2.4rem;display:flex;align-items:center;justify-content:center">ᚱ</div>
+      <button class="fif-submit" style="width:100%;padding:12px" id="runeDrawBtn" onclick="_runeDraw()">${t.runeDrawBtn || '룬 뽑기'}</button>
+      <div id="runeResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+let _runeDrawing = false;
+async function _runeDraw() {
+  if (_runeDrawing) return;
+  _runeDrawing = true;
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const btn = document.getElementById('runeDrawBtn');
+  const resultEl = document.getElementById('runeResult');
+  if (!btn || !resultEl) { _runeDrawing = false; return; }
+  btn.disabled = true;
+  btn.textContent = t.runeDrawing || '룬을 뽑는 중...';
+  document.getElementById('runeCardBack')?.classList.add('tarot-flipped');
+
+  const started = Date.now();
+  const MIN_MS = 1800;
+  try {
+    const res = await fetch('/api/rune-reading', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      resultEl.style.display = '';
+      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      btn.disabled = false; btn.textContent = t.runeDrawBtn || '룬 뽑기';
+      _runeDrawing = false;
+      return;
+    }
+    btn.style.display = 'none';
+    resultEl.style.display = '';
+    resultEl.innerHTML = `
+      <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.name}(${data.nameKo})${data.upright ? '' : ` · ${t.runeReversed || '역방향'}`}</div>
+      <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="runeReadingBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+    `;
+    const bodyEl = document.getElementById('runeReadingBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+  } catch (e) {
+    resultEl.style.display = '';
+    resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
+    btn.disabled = false; btn.textContent = t.runeDrawBtn || '룬 뽑기';
+  }
+  _runeDrawing = false;
+}
+
+// ════════════════════════════════════════════
 //  각종 체험 허브 — 홈 화면 카드에서 모든 재미 콘텐츠를 한곳에서 고르는 진입점
 //  (각 항목은 이미 존재하는 open* 함수를 그대로 호출 — 신규 백엔드 없음)
 // ════════════════════════════════════════════
@@ -5287,6 +5497,9 @@ function openExperienceHub() {
     { icon:'🔢', label: t.numerologyTitle || '수비학', fn: openNumerology },
     { icon:'🧧', label: t.tojeongTitle || '토정비결풍 신년운세', fn: openTojeong },
     { icon:'🖐️', label: t.photoModalTitle || '관상·손금', fn: openPhotoReading },
+    { icon:'🌙', label: t.dreamTitle || '꿈해몽', fn: openDreamInterpretation },
+    { icon:'🎱', label: t.lottoTitle || '오늘의 로또번호', fn: openLottoNumbers },
+    { icon:'ᚱ', label: t.runeTitle || '룬 문자 점', fn: openRuneReading },
   ];
   const overlay = document.createElement('div');
   overlay.id = 'experienceHubOverlay';
