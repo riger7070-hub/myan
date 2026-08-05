@@ -727,6 +727,15 @@ async function ensureDBExt(env) {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
     CREATE INDEX IF NOT EXISTS idx_fh_email_created ON feature_history (user_email, created_at DESC);
+    CREATE TABLE IF NOT EXISTS photo_readings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_email TEXT NOT NULL,
+      type TEXT NOT NULL,
+      image_b64 TEXT NOT NULL,
+      reading TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_pr2_email_created ON photo_readings (user_email, created_at DESC);
   `).catch(() => {});
   // user_streaks.last_share_bonus: 기존 배포 DB에 컬럼이 없을 수 있어 별도 ALTER로 보정.
   // 이미 컬럼이 있으면 매 콜드스타트마다 에러가 나지만 위 배치와 분리돼 있어 다른 테이블 생성에 영향 없음.
@@ -781,6 +790,12 @@ export default {
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
     if (path === '/api/type-compat' && method === 'POST') { await ensureDBExt(env); return handleTypeCompat(request, env); }
     if (path === '/api/fortune-topic' && method === 'POST') { await ensureDBExt(env); return handleFortuneTopic(request, env); }
+    if (path === '/api/iching' && method === 'POST') { await ensureDBExt(env); return handleIching(request, env); }
+    if (path === '/api/numerology' && method === 'POST') { await ensureDBExt(env); return handleNumerology(request, env); }
+    if (path === '/api/tojeong' && method === 'POST') { await ensureDBExt(env); return handleTojeong(request, env); }
+    if (path === '/api/photo-reading' && method === 'POST') { await ensureDBExt(env); return handlePhotoReading(request, env); }
+    if (path === '/api/photo-readings' && method === 'GET') { await ensureDBExt(env); return handleGetPhotoReadings(request, env); }
+    if (path === '/api/photo-reading' && method === 'DELETE') { await ensureDBExt(env); return handleDeletePhotoReading(request, env); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -2689,6 +2704,403 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     return cors(JSON.stringify({ success:true, topic, title: t.title, icon: t.icon, reading, remaining: remainingTokens }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  주역(周易) 괘 풀이 — 재미 콘텐츠, 1토큰
+//  전통 삼전법(三錢法, 동전 3개 던지기) 그대로 구현: 효 하나당 동전 3개 합(6~9)으로
+//  노음(6,변효)/소양(7)/소음(8)/노양(9,변효) 결정 — 실제 확률적 무작위성은 서버에서 생성.
+//  64괘 이름 매칭·해석은 AI에 위임(64괘 이름은 안정적인 공개 고전 지식이라 사주 만세력처럼
+//  정밀 계산이 필요한 영역이 아님 — 상/하괘 정보를 명시해 정확도를 높임)
+// ════════════════════════════════════════════
+function _ichingLine() {
+  // 동전 앞(3)/뒤(2) 3개 합: 6=노음(변), 7=소양, 8=소음, 9=노양(변)
+  const sum = [0,0,0].reduce(s => s + (Math.random() < 0.5 ? 2 : 3), 0);
+  const yang = (sum === 7 || sum === 9);
+  const changing = (sum === 6 || sum === 9);
+  return { sum, yang, changing };
+}
+
+async function handleIching(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', question = '' } = await request.json().catch(() => ({}));
+    const cleanQuestion = String(question || '').trim().slice(0, 200);
+
+    // 1토큰 차감 (atomic INSERT)
+    const useId = `iching_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'iching_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '주역 괘 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    // 6효 생성 (아래→위)
+    const lines = Array.from({ length: 6 }, () => _ichingLine());
+    const linesText = lines.map((l, i) => `${i+1}효(아래서 ${i+1}번째): ${l.yang ? '양(--- 실선)' : '음(- - 끊긴선)'}${l.changing ? ' — 변효' : ''}`).join('\n');
+    const hasChanging = lines.some(l => l.changing);
+
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 주역(周易) 점을 봐주는 상담사입니다. 삼전법(동전 던지기)으로 아래 6효가 나왔습니다(아래에서 위 순서):
+${linesText}
+
+${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의 흐름을 물었습니다.'}
+오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+1) 이 6효로 만들어지는 본괘(本卦)의 정식 64괘 이름(한자+한글 독음)을 정확히 밝혀주세요.
+2) 변효가 있다면 변효를 반영한 지괘(之卦) 이름도 함께 밝혀주세요.
+3) 괘의 상징을 바탕으로 ${langLabel}로 4~6문장, 질문(또는 오늘의 흐름)에 대해 따뜻하고 구체적인 해석과 실천 조언을 주세요. 단정적 예언이 아니라 태도와 행동 중심으로 안내하세요.
+
+중요: 한자를 쓸 경우 바로 옆에 괄호로 한글 독음과 뜻을 써주세요. JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.8 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success:true,
+      lines: lines.map(l => ({ yang:l.yang, changing:l.changing })),
+      reading, remaining: remainingTokens
+    }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  수비학(數秘學) 라이프패스 넘버 — 재미 콘텐츠, 1토큰
+//  생년월일 전체 자릿수를 합산해 한 자리로 축약(11/22/33 마스터 넘버는 축약하지 않음) —
+//  100% 결정론적 계산이라 서버에서 직접 산출(AI는 해석만, 재계산 금지)
+// ════════════════════════════════════════════
+function _lifePathNumber(year, month, day) {
+  const digits = `${year}${month}${day}`.split('').map(Number);
+  let sum = digits.reduce((a,b) => a+b, 0);
+  while (sum > 9 && sum !== 11 && sum !== 22 && sum !== 33) {
+    sum = String(sum).split('').map(Number).reduce((a,b) => a+b, 0);
+  }
+  return sum;
+}
+
+async function handleNumerology(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth } = await request.json().catch(() => ({}));
+    const by = birth ? parseInt(birth.year, 10) : NaN;
+    const bm = birth ? parseInt(birth.month, 10) : NaN;
+    const bd = birth ? parseInt(birth.day, 10) : NaN;
+    if (!by || !bm || !bd) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
+    }
+
+    // 1토큰 차감 (atomic INSERT)
+    const useId = `numerology_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'numerology_use', 0, -1, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const lifePath = _lifePathNumber(by, bm, bd);
+    const il = ilchin();
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const prompt = `당신은 서양 수비학(numerology) 상담사입니다. 이 사람의 생년월일로 계산한 라이프패스 넘버(Life Path Number)는 정확히 "${lifePath}"입니다(이 숫자는 이미 정확히 계산된 확정값이니 재계산하지 마세요).
+
+오늘의 오행 기운은 "${on[il.o]}"입니다.
+
+라이프패스 넘버 ${lifePath}의 전통적인 수비학적 의미(성격·강점·인생 방향)를 ${langLabel}로 설명하고, 오늘의 기운과 엮어서 4~6문장으로 따뜻하고 구체적인 조언을 주세요. 단정적 예언이 아니라 태도와 행동 중심으로 안내하세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.8 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, lifePath, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  토정비결풍 신년운세 — 재미 콘텐츠, 2토큰
+//  ※ 정통 토정비결의 원문 괘사(고전 텍스트)는 신뢰성 있게 재현할 방법이 없어 그대로 인용하지
+//  않음. 대신 서버가 계산한 정확한 사주 원국을 바탕으로 "그 해 신수를 총운·재물·애정·건강별로
+//  짚어보는" 전통 신년운세의 정신을 살려 AI가 생성 — 정통 원문의 대체가 아님을 프론트에 안내.
+// ════════════════════════════════════════════
+async function handleTojeong(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth } = await request.json().catch(() => ({}));
+    if (!birth || !birth.year) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
+    }
+    const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
+    if (!saju) return cors(JSON.stringify({ error: { message: '사주 계산에 실패했습니다.' } }), 400);
+
+    // 2토큰 차감 (atomic INSERT — 정식 상세풀이와 동일한 무게)
+    const useId = `tojeong_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'tojeong_use', 0, -2, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 2`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const thisYear = new Date().getFullYear();
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const sajuBlock = `\n\n[이 사람의 사주 원국 — 서버에서 만세력으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}`;
+    const prompt = `당신은 토정비결(土亭祕訣)의 정신을 이어받아 신년운세를 봐주는 상담사입니다. 정통 토정비결 원문을 그대로 인용하지는 말고, 아래 사주를 바탕으로 ${thisYear}년 한 해의 신수를 봐주세요.${sajuBlock}
+
+${langLabel}로 아래 4개 섹션을 각각 2~3문장씩 작성하세요(섹션 제목도 포함):
+1. 총운 — 올 한 해 전체 흐름
+2. 재물운 — 돈과 관련해 주의할 점과 기회
+3. 애정·인간관계운 — 사람들과의 관계에서 신경 쓰면 좋을 점
+4. 건강운 — 몸과 마음을 챙기는 방법
+
+단정적 예언이 아니라 태도와 행동 중심으로, 따뜻하고 희망적인 톤으로 안내하세요. 한자나 어려운 사주 용어는 바로 옆에 괄호로 뜻을 써주세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요(섹션 제목은 줄바꿈으로 구분).`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.8, maxOutputTokens: 2048 } }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    saveFeatureHistory(env, email, 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, year: thisYear, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  관상·손금 사진 분석 (재미 콘텐츠, 2토큰)
+//  사용자가 올린 얼굴/손 사진을 Gemini Vision으로 분석. 저장을 원한다고 명시적으로
+//  확인했으므로 photo_readings 테이블에 이미지·결과를 저장해 마이페이지에서 다시 볼 수 있게 함.
+// ════════════════════════════════════════════
+const MAX_PHOTO_B64_LEN = 900000; // 대략 base64 ~900KB(원본 이미지 약 650KB) — 클라이언트에서 리사이즈 후 전송 전제
+
+async function handlePhotoReading(request, env) {
+  try {
+    // 본문 크기 선행 체크 (base64 인코딩 오버헤드 감안, 약 1.3MB까지만 허용)
+    const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
+    if (contentLength > 1300000) {
+      return cors(JSON.stringify({ error: { message: '사진 용량이 너무 큽니다. 더 작은 사진으로 다시 시도해 주세요.' } }), 413);
+    }
+
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', type, image } = await request.json().catch(() => ({}));
+    if (type !== 'face' && type !== 'palm') {
+      return cors(JSON.stringify({ error: { message: '올바르지 않은 분석 종류입니다.' } }), 400);
+    }
+    if (!image || typeof image !== 'string') {
+      return cors(JSON.stringify({ error: { message: '사진이 필요합니다.' } }), 400);
+    }
+    // data URL 접두사(data:image/jpeg;base64,) 제거
+    const b64 = image.replace(/^data:image\/\w+;base64,/, '');
+    if (b64.length > MAX_PHOTO_B64_LEN) {
+      return cors(JSON.stringify({ error: { message: '사진 용량이 너무 큽니다. 더 작은 사진으로 다시 시도해 주세요.' } }), 413);
+    }
+
+    // 2토큰 차감 (atomic INSERT)
+    const useId = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'photo_reading_use', 0, -2, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 2`
+    ).bind(useId, email, email).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const guide = type === 'face'
+      ? '이마·눈썹·눈·코·입·턱 등 전통 관상학(觀相學)의 요소를 바탕으로 성격의 강점과 살면 좋을 방향을 해석'
+      : '생명선·감정선·두뇌선 등 전통 손금(手相)의 요소를 바탕으로 성격의 강점과 살면 좋을 방향을 해석';
+    const prompt = `당신은 따뜻하고 신중한 ${type==='face'?'관상':'손금'} 상담사입니다. 첨부된 사진을 보고 ${guide}해주세요.
+
+${langLabel}로 5~7문장, 친근하고 희망적인 톤으로 작성하세요.
+
+매우 중요한 규칙:
+- 나이·인종·성별 추측이나 외모 평가(잘생김/못생김 등)는 절대 하지 마세요. 전통 상학(相學)의 상징적 해석에만 집중하세요.
+- 건강·질병에 대한 의학적 진단이나 단정은 절대 하지 마세요.
+- "단명한다", "불행하다" 같은 단정적·부정적 예언은 하지 말고, 모든 해석을 태도와 행동으로 바꿀 수 있는 조언으로 표현하세요.
+- 사진 속 인물을 특정하거나 개인정보를 추측하지 마세요.
+- 사진에 얼굴(또는 손)이 명확히 보이지 않으면, 억지로 해석하지 말고 다시 촬영을 요청하는 안내만 해주세요.
+
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          contents:[{ parts:[
+            { text: prompt },
+            { inline_data: { mime_type: 'image/jpeg', data: b64 } }
+          ]}],
+          generationConfig:{ temperature:0.7 },
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+          ],
+        }) }
+    );
+    const data = await resp.json();
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!reading) {
+      // 세이프티 필터 등으로 응답이 비면 토큰 환불
+      const refundId = `photo_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'photo_reading_refund', 0, 2, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '사진을 분석하지 못했습니다. 다른 사진으로 다시 시도해 주세요. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    // 저장 (마이페이지에서 다시 볼 수 있도록 이미지 + 결과 보관) — 용량 관리를 위해 사용자당 최대 20개만 유지
+    const insertResult = await env.DB.prepare(
+      `INSERT INTO photo_readings (user_email, type, image_b64, reading) VALUES (?, ?, ?, ?)`
+    ).bind(email, type, b64, reading).run();
+    const readingId = insertResult.meta?.last_row_id;
+    env.DB.prepare(
+      `SELECT id FROM photo_readings WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 20`
+    ).bind(email).all().then(({ results }) => {
+      if (results && results.length > 0) {
+        return env.DB.prepare(`DELETE FROM photo_readings WHERE user_email = ? AND id < ?`).bind(email, results[0].id).run();
+      }
+    }).catch(() => {});
+
+    return cors(JSON.stringify({ success:true, id: readingId, type, reading, remaining: remainingTokens }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// 저장된 관상·손금 기록 조회 (최신순, 페이징) — 마이페이지 갤러리용
+async function handleGetPhotoReadings(request, env) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return cors(JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
+  }
+  const idToken = authHeader.slice(7);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) {
+    return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '10', 10), 30);
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT id, type, image_b64, reading, created_at
+      FROM photo_readings
+      WHERE user_email = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(email, limit, offset).all();
+
+    const items = results.map(row => ({
+      id: row.id, type: row.type, image: row.image_b64, reading: row.reading, createdAt: row.created_at,
+    }));
+
+    return cors(JSON.stringify({ ok: true, items, count: items.length }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '기록 조회에 실패했습니다.' } }), 500);
+  }
+}
+
+// 저장된 관상·손금 기록 삭제 (사진은 민감정보이므로 사용자가 직접 지울 수 있게)
+async function handleDeletePhotoReading(request, env) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return cors(JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
+  }
+  const idToken = authHeader.slice(7);
+  const email = await getEmailFromToken(idToken, env);
+  if (!email) {
+    return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  }
+  const url = new URL(request.url);
+  const id = parseInt(url.searchParams.get('id') || '', 10);
+  if (!id) return cors(JSON.stringify({ error: { message: 'id가 필요합니다.' } }), 400);
+
+  try {
+    await env.DB.prepare(`DELETE FROM photo_readings WHERE id = ? AND user_email = ?`).bind(id, email).run();
+    return cors(JSON.stringify({ ok: true }), 200);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: '삭제에 실패했습니다.' } }), 500);
   }
 }
 

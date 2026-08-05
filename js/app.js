@@ -3106,6 +3106,11 @@ function _syncDrawerLangs() {
   _t('drTxtLucky',   t.drLuckyTitle);  _t('drSubLucky', t.drLuckySub);
   _t('drTxtType',    t.drTypeTitle);   _t('drSubType', t.drTypeSub);
   _t('drTxtFortune', t.drFortuneTitle); _t('drSubFortune', t.drFortuneSub);
+  _t('drTxtIching',    t.drIchingTitle);    _t('drSubIching', t.drIchingSub);
+  _t('drTxtNumerology', t.drNumerologyTitle); _t('drSubNumerology', t.drNumerologySub);
+  _t('drTxtTojeong',   t.drTojeongTitle);   _t('drSubTojeong', t.drTojeongSub);
+  _t('drTxtPhoto',    t.drPhotoTitle);      _t('drSubPhoto', t.drPhotoSub);
+  _t('photoGalleryBtnText', t.photoGalleryTitle);
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -4839,6 +4844,421 @@ function _fortuneTopicBack() {
   const resultEl = document.getElementById('fortuneTopicResult');
   if (grid) grid.style.display = '';
   if (resultEl) { resultEl.style.display = 'none'; resultEl.innerHTML = ''; }
+}
+
+// ════════════════════════════════════════════
+//  주역(周易) 괘 풀이 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+function openIching() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:400px;padding:28px 22px;text-align:center">
+      <div class="modal-title">🀄 ${t.ichingTitle || '주역 괘 풀이'}</div>
+      <textarea id="ichingQuestion" placeholder="${t.ichingAskPlaceholder || '궁금한 것을 적어보세요 (선택)'}" maxlength="200" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text);font-size:0.9rem;box-sizing:border-box;min-height:64px;resize:vertical"></textarea>
+      <button class="fif-submit" style="width:100%;margin-top:14px;padding:12px" id="ichingCastBtn" onclick="_ichingCast()">${t.ichingCastBtn || '괘 뽑기'}</button>
+      <div id="ichingResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function _ichingCast() {
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const btn = document.getElementById('ichingCastBtn');
+  const question = (document.getElementById('ichingQuestion')?.value || '').trim();
+  const resultEl = document.getElementById('ichingResult');
+  if (!btn || !resultEl) return;
+  btn.disabled = true;
+  btn.textContent = t.ichingCasting || '괘를 뽑는 중...';
+  resultEl.style.display = '';
+  resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.ichingCasting || '괘를 뽑는 중...'}</div>`;
+
+  const started = Date.now();
+  const MIN_MS = 1800;
+  try {
+    const res = await fetch('/api/iching', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, question })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      btn.disabled = false; btn.textContent = t.ichingCastBtn || '괘 뽑기';
+      return;
+    }
+    // 괘 시각화 (위에서 아래로 그리는 관례에 맞춰 배열을 뒤집어 표시)
+    const barsHtml = [...data.lines].reverse().map(l => `
+      <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin:3px 0">
+        ${l.yang
+          ? `<div style="width:70px;height:8px;background:var(--gold);border-radius:2px"></div>`
+          : `<div style="width:70px;height:8px;display:flex;gap:10px"><div style="flex:1;background:var(--gold);border-radius:2px"></div><div style="flex:1;background:var(--gold);border-radius:2px"></div></div>`}
+        ${l.changing ? `<span style="font-size:0.65rem;color:var(--text-dim)">${t.ichingChanging || '변효'}</span>` : ''}
+      </div>`).join('');
+    document.getElementById('ichingQuestion')?.remove();
+    btn.style.display = 'none';
+    resultEl.innerHTML = `
+      <div style="margin-bottom:14px">${barsHtml}</div>
+      <div class="detail-area-card"><div class="detail-area-body" id="ichingReadingBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+    `;
+    const bodyEl = document.getElementById('ichingReadingBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+  } catch (e) {
+    resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
+    btn.disabled = false; btn.textContent = t.ichingCastBtn || '괘 뽑기';
+  }
+}
+
+// ════════════════════════════════════════════
+//  수비학(數秘學) 라이프패스 넘버 (재미 콘텐츠, 1토큰)
+// ════════════════════════════════════════════
+async function openNumerology() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.numerologyNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const lang = getLang();
+  const birth = { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🔢 ${t.numerologyTitle || '라이프패스 넘버'}</div>
+      <div id="numerologyStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.numerologyLoading || '숫자를 계산하는 중...'}</div>
+      <div id="numerologyResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/numerology', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, birth })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('numerologyStatus');
+    const resultEl = document.getElementById('numerologyResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.6rem">${data.lifePath}</div>
+        <div style="text-align:center;font-size:0.78rem;color:var(--text-dim);margin-bottom:10px">${t.numerologyYourNumber || '당신의 라이프패스 넘버'}</div>
+        <div class="detail-area-card"><div class="detail-area-body" id="numerologyReadingBody"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('numerologyReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('numerologyStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  토정비결풍 신년운세 (재미 콘텐츠, 2토큰)
+// ════════════════════════════════════════════
+async function openTojeong() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.tojeongNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const lang = getLang();
+  const birth = { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour||'' };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:28px 22px;text-align:center;max-height:80vh;overflow-y:auto">
+      <div class="modal-title">🧧 ${t.tojeongTitle || '토정비결풍 신년운세'}</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);margin-top:8px;opacity:0.85">${t.tojeongNotice || ''}</div>
+      <div id="tojeongStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.tojeongLoading || '한 해의 신수를 살펴보는 중...'}</div>
+      <div id="tojeongResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 2000;
+  try {
+    const res = await fetch('/api/tojeong', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, birth })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('tojeongStatus');
+    const resultEl = document.getElementById('tojeongResult');
+    if (!data.success) {
+      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (resultEl) {
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div class="detail-area-card"><div class="detail-area-body" id="tojeongReadingBody"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const bodyEl = document.getElementById('tojeongReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('tojeongStatus');
+    if (statusEl) statusEl.textContent = '오류가 발생했습니다.';
+  }
+}
+
+// ════════════════════════════════════════════
+//  관상·손금 사진 분석 (재미 콘텐츠, 2토큰)
+// ════════════════════════════════════════════
+let _photoReadingType = null;
+let _photoReadingDataUrl = null;
+
+function openPhotoReading() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  _photoReadingType = null;
+  _photoReadingDataUrl = null;
+  const overlay = document.createElement('div');
+  overlay.id = 'photoReadingOverlay';
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:400px;padding:28px 22px;text-align:center">
+      <div class="modal-title">🖐️ ${t.photoModalTitle || '관상·손금 보기'}</div>
+      <div style="font-size:0.85rem;color:var(--text-dim);margin:14px 0">${t.photoPickType || '어떤 것을 볼까요?'}</div>
+      <div style="display:flex;gap:10px">
+        <button class="fortune-topic-btn" style="flex:1" onclick="_photoReadingPickType('face')">
+          <span class="fortune-topic-icon">🙂</span><span class="fortune-topic-label">${t.photoTypeFace || '관상'}</span>
+        </button>
+        <button class="fortune-topic-btn" style="flex:1" onclick="_photoReadingPickType('palm')">
+          <span class="fortune-topic-icon">🖐️</span><span class="fortune-topic-label">${t.photoTypePalm || '손금'}</span>
+        </button>
+      </div>
+      <div id="photoReadingBody" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function _photoReadingPickType(type) {
+  _photoReadingType = type;
+  _photoReadingDataUrl = null;
+  const t = getT();
+  const box = document.querySelector('#photoReadingOverlay .modal-box');
+  if (!box) return;
+  box.innerHTML = `
+    <div class="modal-title">${type === 'face' ? '🙂' : '🖐️'} ${t[type === 'face' ? 'photoTypeFace' : 'photoTypePalm']}</div>
+    <div style="font-size:0.7rem;color:var(--text-dim);margin:12px 0;opacity:0.85">${t.photoUploadNotice || ''}</div>
+    <div id="photoPreviewWrap" style="margin:12px 0"></div>
+    <input type="file" id="photoFileInput" accept="image/*" capture="environment" style="display:none" onchange="_photoReadingFileChange(event)">
+    <button class="fif-submit" style="width:100%;padding:12px" id="photoChooseBtn" onclick="document.getElementById('photoFileInput').click()">${t.photoChooseFile || '사진 선택'}</button>
+    <button class="fif-submit" style="width:100%;padding:12px;margin-top:8px;display:none;opacity:0.5;pointer-events:none" id="photoSubmitBtn" onclick="_photoReadingSubmit()">${t.photoSubmitBtn || '분석 시작'}</button>
+    <div id="photoReadingBody" style="display:none;text-align:left;margin-top:18px"></div>
+  `;
+}
+
+function _photoReadingFileChange(evt) {
+  const file = evt.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      // 클라이언트에서 리사이즈(최대 640px) + JPEG 압축 후 전송 — 업로드 용량·비용 절감
+      const MAX_DIM = 640;
+      let { width, height } = img;
+      if (width > height && width > MAX_DIM) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+      else if (height > MAX_DIM) { width = Math.round(width * MAX_DIM / height); height = MAX_DIM; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      _photoReadingDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+
+      const t = getT();
+      const previewWrap = document.getElementById('photoPreviewWrap');
+      if (previewWrap) previewWrap.innerHTML = `<img src="${_photoReadingDataUrl}" style="max-width:100%;max-height:220px;border-radius:12px;border:1px solid var(--border)">`;
+      const chooseBtn = document.getElementById('photoChooseBtn');
+      if (chooseBtn) chooseBtn.textContent = t.photoRetake || '다시 선택';
+      const submitBtn = document.getElementById('photoSubmitBtn');
+      if (submitBtn) { submitBtn.style.display = ''; submitBtn.style.opacity = '1'; submitBtn.style.pointerEvents = 'auto'; }
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function _photoReadingSubmit() {
+  if (!_photoReadingDataUrl || !_photoReadingType) return;
+  const t = getT();
+  const lang = getLang();
+  const token = getGoogleIdToken();
+  const box = document.querySelector('#photoReadingOverlay .modal-box');
+  if (!box) return;
+  const submitBtn = document.getElementById('photoSubmitBtn');
+  const chooseBtn = document.getElementById('photoChooseBtn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = t.photoAnalyzing || '사진을 분석하는 중...'; }
+  if (chooseBtn) chooseBtn.style.display = 'none';
+
+  const bodyEl = document.getElementById('photoReadingBody');
+  if (bodyEl) {
+    bodyEl.style.display = '';
+    bodyEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.photoAnalyzing || '사진을 분석하는 중...'}</div>`;
+  }
+
+  const started = Date.now();
+  const MIN_MS = 2000;
+  try {
+    const res = await fetch('/api/photo-reading', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, type: _photoReadingType, image: _photoReadingDataUrl })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      if (bodyEl) bodyEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t.photoSubmitBtn || '분석 시작'; }
+      if (chooseBtn) chooseBtn.style.display = '';
+      return;
+    }
+    document.getElementById('photoFileInput')?.remove();
+    if (submitBtn) submitBtn.remove();
+    if (chooseBtn) chooseBtn.remove();
+    if (bodyEl) {
+      bodyEl.innerHTML = `
+        <div class="detail-area-card"><div class="detail-area-body" id="photoReadingText"></div></div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      `;
+      const textEl = document.getElementById('photoReadingText');
+      if (textEl) revealSentences(textEl, data.reading, lang, { scrollEl: bodyEl, stagger: 0 });
+    }
+  } catch (e) {
+    if (bodyEl) bodyEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">오류가 발생했습니다.</div>`;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t.photoSubmitBtn || '분석 시작'; }
+    if (chooseBtn) chooseBtn.style.display = '';
+  }
+}
+
+// 마이페이지 — 저장된 관상·손금 기록 갤러리
+async function showPhotoGallery() {
+  const token = getGoogleIdToken();
+  if (!token) { showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.'); return; }
+  const t = getT();
+  const modal = document.createElement('div');
+  modal.id = 'photo-gallery-modal';
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8); z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; animation: fadeIn 0.3s ease;
+  `;
+  modal.innerHTML = `
+    <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">🖐️ ${t.photoGalleryTitle || '관상·손금 기록'}</div>
+        <button onclick="document.getElementById('photo-gallery-modal').remove()" style="background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; padding: 0; width: 32px; height: 32px;">×</button>
+      </div>
+      <div id="photo-gallery-content" style="flex: 1; overflow-y: auto; padding: 20px;">
+        <div style="text-align: center; padding: 40px; color: var(--text-dim);"><div style="font-size: 2rem; margin-bottom: 12px;">⏳</div></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  try {
+    const res = await fetch('/api/photo-readings?limit=20', { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    const content = document.getElementById('photo-gallery-content');
+    if (!data.ok || !data.items || data.items.length === 0) {
+      content.innerHTML = `<div style="text-align: center; padding: 60px 20px; color: var(--text-dim);"><div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;">🖐️</div><div>${t.photoGalleryEmpty || '아직 기록이 없습니다'}</div></div>`;
+      return;
+    }
+    content.innerHTML = data.items.map(item => {
+      const date = new Date(item.createdAt * 1000);
+      const dateStr = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}`;
+      const typeLabel = t[item.type === 'face' ? 'photoTypeFace' : 'photoTypePalm'] || item.type;
+      return `
+        <div style="display:flex;gap:12px;background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+          <img src="${item.image}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:start">
+              <div style="font-size:0.85rem;color:var(--gold)">${item.type === 'face' ? '🙂' : '🖐️'} ${typeLabel} · ${dateStr}</div>
+              <button onclick="_deletePhotoReading(${item.id})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.75rem">✕</button>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-dim);margin-top:4px;white-space:pre-wrap;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${item.reading}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    const content = document.getElementById('photo-gallery-content');
+    if (content) content.innerHTML = `<div style="text-align: center; padding: 60px 20px; color: #e05a4a;">⚠️ 기록을 불러오는데 실패했습니다</div>`;
+  }
+}
+
+async function _deletePhotoReading(id) {
+  const t = getT();
+  if (!confirm(t.photoDeleteConfirm || '이 기록을 삭제할까요?')) return;
+  const token = getGoogleIdToken();
+  try {
+    await fetch(`/api/photo-reading?id=${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+    showToast(t.photoDeleted || '삭제되었습니다');
+    document.getElementById('photo-gallery-modal')?.remove();
+    showPhotoGallery();
+  } catch (e) {}
 }
 
 // ════════════════════════════════════════════
