@@ -997,7 +997,7 @@ async function handleGeminiChat(request, env) {
     if (lang === 'zh') langInstruct = '请用简体中文回答。';
     if (lang === 'ja') langInstruct = '必ず日本語でお答えください。';
 
-    const basePrompt = `Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]} · Secondary: ${on[il.jo]}\n${langInstruct}\nRules: Use "energy reading / flow / prescription" — never "fortune-telling / fate / divination".\nNo definitive predictions. Frame negatives as areas for balance. No markdown bold. End with ONE tag: #木 #火 #土 #金 or #水\n\nHANJA RULE (CRITICAL): When writing the reading in Korean, if you use any Chinese character or difficult Sino-Korean term, you MUST immediately follow it with its meaning in plain Korean in parentheses. Examples: 甲木(갑목, 강한 나무 기운), 天干(천간, 하늘의 기운 10가지), 地支(지지, 땅의 기운 12가지), 庚寅(경인, 쇠와 호랑이의 기운), 相生(상생, 서로 도움), 相剋(상극, 서로 충돌). Simple everyday words do NOT need explanation. Speak warmly and naturally — like a kind friend, not an academic.`;
+    const basePrompt = `Ilchin today: ${CG[il.ci]}${JJ[il.ji]} · Primary Ohaeng: ${on[il.o]} · Secondary: ${on[il.jo]}\n${langInstruct}\nRules: Use "energy reading / flow / prescription" — never "fortune-telling / fate / divination".\nNo definitive predictions. Frame negatives as areas for balance. No markdown bold, no asterisks (*), no em dashes (—) — connect sentences naturally with commas and everyday connectors instead, like a person speaking. End with ONE tag: #木 #火 #土 #金 or #水\n\nHANJA RULE (CRITICAL): When writing the reading in Korean, if you use any Chinese character or difficult Sino-Korean term, you MUST immediately follow it with its meaning in plain Korean in parentheses. Examples: 甲木(갑목, 강한 나무 기운), 天干(천간, 하늘의 기운 10가지), 地支(지지, 땅의 기운 12가지), 庚寅(경인, 쇠와 호랑이의 기운), 相生(상생, 서로 도움), 相剋(상극, 서로 충돌). Simple everyday words do NOT need explanation. Speak warmly and naturally — like a kind friend, not an academic.`;
 
     const fallbackPrompt = `\nCritical Safe Guide: If the user asks general trivia, cooking, coding, or any topic completely unrelated to Saju, Ohaeng, and daily energy flow, DO NOT freeze or throw a safety block. Instead, kindly reply in the requested language that you are the Ohaeng Energy Master of M;Y 安, and gently guide them to ask about their spiritual energy reading or destiny elements.`;
 
@@ -2346,7 +2346,7 @@ async function handleDetailReading(request, env) {
 
 중요: 한자나 어려운 사주 용어(예: 甲木, 天干, 地支, 相生 등)를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요. 예) 甲木(갑목, 강한 나무 기운), 相生(상생, 서로 돕는 관계). 일상적인 쉬운 단어는 풀이 불필요.
 
-JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2417,7 +2417,7 @@ async function handleTarotDraw(request, env) {
 
 이 카드가 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 재미있게 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 카드여도 균형을 찾는 조언으로 전환해서 표현하세요.
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2508,7 +2508,7 @@ async function handleZodiacFortune(request, env) {
 
 띠와 별자리, 오늘의 오행 기운을 재미있게 엮어서 ${langLabel}로 3~4문장의 짧고 유쾌한 오늘의 운세를 알려주세요. 진지한 예언이 아니라 가볍게 웃으며 읽을 수 있는 톤으로, 마지막엔 오늘 실천하면 좋을 작은 팁 하나를 더해주세요.
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2627,7 +2627,7 @@ async function handleTypeCompat(request, env) {
 
 두 유형의 궁합을 ${langLabel}로 3~4문장, 가볍고 유쾌하게 풀어주세요. 두 사람이 함께하면 어떤 케미가 나는지, 서로에게 좋은 점이나 함께 하면 좋을 활동을 재미있게 알려주세요. 안 맞는 조합처럼 보여도 유쾌하게 표현하세요(예: "티격태격하지만 그게 매력!").
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2705,7 +2705,7 @@ async function handleFortuneTopic(request, env) {
 
 중요: 한자나 어려운 사주 용어를 쓸 경우 반드시 바로 옆에 괄호로 뜻을 써주세요.
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2783,7 +2783,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
 2) 변효가 있다면 변효를 반영한 지괘(之卦) 이름도 함께 밝혀주세요.
 3) 괘의 상징을 바탕으로 ${langLabel}로 4~6문장, 질문(또는 오늘의 흐름)에 대해 따뜻하고 구체적인 해석과 실천 조언을 주세요. 단정적 예언이 아니라 태도와 행동 중심으로 안내하세요.
 
-중요: 한자를 쓸 경우 바로 옆에 괄호로 한글 독음과 뜻을 써주세요. JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+중요: 한자를 쓸 경우 바로 옆에 괄호로 한글 독음과 뜻을 써주세요. JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2861,7 +2861,7 @@ async function handleNumerology(request, env) {
 
 라이프패스 넘버 ${lifePath}의 전통적인 수비학적 의미(성격·강점·인생 방향)를 ${langLabel}로 설명하고, 오늘의 기운과 엮어서 4~6문장으로 따뜻하고 구체적인 조언을 주세요. 단정적 예언이 아니라 태도와 행동 중심으로 안내하세요.
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -2929,13 +2929,13 @@ ${langLabel}로 아래 4개 섹션을 각각 2~3문장씩 작성하세요(섹션
 
 단정적 예언이 아니라 태도와 행동 중심으로, 따뜻하고 희망적인 톤으로 안내하세요. 한자나 어려운 사주 용어는 바로 옆에 괄호로 뜻을 써주세요.
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요(섹션 제목은 줄바꿈으로 구분).`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요(섹션 제목은 줄바꿈으로 구분). 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, maxOutputTokens: 2048 } }) }
+          generationConfig:{ temperature:0.8, maxOutputTokens: 4096, thinkingConfig:{ thinkingBudget: 0 } } }) }
     );
     const data = await resp.json();
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
@@ -3012,7 +3012,7 @@ ${langLabel}로 5~7문장, 친근하고 희망적인 톤으로 작성하세요.
 - 사진 속 인물을 특정하거나 개인정보를 추측하지 마세요.
 - 사진에 얼굴(또는 손)이 명확히 보이지 않으면, 억지로 해석하지 말고 다시 촬영을 요청하는 안내만 해주세요.
 
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요.`;
+JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -3020,7 +3020,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({
           contents:[{ parts:[
             { text: prompt },
-            { inline_data: { mime_type: 'image/jpeg', data: b64 } }
+            { inlineData: { mimeType: 'image/jpeg', data: b64 } }
           ]}],
           generationConfig:{ temperature:0.7 },
           safetySettings: [
@@ -3031,11 +3031,13 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
           ],
         }) }
     );
-    const data = await resp.json();
+    // Gemini 응답 파싱 — 형식이 예상과 다르거나(JSON 아님 등) 실패해도 아래에서 안전하게 처리
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
-    if (!reading) {
-      // 세이프티 필터 등으로 응답이 비면 토큰 환불
+    if (!resp.ok || !reading) {
+      // API 오류 또는 세이프티 필터 등으로 응답이 비면 토큰 환불
       const refundId = `photo_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await env.DB.prepare(
         `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
@@ -3045,17 +3047,23 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     }
 
     // 저장 (마이페이지에서 다시 볼 수 있도록 이미지 + 결과 보관) — 용량 관리를 위해 사용자당 최대 20개만 유지
-    const insertResult = await env.DB.prepare(
-      `INSERT INTO photo_readings (user_email, type, image_b64, reading) VALUES (?, ?, ?, ?)`
-    ).bind(email, type, b64, reading).run();
-    const readingId = insertResult.meta?.last_row_id;
-    env.DB.prepare(
-      `SELECT id FROM photo_readings WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 20`
-    ).bind(email).all().then(({ results }) => {
-      if (results && results.length > 0) {
-        return env.DB.prepare(`DELETE FROM photo_readings WHERE user_email = ? AND id < ?`).bind(email, results[0].id).run();
-      }
-    }).catch(() => {});
+    // 저장에 실패해도(용량/일시 오류 등) 이미 생성된 풀이는 그대로 사용자에게 돌려줌 — 결제·생성은 이미 끝난 뒤이므로
+    let readingId = null;
+    try {
+      const insertResult = await env.DB.prepare(
+        `INSERT INTO photo_readings (user_email, type, image_b64, reading) VALUES (?, ?, ?, ?)`
+      ).bind(email, type, b64, reading).run();
+      readingId = insertResult.meta?.last_row_id ?? null;
+      env.DB.prepare(
+        `SELECT id FROM photo_readings WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 20`
+      ).bind(email).all().then(({ results }) => {
+        if (results && results.length > 0) {
+          return env.DB.prepare(`DELETE FROM photo_readings WHERE user_email = ? AND id < ?`).bind(email, results[0].id).run();
+        }
+      }).catch(() => {});
+    } catch (e) {
+      console.error('[PHOTO READING SAVE]', e);
+    }
 
     return cors(JSON.stringify({ success:true, id: readingId, type, reading, remaining: remainingTokens }), 200);
   } catch(e) {
