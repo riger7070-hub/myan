@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, ActivityIndicator, BackHandler, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -44,6 +44,11 @@ export default function WebScreen() {
     }
     return false; // 기본 동작 (앱 종료)
   }, []);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', handleAndroidBack);
+    return () => sub.remove();
+  }, [handleAndroidBack]);
 
   // 웹 → 네이티브 메시지 수신
   const handleMessage = useCallback(async ({ nativeEvent }) => {
