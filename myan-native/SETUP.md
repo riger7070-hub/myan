@@ -27,12 +27,16 @@ npm install -g expo-cli
 안드로이드 네이티브 로그인은 앱 서명(패키지명 + SHA-1)이 **webClientId 와 같은 프로젝트**에
 Android 클라이언트로 등록돼 있어야 통과한다. 다른 프로젝트에 등록하면 `DEVELOPER_ERROR` 가 난다.
 
-1. SHA-1 지문 확인
-   ```bash
-   eas credentials --platform android   # Keystore → SHA-1 Fingerprint
+1. SHA-1 지문 확인 — EAS 업로드 키(2026-08-07 기준, 키스토어를 새로 만들지 않는 한 그대로):
    ```
+   1C:68:0A:F2:7A:38:80:64:FC:92:B0:80:FA:3D:80:EB:CB:E5:EF:4D
+   ```
+   다시 확인하려면 `eas credentials --platform android` (대화형 메뉴라 터미널에서 직접 실행해야 한다)
+   또는 https://expo.dev/accounts/myansik/projects/myan/credentials
+
    ※ Play Store 배포 시에는 **Play 앱 서명 키**의 SHA-1 도 따로 등록해야 한다
-   (Play Console → 설정 → 앱 서명). 안 하면 스토어에서 받은 앱만 로그인이 깨진다.
+   (Play Console → 설정 → 앱 서명). 구글이 업로드 키를 자기 키로 다시 서명하므로,
+   빠뜨리면 내부 테스트 APK 는 로그인되는데 스토어에서 받은 앱만 `DEVELOPER_ERROR` 가 난다.
 2. https://console.cloud.google.com → 프로젝트 **806789036860** 선택
    → API 및 서비스 → 사용자 인증 정보 → 만들기 → OAuth 2.0 클라이언트 ID → **Android**
    → 패키지 이름 `com.myan.app`, 위에서 얻은 SHA-1 입력
