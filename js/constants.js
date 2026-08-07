@@ -78,6 +78,57 @@ function moonPhaseLocal(date = new Date()) {
   };
 }
 
+// 수성 역행 — 서버 worker.js의 mercuryRetrograde()와 동일한 궤도요소·식.
+// ⚠ 둘 중 하나만 고치면 홈 배지와 운세 내용이 어긋난다. 반드시 함께 수정할 것.
+const _ORBIT_LOCAL = {
+  mercury: { a:0.38709927, e:0.20563593, I:7.00497902, L:252.25032350, lp:77.45779628, node:48.33076593,
+             da:0.00000037, de:0.00001906, dI:-0.00594749, dL:149472.67411175, dlp:0.16047689, dnode:-0.12534081 },
+  earth:   { a:1.00000261, e:0.01671123, I:-0.00001531, L:100.46457166, lp:102.93768193, node:0.0,
+             da:0.00000562, de:-0.00004392, dI:-0.01294668, dL:35999.37244981, dlp:0.32327364, dnode:0.0 },
+};
+function _helioXYLocal(p, T) {
+  const D = Math.PI / 180;
+  const a = p.a + p.da * T, e = p.e + p.de * T;
+  const I = (p.I + p.dI * T) * D, L = (p.L + p.dL * T) * D;
+  const lp = (p.lp + p.dlp * T) * D, node = (p.node + p.dnode * T) * D;
+  const w = lp - node;
+  let M = L - lp;
+  M = ((M + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  let E = M + e * Math.sin(M);
+  for (let i = 0; i < 10; i++) {
+    const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    E -= dE;
+    if (Math.abs(dE) < 1e-12) break;
+  }
+  const xv = a * (Math.cos(E) - e), yv = a * Math.sqrt(1 - e * e) * Math.sin(E);
+  const cw = Math.cos(w), sw = Math.sin(w), cn = Math.cos(node), sn = Math.sin(node), ci = Math.cos(I);
+  return {
+    x: (cw * cn - sw * sn * ci) * xv + (-sw * cn - cw * sn * ci) * yv,
+    y: (cw * sn + sw * cn * ci) * xv + (-sw * sn + cw * cn * ci) * yv,
+  };
+}
+function _mercuryLonLocal(date) {
+  const T = (date.getTime() / 86400000 + 2440587.5 - 2451545.0) / 36525;
+  const m = _helioXYLocal(_ORBIT_LOCAL.mercury, T), e = _helioXYLocal(_ORBIT_LOCAL.earth, T);
+  return Math.atan2(m.y - e.y, m.x - e.x);
+}
+function mercuryRetrogradeLocal(date = new Date()) {
+  const at = (d) => {
+    const a = _mercuryLonLocal(new Date(d.getTime() - 43200000));
+    const b = _mercuryLonLocal(new Date(d.getTime() + 43200000));
+    let x = b - a;
+    while (x > Math.PI) x -= 2 * Math.PI;
+    while (x < -Math.PI) x += 2 * Math.PI;
+    return x < 0;
+  };
+  if (!at(date)) return { retrograde: false };
+  for (let k = 1; k <= 30; k++) {
+    const d = new Date(date.getTime() + k * 86400000);
+    if (!at(d)) return { retrograde: true, endsAt: d.toISOString().slice(0, 10) };
+  }
+  return { retrograde: true, endsAt: null };
+}
+
 // 오늘의 운세 모음 — 키는 백엔드 worker.js의 FORTUNE_TOPICS와 맞출 것. 라벨은 locales.js의 fortuneTopicTitle에서.
 const FORTUNE_TOPICS = [
   { key:'crush',       icon:'💌' },

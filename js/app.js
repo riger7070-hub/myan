@@ -4763,7 +4763,7 @@ async function openZodiacFortune() {
       const animalSuffix = lang === 'ko' ? '띠' : '';
       resultEl.innerHTML = `
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${animalLabel}${animalSuffix} · ${zodiacLabel}</div>
-        ${data.moon ? `<div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:6px">${MOON_PHASE_ICONS[data.moon.index]} ${MOON_PHASE_NAMES[lang]?.[data.moon.index] || ''} · ${data.moon.illumination}%</div>` : ''}
+        ${data.moon ? `<div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:6px">${MOON_PHASE_ICONS[data.moon.index]} ${MOON_PHASE_NAMES[lang]?.[data.moon.index] || ''} · ${data.moon.illumination}%${data.mercury?.retrograde ? ` &nbsp;·&nbsp; <span style="color:#e08a7a">☿ ${t.mercuryRetro || '수성 역행'}</span>` : ''}</div>` : ''}
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="zodiacReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🐉",title:${JSON.stringify(animalLabel + animalSuffix + " · " + zodiacLabel)},filename:"myan-zodiac"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
@@ -5723,6 +5723,17 @@ function renderMoonToday() {
   const name = MOON_PHASE_NAMES[getLang()]?.[m.index] || MOON_PHASE_NAMES.ko[m.index];
   el.textContent = `${MOON_PHASE_ICONS[m.index]} ${name}`;
   el.title = `월령 ${m.age.toFixed(1)}일 · 밝기 ${Math.round(m.illumination * 100)}%`;
+
+  // 수성 역행은 1년에 3~4번, 각 3주뿐인 '사건'이라 그때만 배지를 띄운다.
+  // 평소에도 표시하면 정보가 아니라 잡음이 된다.
+  const badge = document.getElementById('mercuryBadge');
+  if (!badge || typeof mercuryRetrogradeLocal !== 'function') return;
+  const merc = mercuryRetrogradeLocal();
+  if (!merc.retrograde) { badge.style.display = 'none'; return; }
+  const t = getT();
+  badge.style.display = '';
+  badge.textContent = `☿ ${t.mercuryRetro || '수성 역행'}`;
+  badge.title = merc.endsAt ? `${merc.endsAt}까지` : '';
 }
 
 function renderHomeSections() {

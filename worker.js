@@ -59,6 +59,67 @@ function moonPhase(date = new Date()) {
 // 프롬프트에 넣을 한국어 표기 (AI가 각 언어로 번역해 설명한다)
 const MOON_PHASE_KO = ['삭(신월)', '초승달', '상현달', '차오르는 달', '보름달', '기우는 달', '하현달', '그믐달'];
 
+// ── 수성 역행 — 실제 궤도 계산 ──
+// 지구와 수성의 위치를 각각 구해 "지구에서 본 수성의 황경"이 줄어드는지로 판정한다.
+// 역행은 실제 후진이 아니라 두 행성의 공전 속도 차로 생기는 겉보기 현상이므로
+// 지구 위치를 함께 계산해야 한다.
+// JPL 근사 궤도요소(1800~2050 유효). js/constants.js의 클라이언트 구현과 값이 같아야 함.
+const _ORBIT = {
+  mercury: { a:0.38709927, e:0.20563593, I:7.00497902, L:252.25032350, lp:77.45779628, node:48.33076593,
+             da:0.00000037, de:0.00001906, dI:-0.00594749, dL:149472.67411175, dlp:0.16047689, dnode:-0.12534081 },
+  earth:   { a:1.00000261, e:0.01671123, I:-0.00001531, L:100.46457166, lp:102.93768193, node:0.0,
+             da:0.00000562, de:-0.00004392, dI:-0.01294668, dL:35999.37244981, dlp:0.32327364, dnode:0.0 },
+};
+
+// 궤도요소 → 황도면 직교좌표(태양 중심). 케플러 방정식은 뉴턴법으로 푼다.
+function _helioXY(p, T) {
+  const D = Math.PI / 180;
+  const a = p.a + p.da * T, e = p.e + p.de * T;
+  const I = (p.I + p.dI * T) * D, L = (p.L + p.dL * T) * D;
+  const lp = (p.lp + p.dlp * T) * D, node = (p.node + p.dnode * T) * D;
+  const w = lp - node;
+  let M = L - lp;
+  M = ((M + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  let E = M + e * Math.sin(M);
+  for (let i = 0; i < 10; i++) {
+    const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    E -= dE;
+    if (Math.abs(dE) < 1e-12) break;
+  }
+  const xv = a * (Math.cos(E) - e), yv = a * Math.sqrt(1 - e * e) * Math.sin(E);
+  const cw = Math.cos(w), sw = Math.sin(w), cn = Math.cos(node), sn = Math.sin(node), ci = Math.cos(I);
+  return {
+    x: (cw * cn - sw * sn * ci) * xv + (-sw * cn - cw * sn * ci) * yv,
+    y: (cw * sn + sw * cn * ci) * xv + (-sw * sn + cw * cn * ci) * yv,
+  };
+}
+
+// 지구에서 본 수성의 황경(rad)
+function _mercuryLon(date) {
+  const T = (date.getTime() / 86400000 + UNIX_EPOCH_JD - 2451545.0) / 36525;
+  const m = _helioXY(_ORBIT.mercury, T), e = _helioXY(_ORBIT.earth, T);
+  return Math.atan2(m.y - e.y, m.x - e.x);
+}
+
+function _isRetroAt(date) {
+  const a = _mercuryLon(new Date(date.getTime() - 43200000));
+  const b = _mercuryLon(new Date(date.getTime() + 43200000));
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;   // 0/360도 경계 넘어갈 때 부호가 뒤집히는 것 방지
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d < 0;
+}
+
+// 역행 중이면 종료 예정일까지 알려준다(최대 30일 앞까지 탐색 — 역행은 보통 20~24일)
+function mercuryRetrograde(date = new Date()) {
+  if (!_isRetroAt(date)) return { retrograde: false };
+  for (let k = 1; k <= 30; k++) {
+    const d = new Date(date.getTime() + k * 86400000);
+    if (!_isRetroAt(d)) return { retrograde: true, endsAt: d.toISOString().slice(0, 10) };
+  }
+  return { retrograde: true, endsAt: null };
+}
+
 // 한글 시진명 → 지지(시지) 매핑
 const SIJI_TO_JJ = {
   '자시':'子','축시':'丑','인시':'寅','묘시':'卯','진시':'辰','사시':'巳',
@@ -2368,12 +2429,19 @@ async function handleZodiacFortune(request, env) {
     const moonName = MOON_PHASE_KO[moon.index];
     const moonPct = Math.round(moon.illumination * 100);
 
+    // 수성 역행은 '사건'이라 역행 중일 때만 프롬프트에 넣는다.
+    // 평소에도 "순행 중"이라 알리면 매번 언급돼 해석이 지저분해진다.
+    const merc = mercuryRetrograde();
+    const mercBlock = merc.retrograde
+      ? `\n수성 역행: 진행 중${merc.endsAt ? ` (${merc.endsAt}까지)` : ''} — 소통·계약·이동에서 오해나 지연이 생기기 쉬운 시기로 알려져 있습니다. 다만 겁주지 말고, 확인하고 여유를 두면 무난하다는 톤으로 짧게 언급해 주세요.`
+      : '';
+
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
     const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 이 사람은 "${animal}띠"이고 서양 별자리는 "${zodiac}"입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.
 
-[오늘 실제 하늘의 달 — 천문 계산값이니 그대로 사용하고 임의로 바꾸지 마세요]
-달의 위상: ${moonName} (월령 ${moon.age.toFixed(1)}일, 밝기 약 ${moonPct}%)
+[오늘 실제 하늘 — 천문 계산값이니 그대로 사용하고 임의로 바꾸지 마세요]
+달의 위상: ${moonName} (월령 ${moon.age.toFixed(1)}일, 밝기 약 ${moonPct}%)${mercBlock}
 
 띠와 별자리, 오늘의 오행 기운, 그리고 위 달의 위상을 재미있게 엮어서 ${langLabel}로 3~4문장의 짧고 유쾌한 오늘의 운세를 알려주세요. 달이 차오르는 중이면 시작·확장의 기운으로, 기우는 중이면 정리·마무리의 기운으로 자연스럽게 풀어주세요. 진지한 예언이 아니라 가볍게 웃으며 읽을 수 있는 톤으로, 마지막엔 오늘 실천하면 좋을 작은 팁 하나를 더해주세요.
 
@@ -2403,6 +2471,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     return cors(JSON.stringify({
       success:true, animal, animalIndex, zodiac, zodiacIndex, reading,
       moon: { index: moon.index, illumination: moonPct }, // 프론트는 index로 자국어 이름을 찾는다
+      mercury: merc,
       remaining: remainingTokens
     }), 200);
   } catch(e) {
