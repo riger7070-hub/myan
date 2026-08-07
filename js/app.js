@@ -4334,10 +4334,10 @@ function showSajuInput(m) {
   const title = isDuo ? '💞 우리의 조화' : '☯ 나만의 리딩';
   const sub = isDuo ? '두 분의 생년월일·생시를 입력해 주세요' : '생년월일과 태어난 시간을 입력해 주세요';
   cw.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:36px 20px">
       <div style="max-width:580px;width:100%;margin:0 auto">
         <div style="text-align:center;margin-bottom:12px;font-size:1.4rem;color:var(--gold);letter-spacing:1px">${title}</div>
-        <div style="text-align:center;margin-bottom:24px;font-size:0.95rem;color:var(--text-dim)">${sub}</div>
+        <div style="text-align:center;margin-bottom:28px;font-size:0.95rem;color:var(--text-dim)">${sub}</div>
         ${isDuo ? _personFieldsHtml(1,'첫 번째 분') + _personFieldsHtml(2,'두 번째 분') : _personFieldsHtml(1,'')}
         <div style="font-size:0.8rem;color:var(--text-dim);text-align:center;margin:8px 0 16px">태어난 시간을 모르시면 비워두셔도 됩니다</div>
         <button onclick="submitSajuInput('${m}')" class="fif-submit" style="width:100%;padding:14px;font-size:1rem" id="sjSubmitBtn">간단 풀이 보기 ›</button>
@@ -4430,14 +4430,14 @@ function renderSajuResult(data, m) {
     <button class="rx-detail-btn" onclick="_detailFromSaju('${today}','${ohaeng}','${c.key}')">${c.icon} ${t.detailCardTitle?.[c.key] || c.key}</button>`).join('') + `
     <button class="rx-share-btn" onclick="shareOhaengCard('${ohaeng}')">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[getLang()] || '공유하기'}</button>`;
   cw.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:20px">
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100%;padding:36px 20px">
       <div style="max-width:640px;width:100%;margin:0 auto">
-        <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:20px">✨ 간단 풀이</div>
+        <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:26px">✨ 간단 풀이</div>
         ${_ohaengGaugeHtml(data.ohaeng||{})}
-        <div id="sjReadingBody" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px"></div>
-        <div style="font-size:0.72rem;color:var(--text-dim);margin:16px 0 6px">${t.detailTitle||'상세 풀이'} (토큰 2)</div>
+        <div id="sjReadingBody" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:32px 24px;margin-top:22px"></div>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin:26px 0 10px">${t.detailTitle||'상세 풀이'} (토큰 2)</div>
         <div id="sjDetailBtns" style="display:flex;gap:8px;flex-wrap:wrap;opacity:0.4;pointer-events:none;transition:opacity .3s">${detailBtnsHtml}</div>
-        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
+        <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
       </div>
     </div>`;
   cw.scrollTop = 0;

@@ -568,7 +568,7 @@ body::-webkit-scrollbar {
 
 .bubble {
   max-width: 92%;
-  padding: 16px 20px;
+  padding: 22px 20px;
   font-size: 0.95rem;
   line-height: 1.9;
   border-radius: 18px;
@@ -3186,19 +3186,19 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
+  padding: 24px 18px;
+  margin-bottom: 14px;
 }
 .detail-area-title {
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--accent);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .detail-area-body {
   font-size: 0.83rem;
   color: var(--text);
-  line-height: 1.7;
+  line-height: 1.85;
 }
 
 /* ════════════════════════════════════════
@@ -4208,12 +4208,14 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 /* 문장 단위 순차 공개 */
 .reveal-sentence {
   display: block;
-  margin: 0 0 8px;
+  margin: 0 0 15px;
   font-size: 0.95rem;
-  line-height: 1.85;
+  line-height: 1.9;
   opacity: 0;
   animation: fadeIn .6s ease forwards;
 }
+/* 마지막 문장의 아래 여백은 컨테이너 padding에 맡겨 위아래 간격을 대칭으로 유지 */
+.reveal-sentence:last-child { margin-bottom: 0; }
 
 /* ════════════════════════════════════════
    온보딩 튜토리얼
