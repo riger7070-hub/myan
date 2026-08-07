@@ -1656,7 +1656,23 @@ async function _confirmTossPayment({ paymentKey, orderId, amount }) {
 }
 
 // ── 토스페이먼츠 직접 결제창 호출 ──
-const TOSS_CLIENT_KEY = window.ENV?.TOSS_CLIENT_KEY || 'test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb';
+// 클라이언트 키는 worker.js가 index.html에 주입한다(window.ENV).
+// 주입 실패 시 테스트 키로 조용히 넘어가면 정식 오픈 후 위험하다.
+// 결제창은 정상적으로 뜨는데 실제 결제가 안 되거나, 서버의 라이브 시크릿과
+// 짝이 맞지 않아 승인 단계에서 실패한다. 그래서 폴백 없이 명시적으로 막는다.
+const TOSS_CLIENT_KEY = window.ENV?.TOSS_CLIENT_KEY || '';
+
+// 결제 시작 전 키가 있는지 확인. 없으면 결제창을 띄우지 않는다.
+function _ensureTossKey() {
+  if (TOSS_CLIENT_KEY) return true;
+  showToast({
+    ko: '결제 설정을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.',
+    en: 'Could not load payment settings. Please refresh and try again.',
+    zh: '无法加载支付设置，请刷新后重试。',
+    ja: '決済設定を読み込めませんでした。更新して再度お試しください。',
+  }[getLang()] || '결제 설정을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
+  return false;
+}
 
 async function buyToken(pkg) {
   const user = getUser();
@@ -1674,6 +1690,8 @@ async function buyToken(pkg) {
   if (typeof Analytics !== 'undefined') {
     Analytics.trackPayment('start', selected.amount, selected.tokens);
   }
+
+  if (!_ensureTossKey()) return;
 
   const orderId = `myan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
 
@@ -1714,6 +1732,8 @@ async function subscribeMembership(plan) {
   const info = SUB_PLANS_FE[plan];
   if (!info) return;
   if (typeof Analytics !== 'undefined') Analytics.trackPayment('start', info.amount, info.tokens);
+
+  if (!_ensureTossKey()) return;
 
   sessionStorage.setItem('myan_pending_sub_plan', plan);
   try {
