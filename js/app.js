@@ -1334,6 +1334,57 @@ document.getElementById('backBtn').addEventListener('click', () => {
 const SHEETS_EP  = window.ENV?.SHEETS_ENDPOINT || 'https://script.google.com/macros/s/AKfycbyJEDLW1Ohx9rQYrkSxFUNNl8LmRtUK-WkXg4sgtLBLfpPJcYfpXMJXQH9Ya2k36j3l/exec';
 const GOOGLE_CID = window.ENV?.GOOGLE_CLIENT_ID || '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleusercontent.com';
 
+/* ── 네이티브 앱(WebView) 브릿지 ──
+   myan-native/app/index.jsx 가 페이지 로드 전에 주입하는 값들과 짝을 이룬다.
+     주입되는 것: window._isNativeApp, window.__nativeGoogleToken(idToken), window.__nativeGoogleError(msg)
+     앱이 받는 메시지: 'GOOGLE_SIGNIN_REQUEST' | 'GOOGLE_SIGNOUT_REQUEST' | 'OPEN_EXTERNAL:<url>'
+   안드로이드 WebView 에서는 구글이 웹 로그인(GIS)을 차단하므로 로그인은 네이티브 SDK 에 위임해야 한다. */
+// 앱 여부는 앱이 직접 심어준 플래그만 보고 판단한다. ReactNativeWebView 객체 유무를 여기서 함께
+// 따지면, 주입 순서가 어긋난 순간에 GIS 버튼으로 폴백해버리는데 그건 앱에서 어차피 막혀 있다.
+const IS_NATIVE_APP = !!window._isNativeApp;
+
+function _nativePost(msg) {
+  try { window.ReactNativeWebView.postMessage(msg); return true; }
+  catch (e) { console.warn('[native bridge] postMessage 실패:', e); return false; }
+}
+
+// 새 창으로 열어야 하는 외부 링크(공유·카카오 상담 등).
+// 앱 안에서는 window.open 이 보이지 않는 WebView 만 만들고 끝나므로 네이티브에 넘겨 외부 브라우저로 연다.
+function openExternal(url, target) {
+  if (IS_NATIVE_APP && _nativePost('OPEN_EXTERNAL:' + url)) return;
+  window.open(url, target || '_blank', 'noopener,noreferrer');
+}
+
+let _nativeSignInBusy = false;
+let _nativeSignInTimer = null;
+function _nativeGoogleSignIn() {
+  if (_nativeSignInBusy) return;
+  _nativeSignInBusy = true;
+  // 구형 앱 빌드 등 응답이 영영 안 오는 경우에도 버튼이 영구히 잠기지 않도록 해제 타이머를 건다.
+  _nativeSignInTimer = setTimeout(() => { _nativeSignInBusy = false; }, 90000);
+  if (!_nativePost('GOOGLE_SIGNIN_REQUEST')) {
+    _nativeSignInBusy = false;
+    clearTimeout(_nativeSignInTimer);
+    showToast(getT().googleSignInFail);
+  }
+}
+
+window.addEventListener('nativeGoogleSignIn', (ev) => {
+  _nativeSignInBusy = false;
+  clearTimeout(_nativeSignInTimer);
+  const d = ev.detail || {};
+  if (d.idToken) {
+    // 네이티브가 준 것도 구글 ID 토큰이라 웹 GIS 응답과 형태가 같다 → 기존 경로 그대로 재사용
+    handleGoogleCredential({ credential: d.idToken });
+    return;
+  }
+  // 사용자가 계정 선택창을 닫은 것은 오류가 아니므로 조용히 넘어간다
+  const msg = String(d.error || '');
+  if (/cancel|SIGN_IN_CANCELLED|-5\b/i.test(msg)) return;
+  console.warn('[native bridge] 구글 로그인 실패:', msg);
+  showToast(getT().googleSignInFail);
+});
+
 
 let selGender = '';
 let selGenderMp = '';
@@ -1494,6 +1545,9 @@ function _silentTokenRefresh() {
   if (localStorage.getItem('myan_signed_out') === 'true') return;
   if (!isLoggedIn()) return;
   if (_silentRefreshActive) return;
+  // 앱에서는 GIS 무음 갱신이 불가능하다. 정상 경로에선 30일 세션 토큰을 받아 이 타이머 자체가 해제되고,
+  // 세션 교환이 실패해 여기까지 온 경우엔 401 → _reauthExpired 로 로그인 화면(네이티브 버튼)에서 복구한다.
+  if (IS_NATIVE_APP) return;
   _silentRefreshActive = true;
   try {
     _ensureGisInit(); // GIS 초기화 보장
@@ -2157,6 +2211,7 @@ async function _checkAdminBadge() {
 function goSignup() {
   showScreen('SIGNUP');
   renderSignup();
+  if (IS_NATIVE_APP) { _renderNativeGoogleBtn('googleBtnEl', getT().googleSignUp); return; }
   // 구글 버튼 초기화 (스크립트 로드 대기)
   const tryInit = (attempts) => {
     if (typeof google !== 'undefined' && google.accounts && google.accounts.id && GOOGLE_CID) {
@@ -2178,6 +2233,7 @@ function goSignup() {
 let _gisInited = false;
 function _ensureGisInit() {
   if (_gisInited) return;
+  if (IS_NATIVE_APP) return; // 앱에서는 네이티브 SDK 로 로그인한다
   // Google API 로드 체크
   if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
     console.warn('Google Identity Services not available');
@@ -2205,6 +2261,7 @@ function _tryAutoLogin(attempts) {
   if (isLoggedIn()) return;
   if (localStorage.getItem('myan_signed_out') === 'true') return;
   if (!GOOGLE_CID) return;
+  if (IS_NATIVE_APP) return; // One Tap 은 WebView 에서 동작하지 않음 — 사용자가 버튼을 누르면 네이티브로 간다
   if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
     if (attempts > 0) setTimeout(() => _tryAutoLogin(attempts - 1), 300);
     return;
@@ -2707,6 +2764,7 @@ function _signOut() {
   updateAllTokenDisplays();
   try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   try { google.accounts.id.cancel(); } catch(e) {}
+  if (IS_NATIVE_APP) _nativePost('GOOGLE_SIGNOUT_REQUEST'); // 네이티브 SDK 세션도 함께 끊기
   // 재초기화 불필요: disableAutoSelect가 세션 내 자동선택을 차단하고,
   // 다음 페이지 로드에선 myan_signed_out 플래그로 auto_select:false 초기화됨
   selGender = ''; selGenderMp = '';
@@ -2767,6 +2825,7 @@ async function _withdrawAccount() {
   updateAllTokenDisplays();
   try { google.accounts.id.disableAutoSelect(); } catch(e) {}
   try { google.accounts.id.cancel(); } catch(e) {}
+  if (IS_NATIVE_APP) _nativePost('GOOGLE_SIGNOUT_REQUEST'); // 네이티브 SDK 세션도 함께 끊기
   selGender = ''; selGenderMp = '';
   document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
   const _userBtnWD = document.getElementById('userBtn');
@@ -2817,7 +2876,7 @@ function closeTokenModal() {
 
 function openSupport() {
   // 카카오 채널 1:1 채팅으로 바로 연결
-  window.open('https://pf.kakao.com/_xigAbX/chat', '_blank', 'noopener,noreferrer');
+  openExternal('https://pf.kakao.com/_xigAbX/chat');
 }
 
 function logout() {
@@ -2999,6 +3058,7 @@ function showLogin() {
 
   showScreen('LOGIN');
   renderLogin();
+  if (IS_NATIVE_APP) { _renderNativeGoogleBtn('loginGoogleBtnEl', getT().googleSignIn); return; }
   // Google 버튼 초기화 (로그인용)
   const tryInit = (attempts) => {
     if (typeof google !== 'undefined' && google.accounts && google.accounts.id && GOOGLE_CID) {
@@ -3048,21 +3108,33 @@ function initGoogleLoginBtn() {
   });
 }
 
-function _renderGoogleFallbackBtn(wrap) {
-  const t = getT();
+// 구글 공식 버튼(iframe)을 못 쓰는 경우에 쓰는 자체 버튼. GIS 폴백과 네이티브 앱 양쪽이 공유한다.
+function _renderGoogleBtn(wrap, label, onClick) {
   wrap.innerHTML = '';
   const btn = document.createElement('button');
   btn.style.cssText = 'width:100%;max-width:480px;padding:14px 20px;border-radius:8px;' +
     'background:#fff;color:#1f1f1f;border:1px solid #dadce0;font-size:0.95rem;font-weight:500;' +
     'cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;';
   btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.706c-.18-.54-.282-1.117-.282-1.706s.102-1.166.282-1.706V4.962H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/></svg>` +
-    `<span>Google로 로그인</span>`;
-  btn.onclick = () => {
-    try { google.accounts.id.prompt(); } catch(e) {
-      showToast('Google 로그인을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.');
-    }
-  };
+    `<span></span>`;
+  btn.querySelector('span').textContent = label;
+  btn.onclick = onClick;
   wrap.appendChild(btn);
+}
+
+function _renderGoogleFallbackBtn(wrap) {
+  _renderGoogleBtn(wrap, getT().googleSignIn, () => {
+    try { google.accounts.id.prompt(); } catch(e) {
+      showToast(getT().googleSignInFail);
+    }
+  });
+}
+
+// 앱 안에서는 GIS 대신 이 버튼을 띄우고, 누르면 네이티브 구글 로그인 SDK 를 호출한다.
+function _renderNativeGoogleBtn(wrapId, label) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  _renderGoogleBtn(wrap, label, _nativeGoogleSignIn);
 }
 
 function goBackFromLogin() {
@@ -6076,21 +6148,21 @@ function _doShareSNS(type, date, ohaeng) {
             if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
               window.location.href = 'instagram://';
             } else {
-              window.open('https://www.instagram.com/', '_blank');
+              openExternal('https://www.instagram.com/');
             }
           } catch {}
         }, 600);
       }).catch(() => {
-        window.open('https://www.instagram.com/', '_blank');
+        openExternal('https://www.instagram.com/');
       });
       break;
 
     case 'facebook':
-      window.open(`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}&quote=${enc(text)}`, '_blank');
+      openExternal(`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}&quote=${enc(text)}`);
       break;
 
     case 'twitter':
-      window.open(`https://x.com/intent/tweet?text=${enc(text + ' ')}&url=${enc(url)}`, '_blank');
+      openExternal(`https://x.com/intent/tweet?text=${enc(text + ' ')}&url=${enc(url)}`);
       break;
 
     case 'copy':

@@ -9,7 +9,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.myan.app",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "이 앱은 광고 추적을 사용하지 않습니다.",
         "CFBundleLocalizations": [
@@ -30,7 +29,6 @@
         "backgroundColor": "#060608"
       },
       "package": "com.myan.app",
-      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "permissions": [
         "android.permission.INTERNET",
@@ -55,7 +53,6 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-google-signin/google-signin",
       [
         "expo-splash-screen",
         {

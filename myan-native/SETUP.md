@@ -15,40 +15,57 @@ npm install -g eas-cli
 npm install -g expo-cli
 ```
 
-## 2. Google OAuth 설정
+## 2. Google OAuth 설정 ⚠️ 남은 작업
 
-### Google Cloud Console (https://console.cloud.google.com)
-1. 기존 마이안 프로젝트 선택 (또는 새 프로젝트)
-2. **API 및 서비스 → 사용자 인증 정보 → + 만들기 → OAuth 2.0 클라이언트 ID**
-3. 아래 3개 클라이언트 ID 생성:
-   - **웹 애플리케이션** → Web Client ID
-   - **Android** → 패키지: `com.myan.app`, SHA-1 지문 필요
-   - **iOS** → 번들 ID: `com.myan.app`
+**Firebase는 쓰지 않는다.** `@react-native-google-signin/google-signin` 은 Firebase 없이도 동작하며,
+`app/index.jsx` 의 `GoogleSignin.configure({ webClientId })` 로 웹 클라이언트 ID 를 직접 넘긴다.
+따라서 `google-services.json` / `GoogleService-Info.plist` 는 **필요 없다**(2026-08-07에 제거).
 
-### SHA-1 지문 추출 (Android용)
-```bash
-# EAS로 키스토어 생성 후 지문 확인
-eas credentials --platform android
+### 반드시 필요한 것: 웹과 **같은** 프로젝트에 Android OAuth 클라이언트 등록
+
+현재 `app/index.jsx` 의 `WEB_CLIENT_ID` 는 프로젝트 **806789036860** 소속이다.
+안드로이드 네이티브 로그인은 앱 서명(패키지명 + SHA-1)이 **webClientId 와 같은 프로젝트**에
+Android 클라이언트로 등록돼 있어야 통과한다. 다른 프로젝트에 등록하면 `DEVELOPER_ERROR` 가 난다.
+
+1. SHA-1 지문 확인
+   ```bash
+   eas credentials --platform android   # Keystore → SHA-1 Fingerprint
+   ```
+   ※ Play Store 배포 시에는 **Play 앱 서명 키**의 SHA-1 도 따로 등록해야 한다
+   (Play Console → 설정 → 앱 서명). 안 하면 스토어에서 받은 앱만 로그인이 깨진다.
+2. https://console.cloud.google.com → 프로젝트 **806789036860** 선택
+   → API 및 서비스 → 사용자 인증 정보 → 만들기 → OAuth 2.0 클라이언트 ID → **Android**
+   → 패키지 이름 `com.myan.app`, 위에서 얻은 SHA-1 입력
+3. 끝. 이 Android 클라이언트 ID 는 코드에 넣지 않는다 —
+   구글이 앱 서명을 검증하는 용도로만 존재하고, 코드는 계속 `webClientId` 만 쓴다.
+
+### iOS 를 시작할 때 추가로 할 일
+같은 프로젝트에서 **iOS** 클라이언트 ID(번들 `com.myan.app`)를 만든 뒤,
+`app.json` 의 `plugins` 에 아래를 다시 넣는다(역방향 URL 스킴 등록용):
+```json
+["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.806789036860-..." }]
 ```
+그리고 `GoogleSignin.configure` 에 `iosClientId` 를 추가한다.
 
-### src/constants.js 에 클라이언트 ID 입력
-```js
-export const GOOGLE_WEB_CLIENT_ID = 'xxx.apps.googleusercontent.com';
-export const GOOGLE_IOS_CLIENT_ID = 'yyy.apps.googleusercontent.com';
-```
+## 3. 웹 ↔ 네이티브 브릿지
 
-## 3. Firebase 설정 (Google Sign-In 필수)
+앱은 웹사이트를 그대로 띄우는 WebView 셸이라, 로그인·외부링크는 양쪽이 메시지로 주고받는다.
+한쪽만 고치면 조용히 죽으므로 **항상 짝으로** 수정할 것.
 
-### Android
-1. Firebase Console (https://console.firebase.google.com) → 프로젝트 → Android 앱 추가
-2. 패키지: `com.myan.app`
-3. `google-services.json` 다운로드 → `myan-native/` 폴더에 위치
-4. SHA-1 지문 Firebase에도 등록
+| 방향 | 이름 | 위치 |
+|---|---|---|
+| 네이티브 → 웹 | `window._isNativeApp` 플래그 주입 | `app/index.jsx` `INJECTED_JS_BEFORE` |
+| 네이티브 → 웹 | `window.__nativeGoogleToken(idToken)` / `__nativeGoogleError(msg)` → `nativeGoogleSignIn` 이벤트 | 〃 |
+| 웹 → 네이티브 | `GOOGLE_SIGNIN_REQUEST` | `js/app.js` `_nativeGoogleSignIn()` |
+| 웹 → 네이티브 | `GOOGLE_SIGNOUT_REQUEST` | `js/app.js` `_signOut()` / `_withdrawAccount()` |
+| 웹 → 네이티브 | `OPEN_EXTERNAL:<url>` | `js/app.js` `openExternal()` |
 
-### iOS
-1. Firebase Console → iOS 앱 추가
-2. 번들 ID: `com.myan.app`
-3. `GoogleService-Info.plist` 다운로드 → `myan-native/` 폴더에 위치
+- 안드로이드 WebView 에서는 구글이 웹 로그인(GIS)을 차단하므로, 앱에서는 GIS 버튼 대신
+  네이티브 버튼(`_renderNativeGoogleBtn`)을 띄우고 네이티브 SDK 로 위임한다.
+- 네이티브가 돌려주는 것도 같은 구글 ID 토큰이라 웹의 기존 `handleGoogleCredential` 을 그대로 탄다.
+- 토스 결제는 `successUrl` 로 앱에 돌아와야 하므로 **외부 브라우저로 보내지 않는다**(웹뷰 안에서 진행).
+- `kakaotalk://` 같은 커스텀 스킴은 react-native-webview 가 `originWhitelist` 밖이라
+  자동으로 `Linking` 에 넘긴다 — 따로 처리할 필요 없음.
 
 ## 4. 개발 서버 실행
 
