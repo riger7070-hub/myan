@@ -567,14 +567,9 @@ async function callGemini(contents) {
   return data;
 }
 
-function saveChatState() {
-  if (!mode || !hist.length) return;
-  try {
-    localStorage.setItem('myan_chat_mode', mode);
-    localStorage.setItem('myan_chat_hist', JSON.stringify(hist));
-    localStorage.setItem('myan_chat_html', document.getElementById('chat-window').innerHTML);
-  } catch(e) {}
-}
+// 대화 복원 기능이 사라지면서(채팅 방식 제거) 저장한 값을 읽는 곳이 없어졌다.
+// 화면 전체 innerHTML을 뒤로가기·재로그인마다 localStorage에 쓰기만 하고 있었으므로 제거.
+// clearChatState()는 기존 사용자에게 남은 키를 지우기 위해 유지한다.
 
 function clearChatState() {
   localStorage.removeItem('myan_chat_mode');
@@ -595,9 +590,7 @@ function clearAndRestartChat() {
 function goBack() {
   const currentScreen = getCurrentScreen();
 
-  // 채팅 상태 저장
   if (currentScreen === 'CHAT') {
-    saveChatState();
     mode = null;
     hist = [];
   }
@@ -2309,7 +2302,7 @@ async function handleGoogleCredential(response) {
 
     if (pendingMode) {
       const m = pendingMode; pendingMode = null;
-      _enterMode(m, profile); // 채팅 복귀 시 _enterMode 내부에서 저장된 대화 자동 복원
+      _enterMode(m, profile); // 로그인 전 고른 모드로 복귀(대화 복원 기능은 없음)
     } else if (!profile.birthYear && !profile.profileSkipped) {
       // 신규 가입(생년월일 미입력) → 프로필 입력 단계로 이동
       ['screen-chat', 'screen-mypage'].forEach(id => {
@@ -2978,10 +2971,10 @@ function renderLogin() {
 }
 
 function showLogin() {
-  // 채팅 중 토큰 만료로 재로그인이 필요한 경우 → 대화 보존 + 재로그인 후 채팅으로 복귀
+  // 리딩 중 토큰 만료로 재로그인이 필요한 경우 → 재로그인 후 같은 모드로 복귀
+  // (대화 내용 저장은 복원하는 곳이 없어져 제거됨. pendingMode만 유지)
   if (getCurrentScreen() === 'CHAT' && mode) {
-    saveChatState();   // 대화 내용 localStorage에 저장
-    pendingMode = mode; // 로그인 완료 후 _enterMode()가 채팅 복원
+    pendingMode = mode;
   }
 
   showScreen('LOGIN');
