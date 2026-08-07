@@ -124,7 +124,11 @@ function mercuryRetrogradeLocal(date = new Date()) {
   if (!at(date)) return { retrograde: false };
   for (let k = 1; k <= 30; k++) {
     const d = new Date(date.getTime() + k * 86400000);
-    if (!at(d)) return { retrograde: true, endsAt: d.toISOString().slice(0, 10) };
+    if (!at(d)) {
+      // 역행하는 마지막 날을 KST 기준으로 (서버 mercuryRetrograde()와 동일 규칙)
+      const lastDay = new Date(d.getTime() - 86400000 + 9 * 3600000);
+      return { retrograde: true, endsAt: lastDay.toISOString().slice(0, 10) };
+    }
   }
   return { retrograde: true, endsAt: null };
 }

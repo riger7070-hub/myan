@@ -110,12 +110,18 @@ function _isRetroAt(date) {
   return d < 0;
 }
 
-// 역행 중이면 종료 예정일까지 알려준다(최대 30일 앞까지 탐색 — 역행은 보통 20~24일)
+// 역행 중이면 마지막 날까지 알려준다(최대 30일 앞까지 탐색 — 역행은 보통 20~24일).
+// endsAt은 "역행하는 마지막 날"을 KST 기준으로 준다.
+// 순행으로 바뀐 첫날을 그대로 주면 "11/14까지"처럼 이미 끝난 날을 가리키게 되고,
+// 앱의 다른 날짜 로직(_todayKST 등)이 전부 KST라 시간대도 맞춰야 한다.
 function mercuryRetrograde(date = new Date()) {
   if (!_isRetroAt(date)) return { retrograde: false };
   for (let k = 1; k <= 30; k++) {
     const d = new Date(date.getTime() + k * 86400000);
-    if (!_isRetroAt(d)) return { retrograde: true, endsAt: d.toISOString().slice(0, 10) };
+    if (!_isRetroAt(d)) {
+      const lastDay = new Date(d.getTime() - 86400000 + 9 * 3600000); // 전날 + KST 보정
+      return { retrograde: true, endsAt: lastDay.toISOString().slice(0, 10) };
+    }
   }
   return { retrograde: true, endsAt: null };
 }

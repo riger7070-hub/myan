@@ -5729,7 +5729,12 @@ function renderMoonToday() {
   const badge = document.getElementById('mercuryBadge');
   if (!badge || typeof mercuryRetrogradeLocal !== 'function') return;
   const merc = mercuryRetrogradeLocal();
-  if (!merc.retrograde) { badge.style.display = 'none'; return; }
+  if (!merc.retrograde) {
+    badge.style.display = 'none';
+    badge.textContent = '';   // 숨길 때 이전 문구·툴팁도 비운다(다음 표시 때 옛 날짜가 남지 않도록)
+    badge.title = '';
+    return;
+  }
   const t = getT();
   badge.style.display = '';
   badge.textContent = `☿ ${t.mercuryRetro || '수성 역행'}`;
