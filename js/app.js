@@ -1833,18 +1833,22 @@ function closeAdminPanel() {
 
 function setAdminTab(tab) {
   _adminTab = tab;
-  ['pending','approved','all','grant','users'].forEach(t => {
+  ['pending','approved','all','grant','users','usage'].forEach(t => {
     document.getElementById('adminTab' + t.charAt(0).toUpperCase() + t.slice(1))
-      .classList.toggle('on', t === tab);
+      ?.classList.toggle('on', t === tab);
   });
   const isGrant = tab === 'grant';
   const isUsers = tab === 'users';
-  const isList  = !isGrant && !isUsers;
+  const isUsage = tab === 'usage';
+  const isList  = !isGrant && !isUsers && !isUsage;
   document.getElementById('adminPaymentList').style.display = isList ? '' : 'none';
   document.getElementById('adminGrantPanel').style.display  = isGrant ? 'block' : 'none';
   document.getElementById('adminUsersPanel').style.display  = isUsers ? 'block' : 'none';
+  const usageEl = document.getElementById('adminUsagePanel');
+  if (usageEl) usageEl.style.display = isUsage ? 'block' : 'none';
   if (isList) _renderAdminList();
   if (isUsers) renderAdminUsers();
+  if (isUsage) renderAdminUsage();
 }
 
 // HTML 이스케이프 (관리자 화면에 사용자 입력 표시 시 XSS 방지)
@@ -1908,6 +1912,89 @@ async function renderAdminUsers() {
       + userRows
       + '<div style="font-size:0.75rem;color:#999;margin:18px 0 8px;letter-spacing:1px">최근 로그인 기록</div>'
       + loginRows;
+  } catch (e) {
+    el.innerHTML = '<div class="admin-empty">불러올 수 없습니다 (권한 확인)</div>';
+  }
+}
+
+// pkg 값 → 사람이 읽을 라벨. 백엔드 각 핸들러의 pkg 문자열과 키를 맞출 것.
+const ADMIN_PKG_LABELS = {
+  gemini_use:        '☯ 메인 리딩',
+  detail_use:        '🔍 상세 풀이',
+  tarot_use:         '🔮 타로',
+  zodiac_use:        '🐉 띠·별자리',
+  lucky_use:         '🍀 럭키 아이템',
+  typecompat_use:    '🔯 오행 유형·궁합',
+  fortune_use:       '✨ 오늘의 운세 모음',
+  iching_use:        '🀄 주역',
+  numerology_use:    '🔢 수비학',
+  tojeong_use:       '🧧 토정비결풍',
+  photo_reading_use: '🖐️ 관상·손금',
+  dream_use:         '🌙 꿈해몽',
+  lotto_use:         '🎱 로또번호',
+  rune_use:          'ᚱ 룬 문자',
+};
+const _pkgLabel = (pkg) => ADMIN_PKG_LABELS[pkg] || _escHtml(String(pkg || '').replace(/_(use|refund)$/, ''));
+
+let _adminUsageDays = 30;
+function setAdminUsageDays(d) { _adminUsageDays = d; renderAdminUsage(); }
+
+async function renderAdminUsage() {
+  const el = document.getElementById('adminUsagePanel');
+  if (!el) return;
+  el.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+  try {
+    const res = await fetch(EP + `admin/usage?days=${_adminUsageDays}`, { headers: adminAuthHeaders() });
+    if (res.status === 401) {
+      el.innerHTML = '<div class="admin-empty">세션이 만료되었습니다.<br><button onclick="_reauthExpired()" style="margin-top:12px;background:rgba(201,169,110,0.2);border:1px solid rgba(201,169,110,0.4);border-radius:8px;color:#c9a96e;padding:8px 16px;cursor:pointer">🔄 다시 로그인</button></div>';
+      _reauthExpired();
+      return;
+    }
+    if (!res.ok) throw new Error('auth');
+    const data = await res.json();
+    const usage = data.usage || [];
+    const tot   = data.totals || {};
+
+    const periodBtns = [[7, '7일'], [30, '30일'], [0, '전체']].map(([d, label]) =>
+      `<button onclick="setAdminUsageDays(${d})" style="flex:1;padding:7px;border-radius:7px;cursor:pointer;font-size:0.75rem;border:1px solid ${_adminUsageDays === d ? 'rgba(201,169,110,0.5)' : 'rgba(255,255,255,0.1)'};background:${_adminUsageDays === d ? 'rgba(201,169,110,0.18)' : 'transparent'};color:${_adminUsageDays === d ? '#c9a96e' : '#888'}">${label}</button>`
+    ).join('');
+
+    const statCards = `
+      <div style="display:flex;gap:6px;margin-bottom:12px">${periodBtns}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+        ${[['총 이용', tot.uses], ['소모 토큰', tot.spent], ['이용자', tot.users]]
+          .map(([label, val]) => `<div style="background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.15);border-radius:8px;padding:10px 6px;text-align:center"><div style="font-size:1.3rem;font-weight:700;color:#c9a96e">${val ?? 0}</div><div style="font-size:0.66rem;color:#999;margin-top:2px">${label}</div></div>`).join('')}
+      </div>`;
+
+    // 사용 횟수 기준 막대 — 가장 많이 쓰인 기능을 100%로 잡아 상대 비교
+    const maxUses = usage.reduce((m, r) => Math.max(m, r.uses || 0), 0) || 1;
+    const rows = usage.length ? usage.map(r => {
+      const pct = Math.max(2, Math.round((r.uses / maxUses) * 100));
+      return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px">
+          <span style="font-size:0.8rem;color:#e8dcc8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_pkgLabel(r.pkg)}</span>
+          <span style="font-size:0.72rem;color:#c9a96e;flex-shrink:0">${r.uses}회 · ${r.users}명 · ${r.spent}토큰</span>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,rgba(201,169,110,0.55),#c9a96e);border-radius:3px"></div>
+        </div>
+      </div>`;
+    }).join('') : '<div class="admin-empty">해당 기간에 사용 기록이 없습니다</div>';
+
+    // 환불(=AI 응답 실패) 건수. 특정 기능만 많으면 그 기능에 문제가 있다는 신호.
+    const refunds = data.refunds || [];
+    const refundRows = refunds.length ? refunds.map(r => `
+      <div style="display:flex;justify-content:space-between;padding:7px 10px;background:rgba(224,90,74,0.06);border-radius:6px;margin-bottom:4px;font-size:0.75rem">
+        <span style="color:#ddb0a8">${_pkgLabel(r.pkg)}</span>
+        <span style="color:#e08a7a;flex-shrink:0">${r.cnt}건</span>
+      </div>`).join('') : '<div style="font-size:0.75rem;color:#666;padding:6px 2px">실패 없음 👍</div>';
+
+    el.innerHTML = statCards
+      + '<div style="font-size:0.75rem;color:#999;margin:6px 0 10px;letter-spacing:1px">콘텐츠별 이용 (많은 순)</div>'
+      + rows
+      + '<div style="font-size:0.75rem;color:#999;margin:18px 0 8px;letter-spacing:1px">AI 실패·환불</div>'
+      + refundRows;
   } catch (e) {
     el.innerHTML = '<div class="admin-empty">불러올 수 없습니다 (권한 확인)</div>';
   }

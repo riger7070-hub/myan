@@ -848,6 +848,7 @@ export default {
     // ── 로그인 기록 ──
     if (path === '/auth/login' && method === 'POST') { await ensureDBExt(env); return handleAuthLogin(request, env); }
     if (path === '/admin/users' && method === 'GET') { await ensureDBExt(env); return handleAdminUsers(request, env); }
+    if (path === '/admin/usage' && method === 'GET') { await ensureDBExt(env); return handleAdminUsage(request, env); }
 
     // ── 운기 푸딩 행운 페이지 ──
     if (path === '/pudding-fortune' && method === 'GET') {
@@ -1367,6 +1368,59 @@ async function handleAdminUsers(request, env) {
     },
     users:  users.results || [],
     logins: logins.results || [],
+  }));
+}
+
+// 관리자: 콘텐츠별 사용 통계.
+// payment_requests에 기능별 pkg('tarot_use' 등)가 이미 쌓이고 있었으나 이를 집계해서
+// 보는 곳이 없어, 어떤 콘텐츠가 실제로 쓰이는지 알 수 없었다.
+async function handleAdminUsage(request, env) {
+  if (!await isAdmin(request, env)) return cors(JSON.stringify({ error: { message: '관리자 권한이 필요합니다.' } }), 401);
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const url = new URL(request.url);
+  const daysRaw = parseInt(url.searchParams.get('days') || '30', 10);
+  const days = (Number.isFinite(daysRaw) && daysRaw > 0) ? Math.min(daysRaw, 365) : 0; // 0 = 전체 기간
+  const since = days > 0 ? Math.floor(Date.now() / 1000) - days * 86400 : 0;
+
+  // 소비 집계(tokens < 0) — 기능별 사용 횟수·소모 토큰·이용자 수.
+  // 지급/환불 행은 tokens > 0 이라 자연히 제외된다.
+  const usage = await env.DB.prepare(`
+    SELECT pkg,
+           COUNT(*) AS uses,
+           COALESCE(SUM(-tokens), 0) AS spent,
+           COUNT(DISTINCT user_email) AS users
+    FROM payment_requests
+    WHERE status = 'approved' AND tokens < 0
+      AND COALESCE(approved_at, created_at) >= ?
+    GROUP BY pkg
+    ORDER BY uses DESC
+  `).bind(since).all().catch(() => ({ results: [] }));
+
+  // 환불 집계 — 어떤 기능이 자주 실패하는지(AI 응답 실패 시 환불 행이 쌓임)
+  const refunds = await env.DB.prepare(`
+    SELECT pkg, COUNT(*) AS cnt
+    FROM payment_requests
+    WHERE status = 'approved' AND tokens > 0 AND pkg LIKE '%refund%'
+      AND COALESCE(approved_at, created_at) >= ?
+    GROUP BY pkg
+    ORDER BY cnt DESC
+  `).bind(since).all().catch(() => ({ results: [] }));
+
+  const totals = await env.DB.prepare(`
+    SELECT COUNT(*) AS uses,
+           COALESCE(SUM(-tokens), 0) AS spent,
+           COUNT(DISTINCT user_email) AS users
+    FROM payment_requests
+    WHERE status = 'approved' AND tokens < 0
+      AND COALESCE(approved_at, created_at) >= ?
+  `).bind(since).first().catch(() => null);
+
+  return cors(JSON.stringify({
+    days,
+    totals:  { uses: totals?.uses || 0, spent: totals?.spent || 0, users: totals?.users || 0 },
+    usage:   usage.results || [],
+    refunds: refunds.results || [],
   }));
 }
 
