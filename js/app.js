@@ -3297,6 +3297,7 @@ function _syncDrawerLangs() {
   _t('photoGalleryBtnText', t.photoGalleryTitle);
   _t('quickExperienceTitle', t.quickExperienceTitle); _t('quickExperienceDesc', t.quickExperienceDesc);
   renderHomeSections(); // 홈 타일은 JS로 그리므로 언어 전환 시 다시 렌더해야 반영됨
+  renderMoonToday();    // 헤더의 오늘의 달도 언어별 이름이라 함께 갱신
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -3586,6 +3587,7 @@ window.addEventListener('DOMContentLoaded', () => {
   _checkPromoParam();
 
   renderHomeSections(); // 홈 계열별 콘텐츠 타일 초기 렌더
+  renderMoonToday();    // 헤더 오늘의 달 초기 렌더
 
   // 🔥 서버 검증 스트릭을 불러와 배너에 반영 (로그인 전이면 조용히 스킵)
   fetchStreak(true);
@@ -4761,6 +4763,7 @@ async function openZodiacFortune() {
       const animalSuffix = lang === 'ko' ? '띠' : '';
       resultEl.innerHTML = `
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${animalLabel}${animalSuffix} · ${zodiacLabel}</div>
+        ${data.moon ? `<div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:6px">${MOON_PHASE_ICONS[data.moon.index]} ${MOON_PHASE_NAMES[lang]?.[data.moon.index] || ''} · ${data.moon.illumination}%</div>` : ''}
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="zodiacReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🐉",title:${JSON.stringify(animalLabel + animalSuffix + " · " + zodiacLabel)},filename:"myan-zodiac"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
@@ -5709,6 +5712,17 @@ function _homeSections() {
       { icon:'🍮', label: t.quickFortuneTitle || '오늘의 행운',       cost:0, fn:'openFortuneModal()' },
     ]},
   ];
+}
+
+// 헤더에 오늘의 달 위상 표시 — 매일 바뀌므로 사이트가 살아있다는 신호가 된다.
+// 서버 왕복 없이 constants.js의 moonPhaseLocal()로 즉시 계산(서버와 동일한 식).
+function renderMoonToday() {
+  const el = document.getElementById('moonToday');
+  if (!el || typeof moonPhaseLocal !== 'function') return;
+  const m = moonPhaseLocal();
+  const name = MOON_PHASE_NAMES[getLang()]?.[m.index] || MOON_PHASE_NAMES.ko[m.index];
+  el.textContent = `${MOON_PHASE_ICONS[m.index]} ${name}`;
+  el.title = `월령 ${m.age.toFixed(1)}일 · 밝기 ${Math.round(m.illumination * 100)}%`;
 }
 
 function renderHomeSections() {

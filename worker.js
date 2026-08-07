@@ -35,6 +35,30 @@ function ilchin() {
   return { ci: idx%10, ji: idx%12, o: CGO[idx%10], jo: JJO[idx%12] };
 }
 
+// ── 달의 위상(월령) — 실제 천문 계산 ──
+// 별자리 운세가 생일만 보고 판정돼 1년 내내 톤이 같던 문제를 보완하려고 도입.
+// 달은 매일 바뀌므로 "오늘"이 달라지는 실제 근거가 된다.
+// 평균 삭망월 모델이라 실제 삭·망 대비 최대 ±0.5일 오차가 있으나,
+// 8단계 위상은 한 단계가 약 3.7일이라 위상 판정에는 충분하다.
+const SYNODIC_MONTH = 29.530588853;   // 삭망월(일) — 천문 표준값
+const NEW_MOON_JD   = 2451550.09766;  // 기준 삭(Meeus): 2000-01-06
+const UNIX_EPOCH_JD = 2440587.5;
+
+// 0=삭 1=초승 2=상현 3=상현망간 4=보름 5=하현망간 6=하현 7=그믐
+function moonPhase(date = new Date()) {
+  const jd = date.getTime() / 86400000 + UNIX_EPOCH_JD;
+  let age = (jd - NEW_MOON_JD) % SYNODIC_MONTH;
+  if (age < 0) age += SYNODIC_MONTH;
+  // 조도(0~1): 삭에서 0, 망에서 1
+  const illumination = (1 - Math.cos(2 * Math.PI * age / SYNODIC_MONTH)) / 2;
+  // 각 구간 중앙을 기준으로 반올림해야 삭(0일)과 그믐(29.5일)이 갈리지 않는다
+  const index = Math.floor((age / SYNODIC_MONTH) * 8 + 0.5) % 8;
+  return { age, illumination, index };
+}
+
+// 프롬프트에 넣을 한국어 표기 (AI가 각 언어로 번역해 설명한다)
+const MOON_PHASE_KO = ['삭(신월)', '초승달', '상현달', '차오르는 달', '보름달', '기우는 달', '하현달', '그믐달'];
+
 // 한글 시진명 → 지지(시지) 매핑
 const SIJI_TO_JJ = {
   '자시':'子','축시':'丑','인시':'寅','묘시':'卯','진시':'辰','사시':'巳',
@@ -2339,11 +2363,19 @@ async function handleZodiacFortune(request, env) {
     ).bind(email).first();
     const remainingTokens = remainRow?.bal ?? 0;
 
+    // 실제 달의 위상을 함께 넘겨, 같은 별자리라도 날마다 해석이 달라지게 한다
+    const moon = moonPhase();
+    const moonName = MOON_PHASE_KO[moon.index];
+    const moonPct = Math.round(moon.illumination * 100);
+
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
     const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 상담사입니다. 이 사람은 "${animal}띠"이고 서양 별자리는 "${zodiac}"입니다. 오늘의 오행 기운은 "${on[il.o]}"입니다.
 
-띠와 별자리, 오늘의 오행 기운을 재미있게 엮어서 ${langLabel}로 3~4문장의 짧고 유쾌한 오늘의 운세를 알려주세요. 진지한 예언이 아니라 가볍게 웃으며 읽을 수 있는 톤으로, 마지막엔 오늘 실천하면 좋을 작은 팁 하나를 더해주세요.
+[오늘 실제 하늘의 달 — 천문 계산값이니 그대로 사용하고 임의로 바꾸지 마세요]
+달의 위상: ${moonName} (월령 ${moon.age.toFixed(1)}일, 밝기 약 ${moonPct}%)
+
+띠와 별자리, 오늘의 오행 기운, 그리고 위 달의 위상을 재미있게 엮어서 ${langLabel}로 3~4문장의 짧고 유쾌한 오늘의 운세를 알려주세요. 달이 차오르는 중이면 시작·확장의 기운으로, 기우는 중이면 정리·마무리의 기운으로 자연스럽게 풀어주세요. 진지한 예언이 아니라 가볍게 웃으며 읽을 수 있는 톤으로, 마지막엔 오늘 실천하면 좋을 작은 팁 하나를 더해주세요.
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
@@ -2368,7 +2400,11 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
 
-    return cors(JSON.stringify({ success:true, animal, animalIndex, zodiac, zodiacIndex, reading, remaining: remainingTokens }), 200);
+    return cors(JSON.stringify({
+      success:true, animal, animalIndex, zodiac, zodiacIndex, reading,
+      moon: { index: moon.index, illumination: moonPct }, // 프론트는 index로 자국어 이름을 찾는다
+      remaining: remainingTokens
+    }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }

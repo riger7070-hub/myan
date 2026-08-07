@@ -54,6 +54,30 @@ const WESTERN_ZODIAC_NAMES = {
 // 오행 유형 테스트 — 질문 옵션 순서와 백엔드 worker.js의 TYPE_ELEMENTS 순서를 맞출 것
 const TYPE_ORDER = ['木','火','土','金','水'];
 
+// 달의 위상 — 인덱스는 백엔드 worker.js의 MOON_PHASE_KO와 순서를 맞출 것
+// 0=삭 1=초승 2=상현 3=차오름 4=보름 5=기움 6=하현 7=그믐
+const MOON_PHASE_ICONS = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+const MOON_PHASE_NAMES = {
+  ko: ['삭(신월)','초승달','상현달','차오르는 달','보름달','기우는 달','하현달','그믐달'],
+  en: ['New Moon','Waxing Crescent','First Quarter','Waxing Gibbous','Full Moon','Waning Gibbous','Last Quarter','Waning Crescent'],
+  zh: ['新月','蛾眉月','上弦月','盈凸月','满月','亏凸月','下弦月','残月'],
+  ja: ['新月','三日月','上弦の月','十三夜月','満月','寝待月','下弦の月','有明月'],
+};
+
+// 달의 위상 계산 — 서버 worker.js의 moonPhase()와 동일한 천문 상수·식을 쓴다.
+// (홈 화면 표시는 서버 왕복 없이 즉시 그리기 위해 클라이언트에서도 계산)
+function moonPhaseLocal(date = new Date()) {
+  const SYNODIC = 29.530588853, NEW_MOON_JD = 2451550.09766, UNIX_EPOCH_JD = 2440587.5;
+  const jd = date.getTime() / 86400000 + UNIX_EPOCH_JD;
+  let age = (jd - NEW_MOON_JD) % SYNODIC;
+  if (age < 0) age += SYNODIC;
+  return {
+    age,
+    illumination: (1 - Math.cos(2 * Math.PI * age / SYNODIC)) / 2,
+    index: Math.floor((age / SYNODIC) * 8 + 0.5) % 8,
+  };
+}
+
 // 오늘의 운세 모음 — 키는 백엔드 worker.js의 FORTUNE_TOPICS와 맞출 것. 라벨은 locales.js의 fortuneTopicTitle에서.
 const FORTUNE_TOPICS = [
   { key:'crush',       icon:'💌' },
