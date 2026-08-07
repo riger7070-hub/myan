@@ -2411,8 +2411,18 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `detail_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'detail_refund', 0, 2, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
 
@@ -2482,8 +2492,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `tarot_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'tarot_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
 
@@ -2573,8 +2593,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `zodiac_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'zodiac_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
 
@@ -2631,10 +2661,23 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ responseMimeType:'application/json', temperature:0.9 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     let picks;
     try { picks = JSON.parse(raw); } catch { picks = {}; }
+
+    // 이 핸들러는 JSON 응답이라 파싱이 깨져도 picks={}로 흘러가 빈 카드 3장이 나갔다.
+    // 세 항목 중 하나도 이름이 없으면 실패로 보고 환불한다.
+    const hasPick = !!(picks?.color?.name || picks?.food?.name || picks?.song?.name);
+    if (!resp.ok || !hasPick) {
+      const refundId = `lucky_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'lucky_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'lucky', null, JSON.stringify(picks), null).catch(() => {});
 
@@ -2692,8 +2735,18 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
-    const data = await resp.json();
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `typecompat_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'typecompat_refund', 0, 1, 'approved', unixepoch())`
+      ).bind(refundId, email).run();
+      return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
 
     saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
 
