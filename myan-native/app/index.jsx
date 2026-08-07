@@ -50,6 +50,13 @@ export default function WebScreen() {
     return () => sub.remove();
   }, [handleAndroidBack]);
 
+  // 웹앱은 전체 페이지 로드 없이 history.pushState 로만 화면을 전환한다.
+  // onLoadProgress 는 문서 로드에서만 발생해 최초 1회로 끝나므로 여기서 추적하면 안 되고,
+  // pushState 까지 잡아주는 onNavigationStateChange 를 써야 한다.
+  const handleNavState = useCallback((nav) => {
+    canGoBack.current = nav.canGoBack;
+  }, []);
+
   // 웹 → 네이티브 메시지 수신
   const handleMessage = useCallback(async ({ nativeEvent }) => {
     const msg = nativeEvent.data;
@@ -80,17 +87,17 @@ export default function WebScreen() {
     }
   }, []);
 
+  // SDK 54+ 안드로이드는 edge-to-edge 강제라 상·하단 시스템바 영역을 직접 비켜줘야 한다.
+  // (웹뷰 안의 env(safe-area-inset-*) 은 안드로이드에서 0 으로 보고되는 경우가 많음)
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <WebView
         ref={webRef}
         source={{ uri: WEB_URL }}
         style={styles.webview}
         onMessage={handleMessage}
         injectedJavaScriptBeforeContentLoaded={INJECTED_JS_BEFORE}
-        onLoadProgress={({ nativeEvent }) => {
-          canGoBack.current = nativeEvent.canGoBack;
-        }}
+        onNavigationStateChange={handleNavState}
         onLoadEnd={() => setReady(true)}
         javaScriptEnabled
         domStorageEnabled
