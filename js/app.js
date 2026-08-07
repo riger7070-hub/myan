@@ -283,6 +283,26 @@ async function shareOhaengCard(ohaeng) {
   }, 'image/png');
 }
 
+// 재미 콘텐츠 모달의 오류 표시 공통 헬퍼.
+// 토큰 부족(402)이면 안내에서 끝내지 않고 바로 충전으로 이어지게 버튼을 붙인다.
+function _resultErrorHtml(res, data) {
+  const msg = data?.error?.message || '오류가 발생했습니다.';
+  const base = `<div style="font-size:0.85rem;color:var(--text-dim);text-align:center">${msg}</div>`;
+  if (res?.status !== 402) return base;
+
+  const label = { ko:'✦ 토큰 충전하기', en:'✦ Get Tokens', zh:'✦ 充值代币', ja:'✦ トークン購入' }[getLang()] || '✦ 토큰 충전하기';
+  return base + `<button class="fif-submit" style="width:100%;margin-top:14px;padding:12px" onclick="_goCharge()">${label}</button>`;
+}
+
+// 충전 모달로 이동. #token-modal은 z-index 200이라 재미 콘텐츠 오버레이(1200) 아래에 깔린다.
+// 따라서 열려 있는 오버레이를 먼저 닫아야 충전 모달이 실제로 보인다.
+function _goCharge() {
+  if (typeof Analytics !== 'undefined') Analytics.trackToken('charge_click');
+  document.querySelectorAll('.modal-overlay.active').forEach(el => el.remove());
+  document.getElementById('photo-gallery-modal')?.remove();
+  openTokenModal();
+}
+
 // 범용 결과 공유 카드 — 타로/주역/수비학/토정비결/룬/꿈해몽/로또 등 모든 재미 콘텐츠 결과에서 재사용.
 // shareOhaengCard()와 같은 톤(어두운 배경+골드 글로우)이지만 임의의 아이콘·제목·부제를 그린다.
 async function shareResultCard({ icon, title, subtitle, filename }) {
@@ -2692,6 +2712,7 @@ function openTokenModal() {
 
 function closeTokenModal() {
   document.getElementById('token-modal').style.display = 'none';
+  document.body.style.overflow = ''; // openTokenModal에서 건 스크롤 잠금 해제
 }
 
 function openSupport() {
@@ -4576,7 +4597,7 @@ async function _tarotPick(idx) {
 
     const resultEl = document.getElementById('tarotResult');
     if (!data.success) {
-      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     if (backEl) {
@@ -4646,7 +4667,7 @@ async function openZodiacFortune() {
     const statusEl = document.getElementById('zodiacStatus');
     const resultEl = document.getElementById('zodiacResult');
     if (!data.success) {
-      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     if (statusEl) statusEl.style.display = 'none';
@@ -4709,7 +4730,7 @@ async function openLuckyPicks() {
     const statusEl = document.getElementById('luckyStatus');
     const resultEl = document.getElementById('luckyResult');
     if (!data.success) {
-      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     if (statusEl) statusEl.style.display = 'none';
@@ -4831,7 +4852,7 @@ async function _typeTestPickPartner(partnerType) {
     if (remain > 0) await new Promise(r => setTimeout(r, remain));
 
     if (!data.success) {
-      areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      areaEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     areaEl.innerHTML = `
@@ -4917,7 +4938,7 @@ async function _fortuneTopicPick(key) {
     if (remain > 0) await new Promise(r => setTimeout(r, remain));
 
     if (!data.success) {
-      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      resultEl.innerHTML = _resultErrorHtml(res, data);
       _fortunePicking = false;
       return;
     }
@@ -4995,7 +5016,7 @@ async function _ichingCast() {
     if (remain > 0) await new Promise(r => setTimeout(r, remain));
 
     if (!data.success) {
-      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      resultEl.innerHTML = _resultErrorHtml(res, data);
       btn.disabled = false; btn.textContent = t.ichingCastBtn || '괘 뽑기';
       return;
     }
@@ -5069,7 +5090,7 @@ async function openNumerology() {
     const statusEl = document.getElementById('numerologyStatus');
     const resultEl = document.getElementById('numerologyResult');
     if (!data.success) {
-      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     if (statusEl) statusEl.style.display = 'none';
@@ -5138,7 +5159,7 @@ async function openTojeong() {
     const statusEl = document.getElementById('tojeongStatus');
     const resultEl = document.getElementById('tojeongResult');
     if (!data.success) {
-      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     if (statusEl) statusEl.style.display = 'none';
@@ -5273,7 +5294,7 @@ async function _photoReadingSubmit() {
     if (remain > 0) await new Promise(r => setTimeout(r, remain));
 
     if (!data.success) {
-      if (bodyEl) bodyEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      if (bodyEl) bodyEl.innerHTML = _resultErrorHtml(res, data);
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t.photoSubmitBtn || '분석 시작'; }
       if (chooseBtn) chooseBtn.style.display = '';
       return;
@@ -5415,7 +5436,7 @@ async function _dreamSubmit() {
     if (remain > 0) await new Promise(r => setTimeout(r, remain));
 
     if (!data.success) {
-      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      resultEl.innerHTML = _resultErrorHtml(res, data);
       btn.disabled = false; btn.textContent = t.dreamSubmitBtn || '해몽 보기';
       return;
     }
@@ -5473,7 +5494,7 @@ async function openLottoNumbers() {
     const statusEl = document.getElementById('lottoStatus');
     const resultEl = document.getElementById('lottoResult');
     if (!data.success) {
-      if (statusEl) statusEl.textContent = data.error?.message || '오류가 발생했습니다.';
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
       return;
     }
     if (statusEl) statusEl.style.display = 'none';
@@ -5550,7 +5571,7 @@ async function _runeDraw() {
 
     if (!data.success) {
       resultEl.style.display = '';
-      resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${data.error?.message || '오류가 발생했습니다.'}</div>`;
+      resultEl.innerHTML = _resultErrorHtml(res, data);
       btn.disabled = false; btn.textContent = t.runeDrawBtn || '룬 뽑기';
       _runeDrawing = false;
       return;
