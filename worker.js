@@ -67,8 +67,20 @@ const MOON_PHASE_KO = ['삭(신월)', '초승달', '상현달', '차오르는 �
 const _ORBIT = {
   mercury: { a:0.38709927, e:0.20563593, I:7.00497902, L:252.25032350, lp:77.45779628, node:48.33076593,
              da:0.00000037, de:0.00001906, dI:-0.00594749, dL:149472.67411175, dlp:0.16047689, dnode:-0.12534081 },
+  venus:   { a:0.72333566, e:0.00677672, I:3.39467605, L:181.97909950, lp:131.60246718, node:76.67984255,
+             da:0.00000390, de:-0.00004107, dI:-0.00078890, dL:58517.81538729, dlp:0.00268329, dnode:-0.27769418 },
+  mars:    { a:1.52371034, e:0.09339410, I:1.84969142, L:-4.55343205, lp:-23.94362959, node:49.55953891,
+             da:0.00001847, de:0.00007882, dI:-0.00813131, dL:19140.30268499, dlp:0.44441088, dnode:-0.29257343 },
   earth:   { a:1.00000261, e:0.01671123, I:-0.00001531, L:100.46457166, lp:102.93768193, node:0.0,
              da:0.00000562, de:-0.00004392, dI:-0.01294668, dL:35999.37244981, dlp:0.32327364, dnode:0.0 },
+};
+
+// 역행 중일 때 AI에 넘길 의미. 점성술에서 통용되는 해석을 그대로 쓰되,
+// 겁주는 방향이 아니라 "무엇을 조심하면 되는지"로 프레이밍한다.
+const _RETRO_MEANING = {
+  mercury: { ko:'수성', hint:'소통·계약·이동에서 오해나 지연이 생기기 쉬운 시기' },
+  venus:   { ko:'금성', hint:'연애·관계·금전에서 지난 인연이나 결정을 돌아보게 되는 시기' },
+  mars:    { ko:'화성', hint:'추진력이 더디고 갈등이 불거지기 쉬워, 새로 벌이기보다 정비에 좋은 시기' },
 };
 
 // 궤도요소 → 황도면 직교좌표(태양 중심). 케플러 방정식은 뉴턴법으로 푼다.
@@ -94,36 +106,46 @@ function _helioXY(p, T) {
   };
 }
 
-// 지구에서 본 수성의 황경(rad)
-function _mercuryLon(date) {
+// 지구에서 본 행성의 황경(rad)
+function _planetLon(planet, date) {
   const T = (date.getTime() / 86400000 + UNIX_EPOCH_JD - 2451545.0) / 36525;
-  const m = _helioXY(_ORBIT.mercury, T), e = _helioXY(_ORBIT.earth, T);
-  return Math.atan2(m.y - e.y, m.x - e.x);
+  const p = _helioXY(_ORBIT[planet], T), e = _helioXY(_ORBIT.earth, T);
+  return Math.atan2(p.y - e.y, p.x - e.x);
 }
 
-function _isRetroAt(date) {
-  const a = _mercuryLon(new Date(date.getTime() - 43200000));
-  const b = _mercuryLon(new Date(date.getTime() + 43200000));
+function _isRetroAt(planet, date) {
+  const a = _planetLon(planet, new Date(date.getTime() - 43200000));
+  const b = _planetLon(planet, new Date(date.getTime() + 43200000));
   let d = b - a;
   while (d > Math.PI) d -= 2 * Math.PI;   // 0/360도 경계 넘어갈 때 부호가 뒤집히는 것 방지
   while (d < -Math.PI) d += 2 * Math.PI;
   return d < 0;
 }
 
-// 역행 중이면 마지막 날까지 알려준다(최대 30일 앞까지 탐색 — 역행은 보통 20~24일).
+// 역행 중이면 마지막 날까지 알려준다.
 // endsAt은 "역행하는 마지막 날"을 KST 기준으로 준다.
 // 순행으로 바뀐 첫날을 그대로 주면 "11/14까지"처럼 이미 끝난 날을 가리키게 되고,
 // 앱의 다른 날짜 로직(_todayKST 등)이 전부 KST라 시간대도 맞춰야 한다.
-function mercuryRetrograde(date = new Date()) {
-  if (!_isRetroAt(date)) return { retrograde: false };
-  for (let k = 1; k <= 30; k++) {
+// 탐색 상한은 행성별 최장 역행 기간을 넘게 잡는다(수성 24일, 금성 42일, 화성 80일).
+const _RETRO_MAX_DAYS = { mercury: 35, venus: 55, mars: 95 };
+
+function planetRetrograde(planet, date = new Date()) {
+  if (!_ORBIT[planet] || planet === 'earth') return { retrograde: false };
+  if (!_isRetroAt(planet, date)) return { retrograde: false };
+  const limit = _RETRO_MAX_DAYS[planet] || 95;
+  for (let k = 1; k <= limit; k++) {
     const d = new Date(date.getTime() + k * 86400000);
-    if (!_isRetroAt(d)) {
+    if (!_isRetroAt(planet, d)) {
       const lastDay = new Date(d.getTime() - 86400000 + 9 * 3600000); // 전날 + KST 보정
       return { retrograde: true, endsAt: lastDay.toISOString().slice(0, 10) };
     }
   }
   return { retrograde: true, endsAt: null };
+}
+
+// 홈 배지 등 기존 호출부 호환용
+function mercuryRetrograde(date = new Date()) {
+  return planetRetrograde('mercury', date);
 }
 
 // 한글 시진명 → 지지(시지) 매핑
@@ -2435,12 +2457,18 @@ async function handleZodiacFortune(request, env) {
     const moonName = MOON_PHASE_KO[moon.index];
     const moonPct = Math.round(moon.illumination * 100);
 
-    // 수성 역행은 '사건'이라 역행 중일 때만 프롬프트에 넣는다.
+    // 역행은 '사건'이라 진행 중일 때만 프롬프트에 넣는다.
     // 평소에도 "순행 중"이라 알리면 매번 언급돼 해석이 지저분해진다.
-    const merc = mercuryRetrograde();
-    const mercBlock = merc.retrograde
-      ? `\n수성 역행: 진행 중${merc.endsAt ? ` (${merc.endsAt}까지)` : ''} — 소통·계약·이동에서 오해나 지연이 생기기 쉬운 시기로 알려져 있습니다. 다만 겁주지 말고, 확인하고 여유를 두면 무난하다는 톤으로 짧게 언급해 주세요.`
+    const retros = ['mercury', 'venus', 'mars']
+      .map(p => ({ p, ...planetRetrograde(p) }))
+      .filter(r => r.retrograde);
+    const mercBlock = retros.length
+      ? '\n역행 중인 행성: ' + retros.map(r =>
+          `${_RETRO_MEANING[r.p].ko}${r.endsAt ? `(${r.endsAt}까지)` : ''} — ${_RETRO_MEANING[r.p].hint}`
+        ).join(' / ') +
+        '\n겁주지 말고, 조심할 점을 알면 무난하다는 톤으로 짧게만 언급해 주세요. 여러 개면 가장 관련 있는 하나만 다뤄도 됩니다.'
       : '';
+    const merc = retros.find(r => r.p === 'mercury') || { retrograde: false };
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
