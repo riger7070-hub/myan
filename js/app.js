@@ -3303,6 +3303,7 @@ function _syncDrawerLangs() {
   _t('drTxtRune',     t.drRuneTitle);       _t('drSubRune', t.drRuneSub);
   _t('photoGalleryBtnText', t.photoGalleryTitle);
   _t('quickExperienceTitle', t.quickExperienceTitle); _t('quickExperienceDesc', t.quickExperienceDesc);
+  renderHomeSections(); // 홈 타일은 JS로 그리므로 언어 전환 시 다시 렌더해야 반영됨
   _t('drTxtTheme',   t.drThemeTitle);
   _t('drTxtSupport', t.drSupportTitle);
   _t('drTxtLogout',  t.drLogoutTitle);
@@ -3590,6 +3591,8 @@ window.addEventListener('DOMContentLoaded', () => {
   _restoreOhaengIndicator();
   // ?promo= URL 파라미터 감지
   _checkPromoParam();
+
+  renderHomeSections(); // 홈 계열별 콘텐츠 타일 초기 렌더
 
   // 🔥 서버 검증 스트릭을 불러와 배너에 반영 (로그인 전이면 조용히 스킵)
   fetchStreak(true);
@@ -5685,6 +5688,54 @@ async function _runeDraw() {
 //  각종 체험 허브 — 홈 화면 카드에서 모든 재미 콘텐츠를 한곳에서 고르는 진입점
 //  (각 항목은 이미 존재하는 open* 함수를 그대로 호출 — 신규 백엔드 없음)
 // ════════════════════════════════════════════
+// ════════════════════════════════════════════
+//  홈 콘텐츠 섹션 — 15개 콘텐츠를 계열(동양/서양/오늘의 운세)로 묶어 홈에 전부 노출.
+//  라벨은 각 콘텐츠 모달이 이미 쓰는 i18n 키를 그대로 재사용해 번역을 중복 정의하지 않는다.
+//  JS로 그리므로 언어를 바꾸면 _syncDrawerLangs()에서 다시 렌더돼 자동 반영된다.
+// ════════════════════════════════════════════
+function _homeSections() {
+  const t = getT();
+  return [
+    { icon:'☯', title: t.csEast || '동양 점술', items: [
+      { icon:'🀄',  label: t.ichingTitle     || '주역 괘 풀이',       cost:1, fn:'openIching()' },
+      { icon:'🧧',  label: t.tojeongTitle    || '토정비결풍 신년운세', cost:2, fn:'openTojeong()' },
+      { icon:'🔯',  label: t.typeTitle       || '오행 유형 테스트',    cost:1, fn:'openTypeTest()' },
+      { icon:'🖐️', label: t.photoModalTitle || '관상·손금',          cost:2, fn:'openPhotoReading()' },
+      { icon:'🌙',  label: t.dreamTitle      || '꿈해몽',             cost:1, fn:'openDreamInterpretation()' },
+    ]},
+    { icon:'🔮', title: t.csWest || '서양 점술', items: [
+      { icon:'🔮', label: t.tarotTitle      || '오늘의 타로',       cost:1, fn:'openTarotDraw()' },
+      { icon:'🔢', label: t.numerologyTitle || '라이프패스 넘버',   cost:1, fn:'openNumerology()' },
+      { icon:'ᚱ', label: t.runeTitle       || '룬 문자 점',        cost:1, fn:'openRuneReading()' },
+    ]},
+    { icon:'📅', title: t.csDaily || '오늘의 운세', items: [
+      { icon:'🐉', label: t.zodiacTitle       || '띠·별자리 운세',     cost:1, fn:'openZodiacFortune()' },
+      { icon:'✨', label: t.fortuneModalTitle || '오늘의 운세 모음',   cost:1, fn:'openFortuneTopics()' },
+      { icon:'🍀', label: t.luckyTitle        || '오늘의 럭키 아이템', cost:1, fn:'openLuckyPicks()' },
+      { icon:'🎱', label: t.lottoTitle        || '오늘의 로또번호',    cost:1, fn:'openLottoNumbers()' },
+      { icon:'🍮', label: t.quickFortuneTitle || '오늘의 행운',       cost:0, fn:'openFortuneModal()' },
+    ]},
+  ];
+}
+
+function renderHomeSections() {
+  const host = document.getElementById('homeSections');
+  if (!host) return;
+  const freeLabel = { ko:'무료', en:'FREE', zh:'免费', ja:'無料' }[getLang()] || '무료';
+  host.innerHTML = _homeSections().map(sec => `
+    <section class="content-section">
+      <div class="cs-title"><span>${sec.icon}</span>${sec.title}</div>
+      <div class="cs-grid">
+        ${sec.items.map(it => `
+          <button class="cs-tile" onclick="${it.fn}">
+            <span class="cs-cost${it.cost ? '' : ' cs-free'}">${it.cost ? '✦' + it.cost : freeLabel}</span>
+            <span class="cs-ico">${it.icon}</span>
+            <span class="cs-label">${it.label}</span>
+          </button>`).join('')}
+      </div>
+    </section>`).join('');
+}
+
 function openExperienceHub() {
   const t = getT();
   const items = [

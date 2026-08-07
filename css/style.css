@@ -1614,6 +1614,78 @@ body::-webkit-scrollbar {
   .quick-desc { display: none; }
 }
 
+/* ── 홈 콘텐츠 섹션 (동양/서양/오늘의 운세 계열별 타일) ── */
+.home-sections {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+.content-section { width: 100%; }
+.cs-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--gold-light);
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.cs-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 18px 8px 14px;
+  min-height: 104px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform .2s ease, border-color .2s ease, background .2s ease;
+}
+.cs-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(201,169,110,0.45);
+  background: rgba(201,169,110,0.07);
+}
+.cs-ico { font-size: 1.55rem; line-height: 1; }
+.cs-label {
+  font-size: 0.73rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--text);
+  word-break: keep-all;
+}
+/* 토큰 비용 배지 — 누르기 전에 가격을 알 수 있게 타일마다 표시 */
+.cs-cost {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  font-size: 0.6rem;
+  color: var(--gold);
+  opacity: 0.75;
+  letter-spacing: 0.3px;
+}
+.cs-cost.cs-free { color: #7dc88a; }
+
+@media (max-width: 380px) {
+  .cs-grid { grid-template-columns: repeat(3, 1fr); }
+  .cs-label { font-size: 0.68rem; }
+}
+
 /* ── 법적 푸터 ── */
 .legal-footer {
   grid-column: 1 / -1;
