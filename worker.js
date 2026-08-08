@@ -673,11 +673,35 @@ async function cfRateLimit(limiter, key) {
   } catch { return true; }
 }
 
+// 스키마 DDL 을 문장 단위로 나눠 하나씩 실행한다.
+//
+// 원래는 여러 문장을 담은 템플릿을 통째로 `env.DB.exec(...).catch(() => {})` 로 돌렸는데
+// 두 가지가 겹쳐 조용히 망가져 있었다.
+//   1) D1 의 exec() 는 입력을 줄 단위로 쪼개 실행해서, 이 파일처럼 여러 줄로 예쁘게 쓴
+//      CREATE TABLE 문을 제대로 처리하지 못한다.
+//   2) 배치 전체에 하나의 .catch() 가 걸려 있어 중간에 한 문장이 실패하면 나머지가
+//      통째로 사라지는데, 로그조차 남지 않았다.
+// 그 결과 users / login_events / subscriptions / feature_history / photo_readings 등이
+// 프로덕션에 아예 생성되지 않은 채 오래 방치됐다(= 해당 기능들이 조용히 실패 중이었다).
+// 이제는 문장마다 개별 실행 + 개별 로깅이라, 하나가 실패해도 나머지는 계속 만들어진다.
+async function _execEach(env, sql, label) {
+  const stmts = sql.split(';').map(s => s.trim()).filter(Boolean);
+  for (const stmt of stmts) {
+    try {
+      await env.DB.prepare(stmt).run();
+    } catch (e) {
+      // ALTER TABLE 로 이미 있는 컬럼을 추가하는 경우처럼 정상적인 실패도 섞여 있다.
+      // 그래도 삼키지 말고 남긴다 — 안 보이면 오늘 같은 일이 또 생긴다.
+      console.error(`[SCHEMA:${label}]`, stmt.split('\n')[0].slice(0, 70), '→', e?.message);
+    }
+  }
+}
+
 // DB 초기화 (워커 인스턴스 당 최초 1회만 실행)
 let _dbReady = false;
 async function ensureDB(env) {
   if (_dbReady || !env.DB) return;
-  await env.DB.exec(`
+  await _execEach(env, `
     CREATE TABLE IF NOT EXISTS payment_requests (
       id          TEXT    PRIMARY KEY,
       user_email  TEXT    NOT NULL,
@@ -690,7 +714,28 @@ async function ensureDB(env) {
     );
     CREATE INDEX IF NOT EXISTS idx_pr_email_status ON payment_requests (user_email, status);
     CREATE INDEX IF NOT EXISTS idx_pr_created ON payment_requests (created_at DESC);
-  `).catch(() => {});
+
+    -- saju_history 는 여태 어느 ensureDB* 에도 없었다. 프로덕션엔 손으로 만들어져 있어서
+    -- 굴러갔을 뿐이라, DB 를 새로 만들면 리딩 기록 저장이 통째로 깨진다.
+    -- schema_saju_history.sql 과 같은 정의를 여기에 둔다(그 파일은 참고용이고 실행되지 않는다).
+    CREATE TABLE IF NOT EXISTS saju_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_email  TEXT    NOT NULL,
+      mode        TEXT    NOT NULL,
+      p1_name     TEXT,
+      p1_birth    TEXT    NOT NULL,
+      p1_hour     TEXT,
+      p2_name     TEXT,
+      p2_birth    TEXT,
+      p2_hour     TEXT,
+      reading     TEXT    NOT NULL,
+      ohaeng      TEXT    NOT NULL,
+      day_elem    TEXT,
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_saju_user_created ON saju_history(user_email, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_saju_created ON saju_history(created_at DESC);
+  `, 'core');
   _dbReady = true;
 }
 
@@ -698,7 +743,7 @@ async function ensureDB(env) {
 let _dbExtReady = false;
 async function ensureDBExt(env) {
   if (_dbExtReady || !env.DB) return;
-  await env.DB.exec(`
+  await _execEach(env, `
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL,
       auth TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'ko',
@@ -802,22 +847,6 @@ async function ensureDBExt(env) {
     );
     CREATE INDEX IF NOT EXISTS idx_login_events_email ON login_events (email, at DESC);
     CREATE INDEX IF NOT EXISTS idx_login_events_at ON login_events (at DESC);
-    CREATE TABLE IF NOT EXISTS subscriptions (
-      user_email           TEXT PRIMARY KEY,
-      plan                 TEXT NOT NULL,                 -- 'basic' | 'premium'
-      billing_key          TEXT NOT NULL,                 -- 토스 빌링키 (정기결제 수단)
-      customer_key         TEXT NOT NULL,                 -- 토스 customerKey
-      status               TEXT NOT NULL DEFAULT 'active',-- active | canceled | past_due
-      amount               INTEGER NOT NULL,              -- 월 결제 금액(원)
-      monthly_tokens       INTEGER NOT NULL,              -- 매월 지급 토큰 수
-      created_at           INTEGER NOT NULL DEFAULT (unixepoch()),
-      current_period_start INTEGER NOT NULL,
-      current_period_end   INTEGER NOT NULL,              -- 다음 결제 예정일(이 시점 이후 cron이 재결제)
-      last_charged_at      INTEGER,
-      fail_count           INTEGER NOT NULL DEFAULT 0,    -- 연속 결제 실패 횟수 (dunning)
-      canceled_at          INTEGER
-    );
-    CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
     CREATE TABLE IF NOT EXISTS feature_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_email TEXT NOT NULL,
@@ -837,19 +866,40 @@ async function ensureDBExt(env) {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
     CREATE INDEX IF NOT EXISTS idx_pr2_email_created ON photo_readings (user_email, created_at DESC);
-  `).catch(() => {});
-  // user_streaks.last_share_bonus: 기존 배포 DB에 컬럼이 없을 수 있어 별도 ALTER로 보정.
-  // 이미 컬럼이 있으면 매 콜드스타트마다 에러가 나지만 위 배치와 분리돼 있어 다른 테이블 생성에 영향 없음.
-  await env.DB.exec(`ALTER TABLE user_streaks ADD COLUMN last_share_bonus TEXT;`).catch(() => {});
+  `, 'ext');
 
-  // users 테이블 확장: 생년월일 프로필(서버 저장) — 기존 프로덕션 테이블이라 ALTER TABLE로 개별 추가.
-  // 이미 컬럼이 있으면 각각 개별 실패(중복 컬럼)하지만 .catch로 무시되고 다음 컬럼은 계속 진행됨.
-  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_year INTEGER`).catch(() => {});
-  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_month INTEGER`).catch(() => {});
-  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_day INTEGER`).catch(() => {});
-  await env.DB.exec(`ALTER TABLE users ADD COLUMN birth_hour TEXT`).catch(() => {});
-  await env.DB.exec(`ALTER TABLE users ADD COLUMN gender TEXT`).catch(() => {});
-  await env.DB.exec(`ALTER TABLE users ADD COLUMN region TEXT`).catch(() => {});
+  // ⚠️ subscriptions(정기결제) 테이블은 일부러 여기서 만들지 않는다.
+  //
+  // 위 배치가 오래 실패하고 있어서 이 테이블도 프로덕션에 없는 상태였고, 그 덕에 구독 기능은
+  // 조용히 아무것도 하지 않고 있었다. 테이블을 만드는 순간 handleSubscriptionConfirm 이 실제로
+  // 행을 쓰기 시작하고 크론(processSubscriptionRenewals)이 그 행을 근거로 재결제를 시도한다.
+  // 결제 수단 등록 전에 그 상태로 넘어가면 안 되므로, 결제를 정식으로 여는 시점에
+  // 아래 DDL 을 위 'ext' 배치로 옮길 것. 옮길 때 test/schema.test.mjs 의 DEFERRED_TABLES 에서도
+  // subscriptions 를 빼야 테스트가 통과한다(빼먹으면 테스트가 알려준다).
+  //
+  //   CREATE TABLE IF NOT EXISTS subscriptions (
+  //     user_email TEXT PRIMARY KEY, plan TEXT NOT NULL, billing_key TEXT NOT NULL,
+  //     customer_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+  //     amount INTEGER NOT NULL, monthly_tokens INTEGER NOT NULL,
+  //     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  //     current_period_start INTEGER NOT NULL, current_period_end INTEGER NOT NULL,
+  //     last_charged_at INTEGER, fail_count INTEGER NOT NULL DEFAULT 0, canceled_at INTEGER
+  //   );
+  //   CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
+
+  // 아래는 이미 배포된 테이블에 컬럼을 덧붙이는 보정이라 위 배치와 분리한다.
+  // 컬럼이 이미 있으면 매번 실패하는데(정상), _execEach 가 문장별로 처리하므로 다음 줄에 영향이 없다.
+  await _execEach(env, `
+    ALTER TABLE user_streaks ADD COLUMN last_share_bonus TEXT;
+    ALTER TABLE users ADD COLUMN birth_year INTEGER;
+    ALTER TABLE users ADD COLUMN birth_month INTEGER;
+    ALTER TABLE users ADD COLUMN birth_day INTEGER;
+    ALTER TABLE users ADD COLUMN birth_hour TEXT;
+    ALTER TABLE users ADD COLUMN gender TEXT;
+    ALTER TABLE users ADD COLUMN region TEXT;
+    ALTER TABLE push_subscriptions ADD COLUMN user_email TEXT;
+    CREATE INDEX IF NOT EXISTS idx_push_email ON push_subscriptions(user_email);
+  `, 'alter');
 
   _dbExtReady = true;
 }
@@ -3455,12 +3505,20 @@ async function handlePushSubscribe(request, env) {
   try {
     const { subscription, lang='ko' } = await request.json().catch(()=>({}));
     if (!subscription?.endpoint) return cors(JSON.stringify({error:{message:'subscription 필수'}}),400);
+
+    // 로그인 상태면 구독을 사용자와 연결해 개인화 대상이 되게 한다.
+    // 비로그인 구독도 계속 허용한다(email 이 NULL 이면 기본 문구가 나간다).
+    const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+    const email = idToken ? await getEmailFromToken(idToken, env) : null;
+
     const id = _endpointId(subscription.endpoint);
     await env.DB.prepare(
-      `INSERT INTO push_subscriptions (id,endpoint,p256dh,auth,lang)
-       VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET endpoint=excluded.endpoint,
-       p256dh=excluded.p256dh,auth=excluded.auth,lang=excluded.lang`
-    ).bind(id, subscription.endpoint, subscription.keys?.p256dh||'', subscription.keys?.auth||'', lang).run();
+      `INSERT INTO push_subscriptions (id,endpoint,p256dh,auth,lang,user_email)
+       VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET endpoint=excluded.endpoint,
+       p256dh=excluded.p256dh,auth=excluded.auth,lang=excluded.lang,
+       -- 재구독이 비로그인 상태면 기존 연결을 지우지 않는다
+       user_email=COALESCE(excluded.user_email, push_subscriptions.user_email)`
+    ).bind(id, subscription.endpoint, subscription.keys?.p256dh||'', subscription.keys?.auth||'', lang, email).run();
     return cors(JSON.stringify({success:true}),200);
   } catch(e) {
     return cors(JSON.stringify({error:{message:e.message}}),500);
@@ -3482,7 +3540,7 @@ async function handlePushUnsubscribe(request, env) {
 async function _sendOnePush(env, sub, payload) {
   try {
     const jwt = await _vapidJwt(env, sub.endpoint);
-    await fetch(sub.endpoint, {
+    const res = await fetch(sub.endpoint, {
       method:'POST',
       headers:{
         'Authorization':`vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`,
@@ -3491,16 +3549,96 @@ async function _sendOnePush(env, sub, payload) {
       },
       body: JSON.stringify(payload)
     });
+    // 404/410 은 브라우저가 구독을 영구 폐기했다는 뜻이다. 지우지 않으면 죽은 엔드포인트가
+    // 계속 쌓여 매일 크론이 헛일을 한다(예전엔 응답을 아예 보지 않았다).
+    if (res.status === 404 || res.status === 410) {
+      await env.DB.prepare('DELETE FROM push_subscriptions WHERE id=?').bind(sub.id).run().catch(()=>{});
+    }
   } catch(_) {}
 }
+
+// 매일 08시(KST) 크론에서 호출. 구독 1건당 하루 1통이고, 아래 우선순위로 **한 가지** 문구만 고른다.
+// 알림은 과하면 곧장 구독 해제로 이어지므로 여러 통을 보내지 않는다.
+//   1) 스트릭이 살아 있는 사람 → 이어가라고 알림 (가장 시의성 있고 행동으로 이어짐)
+//   2) 7일 이상 리딩이 없는 사람 → 지난 리딩 다시 보기로 유도
+//   3) 그 외 / 비로그인 구독 → 오늘의 일진 오행 (날마다 실제로 바뀌는 문구)
+// 기존 문구는 매일 글자 한 자 안 바뀌어서 무시당하기 쉬웠다.
+const PUSH_MSG = {
+  streak: {
+    ko: n => `🔥 연속 ${n}일 진행 중! 오늘도 이어가세요`,
+    en: n => `🔥 ${n}-day streak! Keep it going today`,
+    zh: n => `🔥 已连续${n}天！今天也继续吧`,
+    ja: n => `🔥 ${n}日連続中！今日も続けましょう`,
+  },
+  dormant: {
+    ko: '지난 리딩을 다시 읽어보세요 📜 마이페이지 → 내 기록',
+    en: 'Revisit your past readings 📜 My Page → My Records',
+    zh: '回顾你的过往解读 📜 我的页面 → 我的记录',
+    ja: '過去のリーディングを読み返しませんか 📜 マイページ → 私の記録',
+  },
+  daily: {
+    ko: e => `오늘은 ${e} 기운의 날이에요 🌟 오늘의 리딩을 받아보세요`,
+    en: e => `Today flows with ${e} energy 🌟 Get your reading`,
+    zh: e => `今天是${e}之气的日子 🌟 来看今日解读`,
+    ja: e => `今日は${e}の気の日 🌟 今日のリーディングを`,
+  },
+};
+
+const DORMANT_DAYS = 7;
 
 async function sendDailyPush(env) {
   await ensureDBExt(env);
   const subs = await env.DB.prepare('SELECT * FROM push_subscriptions').all();
-  for (const sub of (subs.results||[])) {
-    const msg = { ko:'오늘의 오행 운세를 확인하세요! 🌟', en:"Check today's fortune! 🌟",
-                  zh:'查看今日五行运势！🌟', ja:'今日の五行運勢を確認！🌟' };
-    await _sendOnePush(env, sub, { title:'M;Y 安', body: msg[sub.lang]||msg.ko, url:'/' });
+  const rows = subs.results || [];
+  if (!rows.length) return;
+
+  // 개인화 신호는 앞에서 한 번에 모은다 — 구독자마다 조회하면 크론이 D1 호출을 수백 번 한다.
+  const streaks = new Map();   // email → current_streak (어제까지 이어진 경우만)
+  const recent  = new Set();   // 최근 DORMANT_DAYS 일 안에 리딩을 받은 email
+  const hasUsers = rows.some(r => r.user_email);
+
+  if (hasUsers) {
+    const yesterday = new Date(Date.now() + 9*3600000 - 86400000).toISOString().slice(0, 10);
+    try {
+      // 오늘 이미 체크인했으면 재촉할 이유가 없으므로 어제까지인 사람만 고른다
+      const s = await env.DB.prepare(
+        `SELECT user_email, current_streak FROM user_streaks
+         WHERE last_checkin = ? AND current_streak > 0`
+      ).bind(yesterday).all();
+      for (const r of s.results || []) streaks.set(r.user_email, r.current_streak);
+
+      // 휴면 판정용 — "최근 활동자" 목록만 받아오면 되므로 전체 집계보다 훨씬 가볍다
+      const since = Math.floor(Date.now()/1000) - DORMANT_DAYS*86400;
+      const a = await env.DB.prepare(
+        `SELECT DISTINCT user_email FROM (
+           SELECT user_email, created_at FROM saju_history
+           UNION ALL
+           SELECT user_email, created_at FROM feature_history
+         ) WHERE created_at > ?`
+      ).bind(since).all();
+      for (const r of a.results || []) recent.add(r.user_email);
+    } catch (e) {
+      // 개인화 실패가 알림 자체를 막으면 안 된다 — 기본 문구로 계속 진행
+      console.error('[PUSH] 개인화 신호 조회 실패', e);
+    }
+  }
+
+  const il = ilchin();
+  for (const sub of rows) {
+    const lang = PUSH_MSG.daily[sub.lang] ? sub.lang : 'ko';
+    const email = sub.user_email;
+
+    let body;
+    if (email && streaks.has(email)) {
+      body = PUSH_MSG.streak[lang](streaks.get(email));
+    } else if (email && !recent.has(email)) {
+      body = PUSH_MSG.dormant[lang];
+    } else {
+      const elem = (_ELEM_FR[lang] || _ELEM_FR.ko)[il.o] || il.o;
+      body = PUSH_MSG.daily[lang](elem);
+    }
+
+    await _sendOnePush(env, sub, { title:'M;Y 安', body, url:'/' });
   }
 }
 
