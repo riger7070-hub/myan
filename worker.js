@@ -814,6 +814,16 @@ async function hmacVerify(secret, data, signature) {
 // (인메모리 속도 제한 checkRateLimit은 /chat 핸들러 전용이었어서 함께 제거.
 //  현재 속도 제한은 Cloudflare 분산 방식 cfRateLimit만 사용한다.)
 
+// 유료 기능의 토큰 환불. 차감할 때 쓴 값을 그대로 넘겨야 환불이 원래 청구와 어긋나지 않는다.
+// 호출부는 차감 직후 refund 클로저를 만들어 두고, 실패 분기와 catch 양쪽에서 이걸 쓴다.
+async function refundTokens(env, email, feature, cost) {
+  const id = `${feature}_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await env.DB.prepare(
+    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+     VALUES (?, ?, ?, 0, ?, 'approved', unixepoch())`
+  ).bind(id, email, `${feature}_refund`, cost).run();
+}
+
 // Cloudflare Workers 분산 Rate Limiting (전 세계 인스턴스 통합 제한)
 // 바인딩 없으면(로컬 개발 등) 항상 통과 처리
 async function cfRateLimit(limiter, key) {
@@ -2449,6 +2459,8 @@ const DETAIL_CATEGORIES = {
 };
 
 async function handleDetailReading(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -2481,6 +2493,7 @@ async function handleDetailReading(request, env) {
     if (!deductDetail.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '상세 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'detail', 2);
     // 차감 후 잔여 토큰 계산
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
@@ -2509,11 +2522,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `detail_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'detail_refund', 0, 2, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -2521,6 +2530,8 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
 
     return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -2544,6 +2555,8 @@ const TAROT_CARDS = [
 ];
 
 async function handleTarotDraw(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -2562,6 +2575,7 @@ async function handleTarotDraw(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '타로카드 뽑기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'tarot', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -2590,11 +2604,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `tarot_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'tarot_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -2606,6 +2616,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       upright, reading, remaining: remainingTokens
     }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -2636,6 +2648,8 @@ function _getWesternZodiacIndex(month, day) {
 }
 
 async function handleZodiacFortune(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -2667,6 +2681,7 @@ async function handleZodiacFortune(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '띠·별자리 운세는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'zodiac', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -2712,11 +2727,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `zodiac_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'zodiac_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -2729,6 +2740,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       remaining: remainingTokens
     }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -2771,6 +2784,8 @@ const ASPECT_TONE_KO = {
 const ASTRO_TOP_TRANSITS = 5;   // 상위 몇 개만 해석에 쓸지. 전부 넣으면 글이 산만해진다
 
 async function handleAstroTransit(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -2801,6 +2816,7 @@ async function handleAstroTransit(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: `천궁도 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
+    refund = () => refundTokens(env, email, 'astro', COST);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -2852,11 +2868,7 @@ ${transitLines}
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `astro_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'astro_refund', 0, ?, 'approved', unixepoch())`
-      ).bind(refundId, email, COST).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '천궁도 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -2870,6 +2882,8 @@ ${transitLines}
       remaining: remainingTokens,
     }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -2878,6 +2892,8 @@ ${transitLines}
 //  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
 // ════════════════════════════════════════════
 async function handleLuckyPicks(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -2898,6 +2914,7 @@ async function handleLuckyPicks(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '오늘의 럭키 아이템은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'lucky', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -2931,11 +2948,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
     // 세 항목 중 하나도 이름이 없으면 실패로 보고 환불한다.
     const hasPick = !!(picks?.color?.name || picks?.food?.name || picks?.song?.name);
     if (!resp.ok || !hasPick) {
-      const refundId = `lucky_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'lucky_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -2943,6 +2956,8 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
 
     return cors(JSON.stringify({ success:true, picks, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -2954,6 +2969,8 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
 const TYPE_ELEMENTS = ['木','火','土','金','水'];
 
 async function handleTypeCompat(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -2975,6 +2992,7 @@ async function handleTypeCompat(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '궁합 보기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'typecompat', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3000,11 +3018,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `typecompat_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'typecompat_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3012,6 +3026,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, myType, partnerType, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3034,6 +3050,8 @@ const FORTUNE_TOPICS = {
 };
 
 async function handleFortuneTopic(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3054,6 +3072,7 @@ async function handleFortuneTopic(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: `${t.title}은(는) 토큰 1개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
+    refund = () => refundTokens(env, email, 'fortune', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3088,11 +3107,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `fortune_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'fortune_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3100,6 +3115,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, topic, title: t.title, icon: t.icon, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3120,6 +3137,8 @@ function _ichingLine() {
 }
 
 async function handleIching(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3139,6 +3158,7 @@ async function handleIching(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '주역 괘 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'iching', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3176,11 +3196,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `iching_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'iching_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3192,6 +3208,8 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
       reading, remaining: remainingTokens
     }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3211,6 +3229,8 @@ function _lifePathNumber(year, month, day) {
 }
 
 async function handleNumerology(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3235,6 +3255,7 @@ async function handleNumerology(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'numerology', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3264,11 +3285,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `numerology_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'numerology_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3276,6 +3293,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, lifePath, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3287,6 +3306,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 //  짚어보는" 전통 신년운세의 정신을 살려 AI가 생성 — 정통 원문의 대체가 아님을 프론트에 안내.
 // ════════════════════════════════════════════
 async function handleTojeong(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3310,6 +3331,7 @@ async function handleTojeong(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'tojeong', 2);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3342,11 +3364,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `tojeong_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'tojeong_refund', 0, 2, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3354,6 +3372,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, year: thisYear, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3366,6 +3386,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 const MAX_PHOTO_B64_LEN = 900000; // 대략 base64 ~900KB(원본 이미지 약 650KB) — 클라이언트에서 리사이즈 후 전송 전제
 
 async function handlePhotoReading(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     // 본문 크기 선행 체크 (base64 인코딩 오버헤드 감안, 약 1.3MB까지만 허용)
     const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
@@ -3401,6 +3423,7 @@ async function handlePhotoReading(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'photo_reading', 2);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3448,11 +3471,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!resp.ok || !reading) {
       // API 오류 또는 세이프티 필터 등으로 응답이 비면 토큰 환불
-      const refundId = `photo_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'photo_reading_refund', 0, 2, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '사진을 분석하지 못했습니다. 다른 사진으로 다시 시도해 주세요. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3479,6 +3498,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, id: readingId, type, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3545,6 +3566,8 @@ async function handleDeletePhotoReading(request, env) {
 //  꿈해몽 (재미 콘텐츠, 1토큰)
 // ════════════════════════════════════════════
 async function handleDreamInterpretation(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3565,6 +3588,7 @@ async function handleDreamInterpretation(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '꿈해몽은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'dream', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3593,11 +3617,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `dream_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'dream_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3605,6 +3625,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3620,6 +3642,8 @@ function _lottoNumbers() {
 }
 
 async function handleLottoNumbers(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3638,6 +3662,7 @@ async function handleLottoNumbers(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '오늘의 로또번호는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'lotto', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3665,11 +3690,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `lotto_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'lotto_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3677,6 +3698,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, numbers, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
@@ -3700,6 +3723,8 @@ const RUNE_NAMES = [
 ];
 
 async function handleRuneReading(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
@@ -3718,6 +3743,7 @@ async function handleRuneReading(request, env) {
     if (!deduct.meta?.rows_written) {
       return cors(JSON.stringify({ error: { message: '룬 문자 점은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
+    refund = () => refundTokens(env, email, 'rune', 1);
     const remainRow = await env.DB.prepare(
       `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
     ).bind(email).first();
@@ -3746,11 +3772,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      const refundId = `rune_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'rune_refund', 0, 1, 'approved', unixepoch())`
-      ).bind(refundId, email).run();
+      await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
@@ -3758,6 +3780,8 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     return cors(JSON.stringify({ success:true, index: idx, name: rune.en, nameKo: rune.ko, upright, reading, remaining: remainingTokens }), 200);
   } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
   }
 }
