@@ -40,6 +40,17 @@ test('Authorization 토큰을 서명 검증 없이 직접 디코드하지 않는
     `서명 검증 없는 JWT 디코드가 되살아났다. getEmailFromToken() 을 쓸 것:\n${found.join('\n')}`);
 });
 
+test('기록 저장을 await 없이 호출하지 않는다', () => {
+  // Workers 는 응답을 돌려주는 순간 실행 컨텍스트를 정리한다. ctx.waitUntil() 로 등록하지 않은
+  // 미완료 프로미스는 그대로 취소된다 — 이 파일의 fetch 는 (request, env) 만 받아 ctx 조차 없다.
+  // 그래서 `saveSajuHistory(...).catch(() => {})` 같은 fire-and-forget INSERT 는 대부분
+  // 완료되지 못했고, 실제로 saju_history / feature_history 가 0행이었다.
+  // 저장은 몇 ms 짜리 D1 INSERT 이고 어차피 AI 호출 뒤라, 그냥 await 하는 게 맞다.
+  const found = hits(worker, /^\s*save(Feature|Saju)History\s*\(/);
+  assert.deepEqual(found, [],
+    `await 없는 기록 저장이 되살아났다 — 응답과 함께 취소돼 저장이 안 된다:\n${found.join('\n')}`);
+});
+
 test('PIN 을 소스의 문자열 리터럴과 비교하지 않는다', () => {
   // UNGI_PIN / CAFE_STAFF_PIN / PROMO_ADMIN_PIN 은 공개 저장소에 하드코딩돼 있던 것을
   // env 시크릿으로 옮긴 것이다. 시크릿이 없으면 해당 경로는 항상 거부돼야 한다(폴백 금지).

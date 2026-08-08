@@ -452,7 +452,7 @@ async function handleSajuReading(request, env) {
         const email = await getEmailFromToken(idToken, env).catch(() => null);
         if (email) {
           // 비동기로 저장 (응답 블로킹 안 함)
-          saveSajuHistory(env, email, mode, p1, p2, out.reading, out.ohaeng, il.o).catch(() => {});
+          await saveSajuHistory(env, email, mode, p1, p2, out.reading, out.ohaeng, il.o).catch(() => {});
         }
       }
     }
@@ -2362,7 +2362,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
       return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
+    await saveFeatureHistory(env, email, 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -2443,7 +2443,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
+    await saveFeatureHistory(env, email, 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
 
     return cors(JSON.stringify({
       success:true,
@@ -2565,7 +2565,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
+    await saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
 
     return cors(JSON.stringify({
       success:true, animal, animalIndex, zodiac, zodiacIndex, reading,
@@ -2643,7 +2643,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
       return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'lucky', null, JSON.stringify(picks), null).catch(() => {});
+    await saveFeatureHistory(env, email, 'lucky', null, JSON.stringify(picks), null).catch(() => {});
 
     return cors(JSON.stringify({ success:true, picks, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -2712,7 +2712,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
+    await saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, myType, partnerType, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -2800,7 +2800,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'fortune', t.title, reading, { topic }).catch(() => {});
+    await saveFeatureHistory(env, email, 'fortune', t.title, reading, { topic }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, topic, title: t.title, icon: t.icon, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -2888,7 +2888,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
       return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
+    await saveFeatureHistory(env, email, 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
 
     return cors(JSON.stringify({
       success:true,
@@ -2976,7 +2976,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
+    await saveFeatureHistory(env, email, 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, lifePath, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -3054,7 +3054,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
+    await saveFeatureHistory(env, email, 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, year: thisYear, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -3303,7 +3303,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'dream', cleanDream.slice(0, 30), reading, { dream: cleanDream }).catch(() => {});
+    await saveFeatureHistory(env, email, 'dream', cleanDream.slice(0, 30), reading, { dream: cleanDream }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -3375,7 +3375,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
+    await saveFeatureHistory(env, email, 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, numbers, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -3456,7 +3456,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    saveFeatureHistory(env, email, 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
+    await saveFeatureHistory(env, email, 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, index: idx, name: rune.en, nameKo: rune.ko, upright, reading, remaining: remainingTokens }), 200);
   } catch(e) {
