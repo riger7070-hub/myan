@@ -1038,8 +1038,16 @@ export default {
 // 로그인 시 1회 Google 검증 후 자체 세션을 발급하고, 이후 요청은 로컬 HMAC 검증(네트워크 0회).
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30일(초)
 
+// SESSION_SECRET 이 없으면 세션 발급·검증을 아예 하지 않는다(폴백 금지).
+// 예전엔 ADMIN_SECRET → GEMINI_API_KEY → 'myan-dev-secret' 순으로 폴백했는데,
+// 마지막 값이 이 공개 저장소에 그대로 박혀 있어서 시크릿이 비는 순간 누구나
+// 임의 이메일로 세션 토큰을 위조할 수 있었다(= 전 계정 탈취 + 토큰 무한 지급).
+// UNGI_PIN/CAFE_STAFF_PIN/PROMO_ADMIN_PIN 과 같은 원칙 — 시크릿이 없으면 거부한다.
+// 던진 예외는 verifySessionToken 경로에선 getEmailFromToken 의 try/catch 가 받아
+// 인증 거부(null)로 떨어지고, 발급 경로에선 handleAuthLogin 이 500 으로 돌려준다.
 function _sessionSecret(env) {
-  return env.SESSION_SECRET || env.ADMIN_SECRET || env.GEMINI_API_KEY || 'myan-dev-secret';
+  if (!env.SESSION_SECRET) throw new Error('SESSION_SECRET not configured');
+  return env.SESSION_SECRET;
 }
 function _b64urlFromObj(obj) {
   const bytes = new TextEncoder().encode(JSON.stringify(obj));
@@ -1173,7 +1181,14 @@ async function handleAuthLogin(request, env) {
   }
 
   // 자체 세션 토큰 발급 (이후 요청은 이 토큰으로 로컬 검증)
-  const session = await createSessionToken(email, env);
+  // SESSION_SECRET 미설정이면 _sessionSecret() 이 던진다 — 스택을 흘리지 않고 한국어로 응답.
+  let session;
+  try {
+    session = await createSessionToken(email, env);
+  } catch (e) {
+    console.error('[AUTH LOGIN] 세션 발급 실패', e);
+    return cors(JSON.stringify({ error: '로그인 처리 중 오류가 발생했습니다.' }), 500);
+  }
   return cors(JSON.stringify({
     ok: true,
     session,
