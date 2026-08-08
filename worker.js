@@ -3461,13 +3461,15 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
         `INSERT INTO photo_readings (user_email, type, image_b64, reading) VALUES (?, ?, ?, ?)`
       ).bind(email, type, b64, reading).run();
       readingId = insertResult.meta?.last_row_id ?? null;
-      env.DB.prepare(
+      // 20개 상한 정리. await 하지 않으면 응답과 함께 취소돼 상한이 사실상 없는 셈이 된다
+      // (여기 저장되는 건 base64 이미지라 쌓이면 D1 용량을 빠르게 먹는다).
+      const { results } = await env.DB.prepare(
         `SELECT id FROM photo_readings WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 20`
-      ).bind(email).all().then(({ results }) => {
-        if (results && results.length > 0) {
-          return env.DB.prepare(`DELETE FROM photo_readings WHERE user_email = ? AND id < ?`).bind(email, results[0].id).run();
-        }
-      }).catch(() => {});
+      ).bind(email).all();
+      if (results && results.length > 0) {
+        await env.DB.prepare(`DELETE FROM photo_readings WHERE user_email = ? AND id < ?`)
+          .bind(email, results[0].id).run();
+      }
     } catch (e) {
       console.error('[PHOTO READING SAVE]', e);
     }
@@ -3823,6 +3825,24 @@ async function handlePushUnsubscribe(request, env) {
     const { endpoint } = await request.json().catch(()=>({}));
     if (!endpoint) return cors(JSON.stringify({error:{message:'endpoint 필수'}}),400);
     const id = _endpointId(endpoint);
+
+    // 예전엔 endpoint 만 맞으면 누구든 지울 수 있었다. 엔드포인트 URL 은 비밀이 아니라서
+    // 값을 알아낸 사람이 남의 알림을 조용히 끊을 수 있었다(클라이언트는 예전부터
+    // Authorization 을 보내고 있었는데 서버가 무시했다 — 구독 쪽과 같은 문제였다).
+    const row = await env.DB.prepare('SELECT user_email FROM push_subscriptions WHERE id=?')
+      .bind(id).first();
+    if (!row) return cors(JSON.stringify({success:true}),200);   // 이미 없음 — 조용히 성공 처리
+
+    if (row.user_email) {
+      const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
+      const email = idToken ? await getEmailFromToken(idToken, env) : null;
+      if (email !== row.user_email) {
+        return cors(JSON.stringify({error:{message:'권한이 없습니다.'}}),403);
+      }
+    }
+    // user_email 이 NULL 인 건 로그인 전에 만들어진 구독이라 소유자를 알 수 없다.
+    // 그건 예전처럼 endpoint 만으로 해제를 허용한다(막으면 영영 못 끊는다).
+
     await env.DB.prepare('DELETE FROM push_subscriptions WHERE id=?').bind(id).run();
     return cors(JSON.stringify({success:true}),200);
   } catch(e) {
