@@ -1100,6 +1100,7 @@ export default {
     // ── 띠·별자리 운세 (재미 콘텐츠) ──
     if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return handleAstroTransit(request, env); }
+    if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return handleAuspiciousDays(request, env); }
     // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
     if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
@@ -2880,6 +2881,262 @@ ${transitLines}
       success: true, reading, natal, today, transits,
       moon: { index: moon.index, illumination: Math.round(moon.illumination * 100) },
       remaining: remainingTokens,
+    }), 200);
+  } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  택일(擇日) — 목적에 맞는 좋은 날 고르기 (2토큰)
+//
+//  천궁도와 같은 원칙이다. 길흉 판단을 AI 에게 맡기지 않는다.
+//  lunar-javascript 가 들고 있는 실제 역법 데이터(일진의 의宜/기忌, 길신, 흉살, 충)로
+//  코드가 먼저 날짜를 걸러 점수순으로 세우고, AI 는 "왜 그 날인지"만 설명한다.
+//  AI 에게 날짜를 고르게 하면 그럴듯하지만 역서와 무관한 날이 나온다.
+//
+//  용어(嫁娶·天德·月破 …)는 원 데이터가 한자다. 화면에 그대로 내보내면 한국어 사용자가
+//  읽을 수 없으므로 여기서 4개국어 이름으로 바꿔 내려보낸다 — 프론트에 같은 표를
+//  또 두지 않기 위해서다(목적 라벨만 선택 UI 에 필요해 locales.js 에도 있다).
+// ════════════════════════════════════════════
+
+// 목적별로 역서의 어느 항목을 보는지. yi = 이 날이 그 일에 '의(宜)'인가, ji = '기(忌)'인가.
+const TAKIL_PURPOSES = {
+  wedding:  { icon:'💍', yi:['嫁娶','订盟','纳采','冠笄'], ji:['嫁娶'],
+              label:{ ko:'결혼·약혼', en:'Wedding or engagement', zh:'嫁娶·订盟', ja:'結婚・婚約' } },
+  moving:   { icon:'📦', yi:['移徙','入宅','出火','安床'], ji:['移徙','入宅'],
+              label:{ ko:'이사·입주', en:'Moving in', zh:'移徙·入宅', ja:'引っ越し・入居' } },
+  opening:  { icon:'🏪', yi:['开市','挂匾','立券','纳财'], ji:['开市'],
+              label:{ ko:'개업·창업', en:'Opening a business', zh:'开市·开业', ja:'開業・創業' } },
+  contract: { icon:'📝', yi:['立券','交易','纳财','开仓','出货财'], ji:['立券','交易','纳财'],
+              label:{ ko:'계약·거래', en:'Contract or deal', zh:'立券·交易', ja:'契約・取引' } },
+  travel:   { icon:'✈️', yi:['出行'], ji:['出行'],
+              label:{ ko:'여행·출장', en:'Travel', zh:'出行', ja:'旅行・出張' } },
+  medical:  { icon:'🩺', yi:['求医','治病'], ji:['求医','治病','探病'],
+              label:{ ko:'치료·수술', en:'Treatment or surgery', zh:'求医·治病', ja:'治療・手術' } },
+  build:    { icon:'🔨', yi:['动土','修造','上梁','起基','竖柱','盖屋','拆卸'], ji:['动土','修造','上梁','盖屋'],
+              label:{ ko:'공사·수리', en:'Construction or repairs', zh:'动土·修造', ja:'工事・修理' } },
+  meeting:  { icon:'🤝', yi:['会亲友','进人口'], ji:['会亲友'],
+              label:{ ko:'만남·모임', en:'Meeting people', zh:'会亲友', ja:'会合・集まり' } },
+  ritual:   { icon:'🕯️', yi:['祭祀','祈福','开光','斋醮'], ji:['祭祀','祈福'],
+              label:{ ko:'고사·기도', en:'Rite or prayer', zh:'祭祀·祈福', ja:'祈願・祭祀' } },
+};
+
+// 길신/흉살은 역서에 수십 종이 실리는데 전부 보여주면 읽히지 않는다.
+// 택일에서 실제로 무게가 실리는 것만 골라 가중치(w)와 4개국어 이름을 붙였다.
+// 여기 없는 항목은 점수에도, 화면에도 쓰지 않는다.
+const TAKIL_JISHEN = {
+  天德:   { w:2, ko:'천덕',   en:'Heavenly Virtue',   zh:'天德',   ja:'天徳' },
+  月德:   { w:2, ko:'월덕',   en:'Monthly Virtue',    zh:'月德',   ja:'月徳' },
+  天德合: { w:2, ko:'천덕합', en:'Heavenly Virtue Union', zh:'天德合', ja:'天徳合' },
+  月德合: { w:2, ko:'월덕합', en:'Monthly Virtue Union',  zh:'月德合', ja:'月徳合' },
+  天赦:   { w:2, ko:'천사',   en:'Heavenly Pardon',   zh:'天赦',   ja:'天赦' },
+  天愿:   { w:2, ko:'천원',   en:'Heavenly Wish',     zh:'天愿',   ja:'天願' },
+  三合:   { w:2, ko:'삼합',   en:'Triple Harmony',    zh:'三合',   ja:'三合' },
+  六合:   { w:2, ko:'육합',   en:'Six Harmony',       zh:'六合',   ja:'六合' },
+  天喜:   { w:1, ko:'천희',   en:'Heavenly Joy',      zh:'天喜',   ja:'天喜' },
+  天医:   { w:1, ko:'천의',   en:'Heavenly Healer',   zh:'天医',   ja:'天医' },
+  母仓:   { w:1, ko:'모창',   en:'Mother Granary',    zh:'母仓',   ja:'母倉' },
+  生气:   { w:1, ko:'생기',   en:'Life Energy',       zh:'生气',   ja:'生気' },
+  五富:   { w:1, ko:'오부',   en:'Five Riches',       zh:'五富',   ja:'五富' },
+  福生:   { w:1, ko:'복생',   en:'Blessing Born',     zh:'福生',   ja:'福生' },
+};
+const TAKIL_XIONGSHA = {
+  月破: { w:3, ko:'월파', en:'Month Breaker',      zh:'月破', ja:'月破' },
+  大耗: { w:3, ko:'대모', en:'Great Drain',        zh:'大耗', ja:'大耗' },
+  四废: { w:3, ko:'사폐', en:'Four Wastes',        zh:'四废', ja:'四廃' },
+  受死: { w:3, ko:'수사', en:'Death Day',          zh:'受死', ja:'受死' },
+  往亡: { w:2, ko:'왕망', en:'Journey Loss',       zh:'往亡', ja:'往亡' },
+  归忌: { w:2, ko:'귀기', en:'Return Taboo',       zh:'归忌', ja:'帰忌' },
+  血忌: { w:2, ko:'혈기', en:'Blood Taboo',        zh:'血忌', ja:'血忌' },
+  天贼: { w:2, ko:'천적', en:'Heavenly Thief',     zh:'天贼', ja:'天賊' },
+  月煞: { w:1, ko:'월살', en:'Month Killing',      zh:'月煞', ja:'月殺' },
+  月刑: { w:1, ko:'월형', en:'Month Punishment',   zh:'月刑', ja:'月刑' },
+  月厌: { w:1, ko:'월염', en:'Month Loathing',     zh:'月厌', ja:'月厭' },
+  五虚: { w:1, ko:'오허', en:'Five Voids',         zh:'五虚', ja:'五虚' },
+  白虎: { w:1, ko:'백호', en:'White Tiger',        zh:'白虎', ja:'白虎' },
+  朱雀: { w:1, ko:'주작', en:'Vermilion Bird',     zh:'朱雀', ja:'朱雀' },
+};
+// 띠(생년 지지)를 충하는 날은 본명일 충이라 전통 택일에서 가장 먼저 걸러낸다.
+const TAKIL_ANIMALS = {
+  ko:['쥐','소','호랑이','토끼','용','뱀','말','양','원숭이','닭','개','돼지'],
+  en:['Rat','Ox','Tiger','Rabbit','Dragon','Snake','Horse','Goat','Monkey','Rooster','Dog','Pig'],
+  zh:['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'],
+  ja:['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'],
+};
+
+const TAKIL_SCAN_DAYS = 60;   // 몇 달 앞까지 훑을지. 너무 길면 "그때 가서 다시 보면 될 날"이 섞인다
+const TAKIL_TOP       = 5;    // 추천으로 내보낼 날 수
+
+/**
+ * 목적에 맞는 날을 역서 데이터로 걸러 점수순으로 돌려준다. 여기엔 AI 도 네트워크도 없다.
+ * @param {string} purposeKey TAKIL_PURPOSES 의 키
+ * @param {{year:number,month:number,day:number}} start 훑기 시작할 날(보통 오늘)
+ * @param {{days?:number, yearZhi?:string}} opts yearZhi 를 주면 그 띠를 충하는 날은 뺀다
+ * @returns {Array|null} 점수 내림차순(동점이면 빠른 날짜) 후보 목록. 목적 키가 틀리면 null
+ */
+function pickAuspiciousDays(purposeKey, start, opts = {}) {
+  const p = TAKIL_PURPOSES[purposeKey];
+  if (!p) return null;
+  const days = opts.days || TAKIL_SCAN_DAYS;
+  const out = [];
+
+  let solar = Solar.fromYmd(start.year, start.month, start.day);
+  for (let i = 0; i < days; i++, solar = solar.next(1)) {
+    const lunar = solar.getLunar();
+    const ji = lunar.getDayJi();
+    if (ji.includes('诸事不宜')) continue;              // 역서가 통째로 막아둔 날
+    if (p.ji.some(k => ji.includes(k))) continue;      // 그 일에 대놓고 '기(忌)'인 날
+    const yi = lunar.getDayYi();
+    const hits = p.yi.filter(k => yi.includes(k));
+    if (!hits.length) continue;                        // '나쁘지 않다'는 '좋다'가 아니다 — 의(宜)에 있어야 후보
+    const chong = lunar.getDayChong();
+    if (opts.yearZhi && chong === opts.yearZhi) continue;   // 본명일 충
+
+    const jishen   = lunar.getDayJiShen().filter(s => TAKIL_JISHEN[s]);
+    const xiongsha = lunar.getDayXiongSha().filter(s => TAKIL_XIONGSHA[s]);
+    let score = hits.length * 3;
+    for (const s of jishen)   score += TAKIL_JISHEN[s].w;
+    for (const s of xiongsha) score -= TAKIL_XIONGSHA[s].w;
+
+    out.push({
+      ymd: solar.toYmd(),
+      ganzhi: lunar.getDayInGanZhi(),
+      lunarMonth: Math.abs(lunar.getMonth()),
+      lunarDay: lunar.getDay(),
+      leapMonth: lunar.getMonth() < 0,
+      hits, jishen, xiongsha, chong, score,
+    });
+  }
+  // 동점이면 가까운 날을 먼저 — 사용자는 대개 빨리 잡고 싶어 한다
+  out.sort((a, b) => b.score - a.score || (a.ymd < b.ymd ? -1 : 1));
+  return out;
+}
+
+async function handleAuspiciousDays(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', purpose, birth, from, days } = await request.json().catch(() => ({}));
+    const P = TAKIL_PURPOSES[purpose];
+    if (!P) return cors(JSON.stringify({ error: { message: '어떤 일의 날짜를 고를지 선택해 주세요.' } }), 400);
+
+    // 언제부터 볼지. "내년 봄쯤 결혼" 처럼 먼 날을 잡는 경우가 있어 시작일을 받는다.
+    // 과거로는 보내지 않고(지난 날을 권할 수는 없다), 너무 먼 미래도 막는다.
+    const now = new Date();
+    const todayYmd = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+    let startYmd = todayYmd;
+    if (typeof from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      const maxYmd = new Date(Date.UTC(now.getUTCFullYear() + 2, now.getUTCMonth(), now.getUTCDate()))
+        .toISOString().slice(0, 10);
+      if (from < todayYmd || from > maxYmd) {
+        return cors(JSON.stringify({ error: { message: '오늘부터 2년 안의 날짜로 골라 주세요.' } }), 400);
+      }
+      startYmd = from;
+    }
+    const scanDays = Math.min(Math.max(parseInt(days, 10) || TAKIL_SCAN_DAYS, 7), 90);
+
+    // 띠는 있으면 쓰고 없으면 건너뛴다 — 생년월일이 없다고 택일 자체를 막을 이유는 없다.
+    let yearZhi = null, animalIndex = -1;
+    const by = birth ? parseInt(birth.year, 10) : NaN;
+    const bm = birth ? parseInt(birth.month, 10) : NaN;
+    const bd = birth ? parseInt(birth.day, 10) : NaN;
+    if (by && bm && bd) {
+      try {
+        yearZhi = Solar.fromYmd(by, bm, bd).getLunar().getYearZhiByLiChun();
+        animalIndex = JJ.indexOf(yearZhi);
+      } catch { yearZhi = null; }
+    }
+
+    const [sy, sm, sd] = startYmd.split('-').map(n => parseInt(n, 10));
+    const all = pickAuspiciousDays(purpose, { year: sy, month: sm, day: sd }, { yearZhi, days: scanDays });
+    const picks = (all || []).slice(0, TAKIL_TOP);
+
+    // 후보가 없으면 차감하지 않는다. 못 준 결과에 토큰을 받을 수는 없다.
+    if (!picks.length) {
+      return cors(JSON.stringify({ error: { message: `${startYmd}부터 ${scanDays}일 안에는 마땅한 날이 없습니다. 기간을 넓혀 다시 보아 주세요.` } }), 404);
+    }
+
+    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    const COST = 2;
+    const useId = `takil_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'takil_use', 0, ?, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
+    ).bind(useId, email, -COST, email, COST).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: `택일은 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    refund = () => refundTokens(env, email, 'takil', COST);
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const L = (tbl, key) => (tbl[key]?.[lang] || tbl[key]?.ko || key);
+    const purposeLabel = P.label[lang] || P.label.ko;
+    const animals = TAKIL_ANIMALS[lang] || TAKIL_ANIMALS.ko;
+    // 화면·프롬프트 양쪽이 같은 이름을 쓰도록 여기서 한 번만 옮긴다
+    const localized = picks.map(d => ({
+      ...d,
+      jishen:   d.jishen.map(s => L(TAKIL_JISHEN, s)),
+      xiongsha: d.xiongsha.map(s => L(TAKIL_XIONGSHA, s)),
+      chongAnimal: JJ.indexOf(d.chong) >= 0 ? animals[JJ.indexOf(d.chong)] : d.chong,
+    }));
+
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const dayLines = localized.map((d, i) => {
+      const good = d.jishen.length ? ` / 길신: ${d.jishen.join(', ')}` : '';
+      const bad  = d.xiongsha.length ? ` / 흉살: ${d.xiongsha.join(', ')}` : '';
+      return `  ${i + 1}순위 ${d.ymd} (음력 ${d.lunarMonth}월 ${d.lunarDay}일, 일진 ${d.ganzhi}) — 점수 ${d.score}${good}${bad} / 이 날이 충하는 띠: ${d.chongAnimal}`;
+    }).join('\n');
+
+    const prompt = `당신은 택일(擇日)을 봐 주는 상담사입니다. 아래 날짜는 실제 역서(만세력)의 일진·의기(宜忌)·길신·흉살 데이터로 이미 골라 둔 것입니다. 날짜를 새로 지어내거나 순위를 바꾸지 말고, 준 것만 설명하세요.
+
+[하려는 일] ${purposeLabel}
+${yearZhi ? `[의뢰인의 띠] ${animals[animalIndex] || ''}띠 (이 띠를 충하는 날은 이미 제외했습니다)` : '[의뢰인의 띠] 알 수 없음 (본명 충은 걸러내지 못했습니다)'}
+
+[역서가 고른 날 — 점수가 높을수록 그 일에 맞는 날]
+${dayLines}
+
+위 자료를 근거로 ${langLabel}로 답하세요. 조건:
+- 1순위 날을 왜 권하는지 먼저 쓰고, 길신 이름을 근거로 들어 설명하세요.
+- 사정이 안 될 때를 위해 2·3순위도 한 줄씩 짚어 주세요.
+- 흉살이 붙은 날은 숨기지 말고 "이런 점만 조심하면 된다"는 식으로 짚어 주세요.
+- 날짜는 반드시 위에 준 그대로 쓰세요.
+- 400~500자 분량, 문단 2~3개.
+- JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.8 } }) }
+    );
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      await refund(); refund = null;
+      return cors(JSON.stringify({ error: { message: '택일 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, email, 'takil', `${purposeLabel} · ${localized[0].ymd}`, reading,
+      { purpose, picks: localized }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, purpose, purposeLabel, picks: localized, reading,
+      from: startYmd, scanDays, remaining: remainingTokens,
     }), 200);
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.

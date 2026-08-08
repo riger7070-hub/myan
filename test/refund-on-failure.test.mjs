@@ -83,7 +83,7 @@ test('Gemini 가 200 이 아닐 때도 잔액이 그대로다 (기존 환불 경
 
 test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있다', async () => {
   // 유료 기능이 새로 추가될 때 catch 환불을 빠뜨리면 그 기능만 조용히 토큰을 먹는다.
-  // 런타임 테스트로 14개를 전부 덮으려면 요청 픽스처가 14벌 필요하므로, 여기서는 소스 구조로 막는다.
+  // 런타임 테스트로 전부 덮으려면 요청 픽스처가 그만큼 필요하므로, 여기서는 소스 구조로 막는다.
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
@@ -94,7 +94,7 @@ test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있�
   const spans = starts.map((s, i) => src.slice(s, starts[i + 1] ?? src.length));
 
   const paid = spans.filter(s => /'[a-z_]+_use', 0, /.test(s));
-  assert.equal(paid.length, 14, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
+  assert.equal(paid.length, 15, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
 
   for (const span of paid) {
     const name = (span.match(/^async function (\w+)/) || [])[1] || span.slice(0, 40);

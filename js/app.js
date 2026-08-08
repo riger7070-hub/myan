@@ -4958,6 +4958,155 @@ async function openAstroTransit() {
   }
 }
 
+// ════════════════════════════════════════════
+//  택일 — 목적을 고르면 만세력에서 좋은 날을 골라 준다 (2토큰)
+//
+//  길흉 판단은 전부 서버(worker.js 의 pickAuspiciousDays)가 역서 데이터로 끝낸다.
+//  여기에 규칙을 한 줄이라도 두면 서버가 고른 날과 화면에 뜨는 설명이 어긋나므로,
+//  이 파일은 받은 날짜를 그리기만 한다. 길신·흉살 이름도 서버가 자국어로 보내 준다.
+// ════════════════════════════════════════════
+const TAKIL_PURPOSE_ICONS = {
+  wedding:'💍', moving:'📦', opening:'🏪', contract:'📝', travel:'✈️',
+  medical:'🩺', build:'🔨', meeting:'🤝', ritual:'🕯️',
+};
+
+function _takilDayHtml(d, lang, t, best) {
+  let weekday = '';
+  try {
+    weekday = new Date(`${d.ymd}T00:00:00Z`)
+      .toLocaleDateString(lang, { weekday:'short', timeZone:'UTC' });
+  } catch { weekday = ''; }
+
+  return `
+    <div class="detail-area-card" style="margin-top:8px">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700;color:var(--gold);font-size:${best ? '1.12rem' : '0.98rem'}">${_escHtml(d.ymd)}</span>
+        <span style="font-size:0.74rem;color:var(--text-dim)">${_escHtml(weekday)} · ${_escHtml(t.takilLunarShort)} ${d.lunarMonth}.${d.lunarDay} · ${_escHtml(d.ganzhi)}</span>
+      </div>
+      ${d.jishen?.length ? `<div style="font-size:0.75rem;margin-top:6px"><span style="color:var(--gold)">${_escHtml(t.takilGood)}</span> ${_escHtml(d.jishen.join(', '))}</div>` : ''}
+      ${d.xiongsha?.length ? `<div style="font-size:0.75rem;margin-top:3px;color:var(--text-dim)"><span style="color:#e08a7a">${_escHtml(t.takilBad)}</span> ${_escHtml(d.xiongsha.join(', '))}</div>` : ''}
+      <div style="font-size:0.71rem;margin-top:3px;color:var(--text-dim)">${_escHtml(t.takilChong)} ${_escHtml(d.chongAnimal || '')}</div>
+    </div>`;
+}
+
+async function openAuspiciousDays() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+  // 생년월일은 있으면 본명 충을 걸러 주고, 없어도 택일 자체는 된다 — 여기서 막지 않는다.
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  const birth = _u?.birthYear ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay } : null;
+
+  // 서버는 UTC 기준 오늘부터 2년까지만 받는다 — 입력 칸도 같은 범위로 맞춘다.
+  const iso = dt => dt.toISOString().slice(0, 10);
+  const now = new Date();
+  const maxDate = new Date(Date.UTC(now.getUTCFullYear() + 2, now.getUTCMonth(), now.getUTCDate()));
+  const purposes = Object.keys(TAKIL_PURPOSE_ICONS);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:440px;padding:28px 22px;text-align:center">
+      <div class="modal-title">📅 ${_escHtml(t.takilTitle)}</div>
+      <div id="takilForm" style="margin-top:16px">
+        <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.takilPurposeAsk)}</div>
+        <div class="takil-grid" id="takilPurposes">
+          ${purposes.map(p => `
+            <button class="takil-tile" type="button" data-purpose="${p}">
+              <span class="takil-ico">${TAKIL_PURPOSE_ICONS[p]}</span>
+              <span class="takil-label">${_escHtml(t['takilP_' + p] || p)}</span>
+            </button>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;text-align:left">
+          <label style="flex:1;font-size:0.73rem;color:var(--text-dim)">${_escHtml(t.takilFromLabel)}
+            <input type="date" id="takilFrom" class="takil-field" value="${iso(now)}" min="${iso(now)}" max="${iso(maxDate)}">
+          </label>
+          <label style="width:36%;font-size:0.73rem;color:var(--text-dim)">${_escHtml(t.takilRangeLabel)}
+            <select id="takilDays" class="takil-field">
+              <option value="30">30</option>
+              <option value="60" selected>60</option>
+              <option value="90">90</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="takilStatus" style="display:none;font-size:0.8rem;color:var(--text-dim);margin-top:14px"></div>
+      <div id="takilResult" style="display:none;text-align:left;margin-top:16px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const run = async (purpose) => {
+    const formEl   = overlay.querySelector('#takilForm');
+    const statusEl = overlay.querySelector('#takilStatus');
+    const resultEl = overlay.querySelector('#takilResult');
+    const from = overlay.querySelector('#takilFrom')?.value || undefined;
+    const days = parseInt(overlay.querySelector('#takilDays')?.value, 10) || 60;
+
+    if (formEl) formEl.style.display = 'none';
+    if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.takilLoading; }
+
+    const started = Date.now();
+    const MIN_MS = 1500;
+    try {
+      const res = await fetch('/api/auspicious-days', {
+        method: 'POST',
+        headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+        body: JSON.stringify({ lang, purpose, birth, from, days })
+      });
+      const data = await res.json();
+      const remain = MIN_MS - (Date.now() - started);
+      if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+      if (!data.success) {
+        if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
+        return;
+      }
+      if (statusEl) statusEl.style.display = 'none';
+      if (!resultEl) return;
+
+      const [best, ...rest] = data.picks;
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold)">${TAKIL_PURPOSE_ICONS[purpose] || '📅'} ${_escHtml(data.purposeLabel || '')}</div>
+
+        <div style="font-size:0.76rem;color:var(--gold);margin-top:14px">${_escHtml(t.takilBest)}</div>
+        ${_takilDayHtml(best, lang, t, true)}
+
+        ${rest.length ? `
+          <div style="font-size:0.76rem;color:var(--gold);margin-top:14px">${_escHtml(t.takilAlso)}</div>
+          ${rest.map(d => _takilDayHtml(d, lang, t, false)).join('')}` : ''}
+
+        <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="takilReadingBody"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.takilNote)}</div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" id="takilShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
+      `;
+
+      const bodyEl = overlay.querySelector('#takilReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+      const shareBtn = overlay.querySelector('#takilShare');
+      if (shareBtn) shareBtn.addEventListener('click', () => shareResultCard({
+        icon: '📅',
+        title: `${t.takilTitle} · ${data.purposeLabel} · ${best.ymd}`,
+        filename: 'myan-takil',
+      }));
+      refreshTokens();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = getT().netErr || '네트워크 오류가 발생했습니다.';
+    }
+  };
+
+  overlay.querySelectorAll('#takilPurposes [data-purpose]').forEach(btn => {
+    btn.addEventListener('click', () => run(btn.dataset.purpose));
+  });
+}
+
 async function openZodiacFortune() {
   const token = getGoogleIdToken();
   if (!token) {
@@ -5947,6 +6096,7 @@ function _homeSections() {
       { icon:'🔯',  label: t.typeTitle       || '오행 유형 테스트',    cost:1, fn:'openTypeTest()' },
       { icon:'🖐️', label: t.photoModalTitle || '관상·손금',          cost:2, fn:'openPhotoReading()' },
       { icon:'🌙',  label: t.dreamTitle      || '꿈해몽',             cost:1, fn:'openDreamInterpretation()' },
+      { icon:'📅',  label: t.takilTitle      || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
     ]},
     { icon:'🔮', title: t.csWest || '서양 점술', items: [
       { icon:'🪐', label: t.astroTitle      || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
@@ -6025,6 +6175,7 @@ function openExperienceHub() {
     { icon:'🌙', label: t.dreamTitle || '꿈해몽', fn: openDreamInterpretation },
     { icon:'🎱', label: t.lottoTitle || '오늘의 로또번호', fn: openLottoNumbers },
     { icon:'ᚱ', label: t.runeTitle || '룬 문자 점', fn: openRuneReading },
+    { icon:'📅', label: t.takilTitle || '택일 · 좋은 날 고르기', fn: openAuspiciousDays },
   ];
   const overlay = document.createElement('div');
   overlay.id = 'experienceHubOverlay';
@@ -6789,6 +6940,7 @@ async function showSajuHistory() {
       lucky:      { icon: '🍀', label: t.luckyTitle },
       typecompat: { icon: '🔯', label: t.drTypeTitle },
       astro:      { icon: '🪐', label: t.astroTitle },
+      takil:      { icon: '📅', label: t.takilTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
