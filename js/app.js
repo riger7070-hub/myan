@@ -1307,25 +1307,28 @@ document.getElementById('send').addEventListener('click', send);
 document.getElementById('inp').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
+// 화면 안의 뒤로가기 버튼.
+//
+// 화면을 직접 바꾸지 않고 history.back() 만 부른다 — 실제 전환은 popstate 핸들러가 한다.
+// 예전엔 여기서 화면만 바꾸고 히스토리는 그대로 뒀는데, 그러면 홈으로 돌아온 뒤에도
+// 항목이 남아 있어서 OS 뒤로가기 첫 번째는 아무 일도 안 하고(팝만 되고 매칭되는 화면이 없음)
+// 두 번째에 앱이 꺼졌다. 사용자 입장에선 "뒤로가기를 눌렀더니 앱이 죽었다"로 보인다.
+// 이제 버튼과 OS 뒤로가기가 같은 경로를 타므로 둘이 어긋나지 않는다.
 document.getElementById('backBtn').addEventListener('click', () => {
-  const currentScreen = getCurrentScreen();
+  // 홈에는 쌓아둔 항목이 없다. 여기서 history.back() 을 부르면 사이트 밖으로 나가버린다.
+  if (history.state?.screen && history.state.screen !== 'home') {
+    history.back();
+    return;
+  }
 
-  switch (currentScreen) {
-    case 'MYPAGE':
-      closeMyPage();
-      break;
-    case 'SIGNUP':
-      goBackFromSignup();
-      break;
-    case 'LOGIN':
-      goBackFromLogin();
-      break;
+  // 히스토리가 없는 예외 상황(딥링크 진입 등)에서는 예전처럼 화면을 직접 되돌린다.
+  switch (getCurrentScreen()) {
+    case 'MYPAGE':      closeMyPage();       break;
+    case 'SIGNUP':      goBackFromSignup();  break;
+    case 'LOGIN':       goBackFromLogin();   break;
     case 'GUEST':
-    case 'GUEST_RESULT':
-      backToHome();
-      break;
-    default:
-      goBack();
+    case 'GUEST_RESULT': backToHome();       break;
+    default:            goBack();
   }
 });
 
@@ -1367,6 +1370,18 @@ function _nativeGoogleSignIn() {
     clearTimeout(_nativeSignInTimer);
     showToast(getT().googleSignInFail);
   }
+}
+
+// 앱에 현재 언어를 알려준다. 네이티브가 직접 띄우는 문구(뒤로가기 종료 안내 토스트)가
+// 사용자가 고른 언어를 따르게 하려면 네이티브도 언어를 알아야 한다.
+// setLang 은 locales.js 의 전역 함수라 여기서 감싼다(같은 전역 스코프의 클래식 스크립트).
+if (IS_NATIVE_APP) {
+  const _origSetLang = setLang;
+  setLang = function(l) {
+    _origSetLang(l);
+    _nativePost('LANG:' + l);
+  };
+  _nativePost('LANG:' + getLang());   // 저장된 언어로 시작하는 경우를 위해 최초 1회
 }
 
 window.addEventListener('nativeGoogleSignIn', (ev) => {

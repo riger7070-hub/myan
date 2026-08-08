@@ -72,6 +72,7 @@ Android 클라이언트로 등록돼 있어야 통과한다. 다른 프로젝트
 | 웹 → 네이티브 | `GOOGLE_SIGNIN_REQUEST` | `js/app.js` `_nativeGoogleSignIn()` |
 | 웹 → 네이티브 | `GOOGLE_SIGNOUT_REQUEST` | `js/app.js` `_signOut()` / `_withdrawAccount()` |
 | 웹 → 네이티브 | `OPEN_EXTERNAL:<url>` | `js/app.js` `openExternal()` |
+| 웹 → 네이티브 | `LANG:<ko\|en\|zh\|ja>` | `js/app.js` `setLang` 래퍼 (앱의 종료 안내 토스트용) |
 
 - 안드로이드 WebView 에서는 구글이 웹 로그인(GIS)을 차단하므로, 앱에서는 GIS 버튼 대신
   네이티브 버튼(`_renderNativeGoogleBtn`)을 띄우고 네이티브 SDK 로 위임한다.

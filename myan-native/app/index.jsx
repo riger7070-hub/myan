@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View, ActivityIndicator, BackHandler, Linking } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, BackHandler, Linking, ToastAndroid, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,16 @@ const WEB_CLIENT_ID = '806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.google
 GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
 
 const EXTERNAL_PREFIX = 'OPEN_EXTERNAL:';
+const LANG_PREFIX     = 'LANG:';
+
+// 뒤로가기로 앱을 끝내기 전에 한 번 더 확인받는 안내. 웹이 알려준 언어를 따른다.
+const EXIT_HINT = {
+  ko: '한 번 더 누르면 종료됩니다',
+  en: 'Press back again to exit',
+  zh: '再按一次退出',
+  ja: 'もう一度押すと終了します',
+};
+const EXIT_WINDOW_MS = 2000;
 
 async function openExternalUrl(url) {
   try { await Linking.openURL(url); }
@@ -44,12 +54,27 @@ export default function WebScreen() {
 
   // Android 뒤로가기: 웹 히스토리 우선
   const canGoBack = useRef(false);
+  const lang      = useRef('ko');   // 웹이 LANG: 메시지로 알려준다
+  const lastBack  = useRef(0);
+
   const handleAndroidBack = useCallback(() => {
     if (canGoBack.current) {
       webRef.current?.goBack();
       return true; // 앱 종료 방지
     }
-    return false; // 기본 동작 (앱 종료)
+
+    // 더 돌아갈 화면이 없을 때 곧장 꺼지면 "누르자마자 앱이 죽었다"로 느껴진다.
+    // 안드로이드 관례대로 2초 안에 한 번 더 눌러야 실제로 종료한다.
+    // (웹 화면 안에서 뒤로가기 버튼으로 이동한 경우 히스토리 항목이 남아 있어
+    //  OS 뒤로가기 첫 번째가 아무 일도 안 하는 것처럼 보이는 구간이 있는데,
+    //  그 직후 두 번째 누름에서 바로 꺼지던 것도 이걸로 완화된다.)
+    const now = Date.now();
+    if (now - lastBack.current < EXIT_WINDOW_MS) return false; // 종료 허용
+    lastBack.current = now;
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(EXIT_HINT[lang.current] || EXIT_HINT.ko, ToastAndroid.SHORT);
+    }
+    return true;
   }, []);
 
   useEffect(() => {
@@ -96,6 +121,12 @@ export default function WebScreen() {
 
     if (msg === 'GOOGLE_SIGNOUT_REQUEST') {
       try { await GoogleSignin.signOut(); } catch (_) {}
+    }
+
+    // 웹에서 고른 언어 — 네이티브가 직접 띄우는 문구(종료 안내 토스트)에 쓴다
+    if (msg.startsWith(LANG_PREFIX)) {
+      const code = msg.slice(LANG_PREFIX.length);
+      if (EXIT_HINT[code]) lang.current = code;
     }
 
     // 공유·상담 링크 등 새 창으로 열어야 하는 URL.
