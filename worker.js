@@ -1556,9 +1556,10 @@ async function handleMigrateTokens(request, env) {
     return cors(JSON.stringify({ ok: true, tokens: row?.total || 0, migrated: true }));
   }
 
-  const id = `mig_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  // 계정당 1회뿐인 이관이므로 id 를 이메일로 고정한다(위 SELECT 만으로는 동시 요청을 못 막는다).
+  const id = `mig_${email}`;
   await env.DB.prepare(
-    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, 'migration', 0, ?, 'approved')`
+    `INSERT OR IGNORE INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, 'migration', 0, ?, 'approved')`
   ).bind(id, email, localTokens).run();
 
   const row = await env.DB.prepare(
@@ -1589,9 +1590,11 @@ async function handleSignupGrant(request, env) {
     return cors(JSON.stringify({ ok: true, tokens: row?.total || 0, already: true }));
   }
 
-  const id = `signup_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  // id 를 이메일로 고정한다. 위 SELECT 는 동시 요청 두 개를 나란히 통과시키므로(둘 다 갱신 전
+  // 상태를 읽는다) 그것만으로는 중복 지급을 못 막는다. PRIMARY KEY 충돌이 두 번째를 걸러낸다.
+  const id = `signup_${email}`;
   await env.DB.prepare(
-    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, 'signup_grant', 0, 3, 'approved')`
+    `INSERT OR IGNORE INTO payment_requests (id, user_email, pkg, amount, tokens, status) VALUES (?, ?, 'signup_grant', 0, 3, 'approved')`
   ).bind(id, email).run();
 
   return cors(JSON.stringify({ ok: true, tokens: 3 }));
@@ -3981,19 +3984,25 @@ async function handleStreakCheckin(request, env) {
       total = (row.total_checkins||0)+1;
     }
 
+    // 위의 SELECT 검사만으로는 같은 날 두 번 체크인되는 걸 막지 못한다. 두 요청이 나란히 들어오면
+    // 둘 다 갱신 전 상태를 읽고 둘 다 통과한다(버튼 두 번 누르기·재시도·오프라인 큐 재전송).
+    // 그래서 갱신 자체에도 "오늘 날짜가 아직 아닐 때만" 조건을 건다.
     await env.DB.prepare(
       `INSERT INTO user_streaks (user_email,current_streak,max_streak,last_checkin,total_checkins,updated_at)
        VALUES (?,?,?,?,?,unixepoch())
        ON CONFLICT(user_email) DO UPDATE SET current_streak=excluded.current_streak,
        max_streak=excluded.max_streak,last_checkin=excluded.last_checkin,
-       total_checkins=excluded.total_checkins,updated_at=excluded.updated_at`
+       total_checkins=excluded.total_checkins,updated_at=excluded.updated_at
+       WHERE user_streaks.last_checkin IS NOT excluded.last_checkin`
     ).bind(email,current,max,today,total).run();
 
     // 7일 스트릭 보너스 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    // id 를 이메일+날짜로 고정한다. 위 경합으로 두 요청이 여기까지 와도 두 번째는 PRIMARY KEY 충돌로
+    // 무시되므로 하루 한 번만 지급된다(share_bonus 가 이미 쓰는 방식과 같다).
     if (current%7===0) {
-      const bonusId = `streak_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      const bonusId = `streak_${email}_${today}`;
       await env.DB.prepare(
-        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+        `INSERT OR IGNORE INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
          VALUES (?, ?, 'streak_bonus', 0, 5, 'approved', unixepoch())`
       ).bind(bonusId, email).run();
     }
@@ -4567,14 +4576,20 @@ async function handlePromoClaim(request, env) {
     return cors(JSON.stringify({ error: '이미 사용된 코드입니다. 계정당 1회만 사용 가능합니다.' }), 409);
   }
 
-  // 토큰 지급
-  const claimId = `promo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  await env.DB.prepare(
-    `INSERT INTO promo_claims (id, user_email, promo_code, claimed_at, tokens_given) VALUES (?, ?, ?, unixepoch(), ?)`
+  // 토큰 지급.
+  // 위의 중복 확인은 동시 요청 두 개를 나란히 통과시키므로(둘 다 기록 전 상태를 읽는다) 그것만으로는
+  // 두 번 지급되는 걸 막지 못한다. claim id 를 이메일+코드로 고정해 클레임 기록 자체를 관문으로 쓴다 —
+  // 먼저 도착한 요청만 행을 만들고, 나중 요청은 PRIMARY KEY 충돌로 밀려 지급까지 가지 못한다.
+  const claimId = `promo_${email}_${code.toUpperCase()}`;
+  const claimed = await env.DB.prepare(
+    `INSERT OR IGNORE INTO promo_claims (id, user_email, promo_code, claimed_at, tokens_given) VALUES (?, ?, ?, unixepoch(), ?)`
   ).bind(claimId, email, code.toUpperCase(), promo.tokens).run();
+  if (!claimed.meta?.changes) {
+    return cors(JSON.stringify({ error: '이미 사용된 코드입니다. 계정당 1회만 사용 가능합니다.' }), 409);
+  }
 
   await env.DB.prepare(
-    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+    `INSERT OR IGNORE INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
      VALUES (?, ?, 'promo', 0, ?, 'approved', unixepoch())`
   ).bind(`grant_${claimId}`, email, promo.tokens).run();
 
@@ -4665,18 +4680,24 @@ async function handleDynamicPromoClaim(request, env, email, token) {
     return cors(JSON.stringify({ error: '이미 프로모 혜택을 사용하셨습니다. (계정당 1회)' }), 409);
   }
 
-  // 토큰 소비 처리
-  await env.DB.prepare(
-    `UPDATE dynamic_promo_tokens SET used_at = unixepoch(), used_by = ? WHERE token = ?`
+  // 토큰 소비 처리.
+  // used_at IS NULL 조건이 있어야 1회용 코드가 정말 1회가 된다 — 위의 SELECT 는 동시에 들어온
+  // 두 요청(특히 서로 다른 계정)을 나란히 통과시키므로, 조건 없이 UPDATE 하면 둘 다 지급받는다.
+  const consumed = await env.DB.prepare(
+    `UPDATE dynamic_promo_tokens SET used_at = unixepoch(), used_by = ? WHERE token = ? AND used_at IS NULL`
   ).bind(email, token).run();
+  if (!consumed.meta?.changes) {
+    return cors(JSON.stringify({ error: '이 코드는 이미 사용됐거나 만료되었습니다. 직원에게 새 코드를 요청해 주세요.' }), 410);
+  }
 
-  const claimId = `dyn_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  // 계정당 1회이므로 claim id 도 이메일로 고정한다(같은 계정이 서로 다른 코드로 동시에 시도하는 경우 대비).
+  const claimId = `dyn_${email}`;
   await env.DB.prepare(
-    `INSERT INTO promo_claims (id, user_email, promo_code, claimed_at, tokens_given) VALUES (?, ?, 'DYNAMIC', unixepoch(), ?)`
+    `INSERT OR IGNORE INTO promo_claims (id, user_email, promo_code, claimed_at, tokens_given) VALUES (?, ?, 'DYNAMIC', unixepoch(), ?)`
   ).bind(claimId, email, tokenRow.tokens_given).run();
 
   await env.DB.prepare(
-    `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+    `INSERT OR IGNORE INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
      VALUES (?, ?, 'promo_dynamic', 0, ?, 'approved', unixepoch())`
   ).bind(`grant_${claimId}`, email, tokenRow.tokens_given).run();
 
