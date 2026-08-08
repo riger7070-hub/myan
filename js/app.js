@@ -3408,6 +3408,7 @@ function _syncDrawerLangs() {
   _t('drTxtLotto',    t.drLottoTitle);      _t('drSubLotto', t.drLottoSub);
   _t('drTxtRune',     t.drRuneTitle);       _t('drSubRune', t.drRuneSub);
   _t('photoGalleryBtnText', t.photoGalleryTitle);
+  _t('sajuHistoryBtnText', t.histTitle);
   _t('quickExperienceTitle', t.quickExperienceTitle); _t('quickExperienceDesc', t.quickExperienceDesc);
   renderHomeSections(); // 홈 타일은 JS로 그리므로 언어 전환 시 다시 렌더해야 반영됨
   renderMoonToday();    // 헤더의 오늘의 달도 언어별 이름이라 함께 갱신
@@ -6565,12 +6566,32 @@ function renderUngiPuddingCard(ohaeng) {
 // ════════════════════════════════════════════
 //  사주 기록 조회 UI
 // ════════════════════════════════════════════
+// 기록 본문에는 사용자가 입력한 이름과 AI 응답이 그대로 들어가므로,
+// innerHTML 로 그리기 전에 반드시 이스케이프한다.
+function _escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 펼침 상태를 innerHTML 재생성 없이 토글한다(본문은 이미 DOM 에 들어있고 CSS 로만 접는다).
+function toggleHistoryEntry(idx) {
+  const body = document.getElementById(`hist-body-${idx}`);
+  const btn  = document.getElementById(`hist-toggle-${idx}`);
+  if (!body || !btn) return;
+  const open = body.dataset.open === '1';
+  body.dataset.open = open ? '0' : '1';
+  body.style.maxHeight = open ? '3.4em' : 'none';
+  btn.textContent = open ? getT().histExpand : getT().histCollapse;
+}
+
 async function showSajuHistory() {
   const token = getGoogleIdToken();
   if (!token) {
-    showToast('로그인이 필요합니다.');
+    showToast(getT().noLogin);
     return;
   }
+  const t = getT();
 
   // 모달 생성
   const modal = document.createElement('div');
@@ -6585,13 +6606,13 @@ async function showSajuHistory() {
   modal.innerHTML = `
     <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
       <div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ 내 기록</div>
+        <div style="font-size: 1.3rem; color: var(--gold); letter-spacing: 1px;">☯️ ${_escHtml(t.histTitle)}</div>
         <button onclick="document.getElementById('saju-history-modal').remove()" style="background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; padding: 0; width: 32px; height: 32px;">×</button>
       </div>
       <div id="saju-history-content" style="flex: 1; overflow-y: auto; padding: 20px;">
         <div style="text-align: center; padding: 40px; color: var(--text-dim);">
           <div style="font-size: 2rem; margin-bottom: 12px;">⏳</div>
-          <div>기록을 불러오는 중...</div>
+          <div>${_escHtml(t.histLoading)}</div>
         </div>
       </div>
     </div>
@@ -6612,22 +6633,24 @@ async function showSajuHistory() {
 
     (sajuData.history || []).forEach(h => {
       const modeIcon = h.mode === 'duo' ? '💞' : '☯';
-      const modeText = h.mode === 'duo' ? '우리의 조화' : '나만의 리딩';
+      const modeText = h.mode === 'duo' ? t.s2 : t.s1;   // 홈 타일과 같은 이름을 재사용
       const names = h.mode === 'duo'
-        ? `${h.p1.name || '첫 번째 분'} & ${h.p2?.name || '두 번째 분'}`
-        : (h.p1.name || '나');
+        ? `${h.p1.name || t.histP1} & ${h.p2?.name || t.histP2}`
+        : (h.p1.name || t.histMe);
       entries.push({
         createdAt: h.createdAt, icon: modeIcon, title: modeText, sub: names,
         body: h.reading,
       });
     });
 
+    // 라벨은 각 콘텐츠 화면에서 쓰는 기존 번역 키를 그대로 재사용한다 —
+    // 기록 목록에만 따로 번역을 두면 화면과 이름이 어긋난다.
     const FEATURE_META = {
-      detail:     { icon: null, label: '상세풀이' },
-      tarot:      { icon: '🔮', label: '타로' },
-      zodiac:     { icon: '🐉', label: '띠·별자리' },
-      lucky:      { icon: '🍀', label: '오늘의 럭키 아이템' },
-      typecompat: { icon: '🔯', label: '오행 궁합' },
+      detail:     { icon: null, label: t.detailTitle },
+      tarot:      { icon: '🔮', label: t.tarotTitle },
+      zodiac:     { icon: '🐉', label: t.zodiacTitle },
+      lucky:      { icon: '🍀', label: t.luckyTitle },
+      typecompat: { icon: '🔯', label: t.drTypeTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
@@ -6648,7 +6671,7 @@ async function showSajuHistory() {
           ].filter(Boolean).join('\n');
         } catch { body = h.content; }
       } else if (h.feature === 'tarot' && h.meta?.upright === false) {
-        title += ' (역방향)';
+        title += ` (${t.tarotReversed})`;
       }
 
       entries.push({ createdAt: h.createdAt, icon, title, sub: null, body });
@@ -6661,32 +6684,44 @@ async function showSajuHistory() {
       content.innerHTML = `
         <div style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
           <div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3;">📜</div>
-          <div style="font-size: 1.1rem; margin-bottom: 8px;">아직 기록이 없습니다</div>
-          <div style="font-size: 0.9rem; opacity: 0.7;">풀이를 받으면 자동으로 저장됩니다</div>
+          <div style="font-size: 1.1rem; margin-bottom: 8px;">${_escHtml(t.histEmpty)}</div>
+          <div style="font-size: 0.9rem; opacity: 0.7;">${_escHtml(t.histEmptySub)}</div>
         </div>
       `;
       return;
     }
 
-    // 기록 렌더링
-    content.innerHTML = entries.map(en => {
+    // 기록 렌더링.
+    // 예전엔 본문을 2줄로 잘라 보여주기만 하고 펼칠 방법이 없어서, 토큰을 쓰고 받은 풀이를
+    // 다시 읽을 수가 없었다. 본문은 이미 응답에 다 들어있으므로 접힌 상태로 전부 심어두고
+    // 버튼으로 max-height 만 토글한다(다시 fetch 하지 않는다).
+    content.innerHTML = entries.map((en, i) => {
       const date = new Date(en.createdAt * 1000);
       const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
       const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+      const body = (en.body || '').trim();
+      // 2줄(약 3.4em)을 넘길 때만 펼치기 버튼을 붙인다
+      const needsToggle = body.split('\n').length > 2 || body.length > 80;
 
       return `
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
             <div>
-              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${en.icon} ${en.title}</div>
-              ${en.sub ? `<div style="font-size: 0.85rem; color: var(--text-dim);">${en.sub}</div>` : ''}
+              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${en.icon || ''} ${_escHtml(en.title)}</div>
+              ${en.sub ? `<div style="font-size: 0.85rem; color: var(--text-dim);">${_escHtml(en.sub)}</div>` : ''}
             </div>
             <div style="text-align: right; font-size: 0.75rem; color: var(--text-dim);">
               <div>${dateStr}</div>
               <div>${timeStr}</div>
             </div>
           </div>
-          <div style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.8;">${(en.body || '').split('\n').slice(0, 2).join('\n')}</div>
+          <div id="hist-body-${i}" data-open="0" style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.85; max-height: 3.4em; overflow: hidden;">${_escHtml(body)}</div>
+          ${needsToggle ? `
+            <button id="hist-toggle-${i}" onclick="toggleHistoryEntry(${i})"
+              style="margin-top: 8px; background: none; border: none; color: var(--gold); font-size: 0.8rem; cursor: pointer; padding: 4px 0;">
+              ${_escHtml(t.histExpand)}
+            </button>` : ''}
         </div>
       `;
     }).join('');
@@ -6695,7 +6730,7 @@ async function showSajuHistory() {
     content.innerHTML = `
       <div style="text-align: center; padding: 60px 20px; color: #e05a4a;">
         <div style="font-size: 2rem; margin-bottom: 12px;">⚠️</div>
-        <div>기록을 불러오는데 실패했습니다</div>
+        <div>${_escHtml(getT().histFailed)}</div>
       </div>
     `;
   }
