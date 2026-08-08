@@ -1,7 +1,13 @@
 name = "myan"
 main = "worker.js"
 compatibility_date = "2024-11-01"
-pages_build_output_dir = "./"
+
+# ⚠️ pages_build_output_dir 를 여기에 넣지 말 것.
+# 이건 Workers 프로젝트지 Pages 프로젝트가 아닌데, 그 필드가 있으면 wrangler 가 설정을
+# Pages 로 오해해서 (1) `wrangler secret list` / `deployments list` / `d1 execute` 같은
+# Workers 전용 명령이 "Pages 프로젝트입니다"라며 거부되고, (2) `wrangler deploy` 가 매번
+# "정말 진행할까요?" 확인을 물어 CI 에서는 폴백 응답에 기대어 배포되고 있었다.
+# 제거 후 dry-run 결과(바인딩·업로드 크기)는 완전히 동일함을 확인했다.
 
 [assets]
 directory = "./"
