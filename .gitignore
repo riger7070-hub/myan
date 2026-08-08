@@ -19,6 +19,9 @@ node_modules/
 # 빌드 출력
 dist/
 
+# 테스트가 worker.js 를 .mjs 로 임시 복사하는 자리 (test/load-worker.mjs 참고)
+test/.tmp/
+
 # Lock 파일 (package-lock.json은 배포 환경에 필요하므로 포함)
 *.lock
 

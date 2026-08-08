@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "M;Y 安 Web Application",
   "scripts": {
-    "convert-webp": "node convert-to-webp.js"
+    "convert-webp": "node convert-to-webp.js",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "node --check worker.js && npm test && wrangler deploy --dry-run"
   },
   "devDependencies": {
     "playwright": "^1.60.0",

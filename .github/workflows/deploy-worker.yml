@@ -22,6 +22,27 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler@latest
 
+      # 아래 3단계는 배포 게이트다. 이 저장소엔 스테이징이 없고 main 푸시가 곧 배포라,
+      # 여기서 막지 못한 실수는 그대로 프로덕션에 나간다.
+
+      # 프런트엔드(js/*.js, sw.js)는 번들 단계 없이 정적 자산으로 그대로 서빙된다.
+      # 구문 오류 하나면 사이트가 통째로 죽으므로 파싱만이라도 확인한다.
+      - name: 구문 검사
+        run: |
+          node --check worker.js
+          for f in js/*.js sw.js; do node --check "$f"; done
+
+      # 사주 4기둥 골든 · ilchin() 동기화 · 과거 버그 회귀 가드
+      - name: 테스트
+        run: npm test
+
+      # 번들(esbuild) 단계에서만 드러나는 import 오류 등을 배포 전에 잡는다
+      - name: 배포 사전 검증
+        run: wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy to Cloudflare Workers
         run: wrangler deploy
         env:
