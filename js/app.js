@@ -3266,6 +3266,23 @@ refreshTokens();
     _origEnterMode(m, user);
   };
 
+  // 게스트 모드는 입력 화면 → 결과 화면이 이어지지만 항목은 하나만 쌓는다.
+  // 화면 안의 뒤로가기 버튼도 두 화면 모두 backToHome() 으로 처리하므로(1323행 근처)
+  // 결과 화면에서 한 번 누르면 바로 홈으로 가는 동작을 OS 뒤로가기와 맞춘 것.
+  const _origStartGuestMode = startGuestMode;
+  startGuestMode = function() {
+    history.pushState({ screen: 'guest' }, '');
+    _origStartGuestMode();
+  };
+
+  // 게스트 결과 화면의 '지금 가입하기' — 게스트 항목을 회원가입 항목으로 갈아끼운다.
+  // 여기서 항목을 하나 더 쌓으면 회원가입에서 뒤로가기가 홈을 띄운 뒤에도 게스트 항목이
+  // 남아, 앱을 나가려면 뒤로가기를 한 번 더 눌러야 한다.
+  goSignupFromGuest = function() {
+    history.replaceState({ screen: 'signup' }, '');
+    _origGoSignup();
+  };
+
   // 브라우저/OS 뒤로가기 버튼 가로채기
   window.addEventListener('popstate', () => {
     // 모달 우선 닫기
@@ -3287,6 +3304,10 @@ refreshTokens();
     }
     if (document.getElementById('screen-login').style.display === 'flex') {
       goBackFromLogin(); return;
+    }
+    if (document.getElementById('screen-guest').style.display === 'flex' ||
+        document.getElementById('screen-guest-result').style.display === 'flex') {
+      backToHome(); return;
     }
     // 홈에서 뒤로가기 → OS 기본 동작 (앱 종료) 허용
   });
