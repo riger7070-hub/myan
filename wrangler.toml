@@ -72,6 +72,10 @@ TOSS_CLIENT_KEY = "test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb"
 # wrangler secret put UNGI_PIN
 # wrangler secret put CAFE_STAFF_PIN
 # wrangler secret put PROMO_ADMIN_PIN
+# wrangler secret put MASTER_IP
 #
 # ⚠️ 위 세 PIN 시크릿(UNGI_PIN/CAFE_STAFF_PIN/PROMO_ADMIN_PIN)은 하드코딩 폴백을
 # 제거했으므로, 설정 전까지 해당 PIN 인증 경로는 항상 거부됩니다(안전한 기본값).
+#
+# ⚠️ MASTER_IP 는 게스트 체험(하루 1회)을 제한 없이 쓰는 운영자 IP 입니다. 공개 저장소라
+# 코드에서 뺐고 폴백도 없으므로, 설정 전까지는 운영자도 다른 사용자와 똑같이 하루 1회입니다.

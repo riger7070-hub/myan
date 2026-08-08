@@ -4885,37 +4885,55 @@ async function handleGuestChat(request, env) {
       return cors(JSON.stringify({ error: { message: 'birth 필수' } }), 400);
     }
 
-    // 마스터 IP는 제한 없음
-    const MASTER_IP = '183.103.107.75';
-    const isMaster = ip === MASTER_IP;
+    // 제한 없이 쓰는 운영자 IP. 공개 저장소라 값을 코드에 두지 않는다(예전엔 실제 IP 가 박혀 있었다).
+    // 시크릿이 없으면 예외 자체가 사라진다 — PIN 들과 같은 fail-closed 방침.
+    const isMaster = !!env.MASTER_IP && ip === env.MASTER_IP;
 
     // ref=ungi 여부에 따라 다른 테이블 사용
     const isUngi = ref === 'ungi';
     const tableName = isUngi ? 'ungi_guest_usage' : 'guest_usage';
 
-    // IP당 하루 1회 제한 확인 (마스터 IP는 제외)
+    // IP당 하루 1회 제한 (마스터 IP는 제외).
+    // 예전엔 SELECT 로 확인만 하고 실제 기록은 Gemini 응답을 받은 뒤에 했다. 그 사이가 비어 있어서
+    // 같은 IP 로 동시에 들어온 요청이 전부 검사를 통과했고, 무료 호출이 그만큼 여러 번 나갔다.
+    // 그래서 자리를 먼저 잡고(조건부 UPSERT), 풀이를 못 만들면 되돌려준다.
+    let releaseGuestSlot = null;
     if (!isMaster) {
-      const usage = await env.DB.prepare(
-        `SELECT used_count FROM ${tableName} WHERE ip = ? AND used_date = ?`
-      ).bind(ip, today).first().catch(() => null);
+      const claim = await env.DB.prepare(
+        `INSERT INTO ${tableName} (ip, used_date, used_count) VALUES (?, ?, 1)
+         ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1
+         WHERE ${tableName}.used_count < 1`
+      ).bind(ip, today).run().catch(() => null);
 
-      if (usage && usage.used_count >= 1) {
-      // 다음날 자정(KST) 계산
-      const resetDate = new Date(today);
-      resetDate.setDate(resetDate.getDate() + 1);
-      resetDate.setHours(0, 0, 0, 0);
-      const hoursUntilReset = Math.ceil((resetDate - Date.now()) / 3600000);
+      if (!claim?.meta?.changes) {
+        // 다음날 자정(KST) 계산
+        const resetDate = new Date(today);
+        resetDate.setDate(resetDate.getDate() + 1);
+        resetDate.setHours(0, 0, 0, 0);
+        const hoursUntilReset = Math.ceil((resetDate - Date.now()) / 3600000);
 
-      return cors(JSON.stringify({
-        error: {
-          message: 'already_used',
-          code: 'GUEST_LIMIT',
-          resetIn: hoursUntilReset,
-          resetAt: resetDate.toISOString()
-        }
-      }), 429);
+        return cors(JSON.stringify({
+          error: {
+            message: 'already_used',
+            code: 'GUEST_LIMIT',
+            resetIn: hoursUntilReset,
+            resetAt: resetDate.toISOString()
+          }
+        }), 429);
       }
+
+      // 우리 쪽 사정으로 풀이를 못 준 경우엔 오늘의 무료 1회를 소모시키지 않는다.
+      releaseGuestSlot = () => env.DB.prepare(
+        `UPDATE ${tableName} SET used_count = used_count - 1
+         WHERE ip = ? AND used_date = ? AND used_count > 0`
+      ).bind(ip, today).run();
     }
+    const releaseSlot = async () => {
+      if (!releaseGuestSlot) return;
+      const release = releaseGuestSlot;
+      releaseGuestSlot = null;
+      await release().catch(() => {});
+    };
 
     const il = ilchin();
     const on = ON[lang] || ON.ko;
@@ -4958,10 +4976,11 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
       );
 
       if (!resp.ok) {
-        const errorText = await resp.text();
-        console.error('[GUEST CHAT] Gemini API error:', resp.status, errorText);
+        // 업스트림 원문은 로그로만 남긴다 — 응답에 실어 보내면 내부 사정이 그대로 새어나간다.
+        console.error('[GUEST CHAT] Gemini API error:', resp.status, (await resp.text()).slice(0, 500));
+        await releaseSlot();
         return cors(JSON.stringify({
-          error: { message: `Gemini API 오류 (${resp.status})`, details: errorText.substring(0, 200) }
+          error: { message: '지금은 풀이를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.' }
         }), 500);
       }
 
@@ -4976,28 +4995,25 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
         result = JSON.parse(cleaned);
       } catch (parseError) {
         console.error('[GUEST CHAT] Parse error:', parseError.message, 'Raw:', raw.substring(0, 200));
+        await releaseSlot();
         return cors(JSON.stringify({
           error: { message: 'AI 응답을 처리할 수 없습니다. 잠시 후 다시 시도해주세요.' }
         }), 500);
       }
 
       if (!result.reading || !result.ohaeng) {
+        await releaseSlot();
         return cors(JSON.stringify({
           error: { message: 'AI 응답 형식 오류' }
         }), 500);
       }
 
-      // 사용 기록 저장 (ref에 따라 다른 테이블, 마스터 IP는 제외)
-      if (!isMaster) {
-        await env.DB.prepare(
-          `INSERT INTO ${tableName} (ip, used_date, used_count) VALUES (?, ?, 1)
-           ON CONFLICT(ip, used_date) DO UPDATE SET used_count = used_count + 1`
-        ).bind(ip, today).run();
-      }
-
+      // 사용 기록은 위에서 미리 잡아뒀다(releaseGuestSlot). 여기서 다시 올리지 않는다.
       return cors(JSON.stringify({ success: true, reading: result.reading, ohaeng: result.ohaeng, isUngi }), 200);
 
     } catch(e) {
+      // fetch 가 던지는 등 우리 쪽 실패 — 무료 1회를 소모시키지 않는다.
+      await releaseSlot();
       return cors(JSON.stringify({
         error: { message: '서버 오류가 발생했습니다.' }
       }), 500);
