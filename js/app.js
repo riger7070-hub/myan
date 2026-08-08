@@ -4838,6 +4838,126 @@ async function _tarotPick(idx) {
 // ════════════════════════════════════════════
 //  띠·별자리 운세 (재미 콘텐츠, 1토큰)
 // ════════════════════════════════════════════
+// 천궁도 트랜싯 — 실제 행성 위치로 보는 오늘.
+// 다른 콘텐츠와 달리 AI 글만 보여주지 않고 **근거가 된 하늘**을 함께 띄운다.
+// "실제 계산"이 이 기능의 핵심이라 숫자를 감추면 다른 운세와 구별되지 않는다.
+function _astroChartHtml(chart, lang, t) {
+  return ASTRO_BODY_ORDER.map(b => {
+    const c = chart[b];
+    if (!c) return '';
+    const sign = ASTRO_SIGN_NAMES[lang]?.[c.signIndex] || c.sign;
+    const marks = [
+      c.retrograde ? `<span style="color:#e08a7a">℞ ${_escHtml(t.astroRetro)}</span>` : '',
+      c.nearCusp   ? `<span style="color:var(--text-dim)">·${_escHtml(t.astroCusp)}</span>` : '',
+    ].filter(Boolean).join(' ');
+    return `
+      <div style="display:flex;align-items:baseline;gap:6px;font-size:0.8rem;padding:3px 0">
+        <span style="color:var(--gold);width:1.2em;text-align:center">${ASTRO_BODY_ICONS[b]}</span>
+        <span style="width:3.6em;color:var(--text-dim)">${_escHtml(ASTRO_BODY_NAMES[lang]?.[b] || b)}</span>
+        <span>${_escHtml(sign)} <span style="color:var(--text-dim)">${c.degInSign}°</span></span>
+        ${marks}
+      </div>`;
+  }).join('');
+}
+
+function _astroTransitHtml(transits, lang, t) {
+  if (!transits?.length) {
+    return `<div style="font-size:0.8rem;color:var(--text-dim)">${_escHtml(t.astroNoTransit)}</div>`;
+  }
+  const B = ASTRO_BODY_NAMES[lang] || ASTRO_BODY_NAMES.ko;
+  const A = ASTRO_ASPECT_NAMES[lang] || ASTRO_ASPECT_NAMES.ko;
+  return transits.map(tr => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;padding:3px 0">
+      <span style="color:var(--gold)">${ASTRO_ASPECT_ICONS[tr.name] || '·'}</span>
+      <span>${_escHtml(B[tr.transit] || tr.transit)} → ${_escHtml(B[tr.natal] || tr.natal)}</span>
+      <span style="color:var(--text-dim)">${_escHtml(A[tr.name] || tr.name)} ${tr.orb}°</span>
+    </div>`).join('');
+}
+
+async function openAstroTransit() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.zodiacNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const lang = getLang();
+  const birth = { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🪐 ${_escHtml(t.astroTitle)}</div>
+      <div id="astroStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${_escHtml(t.astroLoading)}</div>
+      <div id="astroResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/astro-transit', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, birth })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = document.getElementById('astroStatus');
+    const resultEl = document.getElementById('astroResult');
+    if (!data.success) {
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (!resultEl) return;
+
+    const sunSign = ASTRO_SIGN_NAMES[lang]?.[data.today?.sun?.signIndex] || '';
+    resultEl.style.display = '';
+    resultEl.innerHTML = `
+      <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">☉ ${_escHtml(sunSign)}</div>
+      ${data.moon ? `<div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:6px">${MOON_PHASE_ICONS[data.moon.index]} ${_escHtml(MOON_PHASE_NAMES[lang]?.[data.moon.index] || '')} · ${data.moon.illumination}%</div>` : ''}
+
+      <div class="detail-area-card" style="margin-top:14px">
+        <div style="font-size:0.78rem;color:var(--gold);margin-bottom:6px">${_escHtml(t.astroTransits)}</div>
+        ${_astroTransitHtml(data.transits, lang, t)}
+      </div>
+
+      <div class="detail-area-card" style="margin-top:10px">
+        <div style="font-size:0.78rem;color:var(--gold);margin-bottom:6px">${_escHtml(t.astroSkyToday)}</div>
+        ${_astroChartHtml(data.today, lang, t)}
+      </div>
+
+      <div class="detail-area-card" style="margin-top:10px">
+        <div style="font-size:0.78rem;color:var(--gold);margin-bottom:6px">${_escHtml(t.astroNatal)}</div>
+        ${_astroChartHtml(data.natal, lang, t)}
+      </div>
+
+      <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="astroReadingBody"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.astroNote)}</div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🪐",title:${JSON.stringify(t.astroTitle + " · " + sunSign)},filename:"myan-astro"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+    `;
+    const bodyEl = document.getElementById('astroReadingBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    refreshTokens();
+  } catch (e) {
+    const statusEl = document.getElementById('astroStatus');
+    if (statusEl) statusEl.textContent = getT().netErr || '네트워크 오류가 발생했습니다.';
+  }
+}
+
 async function openZodiacFortune() {
   const token = getGoogleIdToken();
   if (!token) {
@@ -5829,6 +5949,7 @@ function _homeSections() {
       { icon:'🌙',  label: t.dreamTitle      || '꿈해몽',             cost:1, fn:'openDreamInterpretation()' },
     ]},
     { icon:'🔮', title: t.csWest || '서양 점술', items: [
+      { icon:'🪐', label: t.astroTitle      || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
       { icon:'🔮', label: t.tarotTitle      || '오늘의 타로',       cost:1, fn:'openTarotDraw()' },
       { icon:'🔢', label: t.numerologyTitle || '라이프패스 넘버',   cost:1, fn:'openNumerology()' },
       { icon:'ᚱ', label: t.runeTitle       || '룬 문자 점',        cost:1, fn:'openRuneReading()' },
@@ -5891,6 +6012,7 @@ function renderHomeSections() {
 function openExperienceHub() {
   const t = getT();
   const items = [
+    { icon:'🪐', label: t.astroTitle || '천궁도 트랜싯', fn: openAstroTransit },
     { icon:'🔮', label: t.tarotTitle || '오늘의 타로', fn: openTarotDraw },
     { icon:'🐉', label: t.zodiacTitle || '띠·별자리 운세', fn: openZodiacFortune },
     { icon:'🍀', label: t.luckyTitle || '오늘의 럭키 아이템', fn: openLuckyPicks },
@@ -6666,6 +6788,7 @@ async function showSajuHistory() {
       zodiac:     { icon: '🐉', label: t.zodiacTitle },
       lucky:      { icon: '🍀', label: t.luckyTitle },
       typecompat: { icon: '🔯', label: t.drTypeTitle },
+      astro:      { icon: '🪐', label: t.astroTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };

@@ -51,6 +51,33 @@ const WESTERN_ZODIAC_NAMES = {
   ja: ['やぎ座','みずがめ座','うお座','おひつじ座','おうし座','ふたご座','かに座','しし座','おとめ座','てんびん座','さそり座','いて座'],
 };
 
+// 천궁도(트랜싯)용 이름표.
+// ⚠️ 위 WESTERN_ZODIAC_NAMES 와 순서가 다르다. 저쪽은 날짜 판정표(_getWesternZodiacIndex)에
+// 맞춰 염소자리부터 시작하지만, 천궁도의 signIndex 는 황경 0도 = 양자리 기준이라 양자리부터다.
+// 두 표를 섞어 쓰면 별자리가 9칸씩 밀리므로 반드시 구분할 것.
+// 백엔드 worker.js 의 SIGN_NAMES / BODY_NAMES / ASPECT_NAMES 와 순서·키를 맞춰야 한다.
+const ASTRO_SIGN_NAMES = {
+  ko: ['양자리','황소자리','쌍둥이자리','게자리','사자자리','처녀자리','천칭자리','전갈자리','사수자리','염소자리','물병자리','물고기자리'],
+  en: ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'],
+  zh: ['白羊座','金牛座','双子座','巨蟹座','狮子座','处女座','天秤座','天蝎座','射手座','摩羯座','水瓶座','双鱼座'],
+  ja: ['牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座','山羊座','水瓶座','魚座'],
+};
+const ASTRO_BODY_ORDER = ['sun','moon','mercury','venus','mars','jupiter','saturn'];
+const ASTRO_BODY_ICONS = { sun:'☉', moon:'☽', mercury:'☿', venus:'♀', mars:'♂', jupiter:'♃', saturn:'♄' };
+const ASTRO_BODY_NAMES = {
+  ko: { sun:'태양', moon:'달', mercury:'수성', venus:'금성', mars:'화성', jupiter:'목성', saturn:'토성' },
+  en: { sun:'Sun', moon:'Moon', mercury:'Mercury', venus:'Venus', mars:'Mars', jupiter:'Jupiter', saturn:'Saturn' },
+  zh: { sun:'太阳', moon:'月亮', mercury:'水星', venus:'金星', mars:'火星', jupiter:'木星', saturn:'土星' },
+  ja: { sun:'太陽', moon:'月', mercury:'水星', venus:'金星', mars:'火星', jupiter:'木星', saturn:'土星' },
+};
+const ASTRO_ASPECT_ICONS = { conjunction:'☌', sextile:'⚹', square:'□', trine:'△', opposition:'☍' };
+const ASTRO_ASPECT_NAMES = {
+  ko: { conjunction:'합', sextile:'육각', square:'사각', trine:'삼각', opposition:'대립' },
+  en: { conjunction:'Conjunction', sextile:'Sextile', square:'Square', trine:'Trine', opposition:'Opposition' },
+  zh: { conjunction:'合相', sextile:'六分相', square:'四分相', trine:'三分相', opposition:'对分相' },
+  ja: { conjunction:'合', sextile:'セクスタイル', square:'スクエア', trine:'トライン', opposition:'オポジション' },
+};
+
 // 오행 유형 테스트 — 질문 옵션 순서와 백엔드 worker.js의 TYPE_ELEMENTS 순서를 맞출 것
 const TYPE_ORDER = ['木','火','土','金','水'];
 

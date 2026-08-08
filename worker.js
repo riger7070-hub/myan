@@ -73,6 +73,12 @@ const _ORBIT = {
              da:0.00001847, de:0.00007882, dI:-0.00813131, dL:19140.30268499, dlp:0.44441088, dnode:-0.29257343 },
   earth:   { a:1.00000261, e:0.01671123, I:-0.00001531, L:100.46457166, lp:102.93768193, node:0.0,
              da:0.00000562, de:-0.00004392, dI:-0.01294668, dL:35999.37244981, dlp:0.32327364, dnode:0.0 },
+  // 목성·토성은 점성술에서 '느린 행성'으로 비중이 크다(한 별자리에 1년/2.5년씩 머문다).
+  // 위와 같은 JPL 근사 케플러 원소표(1800~2050 유효).
+  jupiter: { a:5.20288700, e:0.04838624, I:1.30439695, L:34.39644051, lp:14.72847983, node:100.47390909,
+             da:-0.00011607, de:-0.00013253, dI:-0.00183714, dL:3034.74612775, dlp:0.21252668, dnode:0.20469106 },
+  saturn:  { a:9.53667594, e:0.05386179, I:2.48599187, L:49.95424423, lp:92.59887831, node:113.66242448,
+             da:-0.00125060, de:-0.00050991, dI:0.00193609, dL:1222.49362201, dlp:-0.41897216, dnode:-0.28867794 },
 };
 
 // 역행 중일 때 AI에 넘길 의미. 점성술에서 통용되는 해석을 그대로 쓰되,
@@ -141,6 +147,151 @@ function planetRetrograde(planet, date = new Date()) {
     }
   }
   return { retrograde: true, endsAt: null };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  천궁도(호로스코프) — 실제 행성 위치로 탄생 차트와 오늘의 트랜싯을 계산
+//
+//  위의 _planetLon() 은 이미 지구에서 본 행성의 황경을 실제로 구하고 있었지만,
+//  여태 역행 판정에만 쓰고 값 자체는 버리고 있었다. 여기서 그 황경을 그대로 살려
+//  "지금 어떤 행성이 어느 별자리에 있고, 서로 어떤 각도인가"를 만든다.
+//
+//  정밀도: 태양·행성은 JPL 근사 원소로 각분 수준(1800~2050). 달만 별도로 절단
+//  급수(Meeus 저정밀식)를 써서 약 0.3도 오차인데, 별자리 한 칸이 30도라 배치
+//  판정에는 충분하다. 다만 경계 근처에서는 흔들릴 수 있어 따로 표시해 준다.
+// ══════════════════════════════════════════════════════════════════════
+const _DEG = Math.PI / 180;
+const _norm360 = d => ((d % 360) + 360) % 360;
+const _julianCenturies = date => (date.getTime() / 86400000 + UNIX_EPOCH_JD - 2451545.0) / 36525;
+
+// 12별자리 (황경 0도 = 양자리 0도부터 30도씩)
+const ZODIAC_SIGNS = ['aries','taurus','gemini','cancer','leo','virgo',
+                      'libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
+
+// 지구에서 본 태양의 황경(도). 태양은 지구 헬리오 좌표의 정반대편에 보인다.
+function sunLonDeg(date = new Date()) {
+  const e = _helioXY(_ORBIT.earth, _julianCenturies(date));
+  return _norm360(Math.atan2(-e.y, -e.x) / _DEG);
+}
+
+// 달의 황경(도) — Meeus 저정밀식(주요 항만). 오차 약 0.3도.
+// 달은 하루에 약 13도를 움직여서, 출생 '시각'을 모르면 최대 ±6.5도 오차가 더 붙는다.
+// (이 서비스는 날짜만 받으므로 정오를 기준으로 계산한다 — sunLonDeg 등과 달리 호출부에서 맞춰준다.)
+function moonLonDeg(date = new Date()) {
+  const T = _julianCenturies(date);
+  const D  = _norm360(297.8502042 + 445267.1115168 * T) * _DEG;  // 평균 이각
+  const M  = _norm360(357.5291092 + 35999.0502909  * T) * _DEG;  // 태양 평균 근점이각
+  const Mp = _norm360(134.9634114 + 477198.8676313 * T) * _DEG;  // 달 평균 근점이각
+  const F  = _norm360( 93.2720993 + 483202.0175273 * T) * _DEG;  // 위도 인수
+
+  const lon = 218.3164477 + 481267.88123421 * T
+    + 6.289 * Math.sin(Mp)
+    - 1.274 * Math.sin(Mp - 2 * D)
+    + 0.658 * Math.sin(2 * D)
+    + 0.214 * Math.sin(2 * Mp)
+    - 0.186 * Math.sin(M)
+    - 0.114 * Math.sin(2 * F);
+  return _norm360(lon);
+}
+
+// 행성 황경(도)
+function planetLonDeg(planet, date = new Date()) {
+  return _norm360(_planetLon(planet, date) / _DEG);
+}
+
+// 차트에 올릴 천체. 태양·달을 포함하는 게 점성술 관례다(둘 다 '행성'으로 다룬다).
+const CHART_BODIES = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
+
+function bodyLonDeg(body, date) {
+  if (body === 'sun')  return sunLonDeg(date);
+  if (body === 'moon') return moonLonDeg(date);
+  return planetLonDeg(body, date);
+}
+
+// 황경 → 별자리 배치. 경계에서 1도 이내면 계산 오차로 뒤집힐 수 있어 표시해 둔다.
+function signPlacement(lonDeg) {
+  const lon = _norm360(lonDeg);
+  const index = Math.floor(lon / 30) % 12;
+  const degInSign = lon - index * 30;
+  return {
+    sign: ZODIAC_SIGNS[index],
+    signIndex: index,
+    degInSign: Math.round(degInSign * 10) / 10,
+    nearCusp: degInSign < 1 || degInSign > 29,   // 경계 근처 — 해석에서 단정하지 않게
+  };
+}
+
+// 주요 각(메이저 어스펙트)과 허용 오차(오브).
+// 오브는 점성술 문헌에서 흔히 쓰는 범위 중 보수적인 쪽을 택했다 — 넓게 잡으면
+// 아무 날에나 각이 잡혀서 "오늘은 특별하다"는 말이 매일 나온다.
+const ASPECTS = [
+  { name: 'conjunction', angle: 0,   orb: 8 },
+  { name: 'sextile',     angle: 60,  orb: 4 },
+  { name: 'square',      angle: 90,  orb: 6 },
+  { name: 'trine',       angle: 120, orb: 6 },
+  { name: 'opposition',  angle: 180, orb: 8 },
+];
+
+// 두 황경 사이의 각도(0~180)
+function angularSeparation(a, b) {
+  let d = Math.abs(_norm360(a) - _norm360(b)) % 360;
+  if (d > 180) d = 360 - d;
+  return d;
+}
+
+// 두 천체가 이루는 각. 없으면 null.
+function findAspect(lonA, lonB) {
+  const sep = angularSeparation(lonA, lonB);
+  for (const asp of ASPECTS) {
+    const diff = Math.abs(sep - asp.angle);
+    if (diff <= asp.orb) {
+      return {
+        name: asp.name,
+        angle: asp.angle,
+        orb: Math.round(diff * 10) / 10,
+        // 오브가 작을수록 각이 '정확'하다 = 영향이 강하다고 본다
+        strength: Math.round((1 - diff / asp.orb) * 100),
+      };
+    }
+  }
+  return null;
+}
+
+// 특정 시점의 차트(천체별 황경·별자리·역행 여부)
+function buildChart(date) {
+  const chart = {};
+  for (const body of CHART_BODIES) {
+    const lon = bodyLonDeg(body, date);
+    chart[body] = {
+      lon: Math.round(lon * 100) / 100,
+      ...signPlacement(lon),
+      // 태양·달은 지구에서 볼 때 역행하지 않는다
+      retrograde: (body === 'sun' || body === 'moon') ? false : _isRetroAt(body, date),
+    };
+  }
+  return chart;
+}
+
+// 생년월일 → 탄생 차트. 시각을 받지 않으므로 그날 정오(UTC)를 기준으로 삼는다.
+// 정오를 쓰면 하루 중 어느 시각이든 오차가 최대 12시간으로 균등해진다(자정 기준이면 최대 24시간).
+function natalChart(year, month, day) {
+  const d = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  if (Number.isNaN(d.getTime())) return null;
+  return buildChart(d);
+}
+
+// 오늘 하늘의 행성이 탄생 차트의 천체에 맺는 각(트랜싯).
+// 강한 순으로 정렬해 상위 몇 개만 쓰게 한다 — 전부 나열하면 해석이 산만해진다.
+function transitAspects(natal, transitChart) {
+  const out = [];
+  for (const t of CHART_BODIES) {
+    for (const n of CHART_BODIES) {
+      const asp = findAspect(transitChart[t].lon, natal[n].lon);
+      if (asp) out.push({ transit: t, natal: n, ...asp });
+    }
+  }
+  out.sort((a, b) => b.strength - a.strength);
+  return out;
 }
 
 // 홈 배지 등 기존 호출부 호환용
@@ -938,6 +1089,7 @@ export default {
     if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return handleTarotDraw(request, env); }
     // ── 띠·별자리 운세 (재미 콘텐츠) ──
     if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
+    if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return handleAstroTransit(request, env); }
     // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
     if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
@@ -2572,6 +2724,147 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       moon: { index: moon.index, illumination: moonPct }, // 프론트는 index로 자국어 이름을 찾는다
       mercury: merc,
       remaining: remainingTokens
+    }), 200);
+  } catch(e) {
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  천궁도 트랜싯 — 실제 행성 위치로 보는 오늘의 하늘 (1토큰)
+//
+//  다른 콘텐츠와 달리 AI 에게 "알아서 지어내라"고 하지 않는다. 별자리 배치와 각도는
+//  전부 코드가 실제 궤도 계산으로 산출해서 넘기고, AI 는 그 사실을 해석만 한다.
+//  (사주에서 computeSaju 로 4기둥을 먼저 구하고 AI 에겐 해석만 시키는 것과 같은 구조 —
+//   천체 위치를 AI 가 지어내면 그럴듯하지만 하늘과 무관한 글이 나온다.)
+// ════════════════════════════════════════════
+const SIGN_NAMES = {
+  ko: ['양자리','황소자리','쌍둥이자리','게자리','사자자리','처녀자리','천칭자리','전갈자리','사수자리','염소자리','물병자리','물고기자리'],
+  en: ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'],
+  zh: ['白羊座','金牛座','双子座','巨蟹座','狮子座','处女座','天秤座','天蝎座','射手座','摩羯座','水瓶座','双鱼座'],
+  ja: ['牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座','山羊座','水瓶座','魚座'],
+};
+const BODY_NAMES = {
+  ko: { sun:'태양', moon:'달', mercury:'수성', venus:'금성', mars:'화성', jupiter:'목성', saturn:'토성' },
+  en: { sun:'Sun', moon:'Moon', mercury:'Mercury', venus:'Venus', mars:'Mars', jupiter:'Jupiter', saturn:'Saturn' },
+  zh: { sun:'太阳', moon:'月亮', mercury:'水星', venus:'金星', mars:'火星', jupiter:'木星', saturn:'土星' },
+  ja: { sun:'太陽', moon:'月', mercury:'水星', venus:'金星', mars:'火星', jupiter:'木星', saturn:'土星' },
+};
+const ASPECT_NAMES = {
+  ko: { conjunction:'합(0도)', sextile:'육각(60도)', square:'사각(90도)', trine:'삼각(120도)', opposition:'대립(180도)' },
+  en: { conjunction:'conjunction (0°)', sextile:'sextile (60°)', square:'square (90°)', trine:'trine (120°)', opposition:'opposition (180°)' },
+  zh: { conjunction:'合相(0度)', sextile:'六分相(60度)', square:'四分相(90度)', trine:'三分相(120度)', opposition:'对分相(180度)' },
+  ja: { conjunction:'合(0度)', sextile:'セクスタイル(60度)', square:'スクエア(90度)', trine:'トライン(120度)', opposition:'オポジション(180度)' },
+};
+// 각의 성격 — AI 가 길흉을 제멋대로 붙이지 않도록 통용되는 해석을 고정해 준다.
+const ASPECT_TONE_KO = {
+  conjunction: '두 힘이 겹쳐 강해지는 각',
+  sextile:     '기회가 열리지만 스스로 움직여야 하는 각',
+  square:      '마찰과 긴장이 생겨 행동을 요구하는 각',
+  trine:       '흐름이 순조롭고 힘이 잘 풀리는 각',
+  opposition:  '양쪽이 팽팽히 맞서 균형을 요구하는 각',
+};
+
+const ASTRO_TOP_TRANSITS = 5;   // 상위 몇 개만 해석에 쓸지. 전부 넣으면 글이 산만해진다
+
+async function handleAstroTransit(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth } = await request.json().catch(() => ({}));
+    const by = birth ? parseInt(birth.year, 10) : NaN;
+    const bm = birth ? parseInt(birth.month, 10) : NaN;
+    const bd = birth ? parseInt(birth.day, 10) : NaN;
+    if (!by || !bm || !bd) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
+    }
+
+    const natal = natalChart(by, bm, bd);
+    if (!natal) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const today = buildChart(new Date());
+    const transits = transitAspects(natal, today).slice(0, ASTRO_TOP_TRANSITS);
+
+    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    const COST = 1;
+    const useId = `astro_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'astro_use', 0, ?, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
+    ).bind(useId, email, -COST, email, COST).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: `천궁도 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const S = SIGN_NAMES[lang] || SIGN_NAMES.ko;
+    const B = BODY_NAMES[lang] || BODY_NAMES.ko;
+    const A = ASPECT_NAMES[lang] || ASPECT_NAMES.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+
+    const fmt = c => `${S[c.signIndex]} ${c.degInSign}도${c.retrograde ? ' (역행)' : ''}`;
+    const natalLines  = CHART_BODIES.map(b => `  ${B[b]}: ${fmt(natal[b])}`).join('\n');
+    const todayLines  = CHART_BODIES.map(b => `  ${B[b]}: ${fmt(today[b])}`).join('\n');
+    const transitLines = transits.length
+      ? transits.map(t =>
+          `  오늘의 ${B[t.transit]} → 태어날 때의 ${B[t.natal]} : ${A[t.name]} (오차 ${t.orb}도) — ${ASPECT_TONE_KO[t.name]}`
+        ).join('\n')
+      : '  (오늘은 뚜렷한 각이 없습니다 — 조용한 하늘입니다)';
+
+    const moon = moonPhase();
+    const prompt = `당신은 서양 점성술 상담사입니다. 아래 행성 위치는 실제 궤도 계산으로 구한 값이니, 임의로 바꾸거나 새로 지어내지 마세요.
+
+[태어난 날의 하늘]
+${natalLines}
+
+[오늘의 하늘]
+${todayLines}
+  달의 위상: ${Math.round(moon.illumination * 100)}% 밝기
+
+[오늘 하늘이 이 사람의 차트에 맺는 각]
+${transitLines}
+
+위 배치를 근거로 오늘 하루의 흐름을 ${langLabel}로 풀어주세요. 조건:
+- 위에 준 각 중 강한 것 2~3개를 골라 그것이 오늘 어떤 형태로 나타날지 구체적으로 쓰세요.
+- 각의 성격(마찰인지 순조로움인지)을 무시하고 좋은 말만 하지 마세요. 다만 겁주지 말고 "무엇을 하면 되는지"로 마무리하세요.
+- 행성 이름과 별자리를 본문에 자연스럽게 언급해, 왜 그런 해석이 나오는지 독자가 알 수 있게 하세요.
+- 400~500자 분량. 문단 2~3개.
+- JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.9 } }) }
+    );
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      const refundId = `astro_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'astro_refund', 0, ?, 'approved', unixepoch())`
+      ).bind(refundId, email, COST).run();
+      return cors(JSON.stringify({ error: { message: '천궁도 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    const title = `${S[today.sun.signIndex]}의 계절`;
+    await saveFeatureHistory(env, email, 'astro', title, reading,
+      { natalSun: natal.sun.signIndex, natalMoon: natal.moon.signIndex, transits }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, natal, today, transits,
+      moon: { index: moon.index, illumination: Math.round(moon.illumination * 100) },
+      remaining: remainingTokens,
     }), 200);
   } catch(e) {
     return cors(JSON.stringify({ error:{ message: e.message } }), 500);
