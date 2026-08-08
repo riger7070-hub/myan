@@ -15,7 +15,7 @@ npm install -g eas-cli
 npm install -g expo-cli
 ```
 
-## 2. Google OAuth 설정 ⚠️ 남은 작업
+## 2. Google OAuth 설정 (2026-08-08 등록 완료)
 
 **Firebase는 쓰지 않는다.** `@react-native-google-signin/google-signin` 은 Firebase 없이도 동작하며,
 `app/index.jsx` 의 `GoogleSignin.configure({ webClientId })` 로 웹 클라이언트 ID 를 직접 넘긴다.
@@ -27,21 +27,30 @@ npm install -g expo-cli
 안드로이드 네이티브 로그인은 앱 서명(패키지명 + SHA-1)이 **webClientId 와 같은 프로젝트**에
 Android 클라이언트로 등록돼 있어야 통과한다. 다른 프로젝트에 등록하면 `DEVELOPER_ERROR` 가 난다.
 
-1. SHA-1 지문 확인 — EAS 업로드 키(2026-08-07 기준, 키스토어를 새로 만들지 않는 한 그대로):
+프로젝트 번호 806789036860 = 프로젝트 ID `caramel-source-494211-e8`(콘솔 표시명 "My Project 83531").
+콘솔 URL 에 번호를 넣어도 이 ID 로 리다이렉트되는 게 정상이다 — 다른 프로젝트로 튕긴 게 아니다.
+
+1. SHA-1 지문 — EAS 업로드 키(2026-08-07 기준, 키스토어를 새로 만들지 않는 한 그대로):
    ```
    1C:68:0A:F2:7A:38:80:64:FC:92:B0:80:FA:3D:80:EB:CB:E5:EF:4D
    ```
    다시 확인하려면 `eas credentials --platform android` (대화형 메뉴라 터미널에서 직접 실행해야 한다)
    또는 https://expo.dev/accounts/myansik/projects/myan/credentials
+2. **[완료 2026-08-08]** 위 프로젝트에 Android 클라이언트 `myan Android (EAS upload key)` 등록
+   (패키지 `com.myan.app` + 위 SHA-1). 클라이언트 ID 는
+   `806789036860-jdeond92nr1fv4a987ejo9uinm7vt4hs.apps.googleusercontent.com`.
+   이 ID 는 **코드에 넣지 않는다** — 구글이 앱 서명을 검증하는 용도로만 존재하고,
+   코드는 계속 `webClientId` 만 쓴다.
+3. **[완료 2026-08-08]** OAuth 동의 화면 게시 상태를 `테스트 중` → **`프로덕션`** 으로 전환.
+   테스트 중이면 테스트 사용자 목록에 없는 계정이 막힐 수 있는데 목록이 비어 있었다.
+   등록된 범위가 하나도 없어서(민감·제한 범위 0개) 구글 인증 심사 없이 즉시 전환됐다.
+   → 콘솔 "Google 인증 플랫폼 → 대상" 에서 확인 가능.
 
-   ※ Play Store 배포 시에는 **Play 앱 서명 키**의 SHA-1 도 따로 등록해야 한다
-   (Play Console → 설정 → 앱 서명). 구글이 업로드 키를 자기 키로 다시 서명하므로,
-   빠뜨리면 내부 테스트 APK 는 로그인되는데 스토어에서 받은 앱만 `DEVELOPER_ERROR` 가 난다.
-2. https://console.cloud.google.com → 프로젝트 **806789036860** 선택
-   → API 및 서비스 → 사용자 인증 정보 → 만들기 → OAuth 2.0 클라이언트 ID → **Android**
-   → 패키지 이름 `com.myan.app`, 위에서 얻은 SHA-1 입력
-3. 끝. 이 Android 클라이언트 ID 는 코드에 넣지 않는다 —
-   구글이 앱 서명을 검증하는 용도로만 존재하고, 코드는 계속 `webClientId` 만 쓴다.
+### 아직 남은 것: Play Store 배포 시 Play 앱 서명 키 SHA-1 추가 등록
+
+구글이 업로드 키를 자기 키로 다시 서명하므로, Play Console → 설정 → 앱 서명 에서
+**Play 앱 서명 키**의 SHA-1 을 위 Android 클라이언트에 하나 더 넣어야 한다.
+빠뜨리면 내부 테스트 APK 는 로그인되는데 스토어에서 받은 앱만 `DEVELOPER_ERROR` 가 난다.
 
 ### iOS 를 시작할 때 추가로 할 일
 같은 프로젝트에서 **iOS** 클라이언트 ID(번들 `com.myan.app`)를 만든 뒤,
