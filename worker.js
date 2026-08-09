@@ -746,6 +746,224 @@ async function handleGetSajuHistory(request, env) {
   }
 }
 
+// ════════════════════════════════════════════
+//  공용 운세 캐시 — 사람마다 달라지지 않는 글은 한 번만 만든다
+//
+//  일부 콘텐츠는 프롬프트에 사주 원국이 전혀 안 들어간다. 같은 카드를 뽑은 두 사람에게
+//  줄 글은 애초에 같은 글이다. 그런데도 매번 Gemini 를 불러서, 분당 요청 한도에 걸려
+//  동시 접속 5명이면 5명 다 실패했다(측정: 순차 12건 전부 성공 / 동시 5건 전부 실패).
+//
+//  캐시 단위는 "그 글을 결정하는 값 전부"를 이어 붙인 bucket 이다. 날짜가 프롬프트에
+//  들어가는 것(띠·별자리, 럭키, 라이프패스)은 bucket 에 날짜를 넣어 하루마다 갈리고,
+//  안 들어가는 것(타로, 룬, 유형궁합)은 날짜 없이 영구 재사용한다.
+//
+//  한 bucket 에 여러 변형을 담아 둘 수 있다(id = bucket#n). 있으면 그중 하나를 무작위로
+//  주므로, 같은 띠·별자리인 두 사람이 나란히 비교해도 똑같은 문장이 나오지 않는다.
+//  변형은 미리 만들어 둘 때만 늘어나고, 사용자 요청은 하나라도 있으면 절대 새로 안 만든다.
+// ════════════════════════════════════════════
+
+// 같은 isolate 안에서 같은 bucket 이 동시에 생성되는 것을 막는다.
+// D1 은 네트워크 왕복이라, 캐시가 빈 상태로 동시에 5건이 들어오면 5건 다 조회에 실패하고
+// 5번 다 Gemini 를 부른다 — 정확히 지금 터지고 있는 그 상황이다. 먼저 온 요청의
+// 약속(promise)을 붙잡아 두고 뒤에 온 요청은 그것을 같이 기다리게 한다.
+const _fortuneInflight = new Map();
+
+/** Gemini 로 본문 텍스트 한 덩이를 받는다. 실패하면 빈 문자열(호출부가 환불 판단). */
+async function geminiText(env, prompt, generationConfig = { temperature: 0.9 }) {
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+    { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig }) }
+  );
+  let data = null;
+  try { data = await resp.json(); } catch { data = null; }
+  if (!resp.ok) {
+    // 실패 사유가 서버 어디에도 안 남아서 "가끔 안 된다"를 추적할 수 없었다.
+    // 본문 전체는 프롬프트가 되돌아올 수 있으니 상태와 메시지만 남긴다.
+    console.warn(`[gemini] ${resp.status} ${data?.error?.status || ''} ${(data?.error?.message || '').slice(0, 200)}`);
+    return '';
+  }
+  const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  if (!text) {
+    console.warn(`[gemini] 200 이지만 본문이 비었다 — finishReason=${data?.candidates?.[0]?.finishReason} promptFeedback=${JSON.stringify(data?.promptFeedback || null)}`);
+  }
+  return text;
+}
+
+/**
+ * bucket 에 저장된 글이 있으면 그중 하나를, 없으면 generate() 로 만들어 저장하고 돌려준다.
+ * @param {string} bucket 그 글을 결정하는 값 전부를 이어 붙인 키
+ * @param {() => Promise<string>} generate 캐시가 비었을 때만 불린다
+ * @returns {Promise<string>} 실패하면 빈 문자열
+ */
+async function cachedFortune(env, bucket, generate) {
+  const pick = async () => {
+    const { results } = await env.DB.prepare(
+      'SELECT reading FROM fortune_cache WHERE bucket = ?'
+    ).bind(bucket).all();
+    if (!results?.length) return '';
+    return results[Math.floor(Math.random() * results.length)].reading;
+  };
+
+  try {
+    const hit = await pick();
+    if (hit) return hit;
+  } catch { /* 캐시 조회 실패는 캐시 미스와 같게 다룬다 — 생성으로 넘어간다 */ }
+
+  const waiting = _fortuneInflight.get(bucket);
+  if (waiting) return waiting;
+
+  const job = (async () => {
+    const text = await generate();
+    if (text) {
+      await storeFortune(env, bucket, text).catch(() => {});
+    }
+    return text;
+  })();
+
+  _fortuneInflight.set(bucket, job);
+  try { return await job; }
+  finally { _fortuneInflight.delete(bucket); }
+}
+
+/** 변형 하나를 캐시에 넣는다. 같은 자리에 이미 있으면 그대로 둔다. */
+async function storeFortune(env, bucket, reading) {
+  // 변형 번호는 현재 개수에서 이어 붙인다. 경합으로 같은 번호가 겹치면
+  // PRIMARY KEY 가 막고(INSERT OR IGNORE) 조용히 넘어간다 — 어차피 같은 bucket 의 글이다.
+  const row = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM fortune_cache WHERE bucket = ?'
+  ).bind(bucket).first();
+  const id = `${bucket}#${row?.n ?? 0}`;
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO fortune_cache (id, bucket, reading) VALUES (?, ?, ?)'
+  ).bind(id, bucket, reading).run();
+}
+
+/** 오늘 날짜(KST, YYYY-MM-DD) — 날짜가 프롬프트에 들어가는 콘텐츠의 bucket 용. */
+function _kstYmd() {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// ── 날짜를 타지 않는 콘텐츠의 bucket·프롬프트 ──
+//
+// 크론이 미리 채워 두는 것과 사용자 요청이 만드는 것이 **반드시 같은 글**이어야 한다.
+// 프롬프트를 양쪽에 따로 적어 두면 한쪽만 손봤을 때 캐시에 다른 결의 글이 섞이는데,
+// 그건 화면만 봐선 알 수 없다. 그래서 bucket 과 프롬프트를 한 자리에서만 만든다.
+const _LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+const _CACHE_LANGS = ['ko', 'en', 'zh', 'ja'];
+const _TAIL = 'JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.';
+
+function tarotSpec(lang, cardIdx, upright) {
+  const card = TAROT_CARDS[cardIdx];
+  const langLabel = _LANG_LABEL[lang] || '한국어';
+  return {
+    bucket: `tarot|${lang}|${cardIdx}|${upright ? 'u' : 'r'}`,
+    prompt: `당신은 오늘의 기운을 친근하게 안내해주는 타로 마스터입니다. 오늘 뽑힌 카드는 "${card.name}" — ${upright ? '정방향' : '역방향'}입니다.
+
+이 카드가 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 재미있게 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 카드여도 균형을 찾는 조언으로 전환해서 표현하세요.
+
+${_TAIL}`,
+  };
+}
+
+function runeSpec(lang, idx, upright) {
+  const rune = RUNE_NAMES[idx];
+  const langLabel = _LANG_LABEL[lang] || '한국어';
+  return {
+    bucket: `rune|${lang}|${idx}|${upright ? 'u' : 'r'}`,
+    prompt: `당신은 룬 문자(Rune) 점을 봐주는 상담사입니다. 오늘 뽑힌 룬은 "${rune.en}(${rune.ko})" — ${upright ? '정방향' : '역방향'}입니다.
+
+이 룬이 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 신비로운 톤으로 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 룬이어도 균형을 찾는 조언으로 전환해서 표현하세요.
+
+${_TAIL}`,
+  };
+}
+
+function typeCompatSpec(lang, myType, partnerType) {
+  const on = ON[lang] || ON.ko;
+  const langLabel = _LANG_LABEL[lang] || '한국어';
+  return {
+    bucket: `typecompat|${lang}|${myType}|${partnerType}`,
+    prompt: `당신은 재미있는 궁합 상담사입니다. 오행 성격 유형 테스트에서 한 사람은 "${on[myType]}" 유형, 다른 사람은 "${on[partnerType]}" 유형이 나왔습니다.
+
+두 유형의 궁합을 ${langLabel}로 3~4문장, 가볍고 유쾌하게 풀어주세요. 두 사람이 함께하면 어떤 케미가 나는지, 서로에게 좋은 점이나 함께 하면 좋을 활동을 재미있게 알려주세요. 안 맞는 조합처럼 보여도 유쾌하게 표현하세요(예: "티격태격하지만 그게 매력!").
+
+${_TAIL}`,
+  };
+}
+
+/** 크론이 미리 채울 수 있는 자리 전부 (날짜를 타지 않는 것만). */
+function permanentFortuneSpecs() {
+  const out = [];
+  for (const lang of _CACHE_LANGS) {
+    for (let i = 0; i < TAROT_CARDS.length; i++) {
+      out.push(tarotSpec(lang, i, true), tarotSpec(lang, i, false));
+    }
+    for (let i = 0; i < RUNE_NAMES.length; i++) {
+      out.push(runeSpec(lang, i, true), runeSpec(lang, i, false));
+    }
+    for (const a of TYPE_ELEMENTS) for (const b of TYPE_ELEMENTS) out.push(typeCompatSpec(lang, a, b));
+  }
+  return out;
+}
+
+// 한 번의 크론에서 만들 개수와 간격.
+// 한도가 분당 10건 근처라 그보다 느리게 간다 — 예열이 사용자 요청을 밀어내면 본말전도다.
+// 916자리를 이 속도로 채우면 한 달쯤 걸리지만, 그동안에도 사용자 요청이 오는 자리부터
+// 알아서 채워지므로 급할 것이 없다. 채워진 자리는 다시 만들지 않는다.
+const WARM_BUDGET = 30;
+const WARM_GAP_MS = 7000;
+const CACHE_TTL_DAYS = 3;
+
+/**
+ * 날짜가 붙은 bucket 중 지난 것을 지운다.
+ * 타로·룬·유형궁합은 날짜를 안 타서 계속 값어치가 있으므로 건드리지 않는다 —
+ * created_at 만 보고 싹 지우면 어렵게 채운 영구 자리를 매일 밤 날려 먹는다.
+ */
+async function purgeStaleFortunes(env, nowSec = Math.floor(Date.now() / 1000)) {
+  const cutoff = nowSec - CACHE_TTL_DAYS * 86400;
+  await env.DB.prepare(
+    `DELETE FROM fortune_cache
+      WHERE created_at < ?
+        AND (bucket LIKE 'zodiac|%' OR bucket LIKE 'lucky|%' OR bucket LIKE 'numerology|%')`
+  ).bind(cutoff).run();
+}
+
+/** 변형이 가장 적은 자리부터 budget 개. 아직 하나도 없는 자리가 먼저 온다. */
+async function selectWarmTargets(env, budget = WARM_BUDGET) {
+  const { results } = await env.DB.prepare(
+    'SELECT bucket, COUNT(*) AS n FROM fortune_cache GROUP BY bucket'
+  ).all();
+  const have = new Map((results || []).map(r => [r.bucket, r.n]));
+  return permanentFortuneSpecs()
+    .map(s => ({ ...s, n: have.get(s.bucket) || 0 }))
+    .sort((a, b) => a.n - b.n)
+    .slice(0, budget);
+}
+
+/**
+ * 날짜를 타지 않는 캐시 자리를 조금씩 미리 채우고, 날짜가 지난 자리는 지운다.
+ * 실패는 삼킨다 — 예열이 안 됐다고 크론의 다른 일(푸시·재결제)까지 멈출 이유가 없다.
+ */
+async function warmFortuneCache(env) {
+  if (!env.DB || !env.GEMINI_API_KEY) return;
+
+  try { await purgeStaleFortunes(env); }
+  catch { /* 정리는 실패해도 그만 — 다음 밤에 다시 시도한다 */ }
+
+  let specs;
+  try { specs = await selectWarmTargets(env); }
+  catch { return; }
+
+  for (const spec of specs) {
+    try {
+      const text = await geminiText(env, spec.prompt);
+      if (text) await storeFortune(env, spec.bucket, text);
+    } catch { /* 한 자리가 실패해도 나머지는 계속 */ }
+    await new Promise(r => setTimeout(r, WARM_GAP_MS));
+  }
+}
+
 // 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 기록 저장 (비동기, 비차단)
 async function saveFeatureHistory(env, email, feature, title, content, meta) {
   try {
@@ -1056,6 +1274,15 @@ async function ensureDBExt(env) {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
     CREATE INDEX IF NOT EXISTS idx_pr2_email_created ON photo_readings (user_email, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS fortune_cache (
+      id TEXT PRIMARY KEY,
+      bucket TEXT NOT NULL,
+      reading TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_fc_bucket ON fortune_cache (bucket);
+    CREATE INDEX IF NOT EXISTS idx_fc_created ON fortune_cache (created_at);
   `, 'ext');
 
   // ⚠️ subscriptions(정기결제) 테이블은 일부러 여기서 만들지 않는다.
@@ -1271,6 +1498,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sendDailyPush(env));
     ctx.waitUntil((async () => { await ensureDBExt(env); await processSubscriptionRenewals(env); })());
+    ctx.waitUntil((async () => { await ensureDBExt(env); await warmFortuneCache(env); })());
   }
 };
 
@@ -2618,25 +2846,12 @@ async function handleTarotDraw(request, env) {
     const card = TAROT_CARDS[cardIdx];
     const upright = Math.random() < 0.65; // 정방향에 약간 더 무게 — 지나치게 부정적인 결과가 잦지 않도록
 
-    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
-    const langLabel = LANG_LABEL[lang] || '한국어';
-    const prompt = `당신은 오늘의 기운을 친근하게 안내해주는 타로 마스터입니다. 오늘 뽑힌 카드는 "${card.name}" — ${upright ? '정방향' : '역방향'}입니다.
+    // 카드 해석에는 뽑은 사람의 정보가 하나도 안 들어간다 — 같은 카드·같은 방향이면 같은 글이다.
+    // 날짜도 프롬프트에 없으므로 한 번 만들면 계속 쓴다(78장 × 정역 2 × 4개국어 = 624개).
+    const { bucket, prompt } = tarotSpec(lang, cardIdx, upright);
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt));
 
-이 카드가 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 재미있게 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 카드여도 균형을 찾는 조언으로 전환해서 표현하세요.
-
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
-
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9 } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
@@ -2749,17 +2964,15 @@ async function handleZodiacFortune(request, env) {
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9 } }) }
+    // 프롬프트에 들어가는 값은 띠·별자리·오늘의 오행·달 위상·역행뿐 — 전부 이 사람과 무관하거나
+    // 오늘이면 모두에게 같다. 뒤의 넷은 날짜가 정하므로 bucket 에 날짜만 넣으면 된다.
+    // (띠 12 × 별자리 12 × 4개국어 = 하루 576개, 그마저도 실제로 들어온 조합만 만든다.)
+    const reading = await cachedFortune(
+      env, `zodiac|${lang}|${animalIndex}|${zodiacIndex}|${_kstYmd()}`,
+      () => geminiText(env, prompt),
     );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
@@ -3733,22 +3946,26 @@ async function handleLuckyPicks(request, env) {
 JSON 형식으로만 답하세요, 다른 텍스트 없이:
 {"color":{"name":"...","reason":"..."},"food":{"name":"...","reason":"..."},"song":{"name":"...","reason":"..."}}`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ responseMimeType:'application/json', temperature:0.9 } }) }
+    // 오늘의 오행 하나로만 정해진다 — 4개국어 합쳐 하루 4개면 전부다.
+    // 여기만 응답이 JSON 이라 캐시에는 그 문자열을 그대로 넣고 꺼낼 때 파싱한다.
+    const raw = await cachedFortune(
+      env, `lucky|${lang}|${_kstYmd()}`,
+      async () => {
+        const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9 });
+        // 캐시에 넣기 전에 걸러야 깨진 JSON 이 하루 종일 재사용되지 않는다.
+        try {
+          const p = JSON.parse(text);
+          return (p?.color?.name || p?.food?.name || p?.song?.name) ? text : '';
+        } catch { return ''; }
+      },
     );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     let picks;
-    try { picks = JSON.parse(raw); } catch { picks = {}; }
+    try { picks = JSON.parse(raw || '{}'); } catch { picks = {}; }
 
     // 이 핸들러는 JSON 응답이라 파싱이 깨져도 picks={}로 흘러가 빈 카드 3장이 나갔다.
     // 세 항목 중 하나도 이름이 없으면 실패로 보고 환불한다.
     const hasPick = !!(picks?.color?.name || picks?.food?.name || picks?.song?.name);
-    if (!resp.ok || !hasPick) {
+    if (!hasPick) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
@@ -3800,25 +4017,11 @@ async function handleTypeCompat(request, env) {
     const remainingTokens = remainRow?.bal ?? 0;
 
     const on = ON[lang] || ON.ko;
-    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
-    const langLabel = LANG_LABEL[lang] || '한국어';
-    const prompt = `당신은 재미있는 궁합 상담사입니다. 오행 성격 유형 테스트에서 한 사람은 "${on[myType]}" 유형, 다른 사람은 "${on[partnerType]}" 유형이 나왔습니다.
+    // 유형 두 개로만 정해진다 — 5 × 5 × 4개국어 = 100개면 전 조합이 채워지고 날짜도 안 탄다.
+    const { bucket, prompt } = typeCompatSpec(lang, myType, partnerType);
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt));
 
-두 유형의 궁합을 ${langLabel}로 3~4문장, 가볍고 유쾌하게 풀어주세요. 두 사람이 함께하면 어떤 케미가 나는지, 서로에게 좋은 점이나 함께 하면 좋을 활동을 재미있게 알려주세요. 안 맞는 조합처럼 보여도 유쾌하게 표현하세요(예: "티격태격하지만 그게 매력!").
-
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
-
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9 } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
@@ -4075,17 +4278,14 @@ async function handleNumerology(request, env) {
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8 } }) }
+    // 생년월일은 라이프패스 넘버 하나로 압축돼서 들어간다(1~9, 11, 22, 33 — 12가지).
+    // 오늘의 기운을 함께 엮으므로 날짜까지 넣어 하루 48개.
+    const reading = await cachedFortune(
+      env, `numerology|${lang}|${lifePath}|${_kstYmd()}`,
+      () => geminiText(env, prompt, { temperature: 0.8 }),
     );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
@@ -4554,25 +4754,11 @@ async function handleRuneReading(request, env) {
     const rune = RUNE_NAMES[idx];
     const upright = Math.random() < 0.7;
 
-    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
-    const langLabel = LANG_LABEL[lang] || '한국어';
-    const prompt = `당신은 룬 문자(Rune) 점을 봐주는 상담사입니다. 오늘 뽑힌 룬은 "${rune.en}(${rune.ko})" — ${upright ? '정방향' : '역방향'}입니다.
+    // 타로와 같다 — 룬과 방향만으로 글이 정해지고 날짜도 안 들어간다(24 × 2 × 4 = 192개).
+    const { bucket, prompt } = runeSpec(lang, idx, upright);
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt));
 
-이 룬이 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 신비로운 톤으로 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 룬이어도 균형을 찾는 조언으로 전환해서 표현하세요.
-
-JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
-
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9 } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
