@@ -406,16 +406,45 @@ const _YONGSIN_ADVICE = {
   }
 }
 
+const _OHAENG_ORDER = ['木','火','土','金','水'];
+
+// 오행 개수 → 합이 정확히 100 인 정수 퍼센트.
+//
+// 최대잉여법(largest remainder): 내림한 뒤 남은 몫을 소수부가 큰 순서로 1씩 나눠 준다.
+// 예전엔 반올림 오차 전부를 최댓값 하나에 몰아넣었는데(`p[mi] += diff`), 그러면
+// 실제로는 같은 두 기운이 벌어져 보인다. 예를 들어 庚午/辛巳/庚辰/壬午 는 火 3개,
+// 金 3개로 똑같은데 화36% 금38% 로 표시됐다. 거기에 _strongElem 이 퍼센트가 아니라
+// 원본 개수를 따로 보고 최댓값을 골라서, 화면에 "금 38%" 를 띄워 놓고 바로 아랫줄에
+// "가장 강한 기운: 화" 라고 적는 자기모순이 생년월일 4건 중 1건꼴로 나왔다.
+// 아래 두 함수가 이 퍼센트에서 그대로 고르므로 숫자와 라벨은 항상 같은 것을 가리킨다.
 function _ohaengPct(elem) {
-  const order = ['木','火','土','金','水'];
-  const total = order.reduce((a,k)=>a+(elem[k]||0),0) || 1;
-  const p = order.map(k => Math.round((elem[k]||0)/total*100));
-  const diff = 100 - p.reduce((a,b)=>a+b,0);
-  if (diff !== 0) { let mi=0; for(let i=1;i<5;i++) if(p[i]>p[mi]) mi=i; p[mi]+=diff; }
-  const out={}; order.forEach((k,i)=>out[k]=p[i]); return out;
+  const total = _OHAENG_ORDER.reduce((a,k)=>a+(elem[k]||0),0);
+  const out = {};
+  if (!total) { _OHAENG_ORDER.forEach(k => out[k] = 0); return out; }
+
+  const exact = _OHAENG_ORDER.map(k => (elem[k]||0)/total*100);
+  const p = exact.map(Math.floor);
+  const rest = 100 - p.reduce((a,b)=>a+b,0);   // 내림으로 잃은 몫 (0~4)
+  // 소수부가 큰 순서, 같으면 木火土金水 순서 — 아래 두 함수의 동점 처리와 같은 기준.
+  const byRemainder = _OHAENG_ORDER.map((_, i) => i)
+    .sort((a,b) => (exact[b]-p[b]) - (exact[a]-p[a]) || a-b);
+  for (let i = 0; i < rest; i++) p[byRemainder[i]]++;
+
+  _OHAENG_ORDER.forEach((k,i) => out[k] = p[i]);
+  return out;
 }
-function _strongElem(elem){ let b='木'; ['火','土','金','水'].forEach(k=>{ if((elem[k]||0)>(elem[b]||0)) b=k; }); return b; }
-function _needElem(elem){ const zero=['木','火','土','金','水'].find(k=>(elem[k]||0)===0); if(zero)return zero; let b='木'; ['火','土','金','水'].forEach(k=>{ if((elem[k]||0)<(elem[b]||0)) b=k; }); return b; }
+// 동점이면 木火土金水 중 앞선 것 — _ohaengPct 가 잉여분을 주는 순서와 같다.
+function _strongElem(elem){
+  const pct = _ohaengPct(elem);
+  return _OHAENG_ORDER.reduce((b,k) => pct[k] > pct[b] ? k : b, '木');
+}
+function _needElem(elem){
+  // 아예 없는 기운이 있으면 그게 용신이다(0% 라 어차피 최솟값이기도 하다).
+  const zero = _OHAENG_ORDER.find(k => (elem[k]||0) === 0);
+  if (zero) return zero;
+  const pct = _ohaengPct(elem);
+  return _OHAENG_ORDER.reduce((b,k) => pct[k] < pct[b] ? k : b, '木');
+}
 
 // 십성 해석 (년월일시 기둥의 의미)
 function _pillarMeaning(L) {
