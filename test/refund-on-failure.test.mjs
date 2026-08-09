@@ -94,7 +94,7 @@ test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있�
   const spans = starts.map((s, i) => src.slice(s, starts[i + 1] ?? src.length));
 
   const paid = spans.filter(s => /'[a-z_]+_use', 0, /.test(s));
-  assert.equal(paid.length, 17, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
+  assert.equal(paid.length, 18, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
 
   for (const span of paid) {
     const name = (span.match(/^async function (\w+)/) || [])[1] || span.slice(0, 40);

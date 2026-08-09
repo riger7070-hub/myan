@@ -1103,6 +1103,7 @@ export default {
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return handleAuspiciousDays(request, env); }
     if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return handleDaeun(request, env); }
     if (path === '/api/name-reading'   && method === 'POST') { await ensureDBExt(env); return handleNameReading(request, env); }
+    if (path === '/api/compat-timing'  && method === 'POST') { await ensureDBExt(env); return handleCompatTiming(request, env); }
     // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
     if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
@@ -3488,6 +3489,168 @@ ${sajuLine}
       chars: analysis.chars, pairs: analysis.pairs, score: analysis.score,
       fills: analysis.fills, overs: analysis.overs,
       sajuElem: saju?.elem || null,
+      remaining: remainingTokens,
+    }), 200);
+  } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  궁합 심화 — 두 사람에게 언제가 좋은 시기인지 (3토큰)
+//
+//  기존 궁합이 "둘이 어떤 조합인지"를 본다면 여기서는 "언제인지"를 본다. 판단 근거는
+//  세운(그 해의 지지)이 각자의 일지(日支)와 맺는 관계다 — 육합·삼합이면 풀리고
+//  충이면 흔들린다는, 명리에서 시기를 볼 때 가장 먼저 보는 자리다. 거기에 각자
+//  그 해에 어느 대운을 지나는지를 얹어 배경으로 준다(computeDaeun 재사용).
+//
+//  좋은 해를 코드가 먼저 세워서 넘기고, AI 는 그 해가 왜 그런지 설명만 한다.
+// ════════════════════════════════════════════
+const JIJI_YUKHAP = { 子:'丑', 丑:'子', 寅:'亥', 亥:'寅', 卯:'戌', 戌:'卯', 辰:'酉', 酉:'辰', 巳:'申', 申:'巳', 午:'未', 未:'午' };
+const JIJI_SAMHAP = [['申','子','辰'], ['巳','酉','丑'], ['寅','午','戌'], ['亥','卯','未']];
+
+// 그 해의 지지가 어떤 사람의 일지와 맺는 관계. 합·충이 겹치면 충을 우선한다(흔들림이 먼저 체감된다).
+function branchRelation(yearZhi, dayZhi) {
+  if (!yearZhi || !dayZhi) return { relation: 'none', score: 0 };
+  const yi = JJ.indexOf(yearZhi), di = JJ.indexOf(dayZhi);
+  if (yi < 0 || di < 0) return { relation: 'none', score: 0 };
+  if ((yi + 6) % 12 === di) return { relation: 'chung',  score: -3 };   // 충
+  if (JIJI_YUKHAP[yearZhi] === dayZhi) return { relation: 'yukhap', score: 3 };
+  if (JIJI_SAMHAP.some(g => g.includes(yearZhi) && g.includes(dayZhi) && yearZhi !== dayZhi)) {
+    return { relation: 'samhap', score: 2 };
+  }
+  return { relation: 'none', score: 0 };
+}
+
+/**
+ * 두 사람의 앞으로 몇 해를 훑어 시기별 점수를 낸다. 네트워크도 AI 도 없다.
+ * @param {{birth:object, gender:'M'|'F'}} a
+ * @param {{birth:object, gender:'M'|'F'}} b
+ * @param {number} fromYear 훑기 시작할 해
+ * @param {number} years 몇 해를 볼지
+ */
+function computeCompatTiming(a, b, fromYear, years = 10) {
+  const sa = computeSaju(a.birth?.year, a.birth?.month, a.birth?.day, a.birth?.hour);
+  const sb = computeSaju(b.birth?.year, b.birth?.month, b.birth?.day, b.birth?.hour);
+  if (!sa || !sb) return null;
+
+  const dayZhiA = sa.dp[1], dayZhiB = sb.dp[1];
+  // 대운은 성별이 있어야 세워진다. 없으면 시기 흐름만 보고 대운은 비운다.
+  const daeunA = a.gender ? computeDaeun(a.birth, a.gender, fromYear) : null;
+  const daeunB = b.gender ? computeDaeun(b.birth, b.gender, fromYear) : null;
+  const daeunAt = (d, y) => d?.periods.find(p => y >= p.startYear && y <= p.endYear)?.ganzhi || null;
+
+  const timeline = [];
+  for (let i = 0; i < years; i++) {
+    const y = fromYear + i;
+    // 6월 1일은 입춘·동지 어느 쪽에도 걸리지 않아 그 해의 연주를 그대로 집는다
+    const yearGanZhi = Solar.fromYmd(y, 6, 1).getLunar().getYearInGanZhi();
+    const yearZhi = yearGanZhi[1];
+    const ra = branchRelation(yearZhi, dayZhiA);
+    const rb = branchRelation(yearZhi, dayZhiB);
+    timeline.push({
+      year: y, ganzhi: yearGanZhi,
+      a: { relation: ra.relation, daeun: daeunAt(daeunA, y) },
+      b: { relation: rb.relation, daeun: daeunAt(daeunB, y) },
+      score: ra.score + rb.score,
+    });
+  }
+
+  // 가장 높은 점수부터, 같으면 가까운 해 먼저 — 사용자는 대개 빨리 잡고 싶어 한다.
+  const best = [...timeline].sort((x, z) => z.score - x.score || x.year - z.year).slice(0, 3);
+  return { pillars: { a: sa.text, b: sb.text }, dayZhi: { a: dayZhiA, b: dayZhiB }, timeline, best };
+}
+
+async function handleCompatTiming(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', p1, p2 } = await request.json().catch(() => ({}));
+    if (!p1?.year || !p2?.year) {
+      return cors(JSON.stringify({ error: { message: '두 분의 생년월일이 모두 필요합니다.' } }), 400);
+    }
+    const nameA = sanitizeName(p1.name || '') || 'A';
+    const nameB = sanitizeName(p2.name || '') || 'B';
+
+    const fromYear = new Date().getUTCFullYear();
+    const YEARS = 10;
+    const timing = computeCompatTiming(
+      { birth: p1, gender: p1.gender === 'M' || p1.gender === 'F' ? p1.gender : null },
+      { birth: p2, gender: p2.gender === 'M' || p2.gender === 'F' ? p2.gender : null },
+      fromYear, YEARS);
+    if (!timing) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+
+    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    const COST = 3;
+    const useId = `compat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'compat_use', 0, ?, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
+    ).bind(useId, email, -COST, email, COST).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: `궁합 시기 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    refund = () => refundTokens(env, email, 'compat', COST);
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const REL_KO = { yukhap:'육합(끌어당김)', samhap:'삼합(뜻이 모임)', chung:'충(흔들림)', none:'별다른 관계 없음' };
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const line = t => `  ${t.year} ${t.ganzhi} — ${nameA}: ${REL_KO[t.a.relation]}${t.a.daeun ? `(대운 ${t.a.daeun})` : ''}`
+      + ` / ${nameB}: ${REL_KO[t.b.relation]}${t.b.daeun ? `(대운 ${t.b.daeun})` : ''} [점수 ${t.score}]`;
+
+    const prompt = `당신은 두 사람의 인연을 시기로 보아 주는 상담사입니다. 아래는 만세력으로 이미 계산해 둔 값이니 임의로 바꾸거나 새 해를 지어내지 마세요.
+
+[두 분의 사주]
+${nameA}: ${timing.pillars.a}
+${nameB}: ${timing.pillars.b}
+
+[앞으로 ${YEARS}년 — 그 해의 지지가 각자의 일지(日支)와 맺는 관계]
+${timing.timeline.map(line).join('\n')}
+
+[점수가 높은 해]
+${timing.best.map(line).join('\n')}
+
+위 자료를 근거로 ${langLabel}로 풀어 주세요. 조건:
+- 가장 좋은 해를 먼저 짚고, 왜 그 해인지 육합·삼합 같은 근거를 들어 설명하세요.
+- 충이 든 해는 숨기지 말고, 헤어질 해라는 식으로 겁주지도 마세요. 무엇이 흔들리기 쉬운 시기이고 무엇을 조심하면 되는지로 쓰세요.
+- 대운이 함께 적힌 해는 그 사람에게 큰 흐름이 어떤 배경인지 한 번만 언급하세요.
+- 연도는 반드시 위에 준 그대로 쓰세요.
+- 450~550자 분량, 문단 2~3개.
+- JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.85 } }) }
+    );
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      await refund(); refund = null;
+      return cors(JSON.stringify({ error: { message: '궁합 시기 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, email, 'compat', `${nameA} × ${nameB} · ${timing.best[0].year}`, reading,
+      { best: timing.best }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, nameA, nameB,
+      timeline: timing.timeline, best: timing.best, fromYear, years: YEARS,
       remaining: remainingTokens,
     }), 200);
   } catch(e) {

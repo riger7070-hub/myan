@@ -5363,6 +5363,166 @@ async function openNameReading() {
   overlay.querySelector('#nameInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 }
 
+// ════════════════════════════════════════════
+//  궁합 시기 — 두 사람에게 언제가 좋은 해인지 (3토큰)
+//
+//  합·충 판정과 좋은 해 선별은 서버가 끝낸다. 여기서는 연도별 관계를 표로 그린다.
+// ════════════════════════════════════════════
+function _ctRowHtml(row, lang, t, meName, youName) {
+  const REL = { yukhap: t.ctYukhap, samhap: t.ctSamhap, chung: t.ctChung, none: t.ctNone };
+  const tone = r => r === 'chung' ? '#e08a7a' : (r === 'none' ? 'var(--text-dim)' : 'var(--gold)');
+  const cell = side => `<span style="color:${tone(side.relation)};font-size:0.72rem">${_escHtml(REL[side.relation] || '')}</span>`
+    + (side.daeun ? `<span style="color:var(--text-dim);font-size:0.62rem"> ${_escHtml(side.daeun)}</span>` : '');
+
+  return `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;margin-top:2px;${
+      row.best ? 'background:rgba(201,169,110,0.10);border:1px solid rgba(201,169,110,0.35)' : ''}">
+      <span style="width:3.2em;font-size:0.78rem;font-weight:${row.best ? '700' : '400'};color:${row.best ? 'var(--gold)' : 'var(--text)'}">${row.year}</span>
+      <span style="width:2.6em;font-size:0.72rem;color:var(--text-dim)">${_escHtml(row.ganzhi)}</span>
+      <span style="flex:1">${cell(row.a)}</span>
+      <span style="flex:1">${cell(row.b)}</span>
+    </div>`;
+}
+
+async function openCompatTiming() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.ctNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const me = {
+    year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay,
+    hour:_u.birthHour || '', gender:_u.gender || '', name:_u.name || '',
+  };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:440px;padding:30px 22px;text-align:center">
+      <div class="modal-title">💞 ${_escHtml(t.ctTitle)}</div>
+      <div id="ctForm" style="margin-top:16px">
+        <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.ctAsk)}</div>
+        <input type="text" id="ctName" class="takil-field" maxlength="12" autocomplete="off"
+               placeholder="${_escHtml(t.ctPartnerName)}" style="text-align:center">
+        <input type="date" id="ctBirth" class="takil-field" style="margin-top:8px">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <select id="ctHour" class="takil-field" style="flex:1"></select>
+          <select id="ctGender" class="takil-field" style="width:38%">
+            <option value="">-</option>
+            <option value="M">${{ko:'남',en:'M',zh:'男',ja:'男'}[lang] || '남'}</option>
+            <option value="F">${{ko:'여',en:'F',zh:'女',ja:'女'}[lang] || '여'}</option>
+          </select>
+        </div>
+        <button class="oracle-skip-btn" id="ctRunBtn" style="width:100%;margin-top:12px">${_escHtml(t.ctRun)}</button>
+      </div>
+      <div id="ctStatus" style="display:none;font-size:0.8rem;color:var(--text-dim);margin-top:14px"></div>
+      <div id="ctResult" style="display:none;text-align:left;margin-top:16px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // 시진 선택지는 마이페이지와 같은 목록을 쓴다 — 모르면 비워 두면 된다.
+  const hourSel = overlay.querySelector('#ctHour');
+  if (hourSel) {
+    const unknown = { ko:'시간 모름', en:'Hour unknown', zh:'时辰不详', ja:'時刻不明' }[lang] || '시간 모름';
+    const hours = ['자시','축시','인시','묘시','진시','사시','오시','미시','신시','유시','술시','해시'];
+    hourSel.innerHTML = `<option value="">${_escHtml(unknown)}</option>`
+      + hours.map(h => `<option value="${h}">${h}</option>`).join('');
+  }
+
+  const run = async () => {
+    const birthVal = overlay.querySelector('#ctBirth')?.value || '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthVal)) {
+      showToast(t.ctAsk || '상대방의 생년월일을 알려 주세요');
+      return;
+    }
+    const [py, pm, pd] = birthVal.split('-').map(n => parseInt(n, 10));
+    const partner = {
+      year: py, month: pm, day: pd,
+      hour: overlay.querySelector('#ctHour')?.value || '',
+      gender: overlay.querySelector('#ctGender')?.value || '',
+      name: (overlay.querySelector('#ctName')?.value || '').trim(),
+    };
+
+    const formEl   = overlay.querySelector('#ctForm');
+    const statusEl = overlay.querySelector('#ctStatus');
+    const resultEl = overlay.querySelector('#ctResult');
+    if (formEl) formEl.style.display = 'none';
+    if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.ctLoading; }
+
+    const started = Date.now();
+    const MIN_MS = 1500;
+    try {
+      const res = await fetch('/api/compat-timing', {
+        method: 'POST',
+        headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+        body: JSON.stringify({ lang, p1: me, p2: partner })
+      });
+      const data = await res.json();
+      const remain = MIN_MS - (Date.now() - started);
+      if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+      if (!data.success) {
+        if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
+        if (res.status === 400 && formEl) formEl.style.display = '';
+        return;
+      }
+      if (statusEl) statusEl.style.display = 'none';
+      if (!resultEl) return;
+
+      const bestYears = new Set((data.best || []).map(b => b.year));
+      const rows = (data.timeline || []).map(r => ({ ...r, best: bestYears.has(r.year) }));
+      const meLabel = data.nameA && data.nameA !== 'A' ? data.nameA : t.ctMe;
+      const youLabel = data.nameB && data.nameB !== 'B' ? data.nameB : t.ctPartner;
+
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div style="text-align:center;font-weight:700;color:var(--gold)">
+          ${_escHtml(t.ctBest)} · ${(data.best || []).map(b => b.year).join(', ')}
+        </div>
+
+        <div class="detail-area-card" style="margin-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;padding:0 8px 4px;font-size:0.68rem;color:var(--gold)">
+            <span style="width:3.2em">${_escHtml(t.ctTimeline)}</span>
+            <span style="width:2.6em"></span>
+            <span style="flex:1">${_escHtml(meLabel)}</span>
+            <span style="flex:1">${_escHtml(youLabel)}</span>
+          </div>
+          ${rows.map(r => _ctRowHtml(r, lang, t, meLabel, youLabel)).join('')}
+        </div>
+
+        <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="ctReadingBody"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.ctNote)}</div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" id="ctShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
+      `;
+
+      const bodyEl = overlay.querySelector('#ctReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+      const shareBtn = overlay.querySelector('#ctShare');
+      if (shareBtn) shareBtn.addEventListener('click', () => shareResultCard({
+        icon: '💞',
+        title: `${t.ctTitle} · ${(data.best || []).map(b => b.year).join(', ')}`,
+        filename: 'myan-compat-timing',
+      }));
+      refreshTokens();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = getT().netErr || '네트워크 오류가 발생했습니다.';
+    }
+  };
+
+  overlay.querySelector('#ctRunBtn')?.addEventListener('click', run);
+}
+
 async function openZodiacFortune() {
   const token = getGoogleIdToken();
   if (!token) {
@@ -6355,6 +6515,7 @@ function _homeSections() {
       { icon:'📅',  label: t.takilTitle      || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
       { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름',   cost:3, fn:'openDaeun()' },
       { icon:'✍️',  label: t.nameTitle       || '이름 풀이',           cost:2, fn:'openNameReading()' },
+      { icon:'💞',  label: t.ctTitle         || '궁합 시기',           cost:3, fn:'openCompatTiming()' },
     ]},
     { icon:'🔮', title: t.csWest || '서양 점술', items: [
       { icon:'🪐', label: t.astroTitle      || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
@@ -6436,6 +6597,7 @@ function openExperienceHub() {
     { icon:'📅', label: t.takilTitle || '택일 · 좋은 날 고르기', fn: openAuspiciousDays },
     { icon:'🌊', label: t.daeunTitle || '대운 · 10년의 흐름', fn: openDaeun },
     { icon:'✍️', label: t.nameTitle || '이름 풀이', fn: openNameReading },
+    { icon:'💞', label: t.ctTitle || '궁합 시기', fn: openCompatTiming },
   ];
   const overlay = document.createElement('div');
   overlay.id = 'experienceHubOverlay';
@@ -7203,6 +7365,7 @@ async function showSajuHistory() {
       takil:      { icon: '📅', label: t.takilTitle },
       daeun:      { icon: '🌊', label: t.daeunTitle },
       name:       { icon: '✍️', label: t.nameTitle },
+      compat:     { icon: '💞', label: t.ctTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
