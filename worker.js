@@ -1102,6 +1102,7 @@ export default {
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return handleAstroTransit(request, env); }
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return handleAuspiciousDays(request, env); }
     if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return handleDaeun(request, env); }
+    if (path === '/api/name-reading'   && method === 'POST') { await ensureDBExt(env); return handleNameReading(request, env); }
     // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
     if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
@@ -3321,6 +3322,172 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
       pillars: { yp: saju.yp, mp: saju.mp, dp: saju.dp, hp: saju.hp, dayGan: saju.dayGan, dayElem: saju.dayElem },
       forward: daeun.forward, qiyun: daeun.qiyun, periods: daeun.periods,
       current: daeun.current, next: daeun.next, liunian: daeun.liunian,
+      remaining: remainingTokens,
+    }), 200);
+  } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  이름 풀이 — 한글 이름의 발음오행과 사주의 궁합 (2토큰)
+//
+//  전통 작명은 발음오행(오음오행)·수리오행(획수)·자원오행(한자 부수) 셋을 함께 본다.
+//  여기서 다루는 것은 그중 발음오행 하나뿐이다. 나머지 둘은 한자 획수·부수 표가
+//  있어야 하는데 이 저장소에 없고, 없는 데이터를 AI 에게 지어내게 하면 그럴듯한
+//  거짓말이 된다. 그래서 범위를 발음오행으로 좁히고 화면에도 그렇게 밝힌다.
+//
+//  판단은 코드가 한다 — 초성에서 오행을 뽑고, 이웃한 글자끼리 상생·상극을 따지고,
+//  그 오행이 사주에서 비어 있던 자리를 채우는지 이미 넘치는 자리를 더 밀어 올리는지
+//  까지 세서 넘긴다. AI 는 그 결과를 말로 풀 뿐이다.
+// ════════════════════════════════════════════
+const HANGUL_CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+// 오음오행 — 아(牙)·설(舌)·순(脣)·치(齒)·후(喉) 순서로 木火土金水.
+const SOUND_ELEM = {
+  'ㄱ':'木','ㄲ':'木','ㅋ':'木',
+  'ㄴ':'火','ㄷ':'火','ㄸ':'火','ㄹ':'火','ㅌ':'火',
+  'ㅁ':'土','ㅂ':'土','ㅃ':'土','ㅍ':'土',
+  'ㅅ':'金','ㅆ':'金','ㅈ':'金','ㅉ':'金','ㅊ':'金',
+  'ㅇ':'水','ㅎ':'水',
+};
+const ELEM_SAENG = { 木:'火', 火:'土', 土:'金', 金:'水', 水:'木' };   // 낳아 주는 관계
+const ELEM_GEUK  = { 木:'土', 土:'水', 水:'火', 火:'金', 金:'木' };   // 누르는 관계
+
+/**
+ * 한글 이름의 발음오행을 뽑고, 이웃 관계와 사주와의 궁합을 센다. AI 도 네트워크도 없다.
+ * @param {string} name 성을 포함한 한글 이름 (2~6자)
+ * @param {Record<string,number>} sajuElem computeSaju 가 낸 오행 분포. 없으면 사주 대조는 건너뛴다
+ */
+function analyzeName(name, sajuElem) {
+  const chars = [...String(name || '').trim()];
+  if (chars.length < 2 || chars.length > 6) return null;
+
+  const parsed = [];
+  for (const ch of chars) {
+    const code = ch.charCodeAt(0);
+    if (code < 0xAC00 || code > 0xD7A3) return null;   // 완성형 한글이 아니면 초성을 뽑을 수 없다
+    const cho = HANGUL_CHOSEONG[Math.floor((code - 0xAC00) / 588)];
+    parsed.push({ ch, choseong: cho, elem: SOUND_ELEM[cho] });
+  }
+
+  // 이웃한 글자끼리만 본다 — 성과 이름이 이어지는 결이 발음오행에서 보는 지점이다.
+  const pairs = [];
+  let score = 0;
+  for (let i = 1; i < parsed.length; i++) {
+    const a = parsed[i - 1].elem, b = parsed[i].elem;
+    let relation;
+    if (ELEM_SAENG[a] === b || ELEM_SAENG[b] === a) { relation = 'saeng'; score += 2; }
+    else if (ELEM_GEUK[a] === b || ELEM_GEUK[b] === a) { relation = 'geuk'; score -= 2; }
+    else { relation = 'bihwa'; score += 1; }
+    pairs.push({ from: a, to: b, relation });
+  }
+
+  // 사주에서 비어 있던 오행을 이름이 채우는지, 이미 많은 쪽을 더 밀어 올리는지.
+  const fills = [], overs = [];
+  if (sajuElem) {
+    const nameElems = [...new Set(parsed.map(p => p.elem))];
+    for (const e of nameElems) {
+      if ((sajuElem[e] || 0) === 0) { fills.push(e); score += 2; }
+      else if ((sajuElem[e] || 0) >= 3) { overs.push(e); score -= 1; }
+    }
+  }
+
+  return { chars: parsed, pairs, score, fills, overs };
+}
+
+async function handleNameReading(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', name, birth } = await request.json().catch(() => ({}));
+    // 사주 대조는 생년월일이 있을 때만 — 이름만 봐도 발음오행 흐름은 나온다.
+    const saju = birth?.year ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    const analysis = analyzeName(name, saju?.elem);
+    if (!analysis) {
+      return cors(JSON.stringify({ error: { message: '한글 이름을 2~6글자로 입력해 주세요.' } }), 400);
+    }
+
+    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    const COST = 2;
+    const useId = `name_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'name_use', 0, ?, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
+    ).bind(useId, email, -COST, email, COST).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: `이름 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    refund = () => refundTokens(env, email, 'name', COST);
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const REL_KO = { saeng:'상생(서로 낳아 주는 관계)', geuk:'상극(한쪽이 누르는 관계)', bihwa:'비화(같은 기운끼리)' };
+
+    const charLine = analysis.chars.map(c => `${c.ch}(${c.choseong}, ${on[c.elem] || c.elem})`).join(' — ');
+    const pairLine = analysis.pairs.map((p, i) =>
+      `  ${analysis.chars[i].ch}→${analysis.chars[i + 1].ch}: ${on[p.from] || p.from}과 ${on[p.to] || p.to}, ${REL_KO[p.relation]}`
+    ).join('\n');
+    const sajuLine = saju
+      ? `${saju.text}\n비어 있는 오행을 이름이 채우는 것: ${analysis.fills.length ? analysis.fills.map(e => on[e] || e).join(', ') : '없음'}`
+        + `\n이미 많은데 이름이 더 보태는 것: ${analysis.overs.length ? analysis.overs.map(e => on[e] || e).join(', ') : '없음'}`
+      : '(생년월일이 없어 사주와는 대조하지 않았습니다)';
+
+    const prompt = `당신은 이름을 봐 주는 상담사입니다. 아래 분석은 이미 계산해 둔 값이니 임의로 바꾸지 말고, 없는 근거(획수·한자 뜻 등)를 지어내지 마세요.
+
+[이름의 발음오행]
+${charLine}
+
+[이웃한 글자끼리의 관계]
+${pairLine}
+
+[사주와의 대조]
+${sajuLine}
+
+위 자료를 근거로 ${langLabel}로 풀어 주세요. 조건:
+- 이름이 어떤 기운의 흐름으로 읽히는지 먼저 쓰고, 상생·상극이 어디에서 생기는지 글자를 짚어 설명하세요.
+- 사주와 대조한 결과가 있으면, 이름이 부족한 자리를 채우는지 아니면 이미 센 쪽을 더 미는지 말해 주세요.
+- 이름이 나쁘다고 몰아가거나 개명을 권하지 마세요. 상극이 있어도 그것이 어떤 성질로 드러나는지, 무엇으로 균형을 잡으면 되는지로 풀어 주세요.
+- 여기서 본 것은 발음오행 하나뿐이며 획수(수리)와 한자 뜻(자원)은 보지 않았다는 점을 마지막에 한 문장으로 밝혀 주세요.
+- 400~500자 분량, 문단 2~3개.
+- JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.85 } }) }
+    );
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      await refund(); refund = null;
+      return cors(JSON.stringify({ error: { message: '이름 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, email, 'name', analysis.chars.map(c => c.ch).join(''), reading,
+      { chars: analysis.chars, pairs: analysis.pairs, fills: analysis.fills, overs: analysis.overs }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading,
+      name: analysis.chars.map(c => c.ch).join(''),
+      chars: analysis.chars, pairs: analysis.pairs, score: analysis.score,
+      fills: analysis.fills, overs: analysis.overs,
+      sajuElem: saju?.elem || null,
       remaining: remainingTokens,
     }), 200);
   } catch(e) {

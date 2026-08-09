@@ -5237,6 +5237,132 @@ async function openDaeun() {
   }
 }
 
+// ════════════════════════════════════════════
+//  이름 풀이 — 한글 초성의 발음오행 (2토큰)
+//
+//  오행 배정과 상생·상극 판정은 서버가 한다. 같은 표를 여기에 또 두면 화면과 본문이
+//  어긋나므로, 이 파일은 서버가 준 글자별 오행을 색으로 그리기만 한다.
+// ════════════════════════════════════════════
+function _nameCharsHtml(chars, pairs, lang, t) {
+  const on  = (typeof ON !== 'undefined' ? (ON[lang] || ON.ko) : {});
+  const col = (typeof OC !== 'undefined' ? OC : {});
+  const REL = { saeng: t.nameSaeng, geuk: t.nameGeuk, bihwa: t.nameBihwa };
+  const ARROW = { saeng: '→', geuk: '⊣', bihwa: '·' };
+
+  return `<div style="display:flex;align-items:flex-start;justify-content:center;gap:2px;flex-wrap:wrap">
+    ${chars.map((c, i) => `
+      ${i > 0 ? `<div style="text-align:center;padding-top:14px;min-width:2.4em">
+        <div style="font-size:0.9rem;color:${pairs[i-1]?.relation === 'geuk' ? '#e08a7a' : 'var(--gold)'}">${ARROW[pairs[i-1]?.relation] || '·'}</div>
+        <div style="font-size:0.6rem;color:var(--text-dim)">${_escHtml(REL[pairs[i-1]?.relation] || '')}</div>
+      </div>` : ''}
+      <div style="text-align:center;min-width:3.1em">
+        <div style="font-size:1.5rem;font-weight:700;color:${col[c.elem] || 'var(--text)'}">${_escHtml(c.ch)}</div>
+        <div style="font-size:0.62rem;color:var(--text-dim);margin-top:2px">${_escHtml(c.choseong)}</div>
+        <div style="font-size:0.66rem;color:var(--text-dim)">${_escHtml(on[c.elem] || c.elem)}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+async function openNameReading() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+  // 생년월일은 있으면 사주와 대조해 주고, 없어도 이름만으로 풀린다 — 여기서 막지 않는다.
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  const birth = _u?.birthYear ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour || '' } : null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:430px;padding:30px 24px;text-align:center">
+      <div class="modal-title">✍️ ${_escHtml(t.nameTitle)}</div>
+      <div id="nameForm" style="margin-top:16px">
+        <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.nameAsk)}</div>
+        <input type="text" id="nameInput" class="takil-field" maxlength="6" autocomplete="off"
+               placeholder="${_escHtml(t.namePlaceholder)}" style="text-align:center;font-size:1rem">
+        <button class="oracle-skip-btn" id="nameRunBtn" style="width:100%;margin-top:12px">${_escHtml(t.nameRun)}</button>
+      </div>
+      <div id="nameStatus" style="display:none;font-size:0.8rem;color:var(--text-dim);margin-top:14px"></div>
+      <div id="nameResult" style="display:none;text-align:left;margin-top:16px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#nameInput')?.focus();
+
+  const run = async () => {
+    const name = (overlay.querySelector('#nameInput')?.value || '').trim();
+    if (!name) return;
+    const formEl   = overlay.querySelector('#nameForm');
+    const statusEl = overlay.querySelector('#nameStatus');
+    const resultEl = overlay.querySelector('#nameResult');
+
+    if (formEl) formEl.style.display = 'none';
+    if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.nameLoading; }
+
+    const started = Date.now();
+    const MIN_MS = 1500;
+    try {
+      const res = await fetch('/api/name-reading', {
+        method: 'POST',
+        headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+        body: JSON.stringify({ lang, name, birth })
+      });
+      const data = await res.json();
+      const remain = MIN_MS - (Date.now() - started);
+      if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+      if (!data.success) {
+        // 이름을 잘못 적은 경우가 흔하다 — 다시 적을 수 있게 입력칸을 되살린다.
+        if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
+        if (res.status === 400 && formEl) { formEl.style.display = ''; overlay.querySelector('#nameInput')?.focus(); }
+        return;
+      }
+      if (statusEl) statusEl.style.display = 'none';
+      if (!resultEl) return;
+
+      const on = (typeof ON !== 'undefined' ? (ON[lang] || ON.ko) : {});
+      resultEl.style.display = '';
+      resultEl.innerHTML = `
+        <div class="detail-area-card">
+          <div style="font-size:0.76rem;color:var(--gold);margin-bottom:8px;text-align:center">${_escHtml(t.nameFlow)}</div>
+          ${_nameCharsHtml(data.chars, data.pairs, lang, t)}
+        </div>
+
+        ${(data.fills?.length || data.overs?.length) ? `
+          <div class="detail-area-card" style="margin-top:10px;font-size:0.78rem">
+            ${data.fills?.length ? `<div><span style="color:var(--gold)">${_escHtml(t.nameFills)}</span> ${_escHtml(data.fills.map(e => on[e] || e).join(', '))}</div>` : ''}
+            ${data.overs?.length ? `<div style="margin-top:4px;color:var(--text-dim)">${_escHtml(t.nameOvers)} ${_escHtml(data.overs.map(e => on[e] || e).join(', '))}</div>` : ''}
+          </div>` : ''}
+
+        <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="nameReadingBody"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.nameNote)}</div>
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+        <button class="oracle-skip-btn" id="nameShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
+      `;
+
+      const bodyEl = overlay.querySelector('#nameReadingBody');
+      if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+      const shareBtn = overlay.querySelector('#nameShare');
+      if (shareBtn) shareBtn.addEventListener('click', () => shareResultCard({
+        icon: '✍️',
+        title: `${t.nameTitle} · ${data.name}`,
+        filename: 'myan-name',
+      }));
+      refreshTokens();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = getT().netErr || '네트워크 오류가 발생했습니다.';
+    }
+  };
+
+  overlay.querySelector('#nameRunBtn')?.addEventListener('click', run);
+  overlay.querySelector('#nameInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+}
+
 async function openZodiacFortune() {
   const token = getGoogleIdToken();
   if (!token) {
@@ -6228,6 +6354,7 @@ function _homeSections() {
       { icon:'🌙',  label: t.dreamTitle      || '꿈해몽',             cost:1, fn:'openDreamInterpretation()' },
       { icon:'📅',  label: t.takilTitle      || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
       { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름',   cost:3, fn:'openDaeun()' },
+      { icon:'✍️',  label: t.nameTitle       || '이름 풀이',           cost:2, fn:'openNameReading()' },
     ]},
     { icon:'🔮', title: t.csWest || '서양 점술', items: [
       { icon:'🪐', label: t.astroTitle      || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
@@ -6308,6 +6435,7 @@ function openExperienceHub() {
     { icon:'ᚱ', label: t.runeTitle || '룬 문자 점', fn: openRuneReading },
     { icon:'📅', label: t.takilTitle || '택일 · 좋은 날 고르기', fn: openAuspiciousDays },
     { icon:'🌊', label: t.daeunTitle || '대운 · 10년의 흐름', fn: openDaeun },
+    { icon:'✍️', label: t.nameTitle || '이름 풀이', fn: openNameReading },
   ];
   const overlay = document.createElement('div');
   overlay.id = 'experienceHubOverlay';
@@ -7074,6 +7202,7 @@ async function showSajuHistory() {
       astro:      { icon: '🪐', label: t.astroTitle },
       takil:      { icon: '📅', label: t.takilTitle },
       daeun:      { icon: '🌊', label: t.daeunTitle },
+      name:       { icon: '✍️', label: t.nameTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
