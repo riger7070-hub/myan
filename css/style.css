@@ -1686,6 +1686,46 @@ body::-webkit-scrollbar {
   .cs-label { font-size: 0.68rem; }
 }
 
+/* 충전 화면의 "토큰으로 할 수 있는 것" — 값을 먼저, 목록은 그 오른쪽에 줄글로 */
+.cost-guide {
+  margin: 18px 0 4px;
+  padding: 14px 14px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.cost-guide-title {
+  font-size: 0.78rem;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.cost-guide-row {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+  margin-top: 6px;
+}
+.cost-guide-badge {
+  flex: none;
+  min-width: 2.5em;
+  font-size: 0.72rem;
+  color: var(--gold);
+  letter-spacing: 0.3px;
+}
+.cost-guide-items {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
+.cost-guide-note {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  opacity: 0.8;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
 /* 택일 목적 선택 — 모달 안에 9개가 들어가야 해서 홈의 .cs-tile 보다 낮게 잡는다 */
 .takil-grid {
   display: grid;

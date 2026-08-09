@@ -79,6 +79,60 @@ test('묶음이 한쪽으로 몰리지 않는다', () => {
   }
 });
 
+test('타일에 적힌 값이 서버가 실제로 빼는 값과 같다', () => {
+  // 홈에는 ✦2 라고 써 놓고 서버가 3을 빼면 그건 값을 잘못 받은 것이다. 두 숫자가
+  // 다른 파일에 따로 적혀 있어 한쪽만 고치기 쉬우므로 여기서 맞물려 둔다.
+  // 이 표가 홈 타일과 결제 핸들러를 잇는 유일한 연결이다 — 새 유료 기능은 여기에도 적을 것.
+  const HANDLER_OF = {
+    'openDaeun()':          'handleDaeun',
+    'openNameReading()':    'handleNameReading',
+    'openPhotoReading()':   'handlePhotoReading',
+    'openTypeTest()':       'handleTypeCompat',
+    'openNumerology()':     'handleNumerology',
+    'openAuspiciousDays()': 'handleAuspiciousDays',
+    'openCompatTiming()':   'handleCompatTiming',
+    'openTojeong()':        'handleTojeong',
+    'openTarotDraw()':      'handleTarotDraw',
+    'openIching()':         'handleIching',
+    'openRuneReading()':    'handleRuneReading',
+    'openDreamInterpretation()': 'handleDreamInterpretation',
+    'openAstroTransit()':   'handleAstroTransit',
+    'openZodiacFortune()':  'handleZodiacFortune',
+    'openFortuneTopics()':  'handleFortuneTopic',
+    'openLuckyPicks()':     'handleLuckyPicks',
+    'openLottoNumbers()':   'handleLottoNumbers',
+    'openFortuneModal()':   null,   // 무료 — 차감 핸들러가 없다
+  };
+
+  const workerSrc = readFileSync(join(ROOT, 'worker.js'), 'utf8');
+  // 핸들러 하나의 본문에서 차감액을 읽는다. -1 처럼 그 자리에 박아 둔 것과
+  // COST 변수를 바인딩으로 넘기는 것 두 가지 모양이 다 쓰인다.
+  const costOf = (handler) => {
+    const at = workerSrc.indexOf(`async function ${handler}(`);
+    assert.ok(at >= 0, `worker.js 에 ${handler} 가 없다`);
+    const span = workerSrc.slice(at, at + 6000);
+    const m = span.match(/'[a-z_]+_use', 0, (-?\w+|\?)/);
+    assert.ok(m, `${handler}: 차감 구문을 찾지 못했다`);
+    if (m[1] === '?' || m[1].endsWith('COST')) {
+      const c = span.match(/const COST = (\d+)/);
+      assert.ok(c, `${handler}: COST 를 바인딩하는데 선언을 찾지 못했다`);
+      return Number(c[1]);
+    }
+    return Math.abs(Number(m[1]));
+  };
+
+  for (const sec of sections) {
+    for (const item of sec.items) {
+      assert.ok(item.fn in HANDLER_OF,
+        `${item.fn} 가 위 표에 없다 — 새 유료 기능이면 핸들러 이름을 적을 것`);
+      const handler = HANDLER_OF[item.fn];
+      if (!handler) { assert.equal(item.cost, 0, `${item.fn}: 무료로 적혀 있는데 비용이 ${item.cost} 다`); continue; }
+      assert.equal(item.cost, costOf(handler),
+        `${item.fn}: 홈에는 ${item.cost}, ${handler} 는 ${costOf(handler)} 를 뺀다`);
+    }
+  }
+});
+
 test('토큰 비용이 타일마다 붙어 있다', () => {
   // 누르기 전에 값을 알 수 있어야 한다. 무료(0)는 있어도 되지만 undefined 는 안 된다.
   for (const s of sections) {

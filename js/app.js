@@ -2876,11 +2876,43 @@ function _confirmAction(btnId, confirmText, action) {
   }, 3000);
 }
 
+// 충전 화면에 "이 토큰으로 뭘 얼마에 쓰나"를 보여 준다.
+//
+// 30토큰을 사는 사람은 그게 몇 번인지 모른 채 산다. 기능이 18개에 0~3토큰이 섞여 있어
+// 더 그렇다. 값은 _homeSections() 에서 그대로 가져온다 — 여기에 가격표를 따로 적으면
+// 홈에는 2, 안내에는 1 이라고 뜨는 날이 반드시 온다.
+function renderTokenCostGuide() {
+  const host = document.getElementById('tmCostGuide');
+  if (!host || typeof _homeSections !== 'function') return;
+  const t = getT();
+  const lang = getLang();
+  const freeLabel = { ko:'무료', en:'FREE', zh:'免费', ja:'無料' }[lang] || '무료';
+
+  const byCost = new Map();
+  for (const sec of _homeSections()) {
+    for (const item of sec.items) {
+      if (!byCost.has(item.cost)) byCost.set(item.cost, []);
+      byCost.get(item.cost).push(item.label);
+    }
+  }
+  const costs = [...byCost.keys()].sort((a, b) => b - a);   // 비싼 것부터 — 값을 먼저 보게
+
+  host.innerHTML = `
+    <div class="cost-guide-title">${_escHtml(t.tmCostTitle || '토큰으로 할 수 있는 것')}</div>
+    ${costs.map(c => `
+      <div class="cost-guide-row">
+        <span class="cost-guide-badge${c ? '' : ' cs-free'}">${c ? '✦' + c : _escHtml(freeLabel)}</span>
+        <span class="cost-guide-items">${byCost.get(c).map(l => _escHtml(l)).join(' · ')}</span>
+      </div>`).join('')}
+    <div class="cost-guide-note">${_escHtml(t.tmCostNote || '')}</div>`;
+}
+
 function openTokenModal() {
   document.getElementById('token-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   updateAllTokenDisplays(); // 잔액 최신화
   if (typeof _renderTokenModal === 'function') _renderTokenModal(); // 다국어 라벨 갱신
+  renderTokenCostGuide();   // 언어가 바뀌어도 열 때마다 다시 그린다
   if (typeof refreshSubscription === 'function') refreshSubscription(); // 구독 상태 갱신
 }
 
