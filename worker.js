@@ -1101,6 +1101,7 @@ export default {
     if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return handleAstroTransit(request, env); }
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return handleAuspiciousDays(request, env); }
+    if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return handleDaeun(request, env); }
     // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
     if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
@@ -3137,6 +3138,190 @@ ${dayLines}
     return cors(JSON.stringify({
       success: true, purpose, purposeLabel, picks: localized, reading,
       from: startYmd, scanDays, remaining: remainingTokens,
+    }), 200);
+  } catch(e) {
+    // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════
+//  대운(大運) — 10년 단위로 바뀌는 운의 흐름 (3토큰)
+//
+//  사주가 "타고난 판"이라면 대운은 "시간에 따라 바뀌는 판"이다. 여기서도 계산은
+//  코드가 끝낸다. 대운의 방향(순행·역행)과 기운(起運) 시점, 각 구간의 간지는
+//  lunar-javascript 의 EightChar.getYun 이 절기 거리로 산출하고, AI 는 "지금 어느
+//  자리에 와 있는지"를 해석만 한다.
+//
+//  방향은 연간(年干)의 음양과 성별로 갈린다(양남음녀 순행). 그래서 성별이 없으면
+//  대운 자체를 세울 수 없어 이 기능만 성별을 필수로 받는다.
+// ════════════════════════════════════════════
+
+// 시진(자시~해시)만 알아도 기운 시점이 꽤 정확해진다 — 절기까지의 거리를 날짜가 아니라
+// 시각으로 재기 때문이다. 지지 인덱스를 그 시진의 대표 시각으로 옮긴다(자시는 0시).
+function _hourFromBranch(hourInput) {
+  const raw = (hourInput || '').trim();
+  const branch = SIJI_TO_JJ[raw] || raw;
+  const idx = JJ.indexOf(branch);
+  return idx >= 0 ? idx * 2 : 0;
+}
+
+/**
+ * 대운 구간을 만들어 돌려준다. 네트워크도 AI 도 타지 않는다.
+ * @param {{year:number,month:number,day:number,hour?:string}} birth 시진명은 있으면 쓴다
+ * @param {'M'|'F'} gender 대운 방향이 성별로 갈리므로 필수
+ * @param {number} refYear '지금'으로 볼 해
+ */
+function computeDaeun(birth, gender, refYear) {
+  const y = parseInt(birth.year, 10), m = parseInt(birth.month, 10), d = parseInt(birth.day, 10);
+  if (!y || !m || !d) return null;
+  if (gender !== 'M' && gender !== 'F') return null;
+
+  const ec = Solar.fromYmdHms(y, m, d, _hourFromBranch(birth.hour), 0, 0).getLunar().getEightChar();
+  const yun = ec.getYun(gender === 'M' ? 1 : 0);
+
+  const periods = yun.getDaYun()
+    .filter(p => p.getGanZhi())      // 첫 칸은 태어나서 기운 전까지라 간지가 비어 있다
+    .map(p => {
+      const gz = p.getGanZhi();
+      const gi = CG.indexOf(gz[0]), zi = JJ.indexOf(gz[1]);
+      return {
+        ganzhi: gz,
+        ganElem: gi >= 0 ? CGO[gi] : '',
+        zhiElem: zi >= 0 ? JJO[zi] : '',
+        startYear: p.getStartYear(), endYear: p.getEndYear(),
+        startAge: p.getStartAge(),   endAge: p.getEndAge(),
+        current: refYear >= p.getStartYear() && refYear <= p.getEndYear(),
+      };
+    });
+  if (!periods.length) return null;
+
+  const curIdx = periods.findIndex(p => p.current);
+  // 아직 기운 전이면 첫 대운을 '다음'으로 안내한다 — 어린 나이에 조회하는 경우다.
+  const current = curIdx >= 0 ? periods[curIdx] : null;
+  const next    = curIdx >= 0 ? (periods[curIdx + 1] || null) : periods[0];
+
+  // 세운(그 해의 간지)은 대운 안에서 다시 한 해씩 갈린다.
+  let liunian = null;
+  if (curIdx >= 0) {
+    const raw = yun.getDaYun().filter(p => p.getGanZhi())[curIdx];
+    const hit = raw.getLiuNian().find(n => n.getYear() === refYear);
+    if (hit) {
+      const gz = hit.getGanZhi();
+      const gi = CG.indexOf(gz[0]), zi = JJ.indexOf(gz[1]);
+      liunian = { year: refYear, ganzhi: gz, ganElem: gi >= 0 ? CGO[gi] : '', zhiElem: zi >= 0 ? JJO[zi] : '' };
+    }
+  }
+
+  // 기운(起運)까지 걸리는 시간. getStartYear/Month/Day 는 달력 날짜가 아니라 "태어나고 몇 년
+  // 몇 개월 뒤"라는 간격이다. 구간 경계는 해 단위라 시진을 넣어도 안 움직이지만 이 값은 움직인다 —
+  // 시각을 받는 의미가 여기에 있다.
+  const qiyun = { years: yun.getStartYear(), months: yun.getStartMonth(), days: yun.getStartDay() };
+
+  return { forward: yun.isForward(), qiyun, periods, current, next, liunian };
+}
+
+async function handleDaeun(request, env) {
+  // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const email = await getEmailFromToken(idToken, env);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth, gender } = await request.json().catch(() => ({}));
+    if (!birth?.year || !birth?.month || !birth?.day) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
+    }
+    if (gender !== 'M' && gender !== 'F') {
+      return cors(JSON.stringify({ error: { message: '대운은 성별에 따라 방향이 달라집니다. 마이페이지에서 성별을 등록해 주세요.' } }), 400);
+    }
+
+    const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
+    const refYear = new Date().getUTCFullYear();
+    const daeun = computeDaeun(birth, gender, refYear);
+    if (!saju || !daeun) {
+      return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    }
+
+    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    const COST = 3;
+    const useId = `daeun_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const deduct = await env.DB.prepare(
+      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
+       SELECT ?, ?, 'daeun_use', 0, ?, 'approved', unixepoch()
+       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
+    ).bind(useId, email, -COST, email, COST).run();
+    if (!deduct.meta?.rows_written) {
+      return cors(JSON.stringify({ error: { message: `대운 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    refund = () => refundTokens(env, email, 'daeun', COST);
+    const remainRow = await env.DB.prepare(
+      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
+    ).bind(email).first();
+    const remainingTokens = remainRow?.bal ?? 0;
+
+    const on = ON[lang] || ON.ko;
+    const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
+    const langLabel = LANG_LABEL[lang] || '한국어';
+    const el = p => `${on[p.ganElem] || p.ganElem}·${on[p.zhiElem] || p.zhiElem}`;
+    const timeline = daeun.periods.map(p =>
+      `  ${p.startYear}~${p.endYear} (${p.startAge}~${p.endAge}세) ${p.ganzhi} [${el(p)}]${p.current ? '  ← 지금 이 자리' : ''}`
+    ).join('\n');
+
+    const prompt = `당신은 사주 상담사입니다. 아래 사주와 대운은 만세력으로 이미 계산해 둔 값이니, 임의로 바꾸거나 새로 지어내지 마세요.
+
+[사주 네 기둥]
+${saju.text}
+
+[대운 — ${daeun.forward ? '순행' : '역행'}, 태어나고 ${daeun.qiyun.years}년 ${daeun.qiyun.months}개월 뒤부터 돌기 시작해 10년마다 바뀝니다]
+${timeline}
+
+[지금]
+${daeun.current
+  ? `대운 ${daeun.current.ganzhi} [${el(daeun.current)}] 의 ${refYear - daeun.current.startYear + 1}년째 (${daeun.current.startYear}~${daeun.current.endYear})`
+  : `아직 대운이 시작되기 전입니다. 첫 대운은 ${daeun.next.startYear}년(${daeun.next.startAge}세)부터입니다.`}
+${daeun.liunian ? `올해 세운 ${daeun.liunian.ganzhi} [${on[daeun.liunian.ganElem] || ''}·${on[daeun.liunian.zhiElem] || ''}]` : ''}
+${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${daeun.next.startYear}년(${daeun.next.startAge}세)부터` : ''}
+
+위 자료를 근거로 ${langLabel}로 풀어 주세요. 조건:
+- 일간(日干)과 지금 대운의 기운이 어떤 관계인지(돕는지 누르는지)를 먼저 짚고, 그것이 요즘 어떤 형태로 나타나는지 쓰세요.
+- 지금 대운이 언제 끝나고 다음 대운이 어떤 결로 바뀌는지, 그 전환을 무엇으로 준비하면 좋을지 한 문단 쓰세요.
+- 올해 세운은 대운이라는 큰 흐름 안의 한 해로만 다루세요.
+- 좋은 말만 늘어놓지 말고, 눌리는 시기는 눌린다고 쓰되 겁주지 말고 "무엇을 하면 되는지"로 마무리하세요.
+- 한자 용어를 쓰면 바로 옆에 괄호로 뜻을 적어 주세요. 예) 甲木(갑목, 강한 나무 기운)
+- 500~600자 분량, 문단 3개.
+- JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+          generationConfig:{ temperature:0.85 } }) }
+    );
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
+    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    if (!resp.ok || !reading) {
+      await refund(); refund = null;
+      return cors(JSON.stringify({ error: { message: '대운 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    const title = daeun.current
+      ? `${daeun.current.ganzhi} · ${daeun.current.startYear}~${daeun.current.endYear}`
+      : `${daeun.next.startYear}년부터`;
+    await saveFeatureHistory(env, email, 'daeun', title, reading,
+      { forward: daeun.forward, current: daeun.current, next: daeun.next }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, refYear,
+      pillars: { yp: saju.yp, mp: saju.mp, dp: saju.dp, hp: saju.hp, dayGan: saju.dayGan, dayElem: saju.dayElem },
+      forward: daeun.forward, qiyun: daeun.qiyun, periods: daeun.periods,
+      current: daeun.current, next: daeun.next, liunian: daeun.liunian,
+      remaining: remainingTokens,
     }), 200);
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.

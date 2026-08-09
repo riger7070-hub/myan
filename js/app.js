@@ -5107,6 +5107,136 @@ async function openAuspiciousDays() {
   });
 }
 
+// ════════════════════════════════════════════
+//  대운 — 10년마다 바뀌는 운의 흐름 (3토큰)
+//
+//  방향(순행·역행)과 기운(起運) 시점은 성별과 절기 거리로 정해지는 계산값이라
+//  전부 서버가 낸다. 여기서는 받은 구간을 시간순으로 그리고 지금 자리만 강조한다.
+// ════════════════════════════════════════════
+function _daeunRowHtml(p, lang, t) {
+  const on  = (typeof ON !== 'undefined' ? (ON[lang] || ON.ko) : {});
+  const col = (typeof OC !== 'undefined' ? OC : {});
+  const age = String(t.daeunAge || '{a}~{b}').replace('{a}', p.startAge).replace('{b}', p.endAge);
+  return `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;margin-top:3px;${
+      p.current ? 'background:rgba(201,169,110,0.10);border:1px solid rgba(201,169,110,0.35)' : ''}">
+      <span style="width:8px;height:8px;border-radius:50%;flex:none;background:${col[p.ganElem] || '#888'}"></span>
+      <span style="width:5.4em;font-size:0.74rem;color:var(--text-dim)">${p.startYear}~${String(p.endYear).slice(2)}</span>
+      <span style="font-weight:700;font-size:0.95rem;color:${p.current ? 'var(--gold)' : 'var(--text)'}">${_escHtml(p.ganzhi)}</span>
+      <span style="font-size:0.71rem;color:var(--text-dim)">${_escHtml(on[p.ganElem] || '')}·${_escHtml(on[p.zhiElem] || '')}</span>
+      <span style="margin-left:auto;font-size:0.69rem;color:var(--text-dim)">${_escHtml(age)}</span>
+    </div>`;
+}
+
+async function openDaeun() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return;
+  }
+  const t = getT();
+  const lang = getLang();
+  const _u = (typeof getUser === 'function') ? getUser() : null;
+  if (!_u?.birthYear) {
+    showToast(t.zodiacNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  // 대운은 방향이 성별로 갈려서 성별 없이는 세울 수 없다 — 토큰을 쓰기 전에 여기서 막는다.
+  if (_u.gender !== 'M' && _u.gender !== 'F') {
+    showToast(t.daeunNeedGender || '마이페이지에서 성별을 등록해 주세요.');
+    openMyPage();
+    return;
+  }
+  const birth = { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour || '' };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:440px;padding:32px 24px;text-align:center">
+      <div class="modal-title">🌊 ${_escHtml(t.daeunTitle)}</div>
+      <div id="daeunStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${_escHtml(t.daeunLoading)}</div>
+      <div id="daeunResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const started = Date.now();
+  const MIN_MS = 1500;
+  try {
+    const res = await fetch('/api/daeun', {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lang, birth, gender: _u.gender })
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    const statusEl = overlay.querySelector('#daeunStatus');
+    const resultEl = overlay.querySelector('#daeunResult');
+    if (!data.success) {
+      if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
+      return;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (!resultEl) return;
+
+    const on = (typeof ON !== 'undefined' ? (ON[lang] || ON.ko) : {});
+    const qiyun = String(t.daeunQiyun || '')
+      .replace('{y}', data.qiyun?.years ?? 0).replace('{m}', data.qiyun?.months ?? 0);
+    const p = data.pillars || {};
+
+    resultEl.style.display = '';
+    resultEl.innerHTML = `
+      <div style="text-align:center">
+        <div style="font-weight:700;color:var(--gold);font-size:1.05rem">
+          ${data.current ? _escHtml(data.current.ganzhi) : _escHtml(t.daeunNotStarted)}
+          ${data.current ? `<span style="font-size:0.74rem;color:var(--text-dim);font-weight:400"> · ${_escHtml(t.daeunNow)}</span>` : ''}
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:5px">
+          ${_escHtml(data.forward ? t.daeunForward : t.daeunBackward)} · ${_escHtml(qiyun)}
+        </div>
+      </div>
+
+      <div class="detail-area-card" style="margin-top:14px">
+        <div style="font-size:0.76rem;color:var(--gold);margin-bottom:5px">${_escHtml(t.daeunPillars)}</div>
+        <div style="font-size:0.84rem;letter-spacing:1px">${_escHtml([p.yp, p.mp, p.dp, p.hp].filter(Boolean).join('  '))}</div>
+      </div>
+
+      <div class="detail-area-card" style="margin-top:10px">
+        ${(data.periods || []).map(x => _daeunRowHtml(x, lang, t)).join('')}
+      </div>
+
+      ${data.liunian ? `
+        <div class="detail-area-card" style="margin-top:10px;font-size:0.8rem">
+          <span style="color:var(--gold)">${_escHtml(t.daeunThisYear)}</span>
+          ${data.liunian.year} ${_escHtml(data.liunian.ganzhi)}
+          <span style="font-size:0.72rem;color:var(--text-dim)">${_escHtml(on[data.liunian.ganElem] || '')}·${_escHtml(on[data.liunian.zhiElem] || '')}</span>
+        </div>` : ''}
+
+      <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="daeunReadingBody"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.daeunNote)}</div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" id="daeunShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
+    `;
+
+    const bodyEl = overlay.querySelector('#daeunReadingBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    const shareBtn = overlay.querySelector('#daeunShare');
+    if (shareBtn) shareBtn.addEventListener('click', () => shareResultCard({
+      icon: '🌊',
+      title: `${t.daeunTitle}${data.current ? ' · ' + data.current.ganzhi : ''}`,
+      filename: 'myan-daeun',
+    }));
+    refreshTokens();
+  } catch (e) {
+    const statusEl = overlay.querySelector('#daeunStatus');
+    if (statusEl) statusEl.textContent = getT().netErr || '네트워크 오류가 발생했습니다.';
+  }
+}
+
 async function openZodiacFortune() {
   const token = getGoogleIdToken();
   if (!token) {
@@ -6097,6 +6227,7 @@ function _homeSections() {
       { icon:'🖐️', label: t.photoModalTitle || '관상·손금',          cost:2, fn:'openPhotoReading()' },
       { icon:'🌙',  label: t.dreamTitle      || '꿈해몽',             cost:1, fn:'openDreamInterpretation()' },
       { icon:'📅',  label: t.takilTitle      || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
+      { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름',   cost:3, fn:'openDaeun()' },
     ]},
     { icon:'🔮', title: t.csWest || '서양 점술', items: [
       { icon:'🪐', label: t.astroTitle      || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
@@ -6176,6 +6307,7 @@ function openExperienceHub() {
     { icon:'🎱', label: t.lottoTitle || '오늘의 로또번호', fn: openLottoNumbers },
     { icon:'ᚱ', label: t.runeTitle || '룬 문자 점', fn: openRuneReading },
     { icon:'📅', label: t.takilTitle || '택일 · 좋은 날 고르기', fn: openAuspiciousDays },
+    { icon:'🌊', label: t.daeunTitle || '대운 · 10년의 흐름', fn: openDaeun },
   ];
   const overlay = document.createElement('div');
   overlay.id = 'experienceHubOverlay';
@@ -6941,6 +7073,7 @@ async function showSajuHistory() {
       typecompat: { icon: '🔯', label: t.drTypeTitle },
       astro:      { icon: '🪐', label: t.astroTitle },
       takil:      { icon: '📅', label: t.takilTitle },
+      daeun:      { icon: '🌊', label: t.daeunTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
