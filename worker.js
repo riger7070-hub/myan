@@ -914,6 +914,9 @@ function permanentFortuneSpecs() {
 const WARM_BUDGET = 30;
 const WARM_GAP_MS = 7000;
 const CACHE_TTL_DAYS = 3;
+// wrangler.toml 의 crons 두 번째 항목과 반드시 같아야 한다. 어긋나면 예열이 아예
+// 안 돌거나(아무 크론에도 안 걸림) 아침 푸시 시각에 같이 돌아 사용자를 밀어낸다.
+const WARM_CRON = '0 19 * * *';
 
 /**
  * 날짜가 붙은 bucket 중 지난 것을 지운다.
@@ -1496,9 +1499,15 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    // 예열은 새벽(04:00 KST)에만 따로 돈다 — wrangler.toml 의 crons 주석 참고.
+    // Gemini 분당 한도를 사용자 요청과 나눠 쓰므로, 아침 푸시로 사람이 몰리는
+    // 시각에 같이 돌리면 예열이 그 사람들을 밀어낸다.
+    if (event.cron === WARM_CRON) {
+      ctx.waitUntil((async () => { await ensureDBExt(env); await warmFortuneCache(env); })());
+      return;
+    }
     ctx.waitUntil(sendDailyPush(env));
     ctx.waitUntil((async () => { await ensureDBExt(env); await processSubscriptionRenewals(env); })());
-    ctx.waitUntil((async () => { await ensureDBExt(env); await warmFortuneCache(env); })());
   }
 };
 

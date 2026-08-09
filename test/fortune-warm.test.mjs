@@ -17,11 +17,11 @@ import { dirname, join } from 'node:path';
 const {
   permanentFortuneSpecs, selectWarmTargets, purgeStaleFortunes,
   storeFortune, tarotSpec, runeSpec, typeCompatSpec,
-  TAROT_CARDS, RUNE_NAMES, TYPE_ELEMENTS,
+  TAROT_CARDS, RUNE_NAMES, TYPE_ELEMENTS, WARM_CRON, WARM_BUDGET, WARM_GAP_MS,
 } = await loadWorker([
   'permanentFortuneSpecs', 'selectWarmTargets', 'purgeStaleFortunes',
   'storeFortune', 'tarotSpec', 'runeSpec', 'typeCompatSpec',
-  'TAROT_CARDS', 'RUNE_NAMES', 'TYPE_ELEMENTS',
+  'TAROT_CARDS', 'RUNE_NAMES', 'TYPE_ELEMENTS', 'WARM_CRON', 'WARM_BUDGET', 'WARM_GAP_MS',
 ]);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -93,6 +93,36 @@ test('변형이 적은 자리를 먼저 고른다', async () => {
 
   const targets = await selectWarmTargets(env, 3);
   assert.deepEqual(targets.map(t => t.bucket).sort(), specs.slice(0, 3).map(s => s.bucket).sort());
+});
+
+test('예열 크론이 wrangler.toml 에 실제로 등록돼 있다', () => {
+  // WARM_CRON 은 worker.js, 등록은 wrangler.toml — 두 파일에 나뉘어 있어 조용히 어긋난다.
+  // 어긋나면 예열이 아무 크론에도 안 걸려 한 달이 지나도 캐시가 안 차거나,
+  // 반대로 아침 푸시 시각에 같이 돌아 사용자를 한도에서 밀어낸다. 둘 다 화면엔 안 보인다.
+  const toml = readFileSync(join(ROOT, 'wrangler.toml'), 'utf8');
+  const line = toml.match(/^crons\s*=\s*\[(.+)\]/m);
+  assert.ok(line, 'wrangler.toml 에서 crons 를 찾지 못했다');
+  const registered = [...line[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  assert.ok(registered.includes(WARM_CRON),
+    `WARM_CRON(${WARM_CRON}) 이 등록된 크론 ${JSON.stringify(registered)} 에 없다`);
+});
+
+test('예열 크론은 아침 푸시와 다른 시각이다', () => {
+  const toml = readFileSync(join(ROOT, 'wrangler.toml'), 'utf8');
+  const registered = [...toml.match(/^crons\s*=\s*\[(.+)\]/m)[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  const others = registered.filter(c => c !== WARM_CRON);
+  assert.ok(others.length >= 1, '푸시·재결제용 크론이 사라졌다');
+  assert.ok(!others.includes(WARM_CRON), '예열이 다른 작업과 같은 시각에 돈다');
+});
+
+test('예열 속도가 분당 한도보다 느리다', () => {
+  // 무료 등급이 분당 10건 근처다. 예열이 그보다 빠르면 자기가 자기를 막고,
+  // 새벽이라도 그 시간에 들어온 사람까지 밀어낸다.
+  const perMinute = 60000 / WARM_GAP_MS;
+  assert.ok(perMinute <= 9,
+    `예열이 분당 ${perMinute.toFixed(1)}건 — 한도(약 10)에 너무 가깝다`);
+  assert.ok(WARM_BUDGET * WARM_GAP_MS <= 10 * 60 * 1000,
+    `한 번에 ${(WARM_BUDGET * WARM_GAP_MS / 60000).toFixed(1)}분 — 크론 한 번이 너무 길다`);
 });
 
 test('오래된 날짜 자리만 지우고 영구 자리는 남긴다', async () => {
