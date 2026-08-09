@@ -50,7 +50,7 @@ When adding a regression guard, break the code on purpose first and confirm the 
 ### Native app (`myan-native/`)
 Expo/Expo Router app that is **a WebView shell around the deployed site**, not a second client. `app/index.jsx` loads `https://myan.riger7070.workers.dev` in a `WebView` and adds only what a browser can't do: native Google Sign-In (bridged through `window.__nativeGoogleToken`), Android back-button handling, and opening external links. **A new web feature therefore needs no porting — it ships to the app the moment it ships to the web.**
 
-`myan-native/src/*.js` (`api.js`, `locales.js`, `saju.js`, …) is dead code from the app's first commit: nothing under `app/` imports it, and it does not reflect the current web code. Don't update it alongside a web change, and don't trust it as a mirror of `js/`. `myan-native/dist/` is committed build output, likewise not a source of truth.
+The whole app is `app/_layout.jsx` + `app/index.jsx`. There is no second copy of the reading logic to keep in sync — `myan-native/src/*.js` (an unused `api.js`/`locales.js`/`saju.js` set left over from the first commit, imported by nothing) was deleted for that reason. If you find yourself editing a Saju or i18n file under `myan-native/`, you are in the wrong place. `dist/` and `.expo/` there are local build output and are gitignored, not part of the repo.
 
 Not part of the web deploy pipeline — the app only changes when you rebuild it with EAS.
 ```bash
