@@ -6499,36 +6499,44 @@ async function _runeDraw() {
 //  (각 항목은 이미 존재하는 open* 함수를 그대로 호출 — 신규 백엔드 없음)
 // ════════════════════════════════════════════
 // ════════════════════════════════════════════
-//  홈 콘텐츠 섹션 — 15개 콘텐츠를 계열(동양/서양/오늘의 운세)로 묶어 홈에 전부 노출.
+//  홈 콘텐츠 섹션 — 18개 콘텐츠를 홈에 전부 노출.
+//
+//  묶는 기준을 계열(동양/서양)에서 "무엇을 하러 왔는지"로 바꿨다. 콘텐츠가 늘면서
+//  동양 칸에만 9개가 몰려 한 화면을 채우는데, 정작 사용자는 사주와 타로 중에 고르는 게
+//  아니라 "나를 알고 싶다 / 날을 잡아야 한다 / 뭘 물어보고 싶다 / 오늘 뭐지"로 온다.
+//  천궁도가 서양 점술이라는 사실보다 그게 오늘을 보는 것이라는 게 고를 때 쓰는 정보다.
+//
 //  라벨은 각 콘텐츠 모달이 이미 쓰는 i18n 키를 그대로 재사용해 번역을 중복 정의하지 않는다.
 //  JS로 그리므로 언어를 바꾸면 _syncDrawerLangs()에서 다시 렌더돼 자동 반영된다.
 // ════════════════════════════════════════════
 function _homeSections() {
   const t = getT();
   return [
-    { icon:'☯', title: t.csEast || '동양 점술', items: [
-      { icon:'🀄',  label: t.ichingTitle     || '주역 괘 풀이',       cost:1, fn:'openIching()' },
-      { icon:'🧧',  label: t.tojeongTitle    || '토정비결풍 신년운세', cost:2, fn:'openTojeong()' },
-      { icon:'🔯',  label: t.typeTitle       || '오행 유형 테스트',    cost:1, fn:'openTypeTest()' },
-      { icon:'🖐️', label: t.photoModalTitle || '관상·손금',          cost:2, fn:'openPhotoReading()' },
-      { icon:'🌙',  label: t.dreamTitle      || '꿈해몽',             cost:1, fn:'openDreamInterpretation()' },
-      { icon:'📅',  label: t.takilTitle      || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
-      { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름',   cost:3, fn:'openDaeun()' },
-      { icon:'✍️',  label: t.nameTitle       || '이름 풀이',           cost:2, fn:'openNameReading()' },
-      { icon:'💞',  label: t.ctTitle         || '궁합 시기',           cost:3, fn:'openCompatTiming()' },
+    { icon:'☯', title: t.csMe || '사주로 보는 나', items: [
+      { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름', cost:3, fn:'openDaeun()' },
+      { icon:'✍️',  label: t.nameTitle       || '이름 풀이',         cost:2, fn:'openNameReading()' },
+      { icon:'🖐️', label: t.photoModalTitle || '관상·손금',         cost:2, fn:'openPhotoReading()' },
+      { icon:'🔯',  label: t.typeTitle       || '오행 유형 테스트',   cost:1, fn:'openTypeTest()' },
+      { icon:'🔢',  label: t.numerologyTitle || '라이프패스 넘버',    cost:1, fn:'openNumerology()' },
     ]},
-    { icon:'🔮', title: t.csWest || '서양 점술', items: [
-      { icon:'🪐', label: t.astroTitle      || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
-      { icon:'🔮', label: t.tarotTitle      || '오늘의 타로',       cost:1, fn:'openTarotDraw()' },
-      { icon:'🔢', label: t.numerologyTitle || '라이프패스 넘버',   cost:1, fn:'openNumerology()' },
-      { icon:'ᚱ', label: t.runeTitle       || '룬 문자 점',        cost:1, fn:'openRuneReading()' },
+    { icon:'📅', title: t.csTiming || '때를 고르다', items: [
+      { icon:'📆', label: t.takilTitle   || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
+      { icon:'💞', label: t.ctTitle      || '궁합 시기',            cost:3, fn:'openCompatTiming()' },
+      { icon:'🧧', label: t.tojeongTitle || '토정비결풍 신년운세',   cost:2, fn:'openTojeong()' },
     ]},
-    { icon:'📅', title: t.csDaily || '오늘의 운세', items: [
-      { icon:'🐉', label: t.zodiacTitle       || '띠·별자리 운세',     cost:1, fn:'openZodiacFortune()' },
-      { icon:'✨', label: t.fortuneModalTitle || '오늘의 운세 모음',   cost:1, fn:'openFortuneTopics()' },
-      { icon:'🍀', label: t.luckyTitle        || '오늘의 럭키 아이템', cost:1, fn:'openLuckyPicks()' },
-      { icon:'🎱', label: t.lottoTitle        || '오늘의 로또번호',    cost:1, fn:'openLottoNumbers()' },
-      { icon:'🍮', label: t.quickFortuneTitle || '오늘의 행운',       cost:0, fn:'openFortuneModal()' },
+    { icon:'🎴', title: t.csAsk || '물어보는 점', items: [
+      { icon:'🔮', label: t.tarotTitle  || '오늘의 타로',   cost:1, fn:'openTarotDraw()' },
+      { icon:'🀄', label: t.ichingTitle || '주역 괘 풀이',  cost:1, fn:'openIching()' },
+      { icon:'ᚱ', label: t.runeTitle   || '룬 문자 점',    cost:1, fn:'openRuneReading()' },
+      { icon:'🌙', label: t.dreamTitle  || '꿈해몽',        cost:1, fn:'openDreamInterpretation()' },
+    ]},
+    { icon:'✨', title: t.csDaily || '오늘의 운세', items: [
+      { icon:'🪐', label: t.astroTitle         || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
+      { icon:'🐉', label: t.zodiacTitle        || '띠·별자리 운세',     cost:1, fn:'openZodiacFortune()' },
+      { icon:'✨', label: t.fortuneModalTitle  || '오늘의 운세 모음',   cost:1, fn:'openFortuneTopics()' },
+      { icon:'🍀', label: t.luckyTitle         || '오늘의 럭키 아이템', cost:1, fn:'openLuckyPicks()' },
+      { icon:'🎱', label: t.lottoTitle         || '오늘의 로또번호',    cost:1, fn:'openLottoNumbers()' },
+      { icon:'🍮', label: t.quickFortuneTitle  || '오늘의 행운',       cost:0, fn:'openFortuneModal()' },
     ]},
   ];
 }

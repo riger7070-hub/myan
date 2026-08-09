@@ -48,7 +48,11 @@ The suite does not cover Gemini, Toss, or push delivery. For those, and after an
 When adding a regression guard, break the code on purpose first and confirm the test actually fails. A guard that only ever passes is worse than none — it reads as coverage.
 
 ### Native app (`myan-native/`)
-Separate Expo/Expo Router app that talks to the same Workers API (`EP` constant, mirrors `js/constants.js`). Not part of the web deploy pipeline.
+Expo/Expo Router app that is **a WebView shell around the deployed site**, not a second client. `app/index.jsx` loads `https://myan.riger7070.workers.dev` in a `WebView` and adds only what a browser can't do: native Google Sign-In (bridged through `window.__nativeGoogleToken`), Android back-button handling, and opening external links. **A new web feature therefore needs no porting — it ships to the app the moment it ships to the web.**
+
+`myan-native/src/*.js` (`api.js`, `locales.js`, `saju.js`, …) is dead code from the app's first commit: nothing under `app/` imports it, and it does not reflect the current web code. Don't update it alongside a web change, and don't trust it as a mirror of `js/`. `myan-native/dist/` is committed build output, likewise not a source of truth.
+
+Not part of the web deploy pipeline — the app only changes when you rebuild it with EAS.
 ```bash
 cd myan-native
 npm install
