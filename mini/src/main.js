@@ -177,6 +177,9 @@ async function runItem(item) {
   state.item = item;
   state.screen = 'loading';
   state.error = '';
+  // 문구는 화면에 들어올 때 한 번만 고른다. render() 안에서 뽑으면 다시 그릴 때마다
+  // 문구가 바뀌어 깜빡이는 것처럼 보인다.
+  state.loadingLine = LOADING_LINES[Math.floor(Math.random() * LOADING_LINES.length)];
   render();
   try {
     const data = await api(item.path, {
@@ -184,8 +187,10 @@ async function runItem(item) {
       auth: !item.free || item.id !== 'saju',   // 무료 사주는 인증 없이도 되지만 있어도 무방
       body: bodyFor(item, state.profile, state.form),
     });
-    if (typeof data.tokens === 'number') state.tokens = data.tokens;
-    else if (typeof data.remainingTokens === 'number') state.tokens = data.remainingTokens;
+    // 잔액 필드 이름이 갈린다: 웹 콘텐츠는 remaining, 미니 전용(/mini/api/today)은 tokens.
+    // 둘 다 안 오면(무료 사주 등) 따로 물어본다.
+    if (typeof data.remaining === 'number') state.tokens = data.remaining;
+    else if (typeof data.tokens === 'number') state.tokens = data.tokens;
     else if (!item.free) refreshTokens();
 
     state.result = { item, ...extractResult(data) };
@@ -194,7 +199,8 @@ async function runItem(item) {
     if (e.status === 402) { state.error = '토큰이 부족해요.'; go('charge'); return; }
     state.error = e?.message || '오류가 발생했습니다.';
     if (e?.network && e.origin) state.error += `\n(요청 출처: ${e.origin})`;
-    go('home');
+    // 입력을 받은 콘텐츠면 그 화면으로 돌려보낸다. 홈으로 보내면 방금 적은 걸 다시 써야 한다.
+    go(item.need ? 'need' : 'home');
   }
 }
 
@@ -206,20 +212,37 @@ async function runItem(item) {
 function extractResult(d) {
   const body = d.reading || d.text || d.interpretation || '';
   const extras = [];
-  if (d.card?.name) extras.push({ label: '뽑은 카드', value: `${d.card.name}${d.upright === false ? ' (역방향)' : ''}` });
-  if (d.rune?.name) extras.push({ label: '룬', value: d.rune.name });
-  if (d.hexagram?.name) extras.push({ label: '괘', value: d.hexagram.name });
-  if (d.lifePath) extras.push({ label: '라이프패스 넘버', value: String(d.lifePath) });
-  if (d.saju1 || d.saju) extras.push({ label: '사주', value: d.saju1 || d.saju });
-  if (d.dayElem) extras.push({ label: '오늘의 기운', value: d.dayElem });
-  if (d.picks && typeof d.picks === 'object') {
+  const add = (label, value) => { if (value) extras.push({ label, value: String(value) }); };
+
+  if (d.card?.name) add('뽑은 카드', `${d.card.icon || ''} ${d.card.name}${d.upright === false ? ' (역방향)' : ''}`.trim());
+  if (d.hexagram?.name) add('괘', d.hexagram.name);
+  if (d.rune?.name) add('룬', d.rune.name);
+  add('라이프패스 넘버', d.lifePath);
+  add('주제', d.title);
+  add('이름', d.name);
+  add('점수', d.score != null ? `${d.score}점` : '');
+  add('사주', d.saju1 || d.saju);
+  add('오늘의 기운', d.dayElem);
+  add('연도', d.year);
+  if (d.myType && d.partnerType) add('유형', `${d.myType} × ${d.partnerType}`);
+  if (d.moon && typeof d.moon.illumination === 'number') add('달', `밝기 ${d.moon.illumination}%`);
+  if (d.mercury?.retrograde) add('수성', `역행 중${d.mercury.endsAt ? ` (${d.mercury.endsAt}까지)` : ''}`);
+
+  // 택일은 고른 날짜들이 본문만큼 중요하다.
+  if (Array.isArray(d.picks)) {
+    const days = d.picks.slice(0, 5)
+      .map(x => (typeof x === 'string' ? x : x.ymd || x.date || ''))
+      .filter(Boolean);
+    if (days.length) add('좋은 날', days.join(', '));
+  } else if (d.picks && typeof d.picks === 'object') {
+    // 럭키 아이템은 { color, food, song } 처럼 객체로 온다.
+    const KO = { color: '행운의 색', food: '행운의 음식', song: '오늘의 노래', item: '행운의 물건', place: '행운의 장소' };
     for (const [k, v] of Object.entries(d.picks)) {
-      if (typeof v === 'string') extras.push({ label: k, value: v });
+      if (typeof v === 'string') add(KO[k] || k, v);
     }
   }
-  if (Array.isArray(d.days)) {
-    extras.push({ label: '좋은 날', value: d.days.slice(0, 5).map(x => x.ymd || x.date || x).join(', ') });
-  }
+  if (d.best) add('가장 좋은 시기', typeof d.best === 'string' ? d.best : d.best.year || '');
+
   return { body, extras };
 }
 
@@ -365,9 +388,12 @@ const LOADING_LINES = [
 ];
 
 function header() {
-  const p = state.profile || {};
+  // 홈에서는 돌아갈 곳이 없다. 빈 자리를 남겨 제목이 가운데에 그대로 있게 한다.
+  const back = state.screen === 'home'
+    ? '<span class="tb-spacer"></span>'
+    : '<button class="tb-back" id="btn-home" aria-label="뒤로">‹</button>';
   return `<div class="topbar">
-    <button class="tb-back" id="btn-home" aria-label="홈">‹</button>
+    ${back}
     <span class="tb-title">MY;安</span>
     <button class="tb-token" id="btn-charge">${state.tokens} 토큰</button>
   </div>`;
@@ -465,7 +491,8 @@ function render() {
         <div class="loading">
           <img src="${API}/andoryeong.svg" alt="" class="oracle" onerror="this.style.display='none'">
           <div class="spinner"></div>
-          <p class="muted">${LOADING_LINES[Math.floor(Math.random() * LOADING_LINES.length)]}</p>
+          <p class="muted">${esc(state.loadingLine || LOADING_LINES[0])}</p>
+          <p class="muted small">${esc(state.item?.label || '')}</p>
         </div>`;
       break;
 
@@ -523,31 +550,38 @@ function render() {
 }
 
 function needForm(it) {
+  // 오류로 이 화면에 다시 왔을 때 방금 적은 게 남아 있어야 한다.
+  const f = state.form || {};
+  const p = f.partner || {};
+  const sel = (list, cur) => list
+    .map(t => `<option value="${t.v}"${t.v === cur ? ' selected' : ''}>${t.label}</option>`).join('');
+
   switch (it.need) {
     case 'text':
       return `<label>${it.prompt}</label>
-        <textarea id="f-text" rows="3" placeholder="${esc(it.placeholder || '')}"></textarea>`;
+        <textarea id="f-text" rows="3" placeholder="${esc(it.placeholder || '')}">${esc(f.text || '')}</textarea>`;
     case 'name':
-      return `<label>풀이할 이름</label><input id="f-nm" placeholder="예: 안태현">`;
+      return `<label>풀이할 이름</label><input id="f-nm" value="${esc(f.name || '')}" placeholder="예: 안태현">`;
     case 'topic':
       return `<label>어떤 운이 궁금하세요?</label>
-        <select id="f-topic">${TOPICS.map(t => `<option value="${t.v}">${t.label}</option>`).join('')}</select>`;
+        <select id="f-topic">${sel(TOPICS, f.topic)}</select>`;
     case 'purpose':
       return `<label>무엇을 위한 날인가요?</label>
-        <select id="f-purpose">${PURPOSES.map(t => `<option value="${t.v}">${t.label}</option>`).join('')}</select>`;
+        <select id="f-purpose">${sel(PURPOSES, f.purpose)}</select>`;
     case 'type':
       return `<label>나의 유형</label>
-        <select id="f-my">${OHAENG_TYPES.map(t => `<option value="${t.v}">${t.label}</option>`).join('')}</select>
+        <select id="f-my">${sel(OHAENG_TYPES, f.myType)}</select>
         <label>상대의 유형</label>
-        <select id="f-pt">${OHAENG_TYPES.map(t => `<option value="${t.v}">${t.label}</option>`).join('')}</select>`;
+        <select id="f-pt">${sel(OHAENG_TYPES, f.partnerType)}</select>`;
     case 'partner':
       return `<label>상대방 생년월일</label>
         <div class="grid3">
-          <input id="p-y" type="number" inputmode="numeric" placeholder="1990">
-          <input id="p-m" type="number" inputmode="numeric" placeholder="5">
-          <input id="p-d" type="number" inputmode="numeric" placeholder="15">
+          <input id="p-y" type="number" inputmode="numeric" placeholder="1990" value="${esc(p.year || '')}">
+          <input id="p-m" type="number" inputmode="numeric" placeholder="5" value="${esc(p.month || '')}">
+          <input id="p-d" type="number" inputmode="numeric" placeholder="15" value="${esc(p.day || '')}">
         </div>
-        <label>태어난 시각 (선택)</label><input id="p-h" placeholder="예: 오전 9시">`;
+        <label>태어난 시각 (선택)</label>
+        <input id="p-h" placeholder="예: 오전 9시" value="${esc(p.hour || '')}">`;
     case 'photo':
       return `<label>무엇을 볼까요?</label>
         <select id="f-ptype"><option value="face">관상 (얼굴)</option><option value="palm">손금</option></select>

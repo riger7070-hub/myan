@@ -23,21 +23,30 @@ export const OHAENG_TYPES = [
   { v: '水', label: '수(水) · 물' },
 ];
 
+// ⚠️ v 는 서버의 FORTUNE_TOPICS 키와 **정확히** 같아야 한다. 다르면 400 으로 튕긴다.
+// (첫 버전에서 love/money/work 처럼 임의로 지었다가 6개 중 5개가 전부 실패했다.)
 export const TOPICS = [
-  { v: 'love',    label: '애정운' },
-  { v: 'money',   label: '재물운' },
-  { v: 'work',    label: '직장·학업운' },
-  { v: 'health',  label: '건강운' },
-  { v: 'family',  label: '가족운' },
-  { v: 'success', label: '성공운' },
+  { v: 'crush',       label: '짝사랑운' },
+  { v: 'trust',       label: '관계 신뢰 기운' },
+  { v: 'family',      label: '가족운' },
+  { v: 'future',      label: '미래운' },
+  { v: 'grades',      label: '학업·성적운' },
+  { v: 'personality', label: '성격 분석' },
+  { v: 'appearance',  label: '인상·이미지운' },
+  { v: 'success',     label: '성공운' },
 ];
 
+// ⚠️ v 는 서버의 TAKIL_PURPOSES 키와 정확히 같아야 한다(같은 이유).
 export const PURPOSES = [
-  { v: '이사',   label: '이사' },
-  { v: '계약',   label: '계약·개업' },
-  { v: '혼례',   label: '혼례' },
-  { v: '여행',   label: '여행' },
-  { v: '시작',   label: '새로운 시작' },
+  { v: 'wedding',  label: '결혼·약혼' },
+  { v: 'moving',   label: '이사·입주' },
+  { v: 'opening',  label: '개업·창업' },
+  { v: 'contract', label: '계약·거래' },
+  { v: 'travel',   label: '여행·출장' },
+  { v: 'medical',  label: '치료·수술' },
+  { v: 'build',    label: '공사·수리' },
+  { v: 'meeting',  label: '만남·모임' },
+  { v: 'ritual',   label: '고사·기도' },
 ];
 
 export const SECTIONS = [
@@ -47,7 +56,7 @@ export const SECTIONS = [
       { id: 'daeun',      icon: '🌊',  label: '대운 · 10년의 흐름', cost: 3, path: '/api/daeun',          need: null },
       { id: 'name',       icon: '✍️',  label: '이름 풀이',          cost: 2, path: '/api/name-reading',   need: 'name' },
       { id: 'photo',      icon: '🖐️', label: '관상·손금',          cost: 2, path: '/api/photo-reading',  need: 'photo' },
-      { id: 'typecompat', icon: '🔯',  label: '오행 유형 테스트',    cost: 1, path: '/api/type-compat',    need: 'type' },
+      { id: 'typecompat', icon: '🧿',  label: '오행 유형 테스트',    cost: 1, path: '/api/type-compat',    need: 'type' },
       { id: 'numerology', icon: '🔢',  label: '라이프패스 넘버',     cost: 1, path: '/api/numerology',     need: null },
     ],
   },

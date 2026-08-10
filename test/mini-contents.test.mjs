@@ -93,6 +93,56 @@ test('유료 콘텐츠 경로는 미니앱 오리진이 허용된다', () => {
   }
 });
 
+// ── 선택지 값 ──
+// 첫 버전에서 주제(love/money/work…)와 택일 목적(이사/계약…)을 임의로 지었는데,
+// 서버는 crush/trust/family… 와 wedding/moving… 을 기대했다. 화면에는 멀쩡히 뜨지만
+// 고르는 족족 400 으로 튕겼고, 토큰을 안 뺐으니 로그로도 티가 안 났다.
+// 서버 표에서 키를 직접 읽어 대조한다.
+
+/** worker.js 의 객체 리터럴에서 최상위 키만 뽑는다. */
+function serverKeys(name) {
+  const at = worker.indexOf(`const ${name} = {`);
+  assert.ok(at >= 0, `worker.js 에 ${name} 이 없다`);
+  const chunk = worker.slice(at, worker.indexOf('\n};', at));
+  return [...chunk.matchAll(/^ {2}(\w+):\s*\{/gm)].map(m => m[1]);
+}
+
+/** contents.js 의 배열에서 v 값만 뽑는다. */
+function miniValues(name) {
+  const at = contentsSrc.indexOf(`export const ${name} = [`);
+  assert.ok(at >= 0, `contents.js 에 ${name} 이 없다`);
+  const chunk = contentsSrc.slice(at, contentsSrc.indexOf('\n];', at));
+  return [...chunk.matchAll(/v:\s*'([^']+)'/g)].map(m => m[1]);
+}
+
+test('주제별 운세의 주제 값이 서버 FORTUNE_TOPICS 에 다 있다', () => {
+  const server = serverKeys('FORTUNE_TOPICS');
+  const mine = miniValues('TOPICS');
+  assert.ok(mine.length > 0, '주제가 하나도 없다');
+  const missing = mine.filter(v => !server.includes(v));
+  assert.deepEqual(missing, [],
+    `서버에 없는 주제:\n  ${missing.join(', ')}\n서버가 아는 값: ${server.join(', ')}`);
+});
+
+test('택일 목적 값이 서버 TAKIL_PURPOSES 에 다 있다', () => {
+  const server = serverKeys('TAKIL_PURPOSES');
+  const mine = miniValues('PURPOSES');
+  assert.ok(mine.length > 0, '목적이 하나도 없다');
+  const missing = mine.filter(v => !server.includes(v));
+  assert.deepEqual(missing, [],
+    `서버에 없는 목적:\n  ${missing.join(', ')}\n서버가 아는 값: ${server.join(', ')}`);
+});
+
+test('잔액 필드 이름을 서버와 맞춰 읽는다', () => {
+  // 유료 핸들러는 remaining 으로 돌려주는데 앱이 tokens 만 보면 잔액이 안 줄어든 것처럼
+  // 보인다(다음 화면에서야 맞춰진다). 실제로 첫 버전이 그 상태였다.
+  const mainSrc = readFileSync(join(ROOT, 'mini', 'src', 'main.js'), 'utf8');
+  assert.match(mainSrc, /data\.remaining/,
+    '앱이 remaining 을 읽지 않는다 — 유료 콘텐츠 후 잔액이 갱신되지 않는다');
+  assert.ok(worker.includes('remaining: remainingTokens'),
+    '서버가 더 이상 remaining 으로 돌려주지 않는다 — 앱도 함께 고칠 것');
+});
+
 test('로또번호는 미니앱에 넣지 않는다', () => {
   // 사행성 요소로 심사에서 지적될 수 있어 첫 버전에서 뺐다. 무심코 되돌아오는 걸 막는다.
   // 넣기로 결정하면 이 테스트를 지우면서 의식적으로 판단하게 된다.

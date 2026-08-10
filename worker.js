@@ -990,13 +990,15 @@ async function saveFeatureHistory(env, email, feature, title, content, meta) {
 async function handleGetFeatureHistory(request, env) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return cors(JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
+    return miniCors(request, JSON.stringify({ error: { message: '인증이 필요합니다.' } }), 401);
   }
-  const idToken = authHeader.slice(7);
-  const email = await getEmailFromToken(idToken, env);
-  if (!email) {
-    return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+  // 기록은 웹·미니앱이 같은 테이블을 쓰되 키를 네임스페이스로 가른다(accountHistoryKey).
+  // 이메일로만 조회하면 미니앱 사용자는 자기 기록을 영영 못 본다.
+  const acct = await resolveAccount(request, env);
+  if (!acct) {
+    return miniCors(request, JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
   }
+  const email = accountHistoryKey(acct);
 
   const url = new URL(request.url);
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
@@ -1020,9 +1022,9 @@ async function handleGetFeatureHistory(request, env) {
       createdAt: row.created_at,
     }));
 
-    return cors(JSON.stringify({ ok: true, history, count: history.length }), 200);
+    return miniCors(request, JSON.stringify({ ok: true, history, count: history.length }), 200);
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: '기록 조회에 실패했습니다.' } }), 500);
+    return miniCors(request, JSON.stringify({ error: { message: '기록 조회에 실패했습니다.' } }), 500);
   }
 }
 
@@ -1513,7 +1515,7 @@ export default {
     // ── 사주 기록 조회 ──
     if (path === '/api/saju-history' && method === 'GET') { await ensureDBExt(env); return handleGetSajuHistory(request, env); }
     // ── 유료 콘텐츠(상세풀이/타로/띠·별자리/럭키/궁합) 통합 기록 조회 ──
-    if (path === '/api/feature-history' && method === 'GET') { await ensureDBExt(env); return handleGetFeatureHistory(request, env); }
+    if (path === '/api/feature-history' && method === 'GET') { await ensureDBExt(env); return withMiniOrigin(request, await handleGetFeatureHistory(request, env)); }
     // ── 생년월일 프로필 서버 저장 ──
     if (path === '/api/profile' && method === 'POST') { await ensureDBExt(env); return handleSaveProfile(request, env); }
     // ── 푸시 알림 API ──
