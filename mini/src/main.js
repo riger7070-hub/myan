@@ -272,6 +272,28 @@ async function loadHistory() {
 
 // ── 결제 ──────────────────────────────────────────────────
 
+/**
+ * 콘솔에 실제로 등록된 상품 목록을 가져온다.
+ * 코드에 적어 둔 SKU 와 콘솔이 어긋나면 결제가 통째로 실패하는데, 화면에는
+ * "에러"라고만 떠서 원인을 알 수 없다. 실제 목록을 받아 대조해 보여준다.
+ */
+async function loadProducts() {
+  try {
+    const list = await IAP.getProductItemList();
+    state.catalog = (list || []).map(p => ({
+      sku: p.sku || p.productId || p.id,
+      label: p.name || p.title || p.sku,
+      price: p.price ?? p.amount,
+      known: PRODUCTS.some(k => k.sku === (p.sku || p.productId || p.id)),
+    }));
+    state.catalogError = state.catalog.length ? '' : '콘솔에 등록된 상품이 없습니다.';
+  } catch (e) {
+    state.catalog = null;
+    state.catalogError = `상품 목록을 불러오지 못했어요. (${e?.message || e})`;
+  }
+  render();
+}
+
 function buyTokens(product) {
   state.error = '';
   state.busy = true;
@@ -297,8 +319,12 @@ function buyTokens(product) {
     onEvent: () => { state.busy = false; state.error = ''; go('home'); },
     onError: (err) => {
       state.busy = false;
-      // 사용자가 결제창을 닫은 것도 여기로 온다. 실패라고 겁주지 않는다.
-      state.error = '결제가 완료되지 않았어요.';
+      // 사용자가 결제창을 닫은 것도 여기로 온다. 실패라고 겁주지 않되,
+      // 원인을 통째로 감추면 상품 미등록 같은 설정 문제를 영영 못 찾는다.
+      const detail = err?.message || err?.code || (typeof err === 'string' ? err : '');
+      state.error = detail
+        ? `결제가 완료되지 않았어요.\n(${String(detail).slice(0, 160)})`
+        : '결제가 완료되지 않았어요.';
       console.warn('[iap]', err);
       render();
     },
@@ -629,18 +655,28 @@ function render() {
         ${FOOTER}`;
       break;
 
-    case 'charge':
+    case 'charge': {
+      // 콘솔에 등록된 상품을 우선 보여준다. 아직 못 받았으면 코드에 적어 둔 목록으로
+      // 그린다(콘솔 등록 전에는 눌러도 실패하므로 그 사실을 함께 알린다).
+      const list = state.catalog ?? PRODUCTS.map(p => ({ ...p, known: true }));
       html = `${header()}
         <div class="brand sm"><h1>토큰 충전</h1><p>현재 ${state.tokens} 토큰</p></div>
         ${err}
-        ${PRODUCTS.map(p => `
-          <button class="tile wide" data-sku="${p.sku}">
-            <span class="t-label">${p.label}</span>
-            <span class="t-cost">토스로 결제</span>
-          </button>`).join('')}
+        ${state.catalogError ? `<div class="card"><p class="err">${esc(state.catalogError)}</p>
+          <p class="muted small">앱인토스 콘솔에서 인앱 상품을 먼저 등록해야 결제가 열립니다.</p></div>` : ''}
+        ${list.map(p => {
+          const tokens = PRODUCTS.find(k => k.sku === p.sku)?.tokens;
+          return `<button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
+            <span class="t-label">${esc(p.label)}${tokens ? ` · ${tokens}개` : ''}</span>
+            <span class="t-cost">${p.known === false ? '서버 미등록' : (p.price ? `${p.price}원` : '토스로 결제')}</span>
+          </button>`;
+        }).join('')}
+        ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
+          콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
         <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
         ${FOOTER}`;
       break;
+    }
 
     default:
       html = `<div class="loading"><div class="spinner"></div></div>`;
@@ -735,7 +771,7 @@ function bind() {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
 
   on('btn-login', doLogin);
-  on('btn-charge', () => go('charge'));
+  on('btn-charge', () => { state.catalog = undefined; state.catalogError = ''; go('charge'); loadProducts(); });
   on('btn-home', () => go(state.profile?.birthYear ? 'home' : 'profile'));
   on('btn-home2', () => go('home'));
   on('btn-editprofile', () => go('profile'));
