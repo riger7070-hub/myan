@@ -93,17 +93,21 @@ test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있�
   const starts = [...src.matchAll(/^(?:async function|function|const)/gm)].map(m => m.index);
   const spans = starts.map((s, i) => src.slice(s, starts[i + 1] ?? src.length));
 
-  const paid = spans.filter(s => /'[a-z_]+_use', 0, /.test(s));
+  // 차감은 accountSpend 한 줄로 통일돼 있다(웹·미니앱 공용 계정 계층).
+  const paid = spans.filter(s => /await accountSpend\(env, acct, /.test(s));
   assert.equal(paid.length, 18, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
 
   for (const span of paid) {
     const name = (span.match(/^async function (\w+)/) || [])[1] || span.slice(0, 40);
-    assert.match(span, /refund = \(\) => refundTokens\(env, email, '[a-z_]+', (\d+|COST)\);/,
+    assert.match(span, /refund = \(\) => accountRefund\(env, acct, '[a-z_]+', (\d+|COST)\);/,
       `${name}: 차감 직후 refund 클로저가 없다`);
     assert.match(span, /if \(refund\) await refund\(\)\.catch\(\(\) => \{\}\);/,
       `${name}: catch 에서 환불하지 않는다 — 예외가 나면 토큰이 사라진다`);
     assert.doesNotMatch(span, /const refundId = /,
-      `${name}: 인라인 환불이 남아 있다 — refundTokens 로 통일할 것`);
+      `${name}: 인라인 환불이 남아 있다 — accountRefund 로 통일할 것`);
+    // 옛 이메일 기반 경로가 남아 있으면 미니앱 사용자가 웹 원장에 얹힌다.
+    assert.doesNotMatch(span, /refundTokens\(env, email|INSERT INTO payment_requests/,
+      `${name}: 이메일 기반 원장 접근이 남아 있다`);
   }
 });
 

@@ -138,6 +138,31 @@ test('환불하면 차감한 만큼 정확히 돌아온다', async () => {
   }
 });
 
+// ── 배선 검사 ──
+
+test('유료 라우트는 전부 미니앱 오리진을 붙여 응답한다', async () => {
+  // 하나라도 빠지면 그 콘텐츠만 미니앱에서 "Failed to fetch" 로 죽는다. 브라우저가
+  // 막는 거라 서버 로그에는 아무것도 안 남아서, 빠진 걸 알아채기 어렵다.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.js'), 'utf8');
+
+  // 유료 핸들러 이름을 소스에서 직접 뽑는다 — 목록을 손으로 적으면 새 기능에서 어긋난다.
+  const fns = [...src.matchAll(/^async function (\w+)\(request, env\)/gm)].map(m => ({ name: m[1], at: m.index }));
+  const paid = fns.filter((f, i) =>
+    /await accountSpend\(env, acct, /.test(src.slice(f.at, fns[i + 1]?.at ?? src.length))
+  ).map(f => f.name);
+
+  assert.ok(paid.length >= 18, `유료 핸들러를 ${paid.length}개만 찾았다 — 추출이 이상하다`);
+
+  const unwrapped = paid.filter(h =>
+    new RegExp(String.raw`return ${h}\(request, env\);`).test(src)
+  );
+  assert.deepEqual(unwrapped, [],
+    `라우트가 withMiniOrigin 으로 감싸지지 않았다:\n  ${unwrapped.join('\n  ')}`);
+});
+
 test('동시에 들어온 두 차감이 잔액을 넘겨 쓰지 않는다', async () => {
   // 잔액 3에 2토큰짜리 두 개가 동시에 들어오면 하나만 통과해야 한다.
   // 읽고 나서 쓰는 2단계 구현이면 둘 다 통과해서 잔액이 -1 이 된다.

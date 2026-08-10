@@ -105,20 +105,19 @@ test('타일에 적힌 값이 서버가 실제로 빼는 값과 같다', () => {
   };
 
   const workerSrc = readFileSync(join(ROOT, 'worker.js'), 'utf8');
-  // 핸들러 하나의 본문에서 차감액을 읽는다. -1 처럼 그 자리에 박아 둔 것과
-  // COST 변수를 바인딩으로 넘기는 것 두 가지 모양이 다 쓰인다.
+  // 핸들러 하나의 본문에서 차감액을 읽는다.
+  // 차감은 accountSpend(env, acct, '기능', 비용) 한 줄로 통일돼 있고, 비용은 숫자를
+  // 그 자리에 적은 것과 COST 변수를 넘기는 것 두 모양이 쓰인다.
   const costOf = (handler) => {
     const at = workerSrc.indexOf(`async function ${handler}(`);
     assert.ok(at >= 0, `worker.js 에 ${handler} 가 없다`);
     const span = workerSrc.slice(at, at + 6000);
-    const m = span.match(/'[a-z_]+_use', 0, (-?\w+|\?)/);
-    assert.ok(m, `${handler}: 차감 구문을 찾지 못했다`);
-    if (m[1] === '?' || m[1].endsWith('COST')) {
-      const c = span.match(/const COST = (\d+)/);
-      assert.ok(c, `${handler}: COST 를 바인딩하는데 선언을 찾지 못했다`);
-      return Number(c[1]);
-    }
-    return Math.abs(Number(m[1]));
+    const m = span.match(/accountSpend\(env, acct, '[a-z_]+', (\w+)\)/);
+    assert.ok(m, `${handler}: 차감 구문(accountSpend)을 찾지 못했다`);
+    if (/^\d+$/.test(m[1])) return Number(m[1]);
+    const c = span.match(new RegExp(`const ${m[1]} = (\\d+)`));
+    assert.ok(c, `${handler}: 비용으로 ${m[1]} 를 넘기는데 선언을 찾지 못했다`);
+    return Number(c[1]);
   };
 
   for (const sec of sections) {

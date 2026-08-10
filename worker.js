@@ -1097,6 +1097,16 @@ async function resolveAccount(request, env) {
   return null;
 }
 
+/**
+ * 기록(feature_history)에 쓸 키. 원장과 달리 기록은 테이블을 나누지 않고
+ * 미니앱 사용자를 'mini:' 접두사로 네임스페이스만 갈라 둔다 — 돈이 아니라서
+ * 회계가 섞일 일이 없고, 두 서비스가 같은 조회 코드를 그대로 쓸 수 있다.
+ * (접두사 덕에 실제 이메일과 절대 겹치지 않는다.)
+ */
+function accountHistoryKey(acct) {
+  return acct.kind === 'web' ? acct.key : `mini:${acct.key}`;
+}
+
 /** 계정의 현재 잔액. */
 async function accountBalance(env, acct) {
   const { table, col } = _LEDGERS[acct.kind];
@@ -1466,30 +1476,30 @@ export default {
     if (path === '/terms'           && method === 'GET') return handleTermsPage();
 
     // ── 상세 풀이 ──
-    if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return handleDetailReading(request, env); }
+    if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDetailReading(request, env)); }
     // ── 타로카드 뽑기 (재미 콘텐츠) ──
-    if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return handleTarotDraw(request, env); }
+    if (path === '/api/tarot-draw' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTarotDraw(request, env)); }
     // ── 띠·별자리 운세 (재미 콘텐츠) ──
-    if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return handleZodiacFortune(request, env); }
-    if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return handleAstroTransit(request, env); }
-    if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return handleAuspiciousDays(request, env); }
-    if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return handleDaeun(request, env); }
-    if (path === '/api/name-reading'   && method === 'POST') { await ensureDBExt(env); return handleNameReading(request, env); }
-    if (path === '/api/compat-timing'  && method === 'POST') { await ensureDBExt(env); return handleCompatTiming(request, env); }
+    if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleZodiacFortune(request, env)); }
+    if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAstroTransit(request, env)); }
+    if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAuspiciousDays(request, env)); }
+    if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDaeun(request, env)); }
+    if (path === '/api/name-reading'   && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNameReading(request, env)); }
+    if (path === '/api/compat-timing'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleCompatTiming(request, env)); }
     // ── 오늘의 럭키 컬러·음식·노래 (재미 콘텐츠) ──
-    if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return handleLuckyPicks(request, env); }
+    if (path === '/api/lucky-picks' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleLuckyPicks(request, env)); }
     // ── 오행 유형 궁합 테스트 (재미 콘텐츠) ──
-    if (path === '/api/type-compat' && method === 'POST') { await ensureDBExt(env); return handleTypeCompat(request, env); }
-    if (path === '/api/fortune-topic' && method === 'POST') { await ensureDBExt(env); return handleFortuneTopic(request, env); }
-    if (path === '/api/iching' && method === 'POST') { await ensureDBExt(env); return handleIching(request, env); }
-    if (path === '/api/numerology' && method === 'POST') { await ensureDBExt(env); return handleNumerology(request, env); }
-    if (path === '/api/tojeong' && method === 'POST') { await ensureDBExt(env); return handleTojeong(request, env); }
-    if (path === '/api/photo-reading' && method === 'POST') { await ensureDBExt(env); return handlePhotoReading(request, env); }
+    if (path === '/api/type-compat' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTypeCompat(request, env)); }
+    if (path === '/api/fortune-topic' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleFortuneTopic(request, env)); }
+    if (path === '/api/iching' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleIching(request, env)); }
+    if (path === '/api/numerology' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNumerology(request, env)); }
+    if (path === '/api/tojeong' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTojeong(request, env)); }
+    if (path === '/api/photo-reading' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handlePhotoReading(request, env)); }
     if (path === '/api/photo-readings' && method === 'GET') { await ensureDBExt(env); return handleGetPhotoReadings(request, env); }
     if (path === '/api/photo-reading' && method === 'DELETE') { await ensureDBExt(env); return handleDeletePhotoReading(request, env); }
-    if (path === '/api/dream-interpretation' && method === 'POST') { await ensureDBExt(env); return handleDreamInterpretation(request, env); }
-    if (path === '/api/lotto-numbers' && method === 'POST') { await ensureDBExt(env); return handleLottoNumbers(request, env); }
-    if (path === '/api/rune-reading' && method === 'POST') { await ensureDBExt(env); return handleRuneReading(request, env); }
+    if (path === '/api/dream-interpretation' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDreamInterpretation(request, env)); }
+    if (path === '/api/lotto-numbers' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleLottoNumbers(request, env)); }
+    if (path === '/api/rune-reading' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleRuneReading(request, env)); }
     // ── 게스트 체험 ──
     if (path === '/chat-guest' && method === 'POST') { await ensureDBExt(env); return handleGuestChat(request, env); }
     // ── 무료 간단 사주 풀이 (로컬 계산, Gemini 미호출) ──
@@ -3467,8 +3477,8 @@ async function handleDetailReading(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { date, ohaeng, lang = 'ko', birth, p2, category } = await request.json().catch(() => ({}));
     if (!date || !ohaeng) return cors(JSON.stringify({ error: { message: 'date, ohaeng 필수' } }), 400);
@@ -3487,21 +3497,13 @@ async function handleDetailReading(request, env) {
     }
 
     // 2토큰 차감 (atomic INSERT — 잔액 >= 2 일 때만 삽입)
-    const detailUseId = `detail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deductDetail = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'detail_use', 0, -2, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 2`
-    ).bind(detailUseId, email, email).run();
-    if (!deductDetail.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'detail', 2);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '상세 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'detail', 2);
+    refund = () => accountRefund(env, acct, 'detail', 2);
     // 차감 후 잔여 토큰 계산
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    const remainingTokens = await accountBalance(env, acct);
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
@@ -3529,7 +3531,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
       return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, category, categoryTitle: cat.title, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -3563,26 +3565,18 @@ async function handleTarotDraw(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
 
     // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const useId = `tarot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'tarot_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'tarot', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '타로카드 뽑기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'tarot', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'tarot', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const cardIdx = Math.floor(Math.random() * TAROT_CARDS.length);
     const card = TAROT_CARDS[cardIdx];
@@ -3598,7 +3592,7 @@ async function handleTarotDraw(request, env) {
       return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
 
     return cors(JSON.stringify({
       success:true,
@@ -3643,8 +3637,8 @@ async function handleZodiacFortune(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', birth } = await request.json().catch(() => ({}));
     const by = birth ? parseInt(birth.year, 10) : NaN;
@@ -3662,20 +3656,12 @@ async function handleZodiacFortune(request, env) {
     const on = ON[lang] || ON.ko;
 
     // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const useId = `zodiac_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'zodiac_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'zodiac', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '띠·별자리 운세는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'zodiac', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'zodiac', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     // 실제 달의 위상을 함께 넘겨, 같은 별자리라도 날마다 해석이 달라지게 한다
     const moon = moonPhase();
@@ -3719,7 +3705,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
 
     return cors(JSON.stringify({
       success:true, animal, animalIndex, zodiac, zodiacIndex, reading,
@@ -3777,8 +3763,8 @@ async function handleAstroTransit(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', birth } = await request.json().catch(() => ({}));
     const by = birth ? parseInt(birth.year, 10) : NaN;
@@ -3795,20 +3781,12 @@ async function handleAstroTransit(request, env) {
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 1;
-    const useId = `astro_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'astro_use', 0, ?, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
-    ).bind(useId, email, -COST, email, COST).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'astro', COST);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: `천궁도 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => refundTokens(env, email, 'astro', COST);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'astro', COST);
+    const remainingTokens = await accountBalance(env, acct);
 
     const S = SIGN_NAMES[lang] || SIGN_NAMES.ko;
     const B = BODY_NAMES[lang] || BODY_NAMES.ko;
@@ -3861,7 +3839,7 @@ ${transitLines}
     }
 
     const title = `${S[today.sun.signIndex]}의 계절`;
-    await saveFeatureHistory(env, email, 'astro', title, reading,
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'astro', title, reading,
       { natalSun: natal.sun.signIndex, natalMoon: natal.moon.signIndex, transits }).catch(() => {});
 
     return cors(JSON.stringify({
@@ -4008,8 +3986,8 @@ async function handleAuspiciousDays(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', purpose, birth, from, days } = await request.json().catch(() => ({}));
     const P = TAKIL_PURPOSES[purpose];
@@ -4053,20 +4031,12 @@ async function handleAuspiciousDays(request, env) {
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 2;
-    const useId = `takil_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'takil_use', 0, ?, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
-    ).bind(useId, email, -COST, email, COST).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'takil', COST);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: `택일은 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => refundTokens(env, email, 'takil', COST);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'takil', COST);
+    const remainingTokens = await accountBalance(env, acct);
 
     const L = (tbl, key) => (tbl[key]?.[lang] || tbl[key]?.ko || key);
     const purposeLabel = P.label[lang] || P.label.ko;
@@ -4118,7 +4088,7 @@ ${dayLines}
       return cors(JSON.stringify({ error: { message: '택일 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'takil', `${purposeLabel} · ${localized[0].ymd}`, reading,
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'takil', `${purposeLabel} · ${localized[0].ymd}`, reading,
       { purpose, picks: localized }).catch(() => {});
 
     return cors(JSON.stringify({
@@ -4214,8 +4184,8 @@ async function handleDaeun(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', birth, gender } = await request.json().catch(() => ({}));
     if (!birth?.year || !birth?.month || !birth?.day) {
@@ -4234,20 +4204,12 @@ async function handleDaeun(request, env) {
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 3;
-    const useId = `daeun_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'daeun_use', 0, ?, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
-    ).bind(useId, email, -COST, email, COST).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'daeun', COST);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: `대운 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => refundTokens(env, email, 'daeun', COST);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'daeun', COST);
+    const remainingTokens = await accountBalance(env, acct);
 
     const on = ON[lang] || ON.ko;
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
@@ -4299,7 +4261,7 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
     const title = daeun.current
       ? `${daeun.current.ganzhi} · ${daeun.current.startYear}~${daeun.current.endYear}`
       : `${daeun.next.startYear}년부터`;
-    await saveFeatureHistory(env, email, 'daeun', title, reading,
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'daeun', title, reading,
       { forward: daeun.forward, current: daeun.current, next: daeun.next }).catch(() => {});
 
     return cors(JSON.stringify({
@@ -4388,8 +4350,8 @@ async function handleNameReading(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', name, birth } = await request.json().catch(() => ({}));
     // 사주 대조는 생년월일이 있을 때만 — 이름만 봐도 발음오행 흐름은 나온다.
@@ -4401,20 +4363,12 @@ async function handleNameReading(request, env) {
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 2;
-    const useId = `name_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'name_use', 0, ?, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
-    ).bind(useId, email, -COST, email, COST).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'name', COST);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: `이름 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => refundTokens(env, email, 'name', COST);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'name', COST);
+    const remainingTokens = await accountBalance(env, acct);
 
     const on = ON[lang] || ON.ko;
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
@@ -4464,7 +4418,7 @@ ${sajuLine}
       return cors(JSON.stringify({ error: { message: '이름 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'name', analysis.chars.map(c => c.ch).join(''), reading,
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'name', analysis.chars.map(c => c.ch).join(''), reading,
       { chars: analysis.chars, pairs: analysis.pairs, fills: analysis.fills, overs: analysis.overs }).catch(() => {});
 
     return cors(JSON.stringify({
@@ -4553,8 +4507,8 @@ async function handleCompatTiming(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', p1, p2 } = await request.json().catch(() => ({}));
     if (!p1?.year || !p2?.year) {
@@ -4573,20 +4527,12 @@ async function handleCompatTiming(request, env) {
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 3;
-    const useId = `compat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'compat_use', 0, ?, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= ?`
-    ).bind(useId, email, -COST, email, COST).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'compat', COST);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: `궁합 시기 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => refundTokens(env, email, 'compat', COST);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'compat', COST);
+    const remainingTokens = await accountBalance(env, acct);
 
     const REL_KO = { yukhap:'육합(끌어당김)', samhap:'삼합(뜻이 모임)', chung:'충(흔들림)', none:'별다른 관계 없음' };
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
@@ -4629,7 +4575,7 @@ ${timing.best.map(line).join('\n')}
       return cors(JSON.stringify({ error: { message: '궁합 시기 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'compat', `${nameA} × ${nameB} · ${timing.best[0].year}`, reading,
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'compat', `${nameA} × ${nameB} · ${timing.best[0].year}`, reading,
       { best: timing.best }).catch(() => {});
 
     return cors(JSON.stringify({
@@ -4653,28 +4599,20 @@ async function handleLuckyPicks(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
     const il = ilchin();
     const on = ON[lang] || ON.ko;
 
     // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const useId = `lucky_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'lucky_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'lucky', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '오늘의 럭키 아이템은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'lucky', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'lucky', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
@@ -4712,7 +4650,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
       return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'lucky', null, JSON.stringify(picks), null).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'lucky', null, JSON.stringify(picks), null).catch(() => {});
 
     return cors(JSON.stringify({ success:true, picks, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -4734,8 +4672,8 @@ async function handleTypeCompat(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', myType, partnerType } = await request.json().catch(() => ({}));
     if (!TYPE_ELEMENTS.includes(myType) || !TYPE_ELEMENTS.includes(partnerType)) {
@@ -4743,20 +4681,12 @@ async function handleTypeCompat(request, env) {
     }
 
     // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const useId = `typecompat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'typecompat_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'typecompat', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '궁합 보기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'typecompat', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'typecompat', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const on = ON[lang] || ON.ko;
     // 유형 두 개로만 정해진다 — 5 × 5 × 4개국어 = 100개면 전 조합이 채워지고 날짜도 안 탄다.
@@ -4768,7 +4698,7 @@ async function handleTypeCompat(request, env) {
       return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, myType, partnerType, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -4801,28 +4731,20 @@ async function handleFortuneTopic(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', topic, birth } = await request.json().catch(() => ({}));
     const t = FORTUNE_TOPICS[topic];
     if (!t) return cors(JSON.stringify({ error: { message: '올바르지 않은 주제입니다.' } }), 400);
 
     // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const useId = `fortune_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'fortune_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'fortune', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: `${t.title}은(는) 토큰 1개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => refundTokens(env, email, 'fortune', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'fortune', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const il = ilchin();
     const on = ON[lang] || ON.ko;
@@ -4857,7 +4779,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'fortune', t.title, reading, { topic }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'fortune', t.title, reading, { topic }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, topic, title: t.title, icon: t.icon, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -4888,27 +4810,19 @@ async function handleIching(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', question = '' } = await request.json().catch(() => ({}));
     const cleanQuestion = String(question || '').trim().slice(0, 200);
 
     // 1토큰 차감 (atomic INSERT)
-    const useId = `iching_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'iching_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'iching', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '주역 괘 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'iching', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'iching', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     // 6효 생성 (아래→위)
     const lines = Array.from({ length: 6 }, () => _ichingLine());
@@ -4946,7 +4860,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
       return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
 
     return cors(JSON.stringify({
       success:true,
@@ -4980,8 +4894,8 @@ async function handleNumerology(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', birth } = await request.json().catch(() => ({}));
     const by = birth ? parseInt(birth.year, 10) : NaN;
@@ -4992,20 +4906,12 @@ async function handleNumerology(request, env) {
     }
 
     // 1토큰 차감 (atomic INSERT)
-    const useId = `numerology_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'numerology_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'numerology', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'numerology', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'numerology', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const lifePath = _lifePathNumber(by, bm, bd);
     const il = ilchin();
@@ -5032,7 +4938,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, lifePath, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -5054,8 +4960,8 @@ async function handleTojeong(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', birth } = await request.json().catch(() => ({}));
     if (!birth || !birth.year) {
@@ -5065,20 +4971,12 @@ async function handleTojeong(request, env) {
     if (!saju) return cors(JSON.stringify({ error: { message: '사주 계산에 실패했습니다.' } }), 400);
 
     // 2토큰 차감 (atomic INSERT — 정식 상세풀이와 동일한 무게)
-    const useId = `tojeong_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'tojeong_use', 0, -2, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 2`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'tojeong', 2);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'tojeong', 2);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'tojeong', 2);
+    const remainingTokens = await accountBalance(env, acct);
 
     const thisYear = new Date().getFullYear();
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
@@ -5111,7 +5009,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, year: thisYear, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -5140,8 +5038,8 @@ async function handlePhotoReading(request, env) {
 
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', type, image } = await request.json().catch(() => ({}));
     if (type !== 'face' && type !== 'palm') {
@@ -5157,20 +5055,12 @@ async function handlePhotoReading(request, env) {
     }
 
     // 2토큰 차감 (atomic INSERT)
-    const useId = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'photo_reading_use', 0, -2, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 2`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'photo_reading', 2);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'photo_reading', 2);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'photo_reading', 2);
+    const remainingTokens = await accountBalance(env, acct);
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
@@ -5224,16 +5114,16 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     try {
       const insertResult = await env.DB.prepare(
         `INSERT INTO photo_readings (user_email, type, image_b64, reading) VALUES (?, ?, ?, ?)`
-      ).bind(email, type, b64, reading).run();
+      ).bind(accountHistoryKey(acct), type, b64, reading).run();
       readingId = insertResult.meta?.last_row_id ?? null;
       // 20개 상한 정리. await 하지 않으면 응답과 함께 취소돼 상한이 사실상 없는 셈이 된다
       // (여기 저장되는 건 base64 이미지라 쌓이면 D1 용량을 빠르게 먹는다).
       const { results } = await env.DB.prepare(
         `SELECT id FROM photo_readings WHERE user_email = ? ORDER BY created_at DESC LIMIT 1 OFFSET 20`
-      ).bind(email).all();
+      ).bind(accountHistoryKey(acct)).all();
       if (results && results.length > 0) {
         await env.DB.prepare(`DELETE FROM photo_readings WHERE user_email = ? AND id < ?`)
-          .bind(email, results[0].id).run();
+          .bind(accountHistoryKey(acct), results[0].id).run();
       }
     } catch (e) {
       console.error('[PHOTO READING SAVE]', e);
@@ -5314,28 +5204,20 @@ async function handleDreamInterpretation(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko', dream } = await request.json().catch(() => ({}));
     const cleanDream = String(dream || '').trim().slice(0, 500);
     if (!cleanDream) return cors(JSON.stringify({ error: { message: '꿈 내용을 입력해 주세요.' } }), 400);
 
     // 1토큰 차감 (atomic INSERT)
-    const useId = `dream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'dream_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'dream', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '꿈해몽은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'dream', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'dream', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const il = ilchin();
     const on = ON[lang] || ON.ko;
@@ -5364,7 +5246,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'dream', cleanDream.slice(0, 30), reading, { dream: cleanDream }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'dream', cleanDream.slice(0, 30), reading, { dream: cleanDream }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -5390,26 +5272,18 @@ async function handleLottoNumbers(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
 
     // 1토큰 차감 (atomic INSERT)
-    const useId = `lotto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'lotto_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'lotto', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '오늘의 로또번호는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'lotto', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'lotto', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const numbers = _lottoNumbers();
     const il = ilchin();
@@ -5437,7 +5311,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, numbers, reading, remaining: remainingTokens }), 200);
   } catch(e) {
@@ -5471,26 +5345,18 @@ async function handleRuneReading(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
 
     // 1토큰 차감 (atomic INSERT)
-    const useId = `rune_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const deduct = await env.DB.prepare(
-      `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
-       SELECT ?, ?, 'rune_use', 0, -1, 'approved', unixepoch()
-       WHERE (SELECT COALESCE(SUM(tokens), 0) FROM payment_requests WHERE user_email = ? AND status = 'approved') >= 1`
-    ).bind(useId, email, email).run();
-    if (!deduct.meta?.rows_written) {
+    const paid = await accountSpend(env, acct, 'rune', 1);
+    if (!paid) {
       return cors(JSON.stringify({ error: { message: '룬 문자 점은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
-    refund = () => refundTokens(env, email, 'rune', 1);
-    const remainRow = await env.DB.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) AS bal FROM payment_requests WHERE user_email = ? AND status = 'approved'`
-    ).bind(email).first();
-    const remainingTokens = remainRow?.bal ?? 0;
+    refund = () => accountRefund(env, acct, 'rune', 1);
+    const remainingTokens = await accountBalance(env, acct);
 
     const idx = Math.floor(Math.random() * RUNE_NAMES.length);
     const rune = RUNE_NAMES[idx];
@@ -5505,7 +5371,7 @@ async function handleRuneReading(request, env) {
       return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
     }
 
-    await saveFeatureHistory(env, email, 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
 
     return cors(JSON.stringify({ success:true, index: idx, name: rune.en, nameKo: rune.ko, upright, reading, remaining: remainingTokens }), 200);
   } catch(e) {
