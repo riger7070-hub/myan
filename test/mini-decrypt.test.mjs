@@ -73,6 +73,18 @@ test('암호문이 망가졌거나 너무 짧아도 null 이다', async () => {
   }
 });
 
+test('AAD 없이 암호화된 값은 키만으로 풀린다', async () => {
+  // 콘솔이 복호화 키만 주고 AAD 는 안 주는 경우가 있다. 그때는 AAD 가 빈 값으로
+  // 암호화된 것이라, TOSS_DECRYPT_AAD 를 등록하지 않아도 그대로 풀려야 한다.
+  const cipher = await encrypt('19900515', { aad: '' });
+  for (const env of [
+    { TOSS_DECRYPT_KEY: KEY_B64 },                        // 아예 미등록
+    { TOSS_DECRYPT_KEY: KEY_B64, TOSS_DECRYPT_AAD: '' },  // 빈 문자열로 등록
+  ]) {
+    assert.equal(await tossDecrypt(env, cipher), '19900515');
+  }
+});
+
 test('키를 교체하면 새 키로 푼다 (캐시가 옛 키를 붙들지 않는다)', async () => {
   // importKey 결과를 캐시하는데, 캐시를 키 값에 묶어두지 않으면 시크릿을 바꿔도
   // 옛 키를 계속 써서 "키를 갈았는데 복호화가 안 되는" 상태가 된다.
