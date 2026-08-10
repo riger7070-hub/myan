@@ -26,6 +26,20 @@ database_id = "ef511379-fa0b-45c7-b14e-6ccb842c719f"
 [version_metadata]
 binding = "CF_VERSION_METADATA"
 
+# ── 앱인토스 서버 API 용 mTLS 인증서 ──
+# 앱인토스 API 는 mTLS 가 필수라 일반 fetch 로는 호출할 수 없다.
+# 이 바인딩의 fetch() 만 클라이언트 인증서를 제시한다.
+#
+# 등록 절차(인증서를 발급받은 뒤 한 번만):
+#   wrangler mtls-certificate upload --cert toss.pem --key toss.key --name toss-apps-in-toss
+#   → 출력된 ID 를 아래 certificate_id 에 넣고 주석을 해제한다.
+#
+# 미설정 상태에서는 미니앱 로그인이 401 로 실패한다(_tossFetch 가 명시적으로 던짐).
+# 웹 서비스는 이 바인딩을 쓰지 않으므로 영향이 없다.
+# [[mtls_certificates]]
+# binding = "TOSS_MTLS"
+# certificate_id = "<wrangler mtls-certificate upload 가 출력한 ID>"
+
 # ── 일일 푸시 알림: 매일 오전 8시 KST = 23:00 UTC ──
 [triggers]
 # 0 23 UTC = 08:00 KST — 아침 푸시 + 정기결제 재청구

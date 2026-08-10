@@ -1307,6 +1307,38 @@ async function ensureDBExt(env) {
   //   );
   //   CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
 
+  // ── 앱인토스 미니앱 전용 ──
+  // 웹과 완전히 분리된 서비스다. 계정도 토큰도 서로 통하지 않는다.
+  // 웹은 구글 로그인(이메일이 키)이지만 미니앱은 토스 로그인이고, 토스는 이메일을 안 줄 수도
+  // 있어서(null 가능) 불변 식별값인 CI 를 키로 쓴다.
+  // 계산 로직(computeSaju·moonPhase·프롬프트)은 웹과 공유하되 데이터만 갈라 둔다.
+  await _execEach(env, `
+    CREATE TABLE IF NOT EXISTS mini_users (
+      ci            TEXT PRIMARY KEY,
+      name          TEXT,
+      birth_year    INTEGER,
+      birth_month   INTEGER,
+      birth_day     INTEGER,
+      birth_hour    TEXT,
+      gender        TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+      last_login_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      login_count   INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS mini_payment_requests (
+      id          TEXT    PRIMARY KEY,
+      user_ci     TEXT    NOT NULL,
+      pkg         TEXT    NOT NULL,
+      amount      INTEGER NOT NULL DEFAULT 0,
+      tokens      INTEGER NOT NULL DEFAULT 0,
+      status      TEXT    NOT NULL DEFAULT 'pending',
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+      approved_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_mpr_ci_status ON mini_payment_requests (user_ci, status);
+    CREATE INDEX IF NOT EXISTS idx_mpr_created ON mini_payment_requests (created_at DESC);
+  `, 'mini');
+
   // 아래는 이미 배포된 테이블에 컬럼을 덧붙이는 보정이라 위 배치와 분리한다.
   // 컬럼이 이미 있으면 매번 실패하는데(정상), _execEach 가 문장별로 처리하므로 다음 줄에 영향이 없다.
   await _execEach(env, `
@@ -1425,6 +1457,12 @@ export default {
     if (path === '/api/token-history' && method === 'GET') { await ensureDBExt(env); return handleTokenHistory(request, env); }
     // ── 로그인 기록 ──
     if (path === '/auth/login' && method === 'POST') { await ensureDBExt(env); return handleAuthLogin(request, env); }
+
+    // ── 앱인토스 미니앱 (/mini/*) — 웹과 계정·토큰이 완전히 분리된 별도 서비스 ──
+    if (path === '/mini/api/auth/login' && method === 'POST') { await ensureDBExt(env); return handleMiniAuthLogin(request, env); }
+    if (path === '/mini/api/me'         && method === 'GET')  { await ensureDBExt(env); return handleMiniMe(request, env); }
+    if (path === '/mini/api/profile'    && method === 'POST') { await ensureDBExt(env); return handleMiniSaveProfile(request, env); }
+    if (path === '/mini/api/tokens'     && method === 'GET')  { await ensureDBExt(env); return handleMiniTokens(request, env); }
     if (path === '/admin/users' && method === 'GET') { await ensureDBExt(env); return handleAdminUsers(request, env); }
     if (path === '/admin/usage' && method === 'GET') { await ensureDBExt(env); return handleAdminUsage(request, env); }
 
@@ -1575,7 +1613,14 @@ async function getEmailFromToken(idToken, env) {
     // 1-a) 자체 세션 토큰(HS256)이면 로컬 HMAC 검증으로 즉시 처리 (Google 호출 없음)
     try {
       const header = _objFromB64url(parts[0]);
-      if (header && header.alg === 'HS256') return await verifySessionToken(idToken, env);
+      if (header && header.alg === 'HS256') {
+        const subject = await verifySessionToken(idToken, env);
+        // 미니앱 세션('mini:<CI>')은 웹 사용자로 통과시키지 않는다.
+        // 그냥 두면 웹 원장(payment_requests.user_email)에 'mini:...' 행이 생겨
+        // 두 서비스의 계정·토큰이 섞인다. 미니앱은 getMiniCiFromRequest 로만 인증한다.
+        if (typeof subject === 'string' && subject.startsWith('mini:')) return null;
+        return subject;
+      }
     } catch {}
 
     let b64 = parts[1].replace(/-/g,'+').replace(/_/g,'/');
@@ -1595,6 +1640,180 @@ async function getEmailFromToken(idToken, env) {
 
     return info.email;
   } catch { return null; }
+}
+
+// ════════════════════════════════════════════
+//  앱인토스 미니앱 — 인증 (웹의 구글 로그인과 완전히 별개)
+// ════════════════════════════════════════════
+// 미니앱은 토스 앱 안의 웹뷰라 구글 OAuth 가 막힌다(2021-09-30 부터 임베디드 웹뷰 차단).
+// 대신 TossAuth.login() 이 주는 인가코드를 서버가 토스 API 로 교환·검증한다.
+//
+// ⚠️ 앱인토스 서버 API 는 mTLS 가 필수라 일반 fetch 로는 호출할 수 없다.
+// wrangler mtls-certificate 로 올린 인증서를 TOSS_MTLS 바인딩으로 받아 그쪽 fetch 를 쓴다.
+// 바인딩이 없으면(로컬·미설정) 호출을 시도하지 않고 명시적으로 실패시킨다 —
+// 조용히 일반 fetch 로 넘어가면 인증 없이 통과한 것처럼 보일 수 있다.
+const TOSS_API = 'https://apps-in-toss-api.toss.im/api-partner/v1/apps-in-toss';
+
+function _tossFetch(env, url, init) {
+  if (!env.TOSS_MTLS?.fetch) {
+    throw new Error('TOSS_MTLS 바인딩이 없습니다. mTLS 인증서를 등록해야 앱인토스 API를 호출할 수 있습니다.');
+  }
+  return env.TOSS_MTLS.fetch(url, init);
+}
+
+// 인가코드(10분·1회용) → accessToken(1시간) 교환 후, login-me 로 사용자 정보를 받는다.
+async function _tossExchangeAndFetchUser(env, authorizationCode, referrer) {
+  const tokenRes = await _tossFetch(env, `${TOSS_API}/user/oauth2/generate-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ authorizationCode, referrer: referrer === 'SANDBOX' ? 'SANDBOX' : 'DEFAULT' }),
+  });
+  if (!tokenRes.ok) throw new Error('토스 인가코드 교환에 실패했습니다.');
+  const tokens = await tokenRes.json();
+  const accessToken = tokens?.accessToken || tokens?.success?.accessToken;
+  if (!accessToken) throw new Error('토스 accessToken 을 받지 못했습니다.');
+
+  const meRes = await _tossFetch(env, `${TOSS_API}/user/oauth2/login-me`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!meRes.ok) throw new Error('토스 사용자 조회에 실패했습니다.');
+  const me = await meRes.json();
+  // 앱인토스 API 는 HTTP 200 이어도 resultType 으로 실패를 알린다. 반드시 확인할 것.
+  if (me?.resultType && me.resultType !== 'SUCCESS') throw new Error('토스 사용자 인증에 실패했습니다.');
+  return me?.success || me;
+}
+
+// 미니앱 로그인. 성공하면 웹과 같은 자체 세션 토큰을 발급하되 subject 는 CI 다.
+async function handleMiniAuthLogin(request, env) {
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  const { authorizationCode, referrer } = await request.json().catch(() => ({}));
+  if (!authorizationCode || typeof authorizationCode !== 'string') {
+    return cors(JSON.stringify({ error: { message: '인가코드가 필요합니다.' } }), 400);
+  }
+
+  let user;
+  try {
+    user = await _tossExchangeAndFetchUser(env, authorizationCode, referrer);
+  } catch (e) {
+    console.error('[MINI AUTH]', e?.message);
+    return cors(JSON.stringify({ error: { message: '토스 로그인에 실패했습니다.' } }), 401);
+  }
+
+  // CI 는 본인확인 기관의 불변 식별값이라 계정 키로 쓴다.
+  // 이메일은 토스가 안 줄 수도 있어(null) 키로 쓸 수 없다.
+  const ci = user?.ci || user?.userCi || user?.userKey;
+  if (!ci) return cors(JSON.stringify({ error: { message: '사용자 식별값을 받지 못했습니다. 동의 항목(CI)을 확인해 주세요.' } }), 400);
+
+  // 생일을 받았으면 사주 계산에 바로 쓴다. 사용자가 다시 입력할 필요가 없어진다.
+  const birth = _parseTossBirthday(user?.birthday || user?.birthDay);
+
+  try {
+    await env.DB.prepare(
+      `INSERT INTO mini_users (ci, name, birth_year, birth_month, birth_day, gender, login_count)
+       VALUES (?, ?, ?, ?, ?, ?, 1)
+       ON CONFLICT(ci) DO UPDATE SET
+         name = COALESCE(excluded.name, mini_users.name),
+         birth_year  = COALESCE(mini_users.birth_year,  excluded.birth_year),
+         birth_month = COALESCE(mini_users.birth_month, excluded.birth_month),
+         birth_day   = COALESCE(mini_users.birth_day,   excluded.birth_day),
+         gender      = COALESCE(mini_users.gender,      excluded.gender),
+         last_login_at = unixepoch(),
+         login_count = mini_users.login_count + 1`
+    ).bind(ci, user?.name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, user?.gender || null).run();
+  } catch (e) {
+    console.error('[MINI AUTH UPSERT]', e?.message);
+  }
+
+  const session = await createSessionToken(`mini:${ci}`, env);
+  const row = await env.DB.prepare(
+    `SELECT name, birth_year, birth_month, birth_day, birth_hour, gender FROM mini_users WHERE ci = ?`
+  ).bind(ci).first().catch(() => null);
+
+  return cors(JSON.stringify({
+    ok: true,
+    session,
+    exp: Math.floor(Date.now() / 1000) + SESSION_TTL,
+    profile: row ? {
+      name: row.name || '',
+      birthYear: row.birth_year || '', birthMonth: row.birth_month || '',
+      birthDay: row.birth_day || '', birthHour: row.birth_hour || '',
+      gender: row.gender || '',
+    } : null,
+  }), 200);
+}
+
+// 토스가 주는 생일 표기를 연·월·일로 나눈다. 'YYYYMMDD' / 'YYYY-MM-DD' 둘 다 받는다.
+function _parseTossBirthday(raw) {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const year = +digits.slice(0, 4), month = +digits.slice(4, 6), day = +digits.slice(6, 8);
+  if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
+}
+
+// 미니앱 요청의 사용자 CI 를 세션에서 꺼낸다. 웹 세션(구글)은 여기서 통과하지 못한다 —
+// subject 에 'mini:' 접두사가 있어야만 미니앱 사용자로 인정한다(서비스 분리 보장).
+async function getMiniCiFromRequest(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+  if (!token) return null;
+  const subject = await verifySessionToken(token, env).catch(() => null);
+  if (!subject || !subject.startsWith('mini:')) return null;
+  return subject.slice(5);
+}
+
+// 미니앱 잔액. 웹과 같은 append-only 원장 규칙을 쓰되 테이블이 다르다.
+async function _miniBalance(env, ci) {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(tokens), 0) AS bal FROM mini_payment_requests WHERE user_ci = ? AND status = 'approved'`
+  ).bind(ci).first();
+  return row?.bal ?? 0;
+}
+
+async function handleMiniMe(request, env) {
+  const ci = await getMiniCiFromRequest(request, env);
+  if (!ci) return cors(JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  const row = await env.DB.prepare(
+    `SELECT name, birth_year, birth_month, birth_day, birth_hour, gender FROM mini_users WHERE ci = ?`
+  ).bind(ci).first().catch(() => null);
+  return cors(JSON.stringify({
+    ok: true,
+    profile: {
+      name: row?.name || '',
+      birthYear: row?.birth_year || '', birthMonth: row?.birth_month || '',
+      birthDay: row?.birth_day || '', birthHour: row?.birth_hour || '',
+      gender: row?.gender || '',
+    },
+    tokens: await _miniBalance(env, ci),
+  }), 200);
+}
+
+// 토스가 생일을 안 줬거나 태어난 시각을 더 받아야 할 때 쓴다.
+async function handleMiniSaveProfile(request, env) {
+  const ci = await getMiniCiFromRequest(request, env);
+  if (!ci) return cors(JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  const b = await request.json().catch(() => ({}));
+  const y = b.birthYear ? parseInt(b.birthYear, 10) : null;
+  const m = b.birthMonth ? parseInt(b.birthMonth, 10) : null;
+  const d = b.birthDay ? parseInt(b.birthDay, 10) : null;
+  if (y !== null && (!Number.isInteger(y) || y < 1900 || y > new Date().getFullYear())) {
+    return cors(JSON.stringify({ error: { message: '생년을 확인해 주세요.' } }), 400);
+  }
+  try {
+    await env.DB.prepare(
+      `UPDATE mini_users SET birth_year = ?, birth_month = ?, birth_day = ?, birth_hour = ?, gender = ? WHERE ci = ?`
+    ).bind(y, m, d, b.birthHour || null, b.gender || null, ci).run();
+    return cors(JSON.stringify({ ok: true }), 200);
+  } catch {
+    return cors(JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
+  }
+}
+
+async function handleMiniTokens(request, env) {
+  const ci = await getMiniCiFromRequest(request, env);
+  if (!ci) return cors(JSON.stringify({ tokens: 0 }), 401);
+  return cors(JSON.stringify({ tokens: await _miniBalance(env, ci) }), 200);
 }
 
 // 로그인 기록: Google 토큰 검증 후 users upsert + login_events 기록 (로그인 직후 1회 호출)
