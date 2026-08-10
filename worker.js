@@ -1739,7 +1739,11 @@ async function handleMiniAuthLogin(request, env) {
          unlinked_at = NULL`
     ).bind(userKey, user?.name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, user?.gender || null).run();
   } catch (e) {
+    // 여기서 조용히 넘어가면 안 된다. 행이 없는 채로 세션만 나가면 로그인은 된 것처럼
+    // 보이는데 프로필 저장도 토큰 지급도 대상이 없어 전부 무효가 된다.
+    // (실제로 컬럼명을 바꾸기 전에 로그인한 사용자가 이 상태에 빠졌다.)
     console.error('[MINI AUTH UPSERT]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '로그인 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
   }
 
   const session = await createSessionToken(`mini:${userKey}`, env);
@@ -1818,11 +1822,30 @@ async function handleMiniSaveProfile(request, env) {
     return miniCors(request, JSON.stringify({ error: { message: '생년을 확인해 주세요.' } }), 400);
   }
   try {
-    await env.DB.prepare(
-      `UPDATE mini_users SET birth_year = ?, birth_month = ?, birth_day = ?, birth_hour = ?, gender = ? WHERE user_key = ?`
-    ).bind(y, m, d, b.birthHour || null, b.gender || null, userKey).run();
+    // UPDATE 가 아니라 UPSERT 다. 어떤 이유로든 로그인 때 행이 안 만들어졌으면
+    // UPDATE 는 0건을 고치고도 성공을 돌려줘서, 사용자에겐 "저장했다는데 안 남는"
+    // 상태로 보인다. 여기서 행을 만들어 스스로 복구한다.
+    //
+    // gender 는 이 화면에서 받지 않는다. ON CONFLICT 절에서 건드리지 않아야
+    // 토스 로그인으로 받아 둔 값을 덮어쓰지 않는다.
+    const r = await env.DB.prepare(
+      `INSERT INTO mini_users (user_key, name, birth_year, birth_month, birth_day, birth_hour, gender)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_key) DO UPDATE SET
+         name        = excluded.name,
+         birth_year  = excluded.birth_year,
+         birth_month = excluded.birth_month,
+         birth_day   = excluded.birth_day,
+         birth_hour  = excluded.birth_hour`
+    ).bind(userKey, b.name || null, y, m, d, b.birthHour || null, b.gender || null).run();
+
+    if ((r?.meta?.changes ?? 0) === 0) {
+      console.error('[MINI PROFILE] 아무 행도 바뀌지 않았다:', userKey);
+      return miniCors(request, JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
+    }
     return miniCors(request, JSON.stringify({ ok: true }), 200);
-  } catch {
+  } catch (e) {
+    console.error('[MINI PROFILE]', e?.message);
     return miniCors(request, JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
   }
 }
