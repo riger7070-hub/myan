@@ -91,8 +91,10 @@ async function boot() {
 
 async function recoverPendingOrders() {
   try {
-    for (const order of (await IAP.getPendingOrders()) || []) {
-      const orderId = order?.orderId || order?.id;
+    // 이것도 배열이 아니라 { orders: [...] } 로 온다.
+    const pending = (await IAP.getPendingOrders())?.orders || [];
+    for (const order of pending) {
+      const orderId = order?.orderId;
       if (!orderId) continue;
       const r = await api('/mini/api/payment/grant', { method: 'POST', body: { orderId } });
       if (r?.ok) {
@@ -279,12 +281,15 @@ async function loadHistory() {
  */
 async function loadProducts() {
   try {
-    const list = await IAP.getProductItemList();
-    state.catalog = (list || []).map(p => ({
-      sku: p.sku || p.productId || p.id,
-      label: p.name || p.title || p.sku,
-      price: p.price ?? p.amount,
-      known: PRODUCTS.some(k => k.sku === (p.sku || p.productId || p.id)),
+    // ⚠️ 배열이 아니라 { products: [...] } 로 온다. 배열로 착각해 .map 을 부르면
+    //    "map is not a function" 으로 죽는다(실제로 그랬다).
+    const res = await IAP.getProductItemList();
+    const products = res?.products || [];
+    state.catalog = products.map(p => ({
+      sku: p.sku,
+      label: p.displayName || p.sku,
+      price: p.displayAmount || '',
+      known: PRODUCTS.some(k => k.sku === p.sku),
     }));
     state.catalogError = state.catalog.length ? '' : '콘솔에 등록된 상품이 없습니다.';
   } catch (e) {
@@ -664,13 +669,11 @@ function render() {
         ${err}
         ${state.catalogError ? `<div class="card"><p class="err">${esc(state.catalogError)}</p>
           <p class="muted small">앱인토스 콘솔에서 인앱 상품을 먼저 등록해야 결제가 열립니다.</p></div>` : ''}
-        ${list.map(p => {
-          const tokens = PRODUCTS.find(k => k.sku === p.sku)?.tokens;
-          return `<button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
-            <span class="t-label">${esc(p.label)}${tokens ? ` · ${tokens}개` : ''}</span>
-            <span class="t-cost">${p.known === false ? '서버 미등록' : (p.price ? `${p.price}원` : '토스로 결제')}</span>
-          </button>`;
-        }).join('')}
+        ${list.map(p => `
+          <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
+            <span class="t-label">${esc(p.label)}</span>
+            <span class="t-cost">${p.known === false ? '서버 미등록' : esc(p.price || '토스로 결제')}</span>
+          </button>`).join('')}
         ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
           콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
         <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
