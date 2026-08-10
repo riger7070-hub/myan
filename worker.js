@@ -1470,6 +1470,7 @@ export default {
     if (path === '/mini/api/me'         && method === 'GET')  { await ensureDBExt(env); return handleMiniMe(request, env); }
     if (path === '/mini/api/profile'    && method === 'POST') { await ensureDBExt(env); return handleMiniSaveProfile(request, env); }
     if (path === '/mini/api/tokens'     && method === 'GET')  { await ensureDBExt(env); return handleMiniTokens(request, env); }
+    if (path === '/mini/api/payment/grant' && method === 'POST') { await ensureDBExt(env); return handleMiniPaymentGrant(request, env); }
     // 연결 끊기 콜백 — 토스 서버가 부른다. 콘솔에서 GET/POST 중 무엇을 고를지 모르니 둘 다 받는다.
     if (path === '/mini/api/auth/unlink' && (method === 'GET' || method === 'POST')) {
       await ensureDBExt(env); return handleMiniUnlink(request, env);
@@ -1892,6 +1893,129 @@ async function handleMiniUnlink(request, env) {
     return cors(JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
   }
   return cors(JSON.stringify({ ok: true }), 200);
+}
+
+// ════════════════════════════════════════════
+//  앱인토스 인앱결제(IAP)
+// ════════════════════════════════════════════
+// 클라이언트가 IAP.createOneTimePurchaseOrder() 로 결제하면 processProductGrant 콜백에서
+// 이 서버의 /mini/api/payment/grant 를 부른다. 서버는 orderId 를 토스에 **직접 물어**
+// 결제 사실을 확인한 뒤에만 토큰을 넣는다. 지급이 끝나면 클라이언트가
+// IAP.completeProductGrant 로 앱에 알린다.
+//
+// ⚠️ 클라이언트가 보낸 금액·수량은 절대 믿지 않는다. sku 만 받고 지급량은 아래 표에서 정한다.
+//    안 그러면 요청을 조작해 토큰을 원하는 만큼 받아갈 수 있다.
+//
+// ⚠️ SKU 문자열은 앱인토스 콘솔에 등록한 상품 ID 와 **정확히** 같아야 한다.
+//    콘솔에서 상품을 만든 뒤 이 표를 맞춰야 결제가 지급으로 이어진다.
+//    amount 는 기록용(공급가·VAT 제외)이고 실제 청구는 콘솔 설정을 따른다.
+const MINI_PRODUCTS = {
+  token_30:  { tokens: 30,  amount: 4900,  label: '토큰 30개' },
+  token_100: { tokens: 100, amount: 12900, label: '토큰 100개' },
+  token_300: { tokens: 300, amount: 29900, label: '토큰 300개' },
+};
+
+// 결제가 끝난 상태. PURCHASED 는 지급까지 끝난 상태, PAYMENT_COMPLETED 는 결제만 끝나고
+// 지급 대기인 상태다. 우리 입장에선 둘 다 "돈은 들어왔다"라서 지급 대상으로 본다.
+const TOSS_ORDER_PAID = new Set(['PURCHASED', 'PAYMENT_COMPLETED']);
+// 아직 진행 중 — 실패가 아니라 잠시 뒤 다시 물어보면 되는 상태다.
+const TOSS_ORDER_PENDING = new Set(['ORDER_IN_PROGRESS']);
+
+async function _tossOrderStatus(env, orderId) {
+  const res = await _tossFetch(env, `${TOSS_API}/order/get-order-status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId }),
+  });
+  if (!res.ok) throw new Error(`주문 조회 실패(${res.status})`);
+  const data = await res.json();
+  // HTTP 200 이어도 resultType 으로 실패를 알린다 — 반드시 확인할 것.
+  if (data?.resultType && data.resultType !== 'SUCCESS') throw new Error('주문 조회에 실패했습니다.');
+  return data?.success || data;
+}
+
+async function handleMiniPaymentGrant(request, env) {
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return cors(JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const { orderId } = await request.json().catch(() => ({}));
+  if (!orderId || typeof orderId !== 'string') {
+    return cors(JSON.stringify({ error: { message: '주문번호가 필요합니다.' } }), 400);
+  }
+
+  let order;
+  try {
+    order = await _tossOrderStatus(env, orderId);
+  } catch (e) {
+    console.error('[MINI IAP] 주문 조회 실패:', orderId, e?.message);
+    return cors(JSON.stringify({ error: { message: '결제 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 502);
+  }
+
+  const status = order?.status;
+  const sku = order?.sku?.id || order?.sku?.sku || order?.sku;
+
+  // 환불된 주문 — 이미 지급했다면 되돌린다. 원장은 append-only 라 음수 행을 하나 넣는다.
+  if (status === 'REFUNDED') {
+    await _miniRefundOrder(env, orderId, userKey);
+    return cors(JSON.stringify({ error: { message: '환불된 주문입니다.' } }), 409);
+  }
+  if (TOSS_ORDER_PENDING.has(status)) {
+    return cors(JSON.stringify({ error: { message: '결제가 진행 중입니다. 잠시 후 다시 확인해 주세요.' }, retry: true }), 202);
+  }
+  if (!TOSS_ORDER_PAID.has(status)) {
+    console.warn('[MINI IAP] 지급 대상이 아닌 상태:', orderId, status, order?.reason);
+    return cors(JSON.stringify({ error: { message: '완료되지 않은 결제입니다.' } }), 400);
+  }
+
+  const product = typeof sku === 'string' ? MINI_PRODUCTS[sku] : null;
+  if (!product) {
+    // 콘솔에만 상품을 추가하고 MINI_PRODUCTS 를 안 고치면 여기로 온다.
+    // 돈은 이미 받았으므로 조용히 넘기지 말고 반드시 로그를 남긴다.
+    console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, JSON.stringify(sku));
+    return cors(JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
+  }
+
+  // 같은 orderId 로 두 번 들어와도 한 번만 지급한다 — orderId 가 곧 기본키다.
+  // 클라이언트가 재시도하거나 getPendingOrders 로 복구할 때 실제로 두 번 온다.
+  let inserted = false;
+  try {
+    const r = await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, ?, ?, ?, 'approved', unixepoch())
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(orderId, userKey, sku, product.amount, product.tokens).run();
+    inserted = (r?.meta?.changes ?? 0) > 0;
+  } catch (e) {
+    console.error('[MINI IAP] 지급 기록 실패:', orderId, e?.message);
+    return cors(JSON.stringify({ error: { message: '지급 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
+  }
+
+  if (inserted) console.log('[MINI IAP] 지급 완료:', orderId, sku, product.tokens);
+  return cors(JSON.stringify({
+    ok: true,
+    granted: inserted,           // false = 이미 지급된 주문(재시도). 클라이언트는 둘 다 성공으로 처리하면 된다.
+    tokens: product.tokens,
+    balance: await _miniBalance(env, userKey),
+  }), 200);
+}
+
+// 환불 되돌림. 지급 행이 있을 때만 음수 행을 넣고, 그 음수 행도 id 로 중복을 막는다.
+async function _miniRefundOrder(env, orderId, userKey) {
+  try {
+    const paid = await env.DB.prepare(
+      `SELECT tokens, pkg FROM mini_payment_requests WHERE id = ? AND status = 'approved'`
+    ).bind(orderId).first();
+    if (!paid || paid.tokens <= 0) return;
+    const r = await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, ?, 0, ?, 'approved', unixepoch())
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`${orderId}:refund`, userKey, `${paid.pkg}:refund`, -paid.tokens).run();
+    if ((r?.meta?.changes ?? 0) > 0) console.log('[MINI IAP] 환불 반영:', orderId, -paid.tokens);
+  } catch (e) {
+    console.error('[MINI IAP] 환불 반영 실패:', orderId, e?.message);
+  }
 }
 
 // 로그인 기록: Google 토큰 검증 후 users upsert + login_events 기록 (로그인 직후 1회 호출)
