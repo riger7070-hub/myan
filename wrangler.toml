@@ -30,15 +30,17 @@ binding = "CF_VERSION_METADATA"
 # 앱인토스 API 는 mTLS 가 필수라 일반 fetch 로는 호출할 수 없다.
 # 이 바인딩의 fetch() 만 클라이언트 인증서를 제시한다.
 #
-# 등록 절차(인증서를 발급받은 뒤 한 번만):
-#   wrangler mtls-certificate upload --cert toss.pem --key toss.key --name toss-apps-in-toss
-#   → 출력된 ID 를 아래 certificate_id 에 넣고 주석을 해제한다.
+# 등록 완료 (2026-08-10): Toss appsintoss Root CA 발급, 2027-09-04 만료.
+#   wrangler mtls-certificate upload --cert <공개인증서> --key <개인키> --name toss-apps-in-toss
 #
-# 미설정 상태에서는 미니앱 로그인이 401 로 실패한다(_tossFetch 가 명시적으로 던짐).
+# ⚠️ 개인키(.key)는 저장소에 두지 말 것. 실제 키는 Cloudflare 가 보관하고
+#    여기 적힌 certificate_id 는 그 참조일 뿐이라 공개돼도 안전하다.
+# ⚠️ 2027-09-04 이전에 갱신해야 한다. 만료되면 미니앱 로그인·결제가 전부 멈춘다.
+#
 # 웹 서비스는 이 바인딩을 쓰지 않으므로 영향이 없다.
-# [[mtls_certificates]]
-# binding = "TOSS_MTLS"
-# certificate_id = "<wrangler mtls-certificate upload 가 출력한 ID>"
+[[mtls_certificates]]
+binding = "TOSS_MTLS"
+certificate_id = "6b215ad6-067b-47cb-a6de-f39b56870f2c"
 
 # ── 일일 푸시 알림: 매일 오전 8시 KST = 23:00 UTC ──
 [triggers]
