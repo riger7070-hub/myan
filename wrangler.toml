@@ -91,6 +91,13 @@ TOSS_CLIENT_KEY = "test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb"
 # wrangler secret put CAFE_STAFF_PIN
 # wrangler secret put PROMO_ADMIN_PIN
 # wrangler secret put MASTER_IP
+# wrangler secret put TOSS_UNLINK_AUTH
+#
+# ⚠️ TOSS_UNLINK_AUTH 는 앱인토스 콘솔 "연결 끊기 콜백"에 등록한 Basic Auth 헤더 값
+# **전체 문자열**입니다(예: "Basic dG9zcy11bmxpbms6..."). 토스가 탈퇴 통지를 보낼 때
+# 이 값으로 본인을 증명하고, 서버는 대조해서 통과시킵니다.
+# 설정 전까지 /mini/api/auth/unlink 는 항상 401 입니다 — userKey 만 알면 남의 계정을
+# 끊을 수 있는 엔드포인트라 폴백을 두지 않았습니다.
 #
 # ⚠️ 위 세 PIN 시크릿(UNGI_PIN/CAFE_STAFF_PIN/PROMO_ADMIN_PIN)은 하드코딩 폴백을
 # 제거했으므로, 설정 전까지 해당 PIN 인증 경로는 항상 거부됩니다(안전한 기본값).
