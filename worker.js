@@ -1064,6 +1064,80 @@ async function hmacVerify(secret, data, signature) {
 // (인메모리 속도 제한 checkRateLimit은 /chat 핸들러 전용이었어서 함께 제거.
 //  현재 속도 제한은 Cloudflare 분산 방식 cfRateLimit만 사용한다.)
 
+// ════════════════════════════
+//  계정 계층 — 웹(구글)과 미니앱(토스)을 한 코드로 다루기
+// ════════════════════════════
+// 유료 콘텐츠 핸들러는 원래 "이메일"만 알았다. 그래서 미니앱은 같은 콘텐츠를 하나도
+// 쓸 수 없었다. 여기서 "누가 요청했나"를 계정 한 겹으로 감싸, 핸들러가 웹인지 미니앱인지
+// 몰라도 되게 한다.
+//
+// ⚠️ 원장은 절대 섞이지 않는다. 웹은 payment_requests(user_email), 미니앱은
+//    mini_payment_requests(user_key) 로 물리적으로 다른 테이블을 쓴다. 두 서비스는
+//    계정도 토큰도 별개라는 계약이고, test/mini-isolation.test.mjs 가 이를 지킨다.
+//
+// 테이블·컬럼 이름은 아래 고정 표에서만 온다. 사용자 입력이 SQL 로 흘러들지 않는다.
+const _LEDGERS = {
+  web:  { table: 'payment_requests',      col: 'user_email' },
+  mini: { table: 'mini_payment_requests', col: 'user_key' },
+};
+
+/**
+ * 요청자를 계정으로 해석한다.
+ * @returns {{kind:'web'|'mini', key:string}|null} 인증 실패면 null
+ */
+async function resolveAccount(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+  if (!token) return null;
+  // 미니앱 세션('mini:<userKey>')을 먼저 본다. getEmailFromToken 은 이걸 이미 거르지만,
+  // 순서를 뒤집으면 나중에 그 차단이 느슨해졌을 때 미니 사용자가 웹 원장에 얹힌다.
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (userKey) return { kind: 'mini', key: userKey };
+  const email = await getEmailFromToken(token, env).catch(() => null);
+  if (email) return { kind: 'web', key: email };
+  return null;
+}
+
+/** 계정의 현재 잔액. */
+async function accountBalance(env, acct) {
+  const { table, col } = _LEDGERS[acct.kind];
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(tokens), 0) AS bal FROM ${table} WHERE ${col} = ? AND status = 'approved'`
+  ).bind(acct.key).first();
+  return row?.bal ?? 0;
+}
+
+/**
+ * 토큰을 차감한다. 잔액 조건을 INSERT 안에 넣은 한 문장이라, 동시에 들어온 두 요청이
+ * 같은 잔액을 보고 둘 다 통과하는 일이 없다.
+ * @returns {boolean} 잔액이 모자라면 false (이때는 아무것도 쓰이지 않는다)
+ */
+async function accountSpend(env, acct, feature, cost) {
+  const { table, col } = _LEDGERS[acct.kind];
+  const id = `${feature}_use_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO ${table} (id, ${col}, pkg, amount, tokens, status, approved_at)
+     SELECT ?, ?, ?, 0, ?, 'approved', unixepoch()
+      WHERE (SELECT COALESCE(SUM(tokens), 0) FROM ${table}
+              WHERE ${col} = ? AND status = 'approved') >= ?`
+  ).bind(id, acct.key, `${feature}_use`, -cost, acct.key, cost).run();
+  return (r?.meta?.changes ?? 0) > 0;
+}
+
+/** 차감해 놓고 결과를 못 준 경우 되돌린다. 차감할 때 쓴 값을 그대로 넘길 것. */
+async function accountRefund(env, acct, feature, cost) {
+  const { table, col } = _LEDGERS[acct.kind];
+  const id = `${feature}_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    await env.DB.prepare(
+      `INSERT INTO ${table} (id, ${col}, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, ?, 0, ?, 'approved', unixepoch())`
+    ).bind(id, acct.key, `${feature}_refund`, cost).run();
+  } catch (e) {
+    // 환불이 실패하면 사용자는 돈만 잃는다. 조용히 넘기지 말고 반드시 남긴다.
+    console.error('[REFUND FAILED]', acct.kind, feature, cost, e?.message);
+  }
+}
+
 // 유료 기능의 토큰 환불. 차감할 때 쓴 값을 그대로 넘겨야 환불이 원래 청구와 어긋나지 않는다.
 // 호출부는 차감 직후 refund 클로저를 만들어 두고, 실패 분기와 catch 양쪽에서 이걸 쓴다.
 async function refundTokens(env, email, feature, cost) {
