@@ -5,12 +5,12 @@
   "description": "M;Y 安 앱인토스 미니앱 (웹 서비스와 계정·토큰이 분리된 별도 서비스)",
   "type": "module",
   "scripts": {
-    "dev": "granite dev",
-    "build": "granite build",
+    "dev": "vite dev",
+    "build": "vite build && ait build",
     "deploy": "ait deploy"
   },
   "dependencies": {
-    "@apps-in-toss/web-framework": "^1"
+    "@apps-in-toss/web-framework": "^3.0.3"
   },
   "devDependencies": {
     "vite": "^6"
