@@ -1675,6 +1675,72 @@ function _tossFetch(env, url, init) {
   return env.TOSS_MTLS.fetch(url, init);
 }
 
+// ── 토스가 내려준 개인정보 복호화 ──
+// 이름·생년월일·성별·CI 는 평문이 아니라 AES-256-GCM 암호문으로 온다.
+// 규격: base64 로 디코드하면 [IV 12바이트][암호문][인증태그 16바이트] 이고,
+// 키와 AAD 는 콘솔의 "이메일로 복호화 키 받기" 로 받는다(키는 base64).
+//
+// WebCrypto 의 decrypt 는 태그가 암호문 뒤에 붙어 있는 형태를 그대로 받으므로
+// 앞 12바이트만 떼고 나머지를 통째로 넘기면 된다(태그를 따로 자르지 않는다).
+//
+// 키가 없으면 null 을 돌려준다 — 그 경우 사용자가 생년월일을 직접 입력하는 흐름으로 간다.
+const _TOSS_IV_BYTES = 12;
+
+function _b64ToBytes(b64) {
+  const bin = atob(String(b64).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// 요청마다 importKey 를 다시 하지 않도록 캐시하되, **키 값 자체를 캐시 키로 삼는다**.
+// 그냥 한 번만 만들어 두면 시크릿을 교체해도 옛 키를 계속 쓰게 된다.
+let _tossKeyCache = { secret: null, promise: null };
+function _tossDecryptKey(env) {
+  const secret = env.TOSS_DECRYPT_KEY;
+  if (!secret) return null;
+  if (_tossKeyCache.secret !== secret) {
+    _tossKeyCache = {
+      secret,
+      promise: crypto.subtle.importKey(
+        'raw', _b64ToBytes(secret), { name: 'AES-GCM' }, false, ['decrypt']
+      ),
+    };
+  }
+  return _tossKeyCache.promise;
+}
+
+/** 암호문 하나를 평문으로. 키가 없거나 복호화에 실패하면 null. */
+async function tossDecrypt(env, value) {
+  if (!value || typeof value !== 'string') return null;
+  const keyPromise = _tossDecryptKey(env);
+  if (!keyPromise) return null;
+  try {
+    const raw = _b64ToBytes(value);
+    if (raw.length <= _TOSS_IV_BYTES + 16) return null;   // IV + 태그도 안 되는 길이
+    const plain = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: raw.slice(0, _TOSS_IV_BYTES),
+        additionalData: new TextEncoder().encode(env.TOSS_DECRYPT_AAD || ''),
+        tagLength: 128,
+      },
+      await keyPromise,
+      raw.slice(_TOSS_IV_BYTES),   // 암호문 + 태그
+    );
+    return new TextDecoder().decode(plain);
+  } catch {
+    // 키·AAD 가 틀렸거나 값이 애초에 암호문이 아닌 경우다. 호출부가 원본으로 폴백한다.
+    return null;
+  }
+}
+
+/** 암호문이면 풀고, 못 풀면 원본을 그대로 쓴다(평문으로 내려오는 경우 대비). */
+async function _tossField(env, value) {
+  if (!value) return null;
+  return (await tossDecrypt(env, value)) ?? value;
+}
+
 // 인가코드(10분·1회용) → accessToken(1시간) 교환 후, login-me 로 사용자 정보를 받는다.
 async function _tossExchangeAndFetchUser(env, authorizationCode, referrer) {
   const tokenRes = await _tossFetch(env, `${TOSS_API}/user/oauth2/generate-token`, {
@@ -1724,10 +1790,14 @@ async function handleMiniAuthLogin(request, env) {
   const userKey = user?.userKey;
   if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '사용자 식별값(userKey)을 받지 못했습니다.' } }), 400);
 
-  // 생일을 받았으면 사주 계산에 바로 쓴다. 사용자가 다시 입력할 필요가 없어진다.
-  // ⚠️ birthday 는 개인정보라 암호화되어 올 수 있다. 복호화 키를 붙이기 전까지는
-  // 형식 검사(_parseTossBirthday)에서 걸러져 null 이 되고, 사용자가 직접 입력하게 된다.
-  const birth = _parseTossBirthday(user?.birthday || user?.birthDay);
+  // 이름·생일·성별은 암호문으로 온다. 키(TOSS_DECRYPT_KEY)가 등록돼 있으면 풀어서
+  // 바로 쓰고, 없으면 null 이 되어 사용자가 직접 입력하는 화면으로 넘어간다.
+  const [name, birthRaw, gender] = await Promise.all([
+    _tossField(env, user?.name),
+    _tossField(env, user?.birthday || user?.birthDay),
+    _tossField(env, user?.gender),
+  ]);
+  const birth = _parseTossBirthday(birthRaw);
 
   try {
     await env.DB.prepare(
@@ -1742,7 +1812,7 @@ async function handleMiniAuthLogin(request, env) {
          last_login_at = unixepoch(),
          login_count = mini_users.login_count + 1,
          unlinked_at = NULL`
-    ).bind(userKey, user?.name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, user?.gender || null).run();
+    ).bind(userKey, name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, gender || null).run();
   } catch (e) {
     // 여기서 조용히 넘어가면 안 된다. 행이 없는 채로 세션만 나가면 로그인은 된 것처럼
     // 보이는데 프로필 저장도 토큰 지급도 대상이 없어 전부 무효가 된다.
