@@ -1,0 +1,110 @@
+/* M;Y 安 미니앱 — 웹 서비스(css/style.css)와 같은 색을 쓰되, 토스 웹뷰 한 화면에 맞춰
+   따로 최소한만 작성한다. 웹 CSS 를 가져다 쓰면 안 쓰는 규칙까지 번들에 들어간다. */
+:root {
+  --bg: #060608;
+  --bg-soft: #12100c;
+  --gold: #c9a96e;
+  --gold-light: #e8d4a8;
+  --gold-dim: rgba(201, 169, 110, 0.35);
+  --text: #e9e4da;
+  --text-dim: rgba(233, 228, 218, 0.55);
+  --danger: #d98a7a;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  line-height: 1.7;
+  /* 노치·홈 인디케이터를 피한다. 토스 웹뷰는 전체 화면으로 뜬다. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+  min-height: 100vh;
+}
+
+#app { max-width: 520px; margin: 0 auto; padding: 24px 20px 40px; }
+
+/* ── 공통 ── */
+.boot { display: flex; justify-content: center; padding: 120px 0; }
+.spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid var(--gold-dim); border-top-color: var(--gold);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.brand { text-align: center; margin: 28px 0 8px; }
+.brand h1 {
+  font-family: 'Batang', 'Apple SD Gothic Neo', serif;
+  font-size: 2.4rem; font-weight: 400; letter-spacing: 0.02em;
+  background: linear-gradient(178deg, #f0dcb0, #c9a96e 62%, #a5854e);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.brand p { color: var(--text-dim); font-size: 0.86rem; margin-top: 6px; }
+
+h2 { font-size: 1.15rem; font-weight: 600; color: var(--gold-light); margin-bottom: 4px; }
+
+.card {
+  background: var(--bg-soft);
+  border: 1px solid rgba(201, 169, 110, 0.15);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+}
+
+.btn {
+  display: block; width: 100%;
+  padding: 15px 18px; border: none; border-radius: 12px;
+  font-size: 1rem; font-weight: 600; font-family: inherit;
+  background: linear-gradient(160deg, #d8b978, #a5854e);
+  color: #1a1408; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.ghost {
+  background: transparent; color: var(--gold);
+  border: 1px solid var(--gold-dim);
+}
+.btn + .btn { margin-top: 10px; }
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.muted { color: var(--text-dim); font-size: 0.84rem; }
+.err { color: var(--danger); font-size: 0.88rem; margin-top: 10px; }
+
+/* ── 잔액 ── */
+.balance { font-size: 1.6rem; color: var(--gold-light); font-weight: 600; }
+
+/* ── 메뉴 타일 ── */
+.tile { width: 100%; text-align: left; background: var(--bg-soft);
+  border: 1px solid rgba(201,169,110,0.15); border-radius: 16px;
+  padding: 18px 20px; margin-bottom: 12px; color: var(--text);
+  font-family: inherit; font-size: 1rem; cursor: pointer; }
+.tile strong { display: block; color: var(--gold-light); font-size: 1.05rem; margin-bottom: 3px; }
+.tile .cost { float: right; color: var(--gold); font-size: 0.82rem; }
+
+/* ── 입력 ── */
+label { display: block; font-size: 0.86rem; color: var(--text-dim); margin: 14px 0 6px; }
+input, select {
+  width: 100%; padding: 13px 14px;
+  background: #0d0b09; color: var(--text);
+  border: 1px solid rgba(201,169,110,0.22); border-radius: 10px;
+  font-size: 1rem; font-family: inherit;
+}
+.grid3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
+
+/* ── 결과 ── */
+.reading p { margin-bottom: 15px; }
+.reading p:last-child { margin-bottom: 0; }
+
+/* 생성형 AI 고지 — 심사 필수 항목이라 결과가 보이는 화면마다 함께 노출한다. */
+.ai-notice {
+  margin-top: 18px; padding: 12px 14px;
+  background: rgba(201,169,110,0.06);
+  border: 1px solid rgba(201,169,110,0.14);
+  border-radius: 10px;
+  color: var(--text-dim); font-size: 0.78rem; line-height: 1.6;
+}
+
+footer { margin-top: 26px; text-align: center; }
+footer .muted { font-size: 0.74rem; line-height: 1.8; }

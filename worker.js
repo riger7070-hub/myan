@@ -1370,7 +1370,7 @@ export default {
     const method = request.method;
 
     if (method === 'OPTIONS') {
-      return cors(null, 204);
+      return isMiniOrigin(request) ? miniCors(request, null, 204) : cors(null, 204);
     }
 
     await ensureDB(env);
@@ -1422,8 +1422,9 @@ export default {
     if (path === '/saju-reading' && method === 'POST') {
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       const { success } = await env.RL_API.limit({ key: `saju:${ip}` });
-      if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
-      return handleSajuReading(request, env);
+      if (!success) return withMiniOrigin(request, cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429));
+      // 무료·무인증이라 미니앱도 이 엔드포인트를 그대로 쓴다. 오리진만 맞춰 준다.
+      return withMiniOrigin(request, await handleSajuReading(request, env));
     }
     // ── 사주 기록 조회 ──
     if (path === '/api/saju-history' && method === 'GET') { await ensureDBExt(env); return handleGetSajuHistory(request, env); }
@@ -1471,6 +1472,7 @@ export default {
     if (path === '/mini/api/profile'    && method === 'POST') { await ensureDBExt(env); return handleMiniSaveProfile(request, env); }
     if (path === '/mini/api/tokens'     && method === 'GET')  { await ensureDBExt(env); return handleMiniTokens(request, env); }
     if (path === '/mini/api/payment/grant' && method === 'POST') { await ensureDBExt(env); return handleMiniPaymentGrant(request, env); }
+    if (path === '/mini/api/today'         && method === 'POST') { await ensureDBExt(env); return handleMiniDailyFortune(request, env); }
     // 연결 끊기 콜백 — 토스 서버가 부른다. 콘솔에서 GET/POST 중 무엇을 고를지 모르니 둘 다 받는다.
     if (path === '/mini/api/auth/unlink' && (method === 'GET' || method === 'POST')) {
       await ensureDBExt(env); return handleMiniUnlink(request, env);
@@ -1698,10 +1700,10 @@ async function _tossExchangeAndFetchUser(env, authorizationCode, referrer) {
 
 // 미니앱 로그인. 성공하면 웹과 같은 자체 세션 토큰을 발급하되 subject 는 'mini:<userKey>' 다.
 async function handleMiniAuthLogin(request, env) {
-  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
   const { authorizationCode, referrer } = await request.json().catch(() => ({}));
   if (!authorizationCode || typeof authorizationCode !== 'string') {
-    return cors(JSON.stringify({ error: { message: '인가코드가 필요합니다.' } }), 400);
+    return miniCors(request, JSON.stringify({ error: { message: '인가코드가 필요합니다.' } }), 400);
   }
 
   let user;
@@ -1709,13 +1711,13 @@ async function handleMiniAuthLogin(request, env) {
     user = await _tossExchangeAndFetchUser(env, authorizationCode, referrer);
   } catch (e) {
     console.error('[MINI AUTH]', e?.message);
-    return cors(JSON.stringify({ error: { message: '토스 로그인에 실패했습니다.' } }), 401);
+    return miniCors(request, JSON.stringify({ error: { message: '토스 로그인에 실패했습니다.' } }), 401);
   }
 
   // userKey 는 이 앱 전용 사용자 고유값이고 평문으로 내려온다 — 계정 키로 이걸 쓴다.
   // ci 는 암호화되어 있어 복호화 키 없이는 못 쓰고, 연결 끊기 콜백도 userKey 로 온다.
   const userKey = user?.userKey;
-  if (!userKey) return cors(JSON.stringify({ error: { message: '사용자 식별값(userKey)을 받지 못했습니다.' } }), 400);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '사용자 식별값(userKey)을 받지 못했습니다.' } }), 400);
 
   // 생일을 받았으면 사주 계산에 바로 쓴다. 사용자가 다시 입력할 필요가 없어진다.
   // ⚠️ birthday 는 개인정보라 암호화되어 올 수 있다. 복호화 키를 붙이기 전까지는
@@ -1745,7 +1747,7 @@ async function handleMiniAuthLogin(request, env) {
     `SELECT name, birth_year, birth_month, birth_day, birth_hour, gender FROM mini_users WHERE user_key = ?`
   ).bind(userKey).first().catch(() => null);
 
-  return cors(JSON.stringify({
+  return miniCors(request, JSON.stringify({
     ok: true,
     session,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL,
@@ -1788,11 +1790,11 @@ async function _miniBalance(env, userKey) {
 
 async function handleMiniMe(request, env) {
   const userKey = await getMiniUserKeyFromRequest(request, env);
-  if (!userKey) return cors(JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
   const row = await env.DB.prepare(
     `SELECT name, birth_year, birth_month, birth_day, birth_hour, gender FROM mini_users WHERE user_key = ?`
   ).bind(userKey).first().catch(() => null);
-  return cors(JSON.stringify({
+  return miniCors(request, JSON.stringify({
     ok: true,
     profile: {
       name: row?.name || '',
@@ -1807,28 +1809,28 @@ async function handleMiniMe(request, env) {
 // 토스가 생일을 안 줬거나 태어난 시각을 더 받아야 할 때 쓴다.
 async function handleMiniSaveProfile(request, env) {
   const userKey = await getMiniUserKeyFromRequest(request, env);
-  if (!userKey) return cors(JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
   const b = await request.json().catch(() => ({}));
   const y = b.birthYear ? parseInt(b.birthYear, 10) : null;
   const m = b.birthMonth ? parseInt(b.birthMonth, 10) : null;
   const d = b.birthDay ? parseInt(b.birthDay, 10) : null;
   if (y !== null && (!Number.isInteger(y) || y < 1900 || y > new Date().getFullYear())) {
-    return cors(JSON.stringify({ error: { message: '생년을 확인해 주세요.' } }), 400);
+    return miniCors(request, JSON.stringify({ error: { message: '생년을 확인해 주세요.' } }), 400);
   }
   try {
     await env.DB.prepare(
       `UPDATE mini_users SET birth_year = ?, birth_month = ?, birth_day = ?, birth_hour = ?, gender = ? WHERE user_key = ?`
     ).bind(y, m, d, b.birthHour || null, b.gender || null, userKey).run();
-    return cors(JSON.stringify({ ok: true }), 200);
+    return miniCors(request, JSON.stringify({ ok: true }), 200);
   } catch {
-    return cors(JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
+    return miniCors(request, JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
   }
 }
 
 async function handleMiniTokens(request, env) {
   const userKey = await getMiniUserKeyFromRequest(request, env);
-  if (!userKey) return cors(JSON.stringify({ tokens: 0 }), 401);
-  return cors(JSON.stringify({ tokens: await _miniBalance(env, userKey) }), 200);
+  if (!userKey) return miniCors(request, JSON.stringify({ tokens: 0 }), 401);
+  return miniCors(request, JSON.stringify({ tokens: await _miniBalance(env, userKey) }), 200);
 }
 
 // ── 연결 끊기(탈퇴) 콜백 ──
@@ -1856,10 +1858,10 @@ async function handleMiniUnlink(request, env) {
   const expected = env.TOSS_UNLINK_AUTH;
   if (!expected) {
     console.error('[MINI UNLINK] TOSS_UNLINK_AUTH 시크릿이 없어 콜백을 거부했다.');
-    return cors(JSON.stringify({ error: { message: 'unauthorized' } }), 401);
+    return miniCors(request, JSON.stringify({ error: { message: 'unauthorized' } }), 401);
   }
   if (!_timingSafeEqual(request.headers.get('Authorization'), expected)) {
-    return cors(JSON.stringify({ error: { message: 'unauthorized' } }), 401);
+    return miniCors(request, JSON.stringify({ error: { message: 'unauthorized' } }), 401);
   }
 
   // 토스는 GET 쿼리스트링 또는 POST JSON 둘 중 콘솔에서 고른 방식으로 보낸다. 둘 다 받는다.
@@ -1871,7 +1873,7 @@ async function handleMiniUnlink(request, env) {
     userKey = body?.userKey || userKey;
     referrer = body?.referrer || referrer;
   }
-  if (!userKey) return cors(JSON.stringify({ error: { message: 'userKey가 필요합니다.' } }), 400);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: 'userKey가 필요합니다.' } }), 400);
   if (referrer && !TOSS_UNLINK_REFERRERS.has(referrer)) {
     console.warn('[MINI UNLINK] 모르는 referrer:', referrer);
   }
@@ -1890,9 +1892,9 @@ async function handleMiniUnlink(request, env) {
     console.log('[MINI UNLINK] 연결 끊김:', referrer || 'UNKNOWN');
   } catch (e) {
     console.error('[MINI UNLINK]', e?.message);
-    return cors(JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
+    return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
   }
-  return cors(JSON.stringify({ ok: true }), 200);
+  return miniCors(request, JSON.stringify({ ok: true }), 200);
 }
 
 // ════════════════════════════════════════════
@@ -1935,13 +1937,13 @@ async function _tossOrderStatus(env, orderId) {
 }
 
 async function handleMiniPaymentGrant(request, env) {
-  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
   const userKey = await getMiniUserKeyFromRequest(request, env);
-  if (!userKey) return cors(JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
 
   const { orderId } = await request.json().catch(() => ({}));
   if (!orderId || typeof orderId !== 'string') {
-    return cors(JSON.stringify({ error: { message: '주문번호가 필요합니다.' } }), 400);
+    return miniCors(request, JSON.stringify({ error: { message: '주문번호가 필요합니다.' } }), 400);
   }
 
   let order;
@@ -1949,7 +1951,7 @@ async function handleMiniPaymentGrant(request, env) {
     order = await _tossOrderStatus(env, orderId);
   } catch (e) {
     console.error('[MINI IAP] 주문 조회 실패:', orderId, e?.message);
-    return cors(JSON.stringify({ error: { message: '결제 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 502);
+    return miniCors(request, JSON.stringify({ error: { message: '결제 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 502);
   }
 
   const status = order?.status;
@@ -1958,14 +1960,14 @@ async function handleMiniPaymentGrant(request, env) {
   // 환불된 주문 — 이미 지급했다면 되돌린다. 원장은 append-only 라 음수 행을 하나 넣는다.
   if (status === 'REFUNDED') {
     await _miniRefundOrder(env, orderId, userKey);
-    return cors(JSON.stringify({ error: { message: '환불된 주문입니다.' } }), 409);
+    return miniCors(request, JSON.stringify({ error: { message: '환불된 주문입니다.' } }), 409);
   }
   if (TOSS_ORDER_PENDING.has(status)) {
-    return cors(JSON.stringify({ error: { message: '결제가 진행 중입니다. 잠시 후 다시 확인해 주세요.' }, retry: true }), 202);
+    return miniCors(request, JSON.stringify({ error: { message: '결제가 진행 중입니다. 잠시 후 다시 확인해 주세요.' }, retry: true }), 202);
   }
   if (!TOSS_ORDER_PAID.has(status)) {
     console.warn('[MINI IAP] 지급 대상이 아닌 상태:', orderId, status, order?.reason);
-    return cors(JSON.stringify({ error: { message: '완료되지 않은 결제입니다.' } }), 400);
+    return miniCors(request, JSON.stringify({ error: { message: '완료되지 않은 결제입니다.' } }), 400);
   }
 
   const product = typeof sku === 'string' ? MINI_PRODUCTS[sku] : null;
@@ -1973,7 +1975,7 @@ async function handleMiniPaymentGrant(request, env) {
     // 콘솔에만 상품을 추가하고 MINI_PRODUCTS 를 안 고치면 여기로 온다.
     // 돈은 이미 받았으므로 조용히 넘기지 말고 반드시 로그를 남긴다.
     console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, JSON.stringify(sku));
-    return cors(JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
+    return miniCors(request, JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
   }
 
   // 같은 orderId 로 두 번 들어와도 한 번만 지급한다 — orderId 가 곧 기본키다.
@@ -1988,11 +1990,11 @@ async function handleMiniPaymentGrant(request, env) {
     inserted = (r?.meta?.changes ?? 0) > 0;
   } catch (e) {
     console.error('[MINI IAP] 지급 기록 실패:', orderId, e?.message);
-    return cors(JSON.stringify({ error: { message: '지급 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
+    return miniCors(request, JSON.stringify({ error: { message: '지급 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
   }
 
   if (inserted) console.log('[MINI IAP] 지급 완료:', orderId, sku, product.tokens);
-  return cors(JSON.stringify({
+  return miniCors(request, JSON.stringify({
     ok: true,
     granted: inserted,           // false = 이미 지급된 주문(재시도). 클라이언트는 둘 다 성공으로 처리하면 된다.
     tokens: product.tokens,
@@ -2015,6 +2017,107 @@ async function _miniRefundOrder(env, orderId, userKey) {
     if ((r?.meta?.changes ?? 0) > 0) console.log('[MINI IAP] 환불 반영:', orderId, -paid.tokens);
   } catch (e) {
     console.error('[MINI IAP] 환불 반영 실패:', orderId, e?.message);
+  }
+}
+
+// ── 미니앱 토큰 차감·환불 ──
+// 웹과 같은 append-only 규칙이다. 잔액을 읽고 나서 쓰는 2단계로 하면 동시 요청이
+// 같은 잔액을 보고 둘 다 통과한다. 조건을 INSERT 안에 넣어 한 문장으로 끝낸다.
+async function _miniSpend(env, userKey, feature, cost) {
+  const id = `spend:${feature}:${crypto.randomUUID()}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+     SELECT ?, ?, ?, 0, ?, 'approved', unixepoch()
+      WHERE (SELECT COALESCE(SUM(tokens), 0) FROM mini_payment_requests
+              WHERE user_key = ? AND status = 'approved') >= ?`
+  ).bind(id, userKey, feature, -cost, userKey, cost).run();
+  // changes = 0 이면 잔액이 모자라 아무것도 안 들어간 것이다.
+  return (r?.meta?.changes ?? 0) > 0 ? id : null;
+}
+
+// 차감해 놓고 결과를 못 준 경우 되돌린다. 이걸 빠뜨리면 사용자는 돈만 잃는다.
+async function _miniRefundSpend(env, spendId, userKey, cost) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'refund', 0, ?, 'approved', unixepoch())
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`${spendId}:refund`, userKey, cost).run();
+  } catch (e) {
+    console.error('[MINI REFUND]', spendId, e?.message);
+  }
+}
+
+// ── 미니앱 오늘의 운세 (유료 1토큰) ──
+const MINI_TODAY_COST = 1;
+
+async function handleMiniDailyFortune(request, env) {
+  if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const row = await env.DB.prepare(
+    `SELECT name, birth_year, birth_month, birth_day, birth_hour FROM mini_users WHERE user_key = ?`
+  ).bind(userKey).first().catch(() => null);
+  if (!row?.birth_year) {
+    return miniCors(request, JSON.stringify({ error: { message: '생년월일을 먼저 입력해 주세요.' } }), 400);
+  }
+
+  const saju = computeSaju(row.birth_year, row.birth_month, row.birth_day, row.birth_hour);
+  if (!saju) return miniCors(request, JSON.stringify({ error: { message: '사주 계산에 실패했습니다.' } }), 400);
+
+  // 먼저 차감한다. Gemini 를 부르고 나서 차감하면 그 사이에 여러 번 눌러 공짜로 볼 수 있다.
+  const spendId = await _miniSpend(env, userKey, 'today', MINI_TODAY_COST);
+  if (!spendId) {
+    return miniCors(request, JSON.stringify({ error: { message: '토큰이 부족합니다.', code: 'NO_TOKEN' } }), 402);
+  }
+
+  try {
+    const il = ilchin();
+    const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);   // KST 기준 날짜
+    const name = row.name ? `${row.name}님` : '그대';
+    const prompt = [
+      '너는 "안도령"이라는 이름의 다정하고 진중한 사주 해설가야.',
+      `오늘은 ${today}이고, 오늘의 일진 오행은 "${il.o}"야.`,
+      `상담자의 사주는 다음과 같아: ${saju.text}`,
+      `상담자를 "${name}"이라고 불러줘.`,
+      '',
+      '오늘 하루의 운세를 한국어로 풀어줘. 다음 순서로 이어지는 글로 써.',
+      '1) 오늘의 기운을 사주와 일진의 관계로 설명',
+      '2) 오늘 조심할 점 한 가지',
+      '3) 오늘 하면 좋은 일 한 가지',
+      '4) 마무리 응원 한 문장',
+      '',
+      '규칙: 별표(*)나 우물정자(#) 같은 기호를 쓰지 마. 긴 줄표도 쓰지 마.',
+      '소제목이나 번호를 붙이지 말고 자연스럽게 이어지는 문단으로 써.',
+      '전체 400자 내외로, 따뜻하지만 담백하게. 단정적인 예언 대신 조언하듯이 써.',
+    ].join('\n');
+
+    const reading = await geminiText(env, prompt, {
+      temperature: 0.9,
+      maxOutputTokens: 2048,
+      // 추론 토큰이 출력 예산을 다 먹어 본문이 잘리는 걸 막는다.
+      thinkingConfig: { thinkingBudget: 0 },
+    });
+
+    if (!reading) {
+      await _miniRefundSpend(env, spendId, userKey, MINI_TODAY_COST);
+      return miniCors(request, JSON.stringify({ error: { message: '운세를 불러오지 못했습니다. 토큰은 돌려드렸어요.' } }), 502);
+    }
+
+    return miniCors(request, JSON.stringify({
+      ok: true,
+      date: today,
+      dayElem: il.o,
+      saju: saju.text,
+      reading,
+      tokens: await _miniBalance(env, userKey),
+    }), 200);
+  } catch (e) {
+    // fetch 가 던지는 경우(연결 끊김·타임아웃)도 여기로 온다. 차감만 남으면 안 된다.
+    console.error('[MINI TODAY]', e?.message);
+    await _miniRefundSpend(env, spendId, userKey, MINI_TODAY_COST);
+    return miniCors(request, JSON.stringify({ error: { message: '오류가 발생했습니다. 토큰은 돌려드렸어요.' } }), 500);
   }
 }
 
@@ -2816,6 +2919,31 @@ function addSecurityHeaders(response) {
   ].join('; '));
 
   return new Response(response.body, { status: response.status, headers: h });
+}
+
+// 미니앱은 https://<appName>.web.tossmini.com 에서 돌아간다(샌드박스는 private-web).
+// 웹과 오리진이 달라서 cors() 의 고정 ACAO 로는 /mini/api 호출이 전부 브라우저에 막힌다.
+// 와일드카드('*')로 열지 않는 이유: Authorization 헤더를 실어 보내는 API 라서
+// 아무 사이트나 우리 API 를 호출하게 두면 안 된다. 정확히 토스 도메인만 허용한다.
+const MINI_ORIGIN_RE = /^https:\/\/[a-z0-9][a-z0-9-]*\.(web|private-web)\.tossmini\.com$/;
+
+function isMiniOrigin(request) {
+  return MINI_ORIGIN_RE.test(request.headers.get('Origin') || '');
+}
+
+/** 이미 만들어진 응답의 허용 오리진만 미니앱용으로 바꿔 준다(웹 응답은 그대로 통과). */
+function withMiniOrigin(request, res) {
+  if (!isMiniOrigin(request)) return res;
+  const out = new Response(res.body, res);
+  out.headers.set('Access-Control-Allow-Origin', request.headers.get('Origin'));
+  // 오리진마다 응답이 달라지므로 캐시가 섞이지 않게 알린다.
+  out.headers.set('Vary', 'Origin');
+  return out;
+}
+
+/** cors() 와 같되, 토스 미니앱 오리진이면 그 오리진을 허용으로 되돌려준다. */
+function miniCors(request, body, status = 200) {
+  return withMiniOrigin(request, cors(body, status));
 }
 
 function cors(body, status = 200) {
