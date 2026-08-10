@@ -173,7 +173,12 @@ function openItem(item) {
   runItem(item);
 }
 
+// 요청 세대. 뒤로가기로 로딩을 벗어난 뒤 응답이 도착하면 사용자를 결과 화면으로
+// 끌고 가 버린다. 세대가 바뀌었으면 그 응답은 조용히 버린다.
+let _runSeq = 0;
+
 async function runItem(item) {
+  const seq = ++_runSeq;
   state.item = item;
   state.screen = 'loading';
   state.error = '';
@@ -193,11 +198,16 @@ async function runItem(item) {
     else if (typeof data.tokens === 'number') state.tokens = data.tokens;
     else if (!item.free) refreshTokens();
 
+    // 사용자가 이미 뒤로 나갔으면(또는 다른 콘텐츠를 눌렀으면) 화면을 뺏지 않는다.
+    // 토큰은 이미 나갔지만 결과는 '지난 기록'에 남으므로 잃어버리지 않는다.
+    if (seq !== _runSeq || state.screen !== 'loading') return;
+
     state.result = { item, ...extractResult(data), card: data.card, upright: data.upright };
     // 카드를 뽑는 콘텐츠는 결과를 곧장 들이밀지 않는다. 뒤집는 순간이 재미의 절반이다.
     state.reveal = !!data.card;
     go('result');
   } catch (e) {
+    if (seq !== _runSeq || state.screen !== 'loading') return;
     if (e.status === 402) { state.error = '토큰이 부족해요.'; go('charge'); return; }
     state.error = e?.message || '오류가 발생했습니다.';
     if (e?.network && e.origin) state.error += `\n(요청 출처: ${e.origin})`;
@@ -402,7 +412,33 @@ async function withBusy(fn) {
   }
 }
 
-function go(screen) { state.screen = screen; render(); }
+// ── 화면 이동과 뒤로가기 ─────────────────────────────────────
+//
+// 토스 웹뷰에서 뒤로가기(제스처·하드웨어 버튼)는 브라우저 이력을 따라간다. 이력이
+// 하나도 없으면 그 뒤로가기가 곧 **앱 종료**다. 실제로 사주를 보는 도중에 뒤로가기를
+// 누르면 앱이 꺼졌다.
+//
+// 그래서 화면을 옮길 때마다 이력을 쌓고, popstate 에서 앱 안에서 되돌아간다.
+// 홈에서 다시 뒤로가면 그때는 이력이 바닥이라 앱이 닫힌다 — 그게 사용자가 기대하는 동작이다.
+//
+// 로딩 화면은 쌓지 않고 갈아 끼운다(replace). 결과를 기다리다 뒤로가면 로딩이 아니라
+// 그 앞 화면으로 돌아가야 자연스럽다.
+function go(screen, { fromPop = false } = {}) {
+  state.screen = screen;
+  if (!fromPop) {
+    const entry = { screen, at: Date.now() };
+    if (screen === 'loading' || history.state?.screen === screen) history.replaceState(entry, '');
+    else history.pushState(entry, '');
+  }
+  render();
+}
+
+window.addEventListener('popstate', (e) => {
+  const prev = e.state?.screen;
+  if (!prev) return;            // 이력 바닥 — 기본 동작(앱 종료)에 맡긴다
+  // 결과를 기다리는 중이었다면 그 요청은 그냥 버린다(runItem 이 화면을 확인하고 넘긴다).
+  go(prev, { fromPop: true });
+});
 
 // ── 화면 ──────────────────────────────────────────────────
 
@@ -541,6 +577,7 @@ function render() {
           <div class="spinner"></div>
           <p class="muted">${esc(state.loadingLine || LOADING_LINES[0])}</p>
           <p class="muted small">${esc(state.item?.label || '')}</p>
+          <p class="muted small" style="margin-top:14px">풀이는 지난 기록에도 저장돼요</p>
         </div>`;
       break;
 
