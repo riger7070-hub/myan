@@ -484,6 +484,11 @@ function render() {
           </button>
           ${err}
         </div>
+        ${state.profile?.birthYear ? `
+          <button class="btn ghost" id="btn-logout">로그아웃</button>
+          <p class="muted small" style="text-align:center;margin-top:10px">
+            토큰은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
+          </p>` : ''}
         ${FOOTER}`;
       break;
     }
@@ -698,6 +703,13 @@ function bind() {
   on('btn-home2', () => go('home'));
   on('btn-editprofile', () => go('profile'));
   on('btn-history', loadHistory);
+  on('btn-logout', () => {
+    // 세션만 지운다. 토큰과 기록은 서버의 계정(userKey)에 남아 있어서
+    // 다시 로그인하면 그대로 돌아온다.
+    localStorage.removeItem(SESSION_KEY);
+    Object.assign(state, { session: '', profile: null, tokens: 0, history: [], result: null, error: '' });
+    go('login');
+  });
   on('btn-share', shareCard);
   on('btn-reveal', (e) => {
     // 뒤집는 애니메이션이 끝난 뒤에 결과를 보여준다.
