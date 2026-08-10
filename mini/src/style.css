@@ -70,7 +70,8 @@ h2 { font-size: 1.15rem; font-weight: 600; color: var(--gold-light); margin-bott
 
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .muted { color: var(--text-dim); font-size: 0.84rem; }
-.err { color: var(--danger); font-size: 0.88rem; margin-top: 10px; }
+/* 오류 문구는 줄바꿈을 살린다 — 연결 실패 때 요청 출처를 아랫줄에 붙여 보여준다. */
+.err { color: var(--danger); font-size: 0.88rem; margin-top: 10px; white-space: pre-line; }
 
 /* ── 잔액 ── */
 .balance { font-size: 1.6rem; color: var(--gold-light); font-weight: 600; }

@@ -2921,14 +2921,26 @@ function addSecurityHeaders(response) {
   return new Response(response.body, { status: response.status, headers: h });
 }
 
-// 미니앱은 https://<appName>.web.tossmini.com 에서 돌아간다(샌드박스는 private-web).
-// 웹과 오리진이 달라서 cors() 의 고정 ACAO 로는 /mini/api 호출이 전부 브라우저에 막힌다.
+// 미니앱은 토스가 호스팅하는 도메인에서 돌아간다. 웹과 오리진이 달라서 cors() 의
+// 고정 ACAO 로는 /mini/api 호출이 전부 브라우저에 막힌다("Failed to fetch").
+//
+// 서브도메인 구성이 SDK 버전마다 다르다 — 3.x 는 <앱>.web / <앱>.private-web,
+// 1.x~2.x 는 <앱>.apps / <앱>.private-apps 다. 버전을 올리면 오리진이 통째로 바뀌므로
+// 특정 조합을 나열하지 않고 tossmini.com 아래 서브도메인 전체를 받는다.
+//
 // 와일드카드('*')로 열지 않는 이유: Authorization 헤더를 실어 보내는 API 라서
-// 아무 사이트나 우리 API 를 호출하게 두면 안 된다. 정확히 토스 도메인만 허용한다.
-const MINI_ORIGIN_RE = /^https:\/\/[a-z0-9][a-z0-9-]*\.(web|private-web)\.tossmini\.com$/;
+// 아무 사이트나 우리 API 를 호출하게 두면 안 된다. 토스 도메인으로는 묶어 둔다.
+const MINI_ORIGIN_RE = /^https:\/\/([a-z0-9][a-z0-9-]*\.)+tossmini\.com$/;
 
 function isMiniOrigin(request) {
-  return MINI_ORIGIN_RE.test(request.headers.get('Origin') || '');
+  const origin = request.headers.get('Origin') || '';
+  if (MINI_ORIGIN_RE.test(origin)) return true;
+  // 못 알아본 오리진은 남긴다. 미니앱이 "Failed to fetch" 로만 보일 때
+  // 실제로 어떤 오리진이 왔는지 알아야 원인을 찾을 수 있다.
+  if (origin && origin !== 'https://myan.riger7070.workers.dev') {
+    console.warn('[CORS] 허용 목록에 없는 오리진:', origin);
+  }
+  return false;
 }
 
 /** 이미 만들어진 응답의 허용 오리진만 미니앱용으로 바꿔 준다(웹 응답은 그대로 통과). */

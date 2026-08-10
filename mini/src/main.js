@@ -40,11 +40,22 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
   if (body) headers['Content-Type'] = 'application/json';
   if (auth && state.session) headers.Authorization = `Bearer ${state.session}`;
 
-  const res = await fetch(API + path, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(API + path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    // fetch 가 던지면 브라우저는 이유를 안 알려준다("Failed to fetch"). 원인은 대개
+    // CORS 아니면 네트워크인데, 서버가 허용해야 할 오리진이 SDK 버전마다 달라서
+    // 실제 오리진을 함께 보여줘야 어느 쪽인지 판단할 수 있다.
+    const err = new Error('서버에 연결하지 못했어요.');
+    err.network = true;
+    err.origin = location.origin;
+    throw err;
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data?.error?.message || '잠시 후 다시 시도해 주세요.');
@@ -197,6 +208,9 @@ async function withBusy(fn) {
     await fn();
   } catch (e) {
     state.error = e?.message || '오류가 발생했습니다.';
+    // 연결 자체가 안 된 경우엔 오리진을 함께 띄운다. 토스 웹뷰에는 개발자 도구가 없어서
+    // 화면에 찍어 주지 않으면 어떤 도메인에서 호출됐는지 알 방법이 없다.
+    if (e?.network && e.origin) state.error += `\n(요청 출처: ${e.origin})`;
   } finally {
     state.busy = false; render();
   }
