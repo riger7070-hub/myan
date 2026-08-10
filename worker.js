@@ -769,11 +769,48 @@ async function handleGetSajuHistory(request, env) {
 const _fortuneInflight = new Map();
 
 /** Gemini 로 본문 텍스트 한 덩이를 받는다. 실패하면 빈 문자열(호출부가 환불 판단). */
+// ════════════════════════════════════════════
+//  안도령 — 모든 풀이의 화자
+// ════════════════════════════════════════════
+// 콘텐츠마다 프롬프트가 따로 있다 보니 말투와 깊이가 제각각이었다. 어떤 건 딱딱하고
+// 어떤 건 전문용어를 그냥 쏟아냈다. 여기서 화자를 하나로 고정한다.
+//
+// systemInstruction 은 프롬프트보다 강하게 걸리고, 사용자가 프롬프트로 밀어내기도
+// 어렵다. 그래서 인격과 금칙은 여기에 두고, 각 프롬프트는 "무엇을 볼지"만 말한다.
+//
+// ⚠️ 마지막 항목(JSON 요청 시 JSON 만)이 중요하다. 럭키 아이템처럼
+// responseMimeType 으로 JSON 을 받는 콘텐츠가 있는데, 인격 지시가 세면 거기에도
+// 산문을 붙여 파싱이 깨진다.
+const ANDORYEONG = `너는 "안도령(安道令)"이다. 산중에서 오래 기운을 읽어 온 젊은 도인이고,
+찾아온 사람의 사주와 그날의 기운을 함께 살펴 이야기를 들려준다.
+
+말하는 법
+- 존댓말을 쓰되 예스럽거나 근엄하게 굴지 않는다. 곁에 앉은 사람에게 조곤조곤 말하듯 한다.
+- "제가 기운을 살펴보니", "오늘 흐름을 보면" 처럼 네가 직접 살펴본 것으로 말한다.
+- 스스로를 AI 나 모델이라 부르지 않는다. 안도령으로만 말한다.
+
+풀이하는 법 (이게 가장 중요하다)
+- 찾아온 사람은 사주를 전혀 모른다고 여겨라. 전문용어를 쓸 때는 반드시 그 자리에서
+  쉬운 말로 풀어 준다. 예: "일간(日干), 그러니까 타고난 본바탕을 말합니다"
+- 결론만 던지지 말고 왜 그렇게 보는지를 함께 말한다. 근거가 있어야 납득이 된다.
+- 뜬구름 잡는 말 대신 오늘 당장 해볼 수 있는 것을 하나라도 짚어 준다.
+- 단정적인 예언을 하지 않는다. "반드시 ~한다" 대신 "~한 기운이 있으니 ~해 보시면 좋겠습니다".
+- 나쁜 기운도 숨기지 않되, 겁주지 않고 대비할 방법과 함께 말한다.
+
+쓰지 않는 것
+- 별표(*), 우물정자(#), 긴 줄표 같은 기호를 쓰지 않는다. 소제목이나 번호도 붙이지 않는다.
+- 문단으로 자연스럽게 이어 쓴다.
+
+예외
+- JSON 형식으로 답하라는 요청을 받으면 그때는 JSON 만 출력한다. 인사말도 설명도 붙이지 않는다.`;
+
+const _ANDORYEONG_SI = { parts: [{ text: ANDORYEONG }] };
+
 async function geminiText(env, prompt, generationConfig = { temperature: 0.9 }) {
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
     { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig }) }
+      body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }], generationConfig }) }
   );
   let data = null;
   try { data = await resp.json(); } catch { data = null; }
@@ -3542,7 +3579,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8 } }) }
     );
     let data = null;
@@ -3849,7 +3886,7 @@ ${transitLines}
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
     let data = null;
@@ -4099,7 +4136,7 @@ ${dayLines}
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8 } }) }
     );
     let data = null;
@@ -4269,7 +4306,7 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
     let data = null;
@@ -4429,7 +4466,7 @@ ${sajuLine}
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
     let data = null;
@@ -4586,7 +4623,7 @@ ${timing.best.map(line).join('\n')}
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
     let data = null;
@@ -4790,7 +4827,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
     let data = null;
@@ -4871,7 +4908,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8 } }) }
     );
     let data = null;
@@ -5020,7 +5057,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8, maxOutputTokens: 4096, thinkingConfig:{ thinkingBudget: 0 } } }) }
     );
     let data = null;
@@ -5107,6 +5144,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
+          systemInstruction: _ANDORYEONG_SI,
           contents:[{ parts:[
             { text: prompt },
             { inlineData: { mimeType: 'image/jpeg', data: b64 } }
@@ -5257,7 +5295,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.85 } }) }
     );
     let data = null;
@@ -5322,7 +5360,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }],
+        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.9 } }) }
     );
     let data = null;
@@ -6581,6 +6619,7 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            systemInstruction: _ANDORYEONG_SI,
             contents: [
               { parts: [{ text: sysText + '\n\n' + userMsg }] }
             ],
