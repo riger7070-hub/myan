@@ -33,7 +33,10 @@ const DEFERRED_TABLES = new Set(['subscriptions']);
 
 test('DDL 배치를 소스에서 찾았다', () => {
   assert.ok(batches.length >= 2, `_execEach 배치를 ${batches.length}개만 찾았다`);
-  assert.deepEqual(batches.map(b => b.label).sort(), ['alter', 'core', 'ext']);
+  // 배치가 늘거나 줄면 여기서 걸린다. 의도한 변경이면 이 목록을 함께 고칠 것.
+  // mini: 앱인토스 미니앱 전용 테이블(mini_users / mini_payment_requests).
+  //       웹과 계정·토큰이 분리된 별도 서비스라 배치도 따로 둔다.
+  assert.deepEqual(batches.map(b => b.label).sort(), ['alter', 'core', 'ext', 'mini']);
 });
 
 test('모든 문장이 CREATE 또는 ALTER 로 시작한다 (쪼개기 검증)', () => {
