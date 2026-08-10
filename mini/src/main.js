@@ -9,8 +9,8 @@
 //
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
-import { appLogin, IAP } from '@apps-in-toss/web-framework';
-import { SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES } from './contents.js';
+import { appLogin, IAP, saveBase64Data } from '@apps-in-toss/web-framework';
+import { SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS } from './contents.js';
 
 const API = 'https://myan.riger7070.workers.dev';
 const SESSION_KEY = 'myan_mini_session';
@@ -158,7 +158,7 @@ function bodyFor(item, profile, form) {
     case 'topic':      return { ...base, topic: form.topic, birth };
     case 'typecompat': return { ...base, myType: form.myType, partnerType: form.partnerType };
     case 'photo':      return { ...base, type: form.photoType, image: form.image };
-    case 'takil':      return { ...base, purpose: form.purpose, birth, days: 30 };
+    case 'takil':      return { ...base, purpose: form.purpose, birth, from: form.from || '', days: form.days || 30 };
     case 'compat':
       return { ...base, p1: { ...birth, name: profile.name || '' }, p2: form.partner };
     default:           return base;
@@ -193,7 +193,9 @@ async function runItem(item) {
     else if (typeof data.tokens === 'number') state.tokens = data.tokens;
     else if (!item.free) refreshTokens();
 
-    state.result = { item, ...extractResult(data) };
+    state.result = { item, ...extractResult(data), card: data.card, upright: data.upright };
+    // 카드를 뽑는 콘텐츠는 결과를 곧장 들이밀지 않는다. 뒤집는 순간이 재미의 절반이다.
+    state.reveal = !!data.card;
     go('result');
   } catch (e) {
     if (e.status === 402) { state.error = '토큰이 부족해요.'; go('charge'); return; }
@@ -343,14 +345,47 @@ function shareCard() {
   x.font = '28px sans-serif';
   x.fillText('AI가 만든 참고용 콘텐츠입니다', W / 2, H - 80);
 
-  c.toBlob((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `myan-${r.item.id}.png`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, 'image/png');
+  // 토스 웹뷰에서는 <a download> 가 아무 일도 하지 않는다(다운로드가 막혀 있다).
+  // SDK 의 saveBase64Data 로 앨범에 저장해야 한다. 지원하지 않는 구버전 앱에서만
+  // 링크 방식으로 물러선다.
+  const base64 = c.toDataURL('image/png').split(',')[1];
+  const fileName = `myan-${r.item.id}.png`;
+  saveBase64Data({ data: base64, fileName, mimeType: 'image/png' })
+    .then(() => { state.toast = '앨범에 저장했어요.'; render(); })
+    .catch((e) => {
+      console.warn('[save]', e);
+      try {
+        const a = document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = fileName;
+        a.click();
+      } catch { /* 여기까지 실패하면 알려주는 수밖에 없다 */ }
+      state.toast = '저장하지 못했어요. 화면을 캡처해 주세요.';
+      render();
+    });
+}
+
+/**
+ * 사진을 긴 변 1280px, JPEG 로 줄인다.
+ * 요즘 휴대폰 사진은 5~12MB 라서 그대로 보내면 업로드도 오래 걸리고 서버에서도 막힌다.
+ * "다른 사진을 고르세요"라고 돌려보내는 대신 앱이 알아서 줄인다.
+ */
+function shrinkImage(file, maxSide = 1280, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', quality).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 열지 못했어요.')); };
+    img.src = url;
+  });
 }
 
 // ── 공통 ──────────────────────────────────────────────────
@@ -402,6 +437,9 @@ function header() {
 function render() {
   const err = state.error ? `<p class="err">${esc(state.error)}</p>` : '';
   let html;
+  // 한 번 보여준 안내는 다음 렌더에 남지 않는다.
+  const toast = state.toast ? `<div class="toast">${esc(state.toast)}</div>` : '';
+  state.toast = '';
 
   switch (state.screen) {
     case 'login':
@@ -434,8 +472,13 @@ function render() {
             <input id="f-m" type="number" inputmode="numeric" placeholder="5" value="${esc(p.birthMonth || '')}">
             <input id="f-d" type="number" inputmode="numeric" placeholder="15" value="${esc(p.birthDay || '')}">
           </div>
-          <label>태어난 시각 (선택)</label>
-          <input id="f-h" placeholder="예: 오전 9시" value="${esc(p.birthHour || '')}">
+          <label>태어난 시각</label>
+          <select id="f-h">${SIJI.map(([v, l]) =>
+            `<option value="${v}"${v === (p.birthHour || '') ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <label>성별</label>
+          <div class="seg">${GENDERS.map(g =>
+            `<button type="button" class="seg-btn${g.v === (p.gender || '') ? ' on' : ''}" data-gender="${g.v}">${g.label}</button>`).join('')}</div>
+          <p class="muted small">대운 풀이는 남녀에 따라 흐름이 반대로 갑니다.</p>
           <button class="btn" id="btn-save" style="margin-top:20px" ${state.busy ? 'disabled' : ''}>
             ${state.busy ? '저장 중…' : '저장하고 시작하기'}
           </button>
@@ -498,10 +541,26 @@ function render() {
 
     case 'result': {
       const r = state.result || {};
+      // 카드를 뽑았으면 먼저 뒷면만 보여주고, 눌러서 뒤집게 한다.
+      if (state.reveal) {
+        html = `${header()}
+          <div class="brand sm"><h1>${r.item.icon} ${esc(r.item.label)}</h1>
+            <p>카드를 눌러 뒤집어 보세요</p></div>
+          <div class="card-stage">
+            <button class="tarot" id="btn-reveal" aria-label="카드 뒤집기">
+              <span class="tarot-back">✦</span>
+            </button>
+          </div>`;
+        break;
+      }
       const paras = String(r.body || '').split(/\n{2,}|\n/).filter(Boolean)
         .map(t => `<p>${esc(t)}</p>`).join('');
       html = `${header()}
         <div class="brand sm"><h1>${r.item.icon} ${esc(r.item.label)}</h1></div>
+        ${r.card ? `<div class="card-stage"><div class="tarot flipped">
+            <span class="tarot-face">${esc(r.card.icon || '🔮')}<b>${esc(r.card.name || '')}</b>
+            ${r.upright === false ? '<i>역방향</i>' : '<i>정방향</i>'}</span>
+          </div></div>` : ''}
         ${r.extras?.length ? `<div class="card extras">${r.extras.map(e =>
           `<div class="row"><span class="muted">${esc(e.label)}</span><b>${esc(e.value)}</b></div>`).join('')}</div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>
@@ -545,7 +604,7 @@ function render() {
       html = `<div class="loading"><div class="spinner"></div></div>`;
   }
 
-  app.innerHTML = html;
+  app.innerHTML = toast + html;
   bind();
 }
 
@@ -565,9 +624,21 @@ function needForm(it) {
     case 'topic':
       return `<label>어떤 운이 궁금하세요?</label>
         <select id="f-topic">${sel(TOPICS, f.topic)}</select>`;
-    case 'purpose':
+    case 'purpose': {
+      // 언제부터 볼지 고르게 한다. 예전엔 오늘부터 30일로 고정이라
+      // "날 고르는 곳이 없다"는 말을 들었다.
+      const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);   // KST
+      const range = f.days || 30;
       return `<label>무엇을 위한 날인가요?</label>
-        <select id="f-purpose">${sel(PURPOSES, f.purpose)}</select>`;
+        <select id="f-purpose">${sel(PURPOSES, f.purpose)}</select>
+        <label>언제부터 찾을까요?</label>
+        <input id="f-from" type="date" value="${esc(f.from || today)}" min="${today}">
+        <label>얼마나 볼까요?</label>
+        <select id="f-days">
+          ${[[30, '앞으로 한 달'], [60, '앞으로 두 달'], [90, '앞으로 석 달']]
+            .map(([v, l]) => `<option value="${v}"${+range === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>`;
+    }
     case 'type':
       return `<label>나의 유형</label>
         <select id="f-my">${sel(OHAENG_TYPES, f.myType)}</select>
@@ -607,7 +678,7 @@ function collectForm(it) {
       return { name: n };
     }
     case 'topic':   return { topic: v('f-topic') };
-    case 'purpose': return { purpose: v('f-purpose') };
+    case 'purpose': return { purpose: v('f-purpose'), from: v('f-from'), days: +v('f-days') || 30 };
     case 'type':    return { myType: v('f-my'), partnerType: v('f-pt') };
     case 'partner': {
       const y = v('p-y'), m = v('p-m'), d = v('p-d');
@@ -628,13 +699,27 @@ function bind() {
   on('btn-editprofile', () => go('profile'));
   on('btn-history', loadHistory);
   on('btn-share', shareCard);
+  on('btn-reveal', (e) => {
+    // 뒤집는 애니메이션이 끝난 뒤에 결과를 보여준다.
+    const el = e.currentTarget;
+    el.classList.add('flipping');
+    setTimeout(() => { state.reveal = false; render(); }, 620);
+  });
+
+  // 성별은 선택 즉시 화면에 표시만 해 둔다(저장은 '저장하기'에서 한 번에).
+  for (const el of document.querySelectorAll('[data-gender]')) {
+    el.onclick = () => {
+      state.profile = { ...(state.profile || {}), gender: el.dataset.gender };
+      render();
+    };
+  }
 
   on('btn-save', () => {
     const v = (id) => document.getElementById(id)?.value.trim() || '';
     if (!v('f-y') || !v('f-m') || !v('f-d')) { state.error = '생년월일을 모두 입력해 주세요.'; render(); return; }
     saveProfile({
       name: v('f-name'), birthYear: v('f-y'), birthMonth: v('f-m'),
-      birthDay: v('f-d'), birthHour: v('f-h'),
+      birthDay: v('f-d'), birthHour: v('f-h'), gender: state.profile?.gender || '',
     });
   });
 
@@ -646,15 +731,10 @@ function bind() {
     if (it.need === 'photo') {
       const f = document.getElementById('f-photo')?.files?.[0];
       if (!f) { state.error = '사진을 선택해 주세요.'; render(); return; }
-      if (f.size > 4 * 1024 * 1024) { state.error = '사진이 너무 커요. 4MB 이하로 올려 주세요.'; render(); return; }
       form.photoType = document.getElementById('f-ptype')?.value || 'face';
-      form.image = await new Promise((res, rej) => {
-        const fr = new FileReader();
-        fr.onload = () => res(String(fr.result).split(',')[1]);
-        fr.onerror = rej;
-        fr.readAsDataURL(f);
-      }).catch(() => null);
-      if (!form.image) { state.error = '사진을 읽지 못했어요.'; render(); return; }
+      // 크다고 돌려보내지 않는다. 앱이 줄여서 보낸다.
+      form.image = await shrinkImage(f).catch(() => null);
+      if (!form.image) { state.error = '사진을 읽지 못했어요. 다른 사진으로 시도해 주세요.'; render(); return; }
     }
     state.form = form;
     runItem(it);

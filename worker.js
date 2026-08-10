@@ -1987,8 +1987,8 @@ async function handleMiniSaveProfile(request, env) {
     // UPDATE 는 0건을 고치고도 성공을 돌려줘서, 사용자에겐 "저장했다는데 안 남는"
     // 상태로 보인다. 여기서 행을 만들어 스스로 복구한다.
     //
-    // gender 는 이 화면에서 받지 않는다. ON CONFLICT 절에서 건드리지 않아야
-    // 토스 로그인으로 받아 둔 값을 덮어쓰지 않는다.
+    // gender 는 COALESCE 로 받는다. 값이 오면 반영하고, 안 오면 토스 로그인으로 받아 둔
+    // 값을 그대로 둔다 — 빈 값으로 덮어쓰면 대운이 순행·역행부터 뒤집힌다.
     const r = await env.DB.prepare(
       `INSERT INTO mini_users (user_key, name, birth_year, birth_month, birth_day, birth_hour, gender)
        VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1997,7 +1997,8 @@ async function handleMiniSaveProfile(request, env) {
          birth_year  = excluded.birth_year,
          birth_month = excluded.birth_month,
          birth_day   = excluded.birth_day,
-         birth_hour  = excluded.birth_hour`
+         birth_hour  = excluded.birth_hour,
+         gender      = COALESCE(excluded.gender, mini_users.gender)`
     ).bind(userKey, b.name || null, y, m, d, b.birthHour || null, b.gender || null).run();
 
     if ((r?.meta?.changes ?? 0) === 0) {

@@ -160,5 +160,51 @@ input[type=file] { padding: 11px; font-size: 0.88rem; }
   color: var(--text-dim); font-size: 0.78rem; line-height: 1.6;
 }
 
+/* ── 성별 선택 ── */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg-btn {
+  padding: 13px; border-radius: 10px; font-family: inherit; font-size: 0.97rem;
+  background: #0d0b09; color: var(--text-dim);
+  border: 1px solid rgba(201, 169, 110, 0.22); cursor: pointer;
+}
+.seg-btn.on {
+  background: rgba(201, 169, 110, 0.14); color: var(--gold-light);
+  border-color: var(--gold); font-weight: 600;
+}
+
+/* ── 타로 카드 ── */
+.card-stage { display: flex; justify-content: center; padding: 26px 0 22px; perspective: 1000px; }
+.tarot {
+  width: 172px; height: 268px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--gold-dim); font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #1c1710, #0d0b08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: transform 0.6s cubic-bezier(0.4, 0.1, 0.2, 1);
+  transform-style: preserve-3d;
+}
+.tarot-back { font-size: 2.6rem; color: var(--gold-dim); }
+/* 뒷면일 때는 살짝 떠 있게 해서 "누를 수 있다"는 느낌을 준다. */
+#btn-reveal { animation: hover 2.4s ease-in-out infinite; }
+@keyframes hover {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.tarot.flipping { animation: none; transform: rotateY(180deg) scale(1.04); }
+.tarot.flipped { cursor: default; background: linear-gradient(160deg, #221b10, #100d09); }
+.tarot-face {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  font-size: 3rem; color: var(--gold-light);
+}
+.tarot-face b { font-size: 1rem; font-weight: 600; }
+.tarot-face i { font-size: 0.8rem; font-style: normal; color: var(--text-dim); }
+
+/* ── 안내 토스트 ── */
+.toast {
+  background: rgba(201, 169, 110, 0.14); border: 1px solid var(--gold-dim);
+  color: var(--gold-light); border-radius: 10px;
+  padding: 11px 14px; margin-bottom: 12px; font-size: 0.88rem; text-align: center;
+}
+
 footer { margin-top: 24px; text-align: center; }
 footer .muted { font-size: 0.73rem; line-height: 1.9; }
