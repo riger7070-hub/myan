@@ -1,11 +1,12 @@
-/* M;Y 安 미니앱 — 웹 서비스(css/style.css)와 같은 색을 쓰되, 토스 웹뷰 한 화면에 맞춰
-   따로 최소한만 작성한다. 웹 CSS 를 가져다 쓰면 안 쓰는 규칙까지 번들에 들어간다. */
+/* M;Y 安 미니앱 — 웹(css/style.css)과 같은 색·질감을 쓰되, 토스 웹뷰 한 화면에 맞춰
+   필요한 규칙만 새로 쓴다. 웹 CSS 는 데스크톱 레이아웃까지 들어 있어 대부분이 잉여다. */
 :root {
   --bg: #060608;
   --bg-soft: #12100c;
   --gold: #c9a96e;
   --gold-light: #e8d4a8;
   --gold-dim: rgba(201, 169, 110, 0.35);
+  --line: rgba(201, 169, 110, 0.15);
   --text: #e9e4da;
   --text-dim: rgba(233, 228, 218, 0.55);
   --danger: #d98a7a;
@@ -14,98 +15,147 @@
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, #17120b 0%, transparent 60%),
+    var(--bg);
   color: var(--text);
   font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
-  line-height: 1.7;
+  line-height: 1.75;
   /* 노치·홈 인디케이터를 피한다. 토스 웹뷰는 전체 화면으로 뜬다. */
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
            env(safe-area-inset-bottom) env(safe-area-inset-left);
   min-height: 100vh;
 }
 
-#app { max-width: 520px; margin: 0 auto; padding: 24px 20px 40px; }
+#app { max-width: 520px; margin: 0 auto; padding: 16px 18px 44px; }
 
-/* ── 공통 ── */
-.boot { display: flex; justify-content: center; padding: 120px 0; }
+a { color: var(--gold-dim); }
+
+/* ── 상단바 ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 4px 0 18px;
+}
+.tb-back {
+  background: none; border: none; color: var(--gold); font-size: 1.7rem;
+  line-height: 1; padding: 4px 10px 8px; cursor: pointer;
+}
+.tb-title {
+  font-family: 'Batang', serif; font-size: 1.15rem; color: var(--gold-light);
+  letter-spacing: 0.03em;
+}
+.tb-token {
+  background: rgba(201, 169, 110, 0.1); border: 1px solid var(--gold-dim);
+  color: var(--gold-light); border-radius: 999px; padding: 7px 14px;
+  font-size: 0.84rem; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+
+/* ── 브랜드 ── */
+.brand { text-align: center; margin: 26px 0 20px; }
+.brand.sm { margin: 6px 0 18px; }
+.brand h1 {
+  font-family: 'Batang', 'Apple SD Gothic Neo', serif;
+  font-size: 2.3rem; font-weight: 400; letter-spacing: 0.02em; line-height: 1.3;
+  background: linear-gradient(178deg, #f0dcb0, #c9a96e 62%, #a5854e);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.brand.sm h1 { font-size: 1.5rem; }
+.brand p { color: var(--text-dim); font-size: 0.86rem; margin-top: 8px; }
+
+.hello { margin-bottom: 16px; }
+
+h2 { font-size: 1.12rem; font-weight: 600; color: var(--gold-light); margin-bottom: 6px; }
+
+/* ── 섹션 ── */
+.sec { margin-bottom: 26px; }
+.sec h3 {
+  font-size: 0.92rem; font-weight: 600; color: var(--gold);
+  letter-spacing: 0.04em; margin-bottom: 12px; display: flex; align-items: center; gap: 7px;
+}
+.sec h3 span { font-size: 1.05rem; }
+
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 15px;
+  padding: 16px 15px; color: var(--text); font-family: inherit; text-align: left;
+  cursor: pointer; min-height: 108px;
+}
+.tile:active { border-color: var(--gold-dim); }
+.tile.wide { flex-direction: row; align-items: center; justify-content: space-between;
+  min-height: 0; width: 100%; margin-bottom: 10px; }
+.t-icon { font-size: 1.5rem; line-height: 1.4; }
+.t-label { font-size: 0.97rem; color: var(--gold-light); font-weight: 500; }
+.t-cost { font-size: 0.78rem; color: var(--text-dim); margin-top: auto; }
+
+/* ── 카드 ── */
+.card {
+  background: var(--bg-soft); border: 1px solid var(--line);
+  border-radius: 16px; padding: 20px; margin-bottom: 14px;
+}
+.card.extras .row { padding: 5px 0; }
+.card.hist { padding: 16px 18px; }
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.muted { color: var(--text-dim); font-size: 0.85rem; }
+
+/* 오류 문구는 줄바꿈을 살린다 — 연결 실패 때 요청 출처를 아랫줄에 붙여 보여준다. */
+.err { color: var(--danger); font-size: 0.88rem; margin-top: 10px; white-space: pre-line; }
+
+/* ── 버튼 ── */
+.btn {
+  display: block; width: 100%; padding: 15px 18px; border: none; border-radius: 12px;
+  font-size: 1rem; font-weight: 600; font-family: inherit;
+  background: linear-gradient(160deg, #d8b978, #a5854e); color: #1a1408; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; }
+.btn.ghost { background: transparent; color: var(--gold); border: 1px solid var(--gold-dim); }
+
+/* ── 입력 ── */
+label { display: block; font-size: 0.85rem; color: var(--text-dim); margin: 14px 0 6px; }
+input, select, textarea {
+  width: 100%; padding: 13px 14px; background: #0d0b09; color: var(--text);
+  border: 1px solid rgba(201, 169, 110, 0.22); border-radius: 10px;
+  font-size: 1rem; font-family: inherit; line-height: 1.6;
+}
+textarea { resize: vertical; }
+input[type=file] { padding: 11px; font-size: 0.88rem; }
+.grid3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
+
+/* ── 로딩 ── */
+.loading { text-align: center; padding: 60px 0 80px; }
+.oracle {
+  width: 128px; height: 128px; margin-bottom: 22px;
+  /* 웹의 안도령과 같은 춤이되 폭을 줄여 차분하게. */
+  animation: oracleDance 2.6s ease-in-out infinite;
+}
+@keyframes oracleDance {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50%      { transform: translateY(-3px) rotate(1.5deg); }
+}
 .spinner {
-  width: 34px; height: 34px; border-radius: 50%;
+  width: 30px; height: 30px; margin: 0 auto 16px; border-radius: 50%;
   border: 2px solid var(--gold-dim); border-top-color: var(--gold);
   animation: spin 0.9s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.brand { text-align: center; margin: 28px 0 8px; }
-.brand h1 {
-  font-family: 'Batang', 'Apple SD Gothic Neo', serif;
-  font-size: 2.4rem; font-weight: 400; letter-spacing: 0.02em;
-  background: linear-gradient(178deg, #f0dcb0, #c9a96e 62%, #a5854e);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.brand p { color: var(--text-dim); font-size: 0.86rem; margin-top: 6px; }
-
-h2 { font-size: 1.15rem; font-weight: 600; color: var(--gold-light); margin-bottom: 4px; }
-
-.card {
-  background: var(--bg-soft);
-  border: 1px solid rgba(201, 169, 110, 0.15);
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 14px;
-}
-
-.btn {
-  display: block; width: 100%;
-  padding: 15px 18px; border: none; border-radius: 12px;
-  font-size: 1rem; font-weight: 600; font-family: inherit;
-  background: linear-gradient(160deg, #d8b978, #a5854e);
-  color: #1a1408; cursor: pointer;
-}
-.btn:disabled { opacity: 0.45; cursor: default; }
-.btn.ghost {
-  background: transparent; color: var(--gold);
-  border: 1px solid var(--gold-dim);
-}
-.btn + .btn { margin-top: 10px; }
-
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.muted { color: var(--text-dim); font-size: 0.84rem; }
-/* 오류 문구는 줄바꿈을 살린다 — 연결 실패 때 요청 출처를 아랫줄에 붙여 보여준다. */
-.err { color: var(--danger); font-size: 0.88rem; margin-top: 10px; white-space: pre-line; }
-
-/* ── 잔액 ── */
-.balance { font-size: 1.6rem; color: var(--gold-light); font-weight: 600; }
-
-/* ── 메뉴 타일 ── */
-.tile { width: 100%; text-align: left; background: var(--bg-soft);
-  border: 1px solid rgba(201,169,110,0.15); border-radius: 16px;
-  padding: 18px 20px; margin-bottom: 12px; color: var(--text);
-  font-family: inherit; font-size: 1rem; cursor: pointer; }
-.tile strong { display: block; color: var(--gold-light); font-size: 1.05rem; margin-bottom: 3px; }
-.tile .cost { float: right; color: var(--gold); font-size: 0.82rem; }
-
-/* ── 입력 ── */
-label { display: block; font-size: 0.86rem; color: var(--text-dim); margin: 14px 0 6px; }
-input, select {
-  width: 100%; padding: 13px 14px;
-  background: #0d0b09; color: var(--text);
-  border: 1px solid rgba(201,169,110,0.22); border-radius: 10px;
-  font-size: 1rem; font-family: inherit;
-}
-.grid3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
-
-/* ── 결과 ── */
-.reading p { margin-bottom: 15px; }
+/* ── 풀이 본문 ── */
+/* 위아래로 숨 쉴 여백을 준다. 빽빽하면 읽기가 힘들다(웹에서 같은 지적을 받았다). */
+.reading { padding: 24px 22px; }
+.reading p { margin: 0 0 15px; line-height: 1.9; }
 .reading p:last-child { margin-bottom: 0; }
 
 /* 생성형 AI 고지 — 심사 필수 항목이라 결과가 보이는 화면마다 함께 노출한다. */
 .ai-notice {
   margin-top: 18px; padding: 12px 14px;
-  background: rgba(201,169,110,0.06);
-  border: 1px solid rgba(201,169,110,0.14);
+  background: rgba(201, 169, 110, 0.06);
+  border: 1px solid rgba(201, 169, 110, 0.14);
   border-radius: 10px;
   color: var(--text-dim); font-size: 0.78rem; line-height: 1.6;
 }
 
-footer { margin-top: 26px; text-align: center; }
-footer .muted { font-size: 0.74rem; line-height: 1.8; }
+footer { margin-top: 24px; text-align: center; }
+footer .muted { font-size: 0.73rem; line-height: 1.9; }
