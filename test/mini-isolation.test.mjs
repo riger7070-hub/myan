@@ -20,11 +20,11 @@ import { loadWorker } from './load-worker.mjs';
 const {
   createSessionToken, verifySessionToken, getEmailFromToken,
   getMiniUserKeyFromRequest, _parseTossBirthday, _tossFetch,
-  handleMiniUnlink, _timingSafeEqual,
+  handleMiniUnlink, _timingSafeEqual, _normalizeGender,
 } = await loadWorker([
   'createSessionToken', 'verifySessionToken', 'getEmailFromToken',
   'getMiniUserKeyFromRequest', '_parseTossBirthday', '_tossFetch',
-  'handleMiniUnlink', '_timingSafeEqual',
+  'handleMiniUnlink', '_timingSafeEqual', '_normalizeGender',
 ]);
 
 const ENV = { SESSION_SECRET: 'mini-isolation-test-secret' };
@@ -161,6 +161,31 @@ test('상수 시간 비교가 길이·내용 차이를 모두 잡는다', () => 
   assert.equal(_timingSafeEqual('', ''), true);
   assert.equal(_timingSafeEqual(null, ''), true);          // 둘 다 빈 값
   assert.equal(_timingSafeEqual(null, 'x'), false);
+});
+
+// ── 계정 키가 갈리지 않게 ──
+
+test('숫자로 온 userKey 도 세션과 같은 문자열이 된다', async () => {
+  // 토스는 userKey 를 숫자로 준다. 그대로 bind 하면 SQLite 가 REAL 로 받아
+  // TEXT 컬럼에 '307515147.0' 으로 저장하는데, 세션 subject 는 `mini:${userKey}` 라
+  // '307515147' 이다. 그러면 로그인은 한 행에 쓰고 나머지 요청은 다른 행을 읽어
+  // 같은 사람이 두 계정으로 갈린다. 실제로 프로덕션에서 그 상태가 만들어졌다.
+  const numeric = 307515147;
+  const token = await createSessionToken(`mini:${numeric}`, ENV);
+  const fromSession = await getMiniUserKeyFromRequest(req(token), ENV);
+
+  assert.equal(fromSession, '307515147');
+  assert.equal(String(numeric), fromSession, '로그인이 저장할 키와 세션 키가 달라졌다');
+  assert.doesNotMatch(String(numeric), /\./, '키에 소수점이 들어갔다');
+});
+
+test('성별 표기를 M/F 로 맞춘다', () => {
+  // 토스는 MALE/FEMALE, 앱 폼은 M/F 를 보낸다. 대운은 남녀에 따라 순행·역행이
+  // 갈려서 여기가 어긋나면 풀이가 통째로 반대가 된다.
+  for (const v of ['MALE', 'male', 'M', '남', '남성']) assert.equal(_normalizeGender(v), 'M', v);
+  for (const v of ['FEMALE', 'female', 'F', '여', '여성']) assert.equal(_normalizeGender(v), 'F', v);
+  // 모르는 값은 틀린 성별로 계산하느니 비워 두고 사용자에게 받는다.
+  for (const v of ['', null, undefined, 'X', 'OTHER', 'U']) assert.equal(_normalizeGender(v), null, String(v));
 });
 
 test('mTLS 바인딩이 없으면 조용히 넘어가지 않고 던진다', () => {

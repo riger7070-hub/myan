@@ -1873,7 +1873,13 @@ async function handleMiniAuthLogin(request, env) {
 
   // userKey 는 이 앱 전용 사용자 고유값이고 평문으로 내려온다 — 계정 키로 이걸 쓴다.
   // ci 는 암호화되어 있어 복호화 키 없이는 못 쓰고, 연결 끊기 콜백도 userKey 로 온다.
-  const userKey = user?.userKey;
+  //
+  // ⚠️ String() 이 반드시 필요하다. 토스는 userKey 를 **숫자**로 내려주는데, 그대로
+  // bind 하면 SQLite 가 REAL 로 받아 TEXT 컬럼에 '307515147.0' 으로 저장한다.
+  // 반면 세션 subject 는 `mini:${userKey}` 라 문자열 '307515147' 이 된다.
+  // 그러면 로그인은 한 행에 쓰고 나머지 요청은 다른 행을 읽어, 같은 사람이 두 계정으로
+  // 갈린다 — 실제로 토스가 준 이름·생년월일이 로그인 행에만 들어가고 앱에는 안 보였다.
+  const userKey = user?.userKey == null ? null : String(user.userKey);
   if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '사용자 식별값(userKey)을 받지 못했습니다.' } }), 400);
 
   // 이름·생일·성별은 암호문으로 온다. 키(TOSS_DECRYPT_KEY)가 등록돼 있으면 풀어서
@@ -1884,6 +1890,9 @@ async function handleMiniAuthLogin(request, env) {
     _tossField(env, user?.gender),
   ]);
   const birth = _parseTossBirthday(birthRaw);
+  // 토스는 성별을 'MALE'/'FEMALE' 로 준다. 우리 사주 계산은 'M'/'F' 를 쓴다
+  // (대운은 남녀에 따라 순행·역행이 갈리므로 여기서 어긋나면 풀이가 반대로 나온다).
+  const genderCode = _normalizeGender(gender);
 
   try {
     await env.DB.prepare(
@@ -1898,7 +1907,7 @@ async function handleMiniAuthLogin(request, env) {
          last_login_at = unixepoch(),
          login_count = mini_users.login_count + 1,
          unlinked_at = NULL`
-    ).bind(userKey, name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, gender || null).run();
+    ).bind(userKey, name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, genderCode).run();
   } catch (e) {
     // 여기서 조용히 넘어가면 안 된다. 행이 없는 채로 세션만 나가면 로그인은 된 것처럼
     // 보이는데 프로필 저장도 토큰 지급도 대상이 없어 전부 무효가 된다.
@@ -1923,6 +1932,17 @@ async function handleMiniAuthLogin(request, env) {
       gender: row.gender || '',
     } : null,
   }), 200);
+}
+
+/**
+ * 성별 표기를 'M'/'F' 로 맞춘다. 토스는 'MALE'/'FEMALE', 앱 폼은 'M'/'F' 를 보낸다.
+ * 알 수 없으면 null — 잘못된 값으로 대운을 뒤집느니 비워 두고 사용자에게 받는다.
+ */
+function _normalizeGender(raw) {
+  const v = String(raw || '').trim().toUpperCase();
+  if (v === 'M' || v === 'MALE' || v === '남' || v === '남성') return 'M';
+  if (v === 'F' || v === 'FEMALE' || v === '여' || v === '여성') return 'F';
+  return null;
 }
 
 // 토스가 주는 생일 표기를 연·월·일로 나눈다. 'YYYYMMDD' / 'YYYY-MM-DD' 둘 다 받는다.
@@ -1999,7 +2019,7 @@ async function handleMiniSaveProfile(request, env) {
          birth_day   = excluded.birth_day,
          birth_hour  = excluded.birth_hour,
          gender      = COALESCE(excluded.gender, mini_users.gender)`
-    ).bind(userKey, b.name || null, y, m, d, b.birthHour || null, b.gender || null).run();
+    ).bind(userKey, b.name || null, y, m, d, b.birthHour || null, _normalizeGender(b.gender)).run();
 
     if ((r?.meta?.changes ?? 0) === 0) {
       console.error('[MINI PROFILE] 아무 행도 바뀌지 않았다:', userKey);
