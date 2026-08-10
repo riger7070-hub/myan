@@ -1714,6 +1714,11 @@ async function handleMiniAuthLogin(request, env) {
     return miniCors(request, JSON.stringify({ error: { message: '토스 로그인에 실패했습니다.' } }), 401);
   }
 
+  // 토스가 어떤 항목을 실제로 내려줬는지 남긴다. 동의 항목(스코프)을 콘솔에서 켰는지,
+  // 값이 암호화되어 오는지를 이거 없이는 알 수 없다.
+  // ⚠️ 값이 아니라 **필드 이름만** 찍는다. 값은 개인정보라 로그에 남기면 안 된다.
+  console.log('[MINI AUTH] 받은 항목:', Object.keys(user || {}).join(','));
+
   // userKey 는 이 앱 전용 사용자 고유값이고 평문으로 내려온다 — 계정 키로 이걸 쓴다.
   // ci 는 암호화되어 있어 복호화 키 없이는 못 쓰고, 연결 끊기 콜백도 userKey 로 온다.
   const userKey = user?.userKey;
