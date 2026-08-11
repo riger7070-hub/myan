@@ -3320,6 +3320,8 @@ function handlePrivacyPage() {
   <p><strong>Google LLC</strong> — 소셜 로그인 인증 (미국)</p>
   <p><strong>Google LLC (Gemini API)</strong> — AI 리딩 서비스 제공 (미국)</p>
 </div>
+<p style="margin-top:10px">AI 리딩에 사용된 입력값(생년월일, 사진 등)은 <strong>유료 등급 API</strong>로 처리되어
+Google의 모델 학습에 사용되지 않습니다. 회사는 이 목적 외로 해당 데이터를 이용하지 않습니다.</p>
 
 <h2>6. 이용자의 권리</h2>
 <ul>
