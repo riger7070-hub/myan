@@ -10,6 +10,11 @@ jobs:
     name: Deploy Worker
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 이 푸시가 mini/ 를 건드렸는지 봐야 한다(마지막 단계의 배포 안내). 기본 얕은 클론은
+          # github.event.before 커밋을 로컬에 두지 않아서, 여러 커밋을 한 번에 푸시하면 비교가
+          # 조용히 건너뛰어진다. 팩이 2MB 대라 전체를 받아도 부담이 없다.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -22,17 +27,21 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler@latest
 
-      # 아래 3단계는 배포 게이트다. 이 저장소엔 스테이징이 없고 main 푸시가 곧 배포라,
+      # 아래 4단계는 배포 게이트다. 이 저장소엔 스테이징이 없고 main 푸시가 곧 배포라,
       # 여기서 막지 못한 실수는 그대로 프로덕션에 나간다.
 
       # 프런트엔드(js/*.js, sw.js)는 번들 단계 없이 정적 자산으로 그대로 서빙된다.
       # 구문 오류 하나면 사이트가 통째로 죽으므로 파싱만이라도 확인한다.
+      # 미니앱 클라이언트(mini/src/*.js)는 아래 빌드 단계가 어차피 잡지만, 여기서 먼저 걸리면
+      # vite 를 띄우기 전에 파일명과 줄번호가 바로 나온다.
       - name: 구문 검사
         run: |
           node --check worker.js
           for f in js/*.js sw.js; do node --check "$f"; done
+          for f in mini/src/*.js; do node --check "$f"; done
 
       # 사주 4기둥 골든 · ilchin() 동기화 · 과거 버그 회귀 가드
+      # (미니앱 테스트도 여기 포함이라, 미니앱이 깨지면 이 단계에서 이미 배포가 멈춘다)
       - name: 테스트
         run: npm test
 
@@ -43,8 +52,65 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # 미니앱 클라이언트가 빌드되는지 확인한다. 이 워크플로가 이걸 **배포하지는 않지만**
+      # (ait deploy 는 토스 자격증명이 필요해 CI 에 두지 않았다), 빌드가 깨진 채로 머지되면
+      # 정작 배포하려는 순간에야 알게 되고 그때는 워커만 이미 나가 있다.
+      #
+      # npm run build = vite build && ait build 로, 운영자가 실제로 돌리는 명령 그대로다.
+      # ait build 가 따로 있어야 하는 이유: apps-in-toss.config.ts 의 webBundleDir 가 vite 의
+      # outDir 와 어긋나면 vite 는 멀쩡히 끝나고 ait 만 실패한다. 자격증명 없이도 .ait 까지
+      # 묶이므로 CI 에서 여기까지 검증할 수 있다.
+      #
+      # 미니앱 빌드 실패가 워커 배포를 막는 것은 의도다 — 위 '테스트' 단계가 이미 같은 방식으로
+      # 묶여 있다. 워커 수정만 급히 내보내야 하면 미니앱 변경을 되돌리고 푸시할 것.
+      - name: 미니앱 빌드 검증
+        working-directory: mini
+        run: |
+          npm ci
+          npm run build
+
       - name: Deploy to Cloudflare Workers
         run: wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # 워커(= 미니앱 백엔드)는 위에서 나갔지만 미니앱 클라이언트는 아니다. mini/ 를 고친 채
+      # 워커만 배포되면 /mini/api/* 계약이 어긋난 구간이 생기므로, 바뀐 경우 요약에 남긴다.
+      # (스토어에 올리는 일이라 자동화하지 않는다 — 언제 내보낼지는 사람이 정할 일이다.)
+      - name: 미니앱 배포 필요 여부
+        run: |
+          BEFORE='${{ github.event.before }}'
+          ZERO='0000000000000000000000000000000000000000'
+          CHANGED=''
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "$ZERO" ] \
+             && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            CHANGED=$(git diff --name-only "$BEFORE" '${{ github.sha }}' -- mini/)
+          else
+            # 비교 기준이 없다(브랜치 첫 푸시·강제 푸시). 안 바뀌었다고 단정하지 않는다.
+            CHANGED='(이전 커밋을 찾을 수 없어 확인하지 못했습니다)'
+          fi
+
+          if [ -z "$CHANGED" ]; then
+            echo '### 미니앱: `mini/` 변경 없음 — 클라이언트 재배포 불필요' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo '## ⚠️ 미니앱 클라이언트는 직접 배포해야 합니다'
+            echo
+            echo '이 푸시가 `mini/` 를 건드렸습니다. 이 워크플로는 워커(미니앱 백엔드)만 배포합니다.'
+            echo '`/mini/api/*` 계약을 바꿨다면, 클라이언트를 올리기 전까지 앱에서는 옛 번들이 새 서버를 부릅니다.'
+            echo
+            echo '```bash'
+            echo 'cd mini && npm ci && npm run build && npm run deploy'
+            echo '```'
+            echo
+            echo '<details><summary>바뀐 파일</summary>'
+            echo
+            echo '```'
+            echo "$CHANGED"
+            echo '```'
+            echo
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
