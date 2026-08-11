@@ -9,7 +9,9 @@
 //
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
-import { appLogin, IAP, saveBase64Data, getTossShareLink, share } from '@apps-in-toss/web-framework';
+import {
+  appLogin, IAP, saveBase64Data, getTossShareLink, share, GoogleAdMob,
+} from '@apps-in-toss/web-framework';
 import { SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS } from './contents.js';
 
 const API = 'https://myan.riger7070.workers.dev';
@@ -24,6 +26,11 @@ const PRODUCTS = [
 ];
 
 const SHARE_TOKENS = 3;
+const AD_TOKENS = 1;
+
+// ⚠️ 앱인토스 콘솔에서 발급받은 광고 단위 ID. 등록 전에는 광고가 열리지 않는다.
+// 값이 비어 있으면 버튼 자체를 숨긴다 — 눌러도 실패하는 버튼을 보여주지 않는다.
+const AD_UNIT_ID = '';
 
 const state = {
   screen: 'boot',
@@ -361,6 +368,52 @@ async function shareApp() {
   });
 }
 
+// ── 광고 보고 토큰 받기 ─────────────────────────────────────
+//
+// 보상은 SDK 가 'userEarnedReward' 를 보낼 때만 준다. 광고를 닫기만 한 경우
+// (dismissed)에는 주지 않는다 — 그렇게 하면 광고를 띄우고 바로 닫아도 토큰이 나온다.
+// 하루 상한은 서버가 쥐고 있어서 클라이언트를 고쳐도 넘길 수 없다.
+async function watchAd() {
+  if (!AD_UNIT_ID) { state.toast = '광고가 아직 준비되지 않았어요.'; render(); return; }
+  state.busy = true; state.error = ''; render();
+
+  let rewarded = false;
+  const finish = async () => {
+    state.busy = false;
+    if (!rewarded) { render(); return; }
+    try {
+      const r = await api('/mini/api/ad-reward', { method: 'POST', body: {} });
+      state.tokens = r.balance ?? state.tokens;
+      state.toast = r.message || '';
+    } catch (e) {
+      state.error = e?.message || '보상 지급에 실패했어요.';
+    }
+    render();
+  };
+
+  try {
+    await new Promise((resolve, reject) => {
+      GoogleAdMob.loadAppsInTossAdMob({
+        options: { adUnitId: AD_UNIT_ID },
+        onEvent: (e) => { if (e?.type === 'loaded') resolve(); },
+        onError: reject,
+      });
+    });
+    GoogleAdMob.showAppsInTossAdMob({
+      options: { adUnitId: AD_UNIT_ID },
+      onEvent: (e) => {
+        if (e?.type === 'userEarnedReward') rewarded = true;
+        if (e?.type === 'dismissed' || e?.type === 'failedToShow') finish();
+      },
+      onError: () => finish(),
+    });
+  } catch (e) {
+    state.busy = false;
+    state.error = `광고를 불러오지 못했어요. (${e?.message || e})`;
+    render();
+  }
+}
+
 // ── 공유 카드 ──────────────────────────────────────────────
 
 function shareCard() {
@@ -608,7 +661,11 @@ function render() {
         <button class="btn" id="btn-shareapp" ${state.busy ? 'disabled' : ''}>
           친구에게 알리고 토큰 ${SHARE_TOKENS}개 받기
         </button>
-        <p class="muted small" style="text-align:center;margin:8px 0 16px">하루 한 번 받을 수 있어요</p>
+        <p class="muted small" style="text-align:center;margin:8px 0 12px">일주일에 한 번 받을 수 있어요</p>
+        ${AD_UNIT_ID ? `<button class="btn ghost" id="btn-ad" ${state.busy ? 'disabled' : ''}>
+          광고 보고 토큰 ${AD_TOKENS}개 받기
+        </button>
+        <p class="muted small" style="text-align:center;margin:8px 0 16px">하루 5번까지</p>` : ''}
         <div class="row2">
           <button class="btn ghost" id="btn-history">지난 기록</button>
           <button class="btn ghost" id="btn-editprofile">내 정보</button>
@@ -820,6 +877,7 @@ function bind() {
   });
   on('btn-share', shareCard);
   on('btn-shareapp', shareApp);
+  on('btn-ad', watchAd);
   on('btn-reveal', (e) => {
     // 뒤집는 애니메이션이 끝난 뒤에 결과를 보여준다.
     const el = e.currentTarget;

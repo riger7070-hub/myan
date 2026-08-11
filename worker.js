@@ -1597,6 +1597,7 @@ export default {
     if (path === '/mini/api/payment/grant' && method === 'POST') { await ensureDBExt(env); return handleMiniPaymentGrant(request, env); }
     if (path === '/mini/api/today'         && method === 'POST') { await ensureDBExt(env); return handleMiniDailyFortune(request, env); }
     if (path === '/mini/api/share-bonus'   && method === 'POST') { await ensureDBExt(env); return handleMiniShareBonus(request, env); }
+    if (path === '/mini/api/ad-reward'     && method === 'POST') { await ensureDBExt(env); return handleMiniAdReward(request, env); }
     // 연결 끊기 콜백 — 토스 서버가 부른다. 콘솔에서 GET/POST 중 무엇을 고를지 모르니 둘 다 받는다.
     if (path === '/mini/api/auth/unlink' && (method === 'GET' || method === 'POST')) {
       await ensureDBExt(env); return handleMiniUnlink(request, env);
@@ -2301,7 +2302,29 @@ async function _miniRefundSpend(env, spendId, userKey, cost) {
 // 둘 다 원장에 행을 하나 넣는 것이고, **행 id 자체가 중복 방지 장치**다.
 // 별도 플래그 테이블이나 조회-후-쓰기가 없으므로 동시에 두 번 눌러도 한 번만 들어간다.
 const MINI_SIGNUP_TOKENS = 3;   // 첫 로그인 1회
-const MINI_SHARE_TOKENS  = 3;   // 공유 시, 하루 1회
+const MINI_SHARE_TOKENS  = 3;   // 공유 시, 주 1회
+const MINI_AD_TOKENS     = 1;   // 광고 1편당
+const MINI_AD_DAILY_MAX  = 5;   // 하루 광고 보상 횟수 상한
+
+/** KST 기준 오늘 날짜(YYYY-MM-DD). */
+function _kstToday(now = Date.now()) {
+  return new Date(now + 9 * 3600000).toISOString().slice(0, 10);
+}
+
+/**
+ * KST 기준 ISO 주차 키(예: '2026-W33').
+ * 공유 보너스를 주 1회로 묶는 데 쓴다. 단순히 날짜를 7로 나누면 해가 바뀔 때
+ * 주가 겹치거나 건너뛴다.
+ */
+function _kstWeek(now = Date.now()) {
+  const d = new Date(now + 9 * 3600000);
+  d.setUTCHours(0, 0, 0, 0);
+  // ISO 주는 목요일이 속한 해를 그 주의 해로 본다.
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
 
 /** 첫 로그인 지급. id 가 'signup:<userKey>' 라 두 번째부터는 조용히 무시된다. */
 async function _miniGrantSignup(env, userKey) {
@@ -2318,30 +2341,69 @@ async function _miniGrantSignup(env, userKey) {
   }
 }
 
-// 공유 보너스. 하루 한 번만 받을 수 있게 id 에 날짜를 넣는다(KST 기준).
+// 공유 보너스. 주 한 번만 받을 수 있게 id 에 주차를 넣는다(KST 기준).
+// 하루 1회로 두면 매일 3개씩 받아 쓰는 사람이 영영 결제를 안 하게 된다.
 async function handleMiniShareBonus(request, env) {
   if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
   const userKey = await getMiniUserKeyFromRequest(request, env);
   if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
 
-  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
   try {
     const r = await env.DB.prepare(
       `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
        VALUES (?, ?, 'share', 0, ?, 'approved', unixepoch())
        ON CONFLICT(id) DO NOTHING`
-    ).bind(`share:${userKey}:${today}`, userKey, MINI_SHARE_TOKENS).run();
+    ).bind(`share:${userKey}:${_kstWeek()}`, userKey, MINI_SHARE_TOKENS).run();
 
     const granted = (r?.meta?.changes ?? 0) > 0;
     return miniCors(request, JSON.stringify({
       ok: true,
-      granted,                                   // false = 오늘 이미 받음
+      granted,                                   // false = 이번 주에 이미 받음
       tokens: granted ? MINI_SHARE_TOKENS : 0,
       balance: await _miniBalance(env, userKey),
-      message: granted ? `토큰 ${MINI_SHARE_TOKENS}개를 드렸어요.` : '오늘은 이미 받으셨어요. 내일 다시 받을 수 있습니다.',
+      message: granted
+        ? `토큰 ${MINI_SHARE_TOKENS}개를 드렸어요.`
+        : '이번 주는 이미 받으셨어요. 다음 주에 다시 받을 수 있습니다.',
     }), 200);
   } catch (e) {
     console.error('[MINI SHARE]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
+  }
+}
+
+// 광고 시청 보상. 하루 상한까지 한 편에 한 개씩 준다.
+// 순번을 붙인 id 를 앞에서부터 시도해, 들어가는 자리가 곧 그날의 n번째 보상이다.
+// 세는 질의를 따로 두지 않으므로 동시에 두 번 눌러도 상한을 넘지 않는다.
+async function handleMiniAdReward(request, env) {
+  if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const today = _kstToday();
+  try {
+    for (let n = 1; n <= MINI_AD_DAILY_MAX; n++) {
+      const r = await env.DB.prepare(
+        `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'ad', 0, ?, 'approved', unixepoch())
+         ON CONFLICT(id) DO NOTHING`
+      ).bind(`ad:${userKey}:${today}:${n}`, userKey, MINI_AD_TOKENS).run();
+
+      if ((r?.meta?.changes ?? 0) > 0) {
+        return miniCors(request, JSON.stringify({
+          ok: true, granted: true, tokens: MINI_AD_TOKENS,
+          remainToday: MINI_AD_DAILY_MAX - n,
+          balance: await _miniBalance(env, userKey),
+          message: `토큰 ${MINI_AD_TOKENS}개를 드렸어요. 오늘 ${MINI_AD_DAILY_MAX - n}번 더 받을 수 있어요.`,
+        }), 200);
+      }
+    }
+    return miniCors(request, JSON.stringify({
+      ok: true, granted: false, tokens: 0, remainToday: 0,
+      balance: await _miniBalance(env, userKey),
+      message: '오늘은 광고 보상을 다 받으셨어요. 내일 다시 받을 수 있습니다.',
+    }), 200);
+  } catch (e) {
+    console.error('[MINI AD]', e?.message);
     return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
   }
 }

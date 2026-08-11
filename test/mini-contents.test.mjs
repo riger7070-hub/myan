@@ -160,14 +160,28 @@ test('상품 목록이 서버와 앱에서 같다', () => {
 });
 
 test('무료 지급은 행 id 로 중복을 막는다', () => {
-  // 첫 지급은 영구 1회, 공유 보너스는 하루 1회다. 조회하고 나서 쓰는 방식이면
-  // 두 번 눌렀을 때 둘 다 통과해 토큰이 두 배로 나간다. id 충돌로 막아야 한다.
-  assert.match(worker, /VALUES \(\?, \?, 'signup'[\s\S]{0,200}?ON CONFLICT\(id\) DO NOTHING/,
-    '첫 지급이 ON CONFLICT 로 막히지 않는다');
-  assert.match(worker, /VALUES \(\?, \?, 'share'[\s\S]{0,200}?ON CONFLICT\(id\) DO NOTHING/,
-    '공유 보너스가 ON CONFLICT 로 막히지 않는다');
-  // 공유 보너스 id 에 날짜가 들어가야 "하루 한 번"이 된다.
-  assert.match(worker, /`share:\$\{userKey\}:\$\{today\}`/, '공유 보너스 id 에 날짜가 없다');
+  // 첫 지급은 영구 1회, 공유는 주 1회, 광고는 하루 상한까지다. 조회하고 나서 쓰는
+  // 방식이면 두 번 눌렀을 때 둘 다 통과해 토큰이 두 배로 나간다. id 충돌로 막아야 한다.
+  for (const [pkg, label] of [['signup', '첫 지급'], ['share', '공유 보너스'], ['ad', '광고 보상']]) {
+    assert.match(worker, new RegExp(String.raw`VALUES \(\?, \?, '${pkg}'[\s\S]{0,200}?ON CONFLICT\(id\) DO NOTHING`),
+      `${label}이 ON CONFLICT 로 막히지 않는다`);
+  }
+  // 주기가 id 에 들어가야 "주 1회" / "하루 N회"가 성립한다.
+  assert.match(worker, /`share:\$\{userKey\}:\$\{_kstWeek\(\)\}`/, '공유 보너스 id 에 주차가 없다');
+  assert.match(worker, /`ad:\$\{userKey\}:\$\{today\}:\$\{n\}`/, '광고 보상 id 에 날짜·순번이 없다');
+});
+
+test('주차 계산이 해가 바뀌어도 어긋나지 않는다', async () => {
+  // 날짜를 7로 나누는 식으로 주를 세면 연말·연초에 주가 겹치거나 건너뛴다.
+  const { _kstWeek } = await import('./load-worker.mjs').then(m => m.loadWorker(['_kstWeek']));
+  const at = (iso) => _kstWeek(Date.parse(iso));
+
+  // 같은 주 안에서는 같은 키여야 한다(KST 월요일~일요일).
+  assert.equal(at('2026-08-10T00:00:00+09:00'), at('2026-08-16T23:00:00+09:00'), '같은 주가 갈렸다');
+  // 주가 바뀌면 키도 바뀌어야 한다.
+  assert.notEqual(at('2026-08-16T23:00:00+09:00'), at('2026-08-17T01:00:00+09:00'), '주가 안 바뀌었다');
+  // 연말·연초가 같은 ISO 주에 걸치면 같은 키다.
+  assert.equal(at('2025-12-29T12:00:00+09:00'), at('2026-01-01T12:00:00+09:00'), '연말 주가 갈렸다');
 });
 
 test('로또번호는 미니앱에 넣지 않는다', () => {
