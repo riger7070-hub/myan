@@ -48,7 +48,7 @@ const SESSION_KEY = 'myan_mini_session';
 // 판매가 = 공급가 × 1.1 로 계산하므로 11 의 배수만 나온다.
 // tokens 는 test/mini-price-parity.test.mjs 가 서버 MINI_PRODUCTS 와 대조한다.
 const PRODUCTS = [
-  { sku: 'token_10',  tokens: 10,  label: '엽전 10개',  price: '3,850원' },
+  { sku: 'token_10',  tokens: 10,  label: '엽전 10개',  price: '4,290원' },
   { sku: 'token_30',  tokens: 30,  label: '엽전 30개',  price: '9,900원' },
   { sku: 'token_100', tokens: 100, label: '엽전 100개', price: '27,500원' },
 ];
