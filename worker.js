@@ -7171,7 +7171,11 @@ function startTimer(ttl) {
 async function handleGuestChat(request, env) {
   try {
     const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-    const today = new Date().toISOString().slice(0, 10);
+    // 무료 1회의 하루는 KST 자정에 넘어간다. 예전엔 UTC 날짜를 키로 썼는데, 워커 로컬이
+    // UTC 라 실제 초기화가 09:00 KST 에 일어났다 — 08시에 쓰고 10시에 또 쓰면 두 번 됐고,
+    // 밤 11시에 쓴 사람은 한국 날짜가 바뀐 새벽 1시에도 거절당했다. 스트릭·캐시·일진이
+    // 모두 KST 자정을 쓰므로 여기만 어긋나 있었다.
+    const today = _kstYmd();
 
     if (!env.DB) {
       return cors(JSON.stringify({ error: { message: 'DB not available' } }), 500);
@@ -7203,10 +7207,11 @@ async function handleGuestChat(request, env) {
       ).bind(ip, today).run().catch(() => null);
 
       if (!claim?.meta?.changes) {
-        // 다음날 자정(KST) 계산
-        const resetDate = new Date(today);
-        resetDate.setDate(resetDate.getDate() + 1);
-        resetDate.setHours(0, 0, 0, 0);
+        // 다음 KST 자정 = (today 다음 날) 00:00 KST → UTC 로는 그 9시간 전.
+        // 로컬 시간 접근자(setDate/setHours)로 재지 않는다 — 워커에서는 로컬이 UTC 라
+        // 조용히 09:00 KST 를 가리켰다. Date.UTC 는 월·해 넘김도 알아서 처리한다.
+        const [ry, rm, rd] = today.split('-').map(Number);
+        const resetDate = new Date(Date.UTC(ry, rm - 1, rd + 1) - 9 * 3600000);
         const hoursUntilReset = Math.ceil((resetDate - Date.now()) / 3600000);
 
         return cors(JSON.stringify({

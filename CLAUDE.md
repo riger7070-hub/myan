@@ -101,6 +101,8 @@ Gemini failures log via `geminiText` (`console.warn` with status / `finishReason
 
 `env.MASTER_IP` follows the same rule for a different kind of bypass: it is the one IP that skips the guest trial's once-per-day limit in `handleGuestChat`. It was a hardcoded literal too — the owner's real address, in a public repo — and now has no fallback, so an unset secret just means nobody gets the exemption. `test/guest-limit.test.mjs` fails on any dotted-quad literal left in `worker.js`.
 
+That trial's "once per day" is a **KST** day, like everything else here (`_kstYmd()` for the `used_date` key, and `resetAt` computed as the next KST midnight via `Date.UTC`). It used the UTC date, which in the Worker meant the window actually reset at 09:00 KST — a guest could take a second free reading by trying at 08:00 and again at 10:00, and someone who used it at 23:00 was still refused after Korean midnight. Same test file pins the boundary, the rollover months, and that none of it depends on the runtime's local zone.
+
 ### Saju calculation exists in two independent places — keep them in sync deliberately
 - **Backend** (`worker.js`, `computeSaju()`, built on the `lunar-javascript` package): the authoritative calculation, solar-term (절기) aware, used for the actual AI-authored reading and for `saju_history`.
 - **Frontend** (`js/saju-engine.js` `calcSajuElements()`, and `ilchin()` duplicated in both `js/constants.js` and `worker.js`): a simplified client-side approximation used only for the instant gauge/preview UI before the real reading loads, explicitly documented in-code as "절기 미반영 간략화" (solar terms not applied). It is expected to occasionally disagree with the backend by a day/pillar near solar-term boundaries.
