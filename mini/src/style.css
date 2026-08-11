@@ -172,6 +172,10 @@ input[type=file] { padding: 11px; font-size: 0.88rem; }
   border-color: var(--gold); font-weight: 600;
 }
 
+/* ── 퀴즈 보기 ── */
+.choices { display: grid; gap: 8px; margin-top: 12px; }
+.choices .seg-btn { text-align: left; }
+
 /* ── 타로 카드 ── */
 .card-stage { display: flex; justify-content: center; padding: 26px 0 22px; perspective: 1000px; }
 .tarot {

@@ -12,7 +12,9 @@
 import {
   appLogin, IAP, saveBase64Data, getTossShareLink, share, GoogleAdMob,
 } from '@apps-in-toss/web-framework';
-import { SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS } from './contents.js';
+import {
+  SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS, SANGAJI,
+} from './contents.js';
 
 const API = 'https://myan.riger7070.workers.dev';
 const SESSION_KEY = 'myan_mini_session';
@@ -25,7 +27,7 @@ const PRODUCTS = [
   { sku: 'token_100', tokens: 100, label: '토큰 100개', price: '27,900원' },
 ];
 
-const SHARE_TOKENS = 3;
+
 const AD_TOKENS = 1;
 
 // ⚠️ 앱인토스 콘솔에서 발급받은 광고 단위 ID. 등록 전에는 광고가 열리지 않는다.
@@ -345,11 +347,10 @@ function buyTokens(product) {
   });
 }
 
-// ── 친구에게 공유하고 토큰 받기 ─────────────────────────────
-//
-// 보너스는 공유창을 띄운 것만으로 준다. 실제로 보냈는지는 앱이 알 수 없고,
-// 확인하겠다고 붙잡아 두면 정작 공유한 사람도 못 받는다. 대신 서버에서 하루 한 번으로
-// 묶어 두어(행 id 에 날짜가 들어간다) 반복해서 받아 갈 수는 없다.
+// ── 친구에게 알리기 ─────────────────────────────────────────
+// 토큰 보상은 붙이지 않는다. 공유창을 띄운 것만으로 줄 수밖에 없는데(실제로 보냈는지는
+// 앱이 알 수 없다) 그러면 눌렀다 닫기만 반복해도 토큰이 나온다. 토큰은 출석·퀴즈·광고
+// 처럼 확인 가능한 행동에만 붙인다.
 async function shareApp() {
   await withBusy(async () => {
     let link = '';
@@ -357,15 +358,52 @@ async function shareApp() {
       link = await getTossShareLink('/');
     } catch { /* 링크를 못 만들어도 공유 자체는 시도한다 */ }
 
-    const msg = link
-      ? `오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요.\n${link}`
-      : '오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요. 토스에서 "오늘운빨"을 찾아보세요.';
-    await share({ message: msg });
+    await share({
+      message: link
+        ? `오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요.\n${link}`
+        : '오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요. 토스에서 "오늘운빨"을 찾아보세요.',
+    });
+  });
+}
 
-    const r = await api('/mini/api/share-bonus', { method: 'POST', body: {} });
+// ── 놀이: 출석 · 퀴즈 · 산가지 ───────────────────────────────
+
+async function doCheckin() {
+  await withBusy(async () => {
+    const r = await api('/mini/api/checkin', { method: 'POST', body: {} });
     state.tokens = r.balance ?? state.tokens;
+    state.checkin = r;
     state.toast = r.message || '';
   });
+}
+
+async function startQuiz() {
+  await withBusy(async () => {
+    const r = await api('/mini/api/quiz');
+    state.quiz = { ...r, picked: [], done: null };
+    go('quiz');
+  });
+}
+
+async function submitQuiz() {
+  const q = state.quiz;
+  if (!q || q.picked.length !== q.questions.length) {
+    state.error = '모든 문제를 골라 주세요.'; render(); return;
+  }
+  await withBusy(async () => {
+    const r = await api('/mini/api/quiz', {
+      method: 'POST', body: { payload: q.payload, sig: q.sig, answers: q.picked },
+    });
+    state.tokens = r.balance ?? state.tokens;
+    state.quiz = { ...q, done: r };
+  });
+}
+
+/** 산가지 뽑기. 서버를 부르지 않는 무료 재미다 — 결과에 토큰이 걸리면 사행성이 된다. */
+function drawStick() {
+  const s = SANGAJI[Math.floor(Math.random() * SANGAJI.length)];
+  state.stick = s;
+  go('stick');
 }
 
 // ── 광고 보고 토큰 받기 ─────────────────────────────────────
@@ -658,18 +696,34 @@ function render() {
                 </button>`).join('')}
             </div>
           </section>`).join('')}
-        <button class="btn" id="btn-shareapp" ${state.busy ? 'disabled' : ''}>
-          친구에게 알리고 토큰 ${SHARE_TOKENS}개 받기
-        </button>
-        <p class="muted small" style="text-align:center;margin:8px 0 12px">일주일에 한 번 받을 수 있어요</p>
-        ${AD_UNIT_ID ? `<button class="btn ghost" id="btn-ad" ${state.busy ? 'disabled' : ''}>
-          광고 보고 토큰 ${AD_TOKENS}개 받기
-        </button>
-        <p class="muted small" style="text-align:center;margin:8px 0 16px">하루 5번까지</p>` : ''}
+        <section class="sec">
+          <h3><span>🎁</span> 토큰 받기</h3>
+          <div class="tiles">
+            <button class="tile" id="btn-checkin">
+              <span class="t-icon">📅</span><span class="t-label">출석 도장</span>
+              <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 3토큰'}</span>
+            </button>
+            <button class="tile" id="btn-quiz">
+              <span class="t-icon">🧠</span><span class="t-label">오행 퀴즈</span>
+              <span class="t-cost">다 맞히면 1토큰</span>
+            </button>
+            <button class="tile" id="btn-stick">
+              <span class="t-icon">🎋</span><span class="t-label">산가지 뽑기</span>
+              <span class="t-cost">무료</span>
+            </button>
+            ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
+              <span class="t-icon">🎬</span><span class="t-label">광고 보기</span>
+              <span class="t-cost">${AD_TOKENS}토큰 · 하루 5번</span>
+            </button>` : ''}
+          </div>
+        </section>
         <div class="row2">
           <button class="btn ghost" id="btn-history">지난 기록</button>
           <button class="btn ghost" id="btn-editprofile">내 정보</button>
         </div>
+        <button class="btn ghost" id="btn-shareapp" style="margin-bottom:14px" ${state.busy ? 'disabled' : ''}>
+          친구에게 알리기
+        </button>
         <div class="ai-notice">${AI_NOTICE}</div>
         ${FOOTER}`;
       break;
@@ -748,6 +802,59 @@ function render() {
         <button class="btn ghost" id="btn-home2">홈으로</button>
         ${FOOTER}`;
       break;
+
+    case 'quiz': {
+      const q = state.quiz;
+      if (!q) { html = ''; break; }
+      const done = q.done;
+      html = `${header()}
+        <div class="brand sm"><h1>🧠 오행 퀴즈</h1>
+          <p>${done ? '' : '세 문제를 다 맞히면 토큰 1개'}</p></div>
+        ${done ? `
+          <div class="card"><p>${esc(done.message)}</p></div>
+          ${q.questions.map((item, i) => `
+            <div class="card">
+              <p><b>${esc(item.q)}</b></p>
+              <p class="muted" style="margin-top:8px">
+                ${done.results[i]?.correct ? '✅ 정답' : `❌ 정답은 "${esc(item.c[done.results[i]?.answer] || '')}"`}
+              </p>
+              <p class="muted small">${esc(done.results[i]?.why || '')}</p>
+            </div>`).join('')}
+          <button class="btn ghost" id="btn-home2">홈으로</button>
+        ` : `
+          ${q.questions.map((item, i) => `
+            <div class="card">
+              <p><b>${i + 1}. ${esc(item.q)}</b></p>
+              <div class="choices">
+                ${item.c.map((c, j) => `
+                  <button class="seg-btn${q.picked[i] === j ? ' on' : ''}"
+                          data-q="${i}" data-a="${j}">${esc(c)}</button>`).join('')}
+              </div>
+            </div>`).join('')}
+          ${err}
+          <button class="btn" id="btn-quiz-submit" ${state.busy ? 'disabled' : ''}>제출하기</button>
+        `}
+        ${FOOTER}`;
+      break;
+    }
+
+    case 'stick': {
+      const s = state.stick || {};
+      html = `${header()}
+        <div class="brand sm"><h1>🎋 산가지</h1></div>
+        <div class="card" style="text-align:center;padding:34px 22px">
+          <div style="font-size:3.4rem;color:var(--gold-light);font-family:'Batang',serif">${esc(s.n || '')}</div>
+          <div style="color:var(--gold);margin:10px 0 16px;font-size:1.1rem">${esc(s.t || '')}</div>
+          <p>${esc(s.m || '')}</p>
+        </div>
+        <div class="row2">
+          <button class="btn ghost" id="btn-stick">다시 뽑기</button>
+          <button class="btn ghost" id="btn-home2">홈으로</button>
+        </div>
+        <div class="ai-notice">산가지는 재미로 보는 것이며, 토큰이 걸려 있지 않습니다.</div>
+        ${FOOTER}`;
+      break;
+    }
 
     case 'charge': {
       // 콘솔에 등록된 상품을 우선 보여준다. 아직 못 받았으면 코드에 적어 둔 목록으로
@@ -877,6 +984,19 @@ function bind() {
   });
   on('btn-share', shareCard);
   on('btn-shareapp', shareApp);
+  on('btn-checkin', doCheckin);
+  on('btn-quiz', startQuiz);
+  on('btn-stick', drawStick);
+  on('btn-quiz-submit', submitQuiz);
+
+  // 퀴즈 보기 선택
+  for (const el of document.querySelectorAll('[data-q]')) {
+    el.onclick = () => {
+      state.quiz.picked[+el.dataset.q] = +el.dataset.a;
+      state.error = '';
+      render();
+    };
+  }
   on('btn-ad', watchAd);
   on('btn-reveal', (e) => {
     // 뒤집는 애니메이션이 끝난 뒤에 결과를 보여준다.

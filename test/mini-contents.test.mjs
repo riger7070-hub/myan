@@ -162,13 +162,35 @@ test('상품 목록이 서버와 앱에서 같다', () => {
 test('무료 지급은 행 id 로 중복을 막는다', () => {
   // 첫 지급은 영구 1회, 공유는 주 1회, 광고는 하루 상한까지다. 조회하고 나서 쓰는
   // 방식이면 두 번 눌렀을 때 둘 다 통과해 토큰이 두 배로 나간다. id 충돌로 막아야 한다.
-  for (const [pkg, label] of [['signup', '첫 지급'], ['share', '공유 보너스'], ['ad', '광고 보상']]) {
-    assert.match(worker, new RegExp(String.raw`VALUES \(\?, \?, '${pkg}'[\s\S]{0,200}?ON CONFLICT\(id\) DO NOTHING`),
+  for (const [pkg, label] of [
+    ['signup', '첫 지급'], ['ad', '광고 보상'],
+    ['quiz', '퀴즈 보상'], ['checkin_bonus', '개근 보상'],
+  ]) {
+    assert.match(worker, new RegExp(String.raw`VALUES \(\?, \?, '${pkg}'[\s\S]{0,220}?ON CONFLICT\(id\) DO NOTHING`),
       `${label}이 ON CONFLICT 로 막히지 않는다`);
   }
-  // 주기가 id 에 들어가야 "주 1회" / "하루 N회"가 성립한다.
-  assert.match(worker, /`share:\$\{userKey\}:\$\{_kstWeek\(\)\}`/, '공유 보너스 id 에 주차가 없다');
+  // 주기가 id 에 들어가야 "하루 N회" / "하루 1회"가 성립한다.
   assert.match(worker, /`ad:\$\{userKey\}:\$\{today\}:\$\{n\}`/, '광고 보상 id 에 날짜·순번이 없다');
+  assert.match(worker, /`quiz:\$\{userKey\}:\$\{_kstToday\(\)\}`/, '퀴즈 보상 id 에 날짜가 없다');
+});
+
+test('공유에는 토큰 보상이 붙어 있지 않다', () => {
+  // 공유는 공유창을 띄운 것만으로 줄 수밖에 없어서(실제 발송을 앱이 알 수 없다)
+  // 눌렀다 닫기만 반복해도 토큰이 나온다. 그래서 보상을 떼어냈다.
+  const mainSrc = readFileSync(join(ROOT, 'mini', 'src', 'main.js'), 'utf8');
+  assert.doesNotMatch(worker, /'\/mini\/api\/share-bonus'/, '공유 보너스 라우트가 남아 있다');
+  assert.doesNotMatch(mainSrc, /share-bonus/, '앱이 아직 공유 보너스를 부른다');
+});
+
+test('퀴즈 정답은 서명으로 지켜진다', () => {
+  // 정답을 클라이언트에 내려주면 그냥 맞다고 우기면 된다. 서명 검증이 빠지면
+  // 아무 문제나 지어내 만점을 주장할 수 있다.
+  assert.match(worker, /hmacSign\(_sessionSecret\(env\), `quiz:/, '퀴즈 문제에 서명이 없다');
+  assert.match(worker, /hmacVerify\(_sessionSecret\(env\), `quiz:/, '퀴즈 채점에 서명 검증이 없다');
+  // 문제를 낼 때 정답(a)을 함께 내려보내면 안 된다.
+  const at = worker.indexOf('async function handleMiniQuiz(');
+  const span = worker.slice(at, worker.indexOf('async function handleMiniQuizSubmit'));
+  assert.doesNotMatch(span, /a:\s*MINI_QUIZ_BANK/, '문제와 함께 정답이 내려간다');
 });
 
 test('주차 계산이 해가 바뀌어도 어긋나지 않는다', async () => {

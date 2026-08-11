@@ -1596,8 +1596,10 @@ export default {
     if (path === '/mini/api/tokens'     && method === 'GET')  { await ensureDBExt(env); return handleMiniTokens(request, env); }
     if (path === '/mini/api/payment/grant' && method === 'POST') { await ensureDBExt(env); return handleMiniPaymentGrant(request, env); }
     if (path === '/mini/api/today'         && method === 'POST') { await ensureDBExt(env); return handleMiniDailyFortune(request, env); }
-    if (path === '/mini/api/share-bonus'   && method === 'POST') { await ensureDBExt(env); return handleMiniShareBonus(request, env); }
     if (path === '/mini/api/ad-reward'     && method === 'POST') { await ensureDBExt(env); return handleMiniAdReward(request, env); }
+    if (path === '/mini/api/checkin'       && method === 'POST') { await ensureDBExt(env); return handleMiniCheckin(request, env); }
+    if (path === '/mini/api/quiz'          && method === 'GET')  { await ensureDBExt(env); return handleMiniQuiz(request, env); }
+    if (path === '/mini/api/quiz'          && method === 'POST') { await ensureDBExt(env); return handleMiniQuizSubmit(request, env); }
     // 연결 끊기 콜백 — 토스 서버가 부른다. 콘솔에서 GET/POST 중 무엇을 고를지 모르니 둘 다 받는다.
     if (path === '/mini/api/auth/unlink' && (method === 'GET' || method === 'POST')) {
       await ensureDBExt(env); return handleMiniUnlink(request, env);
@@ -2302,7 +2304,6 @@ async function _miniRefundSpend(env, spendId, userKey, cost) {
 // 둘 다 원장에 행을 하나 넣는 것이고, **행 id 자체가 중복 방지 장치**다.
 // 별도 플래그 테이블이나 조회-후-쓰기가 없으므로 동시에 두 번 눌러도 한 번만 들어간다.
 const MINI_SIGNUP_TOKENS = 3;   // 첫 로그인 1회
-const MINI_SHARE_TOKENS  = 3;   // 공유 시, 주 1회
 const MINI_AD_TOKENS     = 1;   // 광고 1편당
 const MINI_AD_DAILY_MAX  = 5;   // 하루 광고 보상 횟수 상한
 
@@ -2341,36 +2342,6 @@ async function _miniGrantSignup(env, userKey) {
   }
 }
 
-// 공유 보너스. 주 한 번만 받을 수 있게 id 에 주차를 넣는다(KST 기준).
-// 하루 1회로 두면 매일 3개씩 받아 쓰는 사람이 영영 결제를 안 하게 된다.
-async function handleMiniShareBonus(request, env) {
-  if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
-  const userKey = await getMiniUserKeyFromRequest(request, env);
-  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
-
-  try {
-    const r = await env.DB.prepare(
-      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
-       VALUES (?, ?, 'share', 0, ?, 'approved', unixepoch())
-       ON CONFLICT(id) DO NOTHING`
-    ).bind(`share:${userKey}:${_kstWeek()}`, userKey, MINI_SHARE_TOKENS).run();
-
-    const granted = (r?.meta?.changes ?? 0) > 0;
-    return miniCors(request, JSON.stringify({
-      ok: true,
-      granted,                                   // false = 이번 주에 이미 받음
-      tokens: granted ? MINI_SHARE_TOKENS : 0,
-      balance: await _miniBalance(env, userKey),
-      message: granted
-        ? `토큰 ${MINI_SHARE_TOKENS}개를 드렸어요.`
-        : '이번 주는 이미 받으셨어요. 다음 주에 다시 받을 수 있습니다.',
-    }), 200);
-  } catch (e) {
-    console.error('[MINI SHARE]', e?.message);
-    return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
-  }
-}
-
 // 광고 시청 보상. 하루 상한까지 한 편에 한 개씩 준다.
 // 순번을 붙인 id 를 앞에서부터 시도해, 들어가는 자리가 곧 그날의 n번째 보상이다.
 // 세는 질의를 따로 두지 않으므로 동시에 두 번 눌러도 상한을 넘지 않는다.
@@ -2406,6 +2377,152 @@ async function handleMiniAdReward(request, env) {
     console.error('[MINI AD]', e?.message);
     return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
   }
+}
+
+// ════════════════════════════════════════════
+//  미니앱 놀이 — 출석 · 퀴즈 · 산가지
+// ════════════════════════════════════════════
+// 보상을 "운"이 아니라 "행동"에 붙인다. 뽑기 결과에 따라 토큰이 나오면 사행성으로
+// 지적받을 수 있어서, 산가지는 재미(무료)만 주고 토큰은 출석·퀴즈·광고로만 나간다.
+const MINI_CHECKIN_TOKENS = 3;   // 7일 개근
+const MINI_QUIZ_TOKENS    = 1;   // 퀴즈 만점, 하루 1회
+const MINI_CHECKIN_CYCLE  = 7;
+
+/** 출석 도장 + 7일 개근 보상. */
+async function handleMiniCheckin(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  const today = _kstToday();
+
+  try {
+    // 도장은 토큰 0짜리 행이다. 원장에 함께 두면 표를 더 만들지 않아도 되고,
+    // id 가 날짜라 하루 한 번만 찍힌다.
+    await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'checkin', 0, 0, 'approved', unixepoch())
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`checkin:${userKey}:${today}`, userKey, 0).run();
+
+    // 최근 도장을 날짜 역순으로 훑어 연속 일수를 센다.
+    const rows = await env.DB.prepare(
+      `SELECT id FROM mini_payment_requests
+        WHERE user_key = ? AND pkg = 'checkin'
+        ORDER BY created_at DESC LIMIT 40`
+    ).bind(userKey).all();
+    const days = new Set((rows?.results || []).map(r => String(r.id).split(':').pop()));
+
+    let streak = 0;
+    for (let i = 0; i < 40; i++) {
+      const d = _kstToday(Date.now() - i * 86400000);
+      if (!days.has(d)) break;
+      streak++;
+    }
+
+    // 7일마다 보상. id 가 날짜라 같은 날 두 번 눌러도 한 번만 나간다.
+    let granted = false;
+    if (streak > 0 && streak % MINI_CHECKIN_CYCLE === 0) {
+      const g = await env.DB.prepare(
+        `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'checkin_bonus', 0, ?, 'approved', unixepoch())
+         ON CONFLICT(id) DO NOTHING`
+      ).bind(`checkin7:${userKey}:${today}`, userKey, MINI_CHECKIN_TOKENS).run();
+      granted = (g?.meta?.changes ?? 0) > 0;
+    }
+
+    return miniCors(request, JSON.stringify({
+      ok: true, streak, granted,
+      tokens: granted ? MINI_CHECKIN_TOKENS : 0,
+      toNext: MINI_CHECKIN_CYCLE - (streak % MINI_CHECKIN_CYCLE || MINI_CHECKIN_CYCLE),
+      balance: await _miniBalance(env, userKey),
+      message: granted
+        ? `${MINI_CHECKIN_CYCLE}일 개근! 토큰 ${MINI_CHECKIN_TOKENS}개를 드렸어요.`
+        : `${streak}일째 오셨어요.`,
+    }), 200);
+  } catch (e) {
+    console.error('[MINI CHECKIN]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
+  }
+}
+
+// 오행 상식 퀴즈. 정답은 클라이언트에 보내지 않는다 — 보내면 그냥 맞다고 우기면 된다.
+// 대신 정답을 HMAC 으로 서명해 함께 내려주고, 채점할 때 서명을 검증한다(서버 상태 불필요).
+const MINI_QUIZ_BANK = [
+  { q: '오행에서 나무(木)를 낳는 기운은 무엇일까요?', c: ['물(水)', '불(火)', '쇠(金)', '흙(土)'], a: 0,
+    why: '물이 나무를 기릅니다. 이를 수생목(水生木)이라 합니다.' },
+  { q: '사주에서 "일간(日干)"은 무엇을 뜻할까요?', c: ['태어난 해', '태어난 날의 천간', '태어난 시각', '띠'], a: 1,
+    why: '태어난 날의 천간이며, 사주에서 나 자신을 나타내는 자리입니다.' },
+  { q: '불(火)이 낳는 기운은 무엇일까요?', c: ['쇠(金)', '물(水)', '흙(土)', '나무(木)'], a: 2,
+    why: '불이 타고 남은 재가 흙이 됩니다. 화생토(火生土)입니다.' },
+  { q: '십이지 중 첫 번째 동물은 무엇일까요?', c: ['소', '호랑이', '용', '쥐'], a: 3,
+    why: '자축인묘…의 첫 글자 자(子)가 쥐입니다.' },
+  { q: '쇠(金)를 이기는 기운은 무엇일까요?', c: ['불(火)', '흙(土)', '물(水)', '나무(木)'], a: 0,
+    why: '불이 쇠를 녹입니다. 화극금(火剋金)입니다.' },
+  { q: '"대운"은 보통 몇 년 단위로 바뀔까요?', c: ['1년', '3년', '10년', '12년'], a: 2,
+    why: '대운은 10년마다 흐름이 바뀝니다.' },
+  { q: '절기 중 한 해의 사주가 바뀌는 기준은 언제일까요?', c: ['설날', '입춘', '동지', '1월 1일'], a: 1,
+    why: '사주는 양력 새해나 설이 아니라 입춘을 기준으로 해가 바뀝니다.' },
+  { q: '흙(土)이 낳는 기운은 무엇일까요?', c: ['나무(木)', '물(水)', '불(火)', '쇠(金)'], a: 3,
+    why: '흙 속에서 쇠가 나옵니다. 토생금(土生金)입니다.' },
+];
+const MINI_QUIZ_COUNT = 3;
+
+async function handleMiniQuiz(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  // 문제를 섞어 3개 고른다.
+  const idx = [...MINI_QUIZ_BANK.keys()].sort(() => Math.random() - 0.5).slice(0, MINI_QUIZ_COUNT);
+  const payload = idx.join(',');
+  const sig = await hmacSign(_sessionSecret(env), `quiz:${userKey}:${payload}`);
+
+  return miniCors(request, JSON.stringify({
+    ok: true,
+    // 정답(a)과 해설(why)은 채점 뒤에 준다.
+    questions: idx.map(i => ({ q: MINI_QUIZ_BANK[i].q, c: MINI_QUIZ_BANK[i].c })),
+    payload, sig,
+  }), 200);
+}
+
+async function handleMiniQuizSubmit(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const { payload, sig, answers } = await request.json().catch(() => ({}));
+  if (!payload || !sig || !Array.isArray(answers)) {
+    return miniCors(request, JSON.stringify({ error: { message: '잘못된 요청입니다.' } }), 400);
+  }
+  // 서명이 맞아야 우리가 낸 문제다. 이게 없으면 아무 문제나 지어내 만점을 주장할 수 있다.
+  const valid = await hmacVerify(_sessionSecret(env), `quiz:${userKey}:${payload}`, sig).catch(() => false);
+  if (!valid) return miniCors(request, JSON.stringify({ error: { message: '문제가 변조되었습니다.' } }), 400);
+
+  const idx = payload.split(',').map(Number).filter(n => MINI_QUIZ_BANK[n]);
+  const results = idx.map((n, i) => ({
+    correct: answers[i] === MINI_QUIZ_BANK[n].a,
+    answer: MINI_QUIZ_BANK[n].a,
+    why: MINI_QUIZ_BANK[n].why,
+  }));
+  const allRight = results.length === idx.length && results.every(r => r.correct);
+
+  let granted = false;
+  if (allRight) {
+    try {
+      const r = await env.DB.prepare(
+        `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'quiz', 0, ?, 'approved', unixepoch())
+         ON CONFLICT(id) DO NOTHING`
+      ).bind(`quiz:${userKey}:${_kstToday()}`, userKey, MINI_QUIZ_TOKENS).run();
+      granted = (r?.meta?.changes ?? 0) > 0;
+    } catch (e) { console.error('[MINI QUIZ]', e?.message); }
+  }
+
+  return miniCors(request, JSON.stringify({
+    ok: true, results, allRight, granted,
+    tokens: granted ? MINI_QUIZ_TOKENS : 0,
+    balance: await _miniBalance(env, userKey),
+    message: !allRight ? '아쉬워요. 내일 다시 도전해 보세요.'
+      : granted ? `모두 맞히셨어요! 토큰 ${MINI_QUIZ_TOKENS}개를 드렸어요.`
+      : '모두 맞히셨어요. 오늘 보상은 이미 받으셨습니다.',
+  }), 200);
 }
 
 // ── 미니앱 오늘의 운세 (유료 1토큰) ──
