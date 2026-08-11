@@ -6545,16 +6545,16 @@ function _homeSections() {
   const t = getT();
   return [
     { icon:'☯', title: t.csMe || '사주로 보는 나', items: [
-      { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름', cost:3, fn:'openDaeun()' },
-      { icon:'✍️',  label: t.nameTitle       || '이름 풀이',         cost:2, fn:'openNameReading()' },
-      { icon:'🖐️', label: t.photoModalTitle || '관상·손금',         cost:2, fn:'openPhotoReading()' },
-      { icon:'🔯',  label: t.typeTitle       || '오행 유형 테스트',   cost:1, fn:'openTypeTest()' },
-      { icon:'🔢',  label: t.numerologyTitle || '라이프패스 넘버',    cost:1, fn:'openNumerology()' },
+      { icon:'🌊',  label: t.daeunTitle      || '대운 · 10년의 흐름', cost:6, fn:'openDaeun()' },
+      { icon:'✍️',  label: t.nameTitle       || '이름 풀이',         cost:4, fn:'openNameReading()' },
+      { icon:'🖐️', label: t.photoModalTitle || '관상·손금',         cost:4, fn:'openPhotoReading()' },
+      { icon:'🔯',  label: t.typeTitle       || '오행 유형 테스트',   cost:2, fn:'openTypeTest()' },
+      { icon:'🔢',  label: t.numerologyTitle || '라이프패스 넘버',    cost:2, fn:'openNumerology()' },
     ]},
     { icon:'📅', title: t.csTiming || '때를 고르다', items: [
       { icon:'📆', label: t.takilTitle   || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
-      { icon:'💞', label: t.ctTitle      || '궁합 시기',            cost:3, fn:'openCompatTiming()' },
-      { icon:'🧧', label: t.tojeongTitle || '토정비결풍 신년운세',   cost:2, fn:'openTojeong()' },
+      { icon:'💞', label: t.ctTitle      || '궁합 시기',            cost:6, fn:'openCompatTiming()' },
+      { icon:'🧧', label: t.tojeongTitle || '토정비결풍 신년운세',   cost:4, fn:'openTojeong()' },
     ]},
     { icon:'🎴', title: t.csAsk || '물어보는 점', items: [
       { icon:'🔮', label: t.tarotTitle  || '오늘의 타로',   cost:1, fn:'openTarotDraw()' },

@@ -102,7 +102,7 @@ const post = (token, body) => new Request('https://x/api/name-reading', {
   body: JSON.stringify(body),
 });
 
-test('정상 응답이면 2토큰이 빠지고 화면이 읽는 필드가 다 있다', async () => {
+test('정상 응답이면 4토큰이 빠지고 화면이 읽는 필드가 다 있다', async () => {
   const { db, env } = setup();
   const token = await createSessionToken(EMAIL, env);
   globalThis.fetch = async () => new Response(
@@ -114,7 +114,7 @@ test('정상 응답이면 2토큰이 빠지고 화면이 읽는 필드가 다 �
   const data = await res.json();
 
   assert.equal(res.status, 200);
-  assert.equal(balanceOf(db, EMAIL), 8);
+  assert.equal(balanceOf(db, EMAIL), 6);
   assert.equal(data.name, '김서연');
   // js/app.js 의 _nameCharsHtml 이 읽는 필드들
   for (const f of ['ch', 'choseong', 'elem']) {
@@ -150,7 +150,7 @@ test('잔액이 모자라면 차감도 호출도 없다', async () => {
   assert.equal(balanceOf(db, EMAIL), 1);
 });
 
-test('Gemini 가 던져도 2토큰이 돌아온다', async () => {
+test('Gemini 가 던져도 4토큰이 돌아온다', async () => {
   const { db, env } = setup();
   const token = await createSessionToken(EMAIL, env);
   globalThis.fetch = async () => { throw new TypeError('network error'); };

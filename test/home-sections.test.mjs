@@ -137,7 +137,7 @@ test('토큰 비용이 타일마다 붙어 있다', () => {
   for (const s of sections) {
     for (const i of s.items) {
       assert.equal(typeof i.cost, 'number', `${i.fn}: 비용이 숫자가 아니다`);
-      assert.ok(i.cost >= 0 && i.cost <= 5, `${i.fn}: 비용이 ${i.cost} 다`);
+      assert.ok(i.cost >= 0 && i.cost <= 6, `${i.fn}: 비용이 ${i.cost} 다`);
     }
   }
 });

@@ -171,7 +171,17 @@ test('무료 지급은 행 id 로 중복을 막는다', () => {
   }
   // 주기가 id 에 들어가야 "하루 N회" / "하루 1회"가 성립한다.
   assert.match(worker, /`ad:\$\{userKey\}:\$\{today\}:\$\{n\}`/, '광고 보상 id 에 날짜·순번이 없다');
-  assert.match(worker, /`quiz:\$\{userKey\}:\$\{_kstToday\(\)\}`/, '퀴즈 보상 id 에 날짜가 없다');
+  assert.match(worker, /`quiz:\$\{userKey\}:\$\{today\}:\$\{n\}`/, '퀴즈 보상 id 에 날짜·순번이 없다');
+  assert.match(worker, /`pop:\$\{userKey\}:\$\{today\}:\$\{n\}`/, '부풀리기 보상 id 에 날짜·순번이 없다');
+});
+
+test('광고로 늘어난 한도는 서버가 실제 지급 기록으로 센다', () => {
+  // 클라이언트가 "광고 봤다"고 말하는 걸 세면 그냥 우기면 된다.
+  // 그날 실제로 나간 광고 보상 행 수를 근거로 삼아야 한다.
+  assert.match(worker, /FROM mini_payment_requests[\s\S]{0,120}?pkg = 'ad'/,
+    '광고 보너스를 지급 기록으로 세지 않는다');
+  assert.match(worker, /MINI_POP_DAILY_MAX \+ await _miniAdBonusToday/, '부풀리기에 광고 보너스가 없다');
+  assert.match(worker, /1 \+ await _miniAdBonusToday/, '퀴즈에 광고 보너스가 없다');
 });
 
 test('공유에는 토큰 보상이 붙어 있지 않다', () => {

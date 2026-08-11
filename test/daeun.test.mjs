@@ -4,7 +4,7 @@
 // 갈리는데(양남음녀 순행), 성별을 잘못 넘기거나 기본값으로 때우면 남의 인생 흐름을
 // 보여 주게 된다. 그래서 방향·구간·기운(起運) 시점을 명리 규칙과 대조해 고정한다.
 //
-// 돈이 걸린 쪽(3토큰 차감·환불)도 함께 본다.
+// 돈이 걸린 쪽(6토큰 차감·환불)도 함께 본다.
 
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -105,7 +105,7 @@ const post = (token, body) => new Request('https://x/api/daeun', {
   body: JSON.stringify(body),
 });
 
-test('정상 응답이면 3토큰이 빠지고 화면이 읽는 필드가 다 있다', async () => {
+test('정상 응답이면 6토큰이 빠지고 화면이 읽는 필드가 다 있다', async () => {
   const { db, env } = setup();
   const token = await createSessionToken(EMAIL, env);
   globalThis.fetch = async () => new Response(
@@ -116,8 +116,8 @@ test('정상 응답이면 3토큰이 빠지고 화면이 읽는 필드가 다 �
   const data = await res.json();
 
   assert.equal(res.status, 200);
-  assert.equal(balanceOf(db, EMAIL), 7);
-  assert.equal(data.remaining, 7);
+  assert.equal(balanceOf(db, EMAIL), 4);
+  assert.equal(data.remaining, 4);
   // js/app.js 의 _daeunRowHtml 이 읽는 필드들 — 이름이 바뀌면 화면에 undefined 가 뜬다
   for (const f of ['ganzhi', 'ganElem', 'zhiElem', 'startYear', 'endYear', 'startAge', 'endAge', 'current']) {
     assert.ok(data.periods[0][f] !== undefined, `화면이 읽는 필드가 없다: ${f}`);
@@ -140,7 +140,7 @@ test('성별이 없으면 차감 없이 400', async () => {
 });
 
 test('잔액이 모자라면 차감도 호출도 없다', async () => {
-  const { db, env } = setup(2);   // 3토큰짜리인데 2개뿐
+  const { db, env } = setup(2);   // 6토큰짜리인데 2개뿐
   const token = await createSessionToken(EMAIL, env);
   let called = false;
   globalThis.fetch = async () => { called = true; return new Response('{}', { status: 200 }); };
@@ -152,7 +152,7 @@ test('잔액이 모자라면 차감도 호출도 없다', async () => {
   assert.equal(balanceOf(db, EMAIL), 2);
 });
 
-test('Gemini 가 던져도 3토큰이 돌아온다', async () => {
+test('Gemini 가 던져도 6토큰이 돌아온다', async () => {
   const { db, env } = setup();
   const token = await createSessionToken(EMAIL, env);
   globalThis.fetch = async () => { throw new TypeError('network error'); };

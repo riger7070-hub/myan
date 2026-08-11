@@ -764,7 +764,7 @@ function render() {
             </button>
             ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
               <span class="t-icon">🎬</span><span class="t-label">광고 보기</span>
-              <span class="t-cost">${AD_TOKENS}토큰 · 하루 5번</span>
+              <span class="t-cost">${AD_TOKENS}토큰 + 퀴즈·부풀리기 기회 1회</span>
             </button>` : ''}
           </div>
         </section>
@@ -869,7 +869,10 @@ function render() {
             ${state.showTips ? `<ul class="tips">${q.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
           </div>`}
         ${done ? `
-          <div class="card"><p>${esc(done.message)}</p></div>
+          <div class="card"><p>${esc(done.message)}</p>
+            ${!done.granted && done.allRight && AD_UNIT_ID
+              ? '<p class="muted small" style="margin-top:8px">광고를 보면 한 번 더 도전할 수 있어요</p>' : ''}
+          </div>
           ${q.questions.map((item, i) => `
             <div class="card">
               <p><b>${esc(item.q)}</b></p>
@@ -906,9 +909,13 @@ function render() {
           <div class="card" style="text-align:center;padding:30px 22px">
             <div style="font-size:3rem;margin-bottom:10px">✨</div>
             <p>${esc(p.done.message)}</p>
+            ${p.done.remainToday === 0 && AD_UNIT_ID
+              ? '<p class="muted small" style="margin-top:10px">광고를 보면 한 번 더 할 수 있어요</p>' : ''}
           </div>
           <div class="row2">
-            ${p.done.remainToday > 0 ? '<button class="btn ghost" id="btn-pop">한 번 더</button>' : '<span></span>'}
+            ${p.done.remainToday > 0
+              ? '<button class="btn ghost" id="btn-pop">한 번 더</button>'
+              : (AD_UNIT_ID ? '<button class="btn ghost" id="btn-ad">광고 보고 한 번 더</button>' : '<span></span>')}
             <button class="btn ghost" id="btn-home2">홈으로</button>
           </div>
         ` : `

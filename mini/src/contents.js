@@ -71,19 +71,19 @@ export const SECTIONS = [
   {
     icon: '☯', title: '사주로 보는 나',
     items: [
-      { id: 'daeun',      icon: '🌊',  label: '대운 · 10년의 흐름', cost: 3, path: '/api/daeun',          need: null },
-      { id: 'name',       icon: '✍️',  label: '이름 풀이',          cost: 2, path: '/api/name-reading',   need: 'name' },
-      { id: 'photo',      icon: '🖐️', label: '관상·손금',          cost: 2, path: '/api/photo-reading',  need: 'photo' },
-      { id: 'typecompat', icon: '🧿',  label: '오행 유형 테스트',    cost: 1, path: '/api/type-compat',    need: 'type' },
-      { id: 'numerology', icon: '🔢',  label: '라이프패스 넘버',     cost: 1, path: '/api/numerology',     need: null },
+      { id: 'daeun',      icon: '🌊',  label: '대운 · 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
+      { id: 'name',       icon: '✍️',  label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
+      { id: 'photo',      icon: '🖐️', label: '관상·손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
+      { id: 'typecompat', icon: '🧿',  label: '오행 유형 테스트',    cost: 2, path: '/api/type-compat',    need: 'type' },
+      { id: 'numerology', icon: '🔢',  label: '라이프패스 넘버',     cost: 2, path: '/api/numerology',     need: null },
     ],
   },
   {
     icon: '📅', title: '때를 고르다',
     items: [
       { id: 'takil',   icon: '📆', label: '택일 · 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
-      { id: 'compat',  icon: '💞', label: '궁합 시기',             cost: 3, path: '/api/compat-timing',   need: 'partner' },
-      { id: 'tojeong', icon: '🧧', label: '토정비결풍 신년운세',    cost: 2, path: '/api/tojeong',         need: null },
+      { id: 'compat',  icon: '💞', label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'tojeong', icon: '🧧', label: '토정비결풍 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
     ],
   },
   {

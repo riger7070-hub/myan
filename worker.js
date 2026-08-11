@@ -2611,12 +2611,17 @@ async function handleMiniQuizSubmit(request, env) {
   let granted = false;
   if (allRight) {
     try {
-      const r = await env.DB.prepare(
-        `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
-         VALUES (?, ?, 'quiz', 0, ?, 'approved', unixepoch())
-         ON CONFLICT(id) DO NOTHING`
-      ).bind(`quiz:${userKey}:${_kstToday()}`, userKey, MINI_QUIZ_TOKENS).run();
-      granted = (r?.meta?.changes ?? 0) > 0;
+      // 기본 하루 1회. 광고를 본 만큼 더 받을 수 있다.
+      const maxToday = 1 + await _miniAdBonusToday(env, userKey);
+      const today = _kstToday();
+      for (let n = 1; n <= maxToday; n++) {
+        const r = await env.DB.prepare(
+          `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+           VALUES (?, ?, 'quiz', 0, ?, 'approved', unixepoch())
+           ON CONFLICT(id) DO NOTHING`
+        ).bind(`quiz:${userKey}:${today}:${n}`, userKey, MINI_QUIZ_TOKENS).run();
+        if ((r?.meta?.changes ?? 0) > 0) { granted = true; break; }
+      }
     } catch (e) { console.error('[MINI QUIZ]', e?.message); }
   }
 
@@ -2640,6 +2645,20 @@ async function handleMiniQuizSubmit(request, env) {
 const MINI_POP_TOKENS    = 1;
 const MINI_POP_TAPS      = 30;     // 터뜨리는 데 필요한 두드림 수
 const MINI_POP_DAILY_MAX = 3;
+
+/**
+ * 광고를 본 만큼 그날 한도를 늘려 준다.
+ * 근거는 클라이언트 말이 아니라 **그날 실제로 지급된 광고 보상 행 수**다.
+ * 광고 보상 자체가 userEarnedReward 로만 나가므로, 여기까지 위조하려면
+ * 광고를 실제로 봐야 한다.
+ */
+async function _miniAdBonusToday(env, userKey) {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS c FROM mini_payment_requests
+      WHERE user_key = ? AND pkg = 'ad' AND id LIKE ?`
+  ).bind(userKey, `ad:${userKey}:${_kstToday()}:%`).first();
+  return row?.c ?? 0;
+}
 const MINI_POP_MIN_MS    = 3000;   // 30번을 3초 안에 = 사람 손이 아니다
 const MINI_POP_MAX_MS    = 300000; // 5분이 넘으면 낡은 발급으로 본다
 
@@ -2674,7 +2693,9 @@ async function handleMiniPopClaim(request, env) {
 
   const today = _kstToday();
   try {
-    for (let n = 1; n <= MINI_POP_DAILY_MAX; n++) {
+    // 광고를 본 만큼 오늘 더 할 수 있다.
+    const maxToday = MINI_POP_DAILY_MAX + await _miniAdBonusToday(env, userKey);
+    for (let n = 1; n <= maxToday; n++) {
       const r = await env.DB.prepare(
         `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
          VALUES (?, ?, 'pop', 0, ?, 'approved', unixepoch())
@@ -2684,9 +2705,9 @@ async function handleMiniPopClaim(request, env) {
       if ((r?.meta?.changes ?? 0) > 0) {
         return miniCors(request, JSON.stringify({
           ok: true, granted: true, tokens: MINI_POP_TOKENS,
-          remainToday: MINI_POP_DAILY_MAX - n,
+          remainToday: maxToday - n,
           balance: await _miniBalance(env, userKey),
-          message: `펑! 토큰 ${MINI_POP_TOKENS}개를 드렸어요. 오늘 ${MINI_POP_DAILY_MAX - n}번 더 할 수 있어요.`,
+          message: `펑! 토큰 ${MINI_POP_TOKENS}개를 드렸어요. 오늘 ${maxToday - n}번 더 할 수 있어요.`,
         }), 200);
       }
     }
@@ -4676,7 +4697,7 @@ async function handleDaeun(request, env) {
     }
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
-    const COST = 3;
+    const COST = 6;
     const paid = await accountSpend(env, acct, 'daeun', COST);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: `대운 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
@@ -4835,7 +4856,7 @@ async function handleNameReading(request, env) {
     }
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
-    const COST = 2;
+    const COST = 4;
     const paid = await accountSpend(env, acct, 'name', COST);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: `이름 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
@@ -4999,7 +5020,7 @@ async function handleCompatTiming(request, env) {
     if (!timing) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
 
     // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
-    const COST = 3;
+    const COST = 6;
     const paid = await accountSpend(env, acct, 'compat', COST);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: `궁합 시기 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
@@ -5154,7 +5175,7 @@ async function handleTypeCompat(request, env) {
     }
 
     // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const paid = await accountSpend(env, acct, 'typecompat', 1);
+    const paid = await accountSpend(env, acct, 'typecompat', 2);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: '궁합 보기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
@@ -5379,7 +5400,7 @@ async function handleNumerology(request, env) {
     }
 
     // 1토큰 차감 (atomic INSERT)
-    const paid = await accountSpend(env, acct, 'numerology', 1);
+    const paid = await accountSpend(env, acct, 'numerology', 2);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
@@ -5444,7 +5465,7 @@ async function handleTojeong(request, env) {
     if (!saju) return cors(JSON.stringify({ error: { message: '사주 계산에 실패했습니다.' } }), 400);
 
     // 2토큰 차감 (atomic INSERT — 정식 상세풀이와 동일한 무게)
-    const paid = await accountSpend(env, acct, 'tojeong', 2);
+    const paid = await accountSpend(env, acct, 'tojeong', 4);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
@@ -5528,7 +5549,7 @@ async function handlePhotoReading(request, env) {
     }
 
     // 2토큰 차감 (atomic INSERT)
-    const paid = await accountSpend(env, acct, 'photo_reading', 2);
+    const paid = await accountSpend(env, acct, 'photo_reading', 4);
     if (!paid) {
       return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
