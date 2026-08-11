@@ -15,6 +15,24 @@
 //   'type'      - 오행 유형 두 개 선택
 //   'purpose'   - 택일 목적 선택
 
+// 오늘의 달 위상. worker.js 의 moonPhase() 와 **같은 상수·같은 식**을 쓴다 —
+// 여는 화면에 띄우는 달이 서버가 말하는 달과 다르면 앙금이 남는다.
+// 서버를 부르지 않는 이유는 여는 화면이 네트워크를 기다리면 안 되기 때문이다.
+const SYNODIC_MONTH = 29.530588853;   // 삭망월(일) — 천문 표준값
+const NEW_MOON_JD   = 2451550.09766;  // 기준 삭(Meeus): 2000-01-06
+const UNIX_EPOCH_JD = 2440587.5;
+
+export const MOON_ICONS = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+export const MOON_NAMES = ['삭', '초승달', '상현달', '차오르는 달', '보름달', '기우는 달', '하현달', '그믐달'];
+
+export function moonToday(date = new Date()) {
+  const jd = date.getTime() / 86400000 + UNIX_EPOCH_JD;
+  let age = (jd - NEW_MOON_JD) % SYNODIC_MONTH;
+  if (age < 0) age += SYNODIC_MONTH;
+  const index = Math.floor((age / SYNODIC_MONTH) * 8 + 0.5) % 8;
+  return { index, icon: MOON_ICONS[index], name: MOON_NAMES[index] };
+}
+
 // 생시. 서버는 한글 시진명('자시'~'해시')이나 지지 글자를 받고, 빈값이면 '모름'으로 본다
 // (worker.js 의 computeSaju 주석 참고). 웹의 _SIJI_OPTIONS 와 같은 목록이다 —
 // 값이 어긋나면 같은 사람인데 웹과 미니앱의 사주가 달라진다.

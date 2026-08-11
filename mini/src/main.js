@@ -15,6 +15,7 @@ import {
 } from '@apps-in-toss/web-framework';
 import {
   SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS, SANGAJI,
+  moonToday,
 } from './contents.js';
 
 const API = 'https://myan.riger7070.workers.dev';
@@ -78,6 +79,50 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
     throw err;
   }
   return data;
+}
+
+// ── 여는 화면 ──────────────────────────────────────────────
+//
+// 달이 뜬 밤, 문이 열리고 안도령이 걸어 나온다. 첫 인상을 만드는 자리이자,
+// 로그인 확인(/mini/api/me)이 오가는 동안 빈 화면을 보여주지 않으려는 자리이기도 하다.
+//
+// 두 가지를 지킨다.
+//   - 연출이 끝나기를 기다리되, 준비가 늦으면 더 기다리지 않는다(둘 중 늦은 쪽에 맞춘다).
+//   - 두 번째부터는 짧게 지나간다. 매번 3초를 보고 있으면 그때부터는 장벽이다.
+const SPLASH_MS = 2600;
+const SPLASH_SEEN = 'myan_mini_seen';
+
+function splashHtml() {
+  const moon = moonToday();
+  const stars = Array.from({ length: 18 }, (_, i) => {
+    const x = (i * 37 + 11) % 100;          // 난수 대신 고정 배치 — 매번 같은 밤하늘이 된다
+    const y = (i * 23 + 7) % 55;
+    const d = (i % 5) * 0.4;
+    return `<span class="star" style="left:${x}%;top:${y}%;animation-delay:${d}s"></span>`;
+  }).join('');
+
+  return `<div class="splash" id="splash">
+    <div class="sky">${stars}
+      <div class="moon" title="${moon.name}">${moon.icon}</div>
+    </div>
+    <div class="gate">
+      <div class="door left"></div>
+      <div class="door right"></div>
+      <div class="glow"></div>
+      <img class="oracle" src="${API}/andoryeong.svg" alt=""
+           onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'oracle',textContent:'🧙'}))">
+    </div>
+    <div class="splash-title">MY;安</div>
+    <div class="splash-sub">${moon.name} 아래, 안도령이 기다립니다</div>
+  </div>`;
+}
+
+async function showSplash() {
+  app.innerHTML = splashHtml();
+  // 두 번째부터는 짧게. 매번 3초를 보고 있으면 그때부터는 장벽이다.
+  const ms = sessionStorage.getItem(SPLASH_SEEN) ? 700 : SPLASH_MS;
+  await new Promise(r => setTimeout(r, ms));
+  sessionStorage.setItem(SPLASH_SEEN, '1');
 }
 
 // ── 부팅 ──────────────────────────────────────────────────
@@ -704,6 +749,10 @@ function header() {
 }
 
 function render() {
+  // 여는 화면이 도는 동안에는 아무것도 그리지 않는다. boot() 이 먼저 끝나면
+  // 연출을 덮어써 버려서, 문이 열리다 말고 홈이 튀어나온다.
+  if (state.splashing) return;
+
   const err = state.error ? `<p class="err">${esc(state.error)}</p>` : '';
   let html;
   // 한 번 보여준 안내는 다음 렌더에 남지 않는다.
@@ -1183,4 +1232,8 @@ function bind() {
   }
 }
 
-boot();
+// 연출과 준비를 나란히 돌린다. 둘 중 늦은 쪽이 끝나면 화면이 바뀐다 —
+// 연출이 끝났는데 아직 확인 중이면 기다리고, 반대면 연출을 끝까지 보여준다.
+state.splashing = true;
+Promise.all([showSplash(), boot().catch(() => { state.screen = 'login'; })])
+  .finally(() => { state.splashing = false; render(); });
