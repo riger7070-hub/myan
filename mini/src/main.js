@@ -17,6 +17,22 @@ import {
   SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS, SANGAJI,
   moonToday,
 } from './contents.js';
+import { icon } from './icons.js';
+
+// ── 화면 밝기 ──
+// 기본은 기기 설정을 따른다. 사용자가 직접 고르면 그 뜻을 우선한다.
+// 이 앱은 밤·달이 컨셉이라 다크가 본래 모습이지만, 밝은 데서 보는 사람도 있다.
+const THEME_KEY = 'myan_mini_theme';
+
+function applyTheme(t) {
+  const wanted = t || localStorage.getItem(THEME_KEY)
+    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  document.documentElement.setAttribute('data-theme', wanted);
+  if (t) localStorage.setItem(THEME_KEY, t);
+  return wanted;
+}
+const currentTheme = () => document.documentElement.getAttribute('data-theme') || 'dark';
+applyTheme();
 
 const API = 'https://myan.riger7070.workers.dev';
 const SESSION_KEY = 'myan_mini_session';
@@ -888,6 +904,11 @@ function render() {
           <div class="seg">${GENDERS.map(g =>
             `<button type="button" class="seg-btn${g.v === (p.gender || '') ? ' on' : ''}" data-gender="${g.v}">${g.label}</button>`).join('')}</div>
           <p class="muted small">대운 풀이는 남녀에 따라 흐름이 반대로 갑니다.</p>
+          <label>화면</label>
+          <div class="seg">
+            <button type="button" class="seg-btn${currentTheme() === 'dark' ? ' on' : ''}" data-theme="dark">어둡게</button>
+            <button type="button" class="seg-btn${currentTheme() === 'light' ? ' on' : ''}" data-theme="light">밝게</button>
+          </div>
           <button class="btn" id="btn-save" style="margin-top:20px" ${state.busy ? 'disabled' : ''}>
             ${state.busy ? '저장 중…' : '저장하고 시작하기'}
           </button>
@@ -922,33 +943,33 @@ function render() {
         ${err}
         ${SECTIONS.map(sec => `
           <section class="sec">
-            <h3><span class="sec-icon">${sec.icon}</span>${sec.title}<i class="rule"></i></h3>
+            <h3><span class="sec-icon">${icon(sec.icon)}</span>${sec.title}<i class="rule"></i></h3>
             <div class="tiles">
               ${sec.items.map(it => `
                 <button class="tile" data-item="${it.id}">
-                  <span class="t-icon">${it.icon}</span>
+                  <span class="t-icon">${icon(it.icon)}</span>
                   <span class="t-label">${it.label}</span>
                   <span class="t-cost${it.cost ? '' : ' free'}">${it.cost ? `${it.cost} 토큰` : '무료'}</span>
                 </button>`).join('')}
             </div>
           </section>`).join('')}
         <section class="sec">
-          <h3><span>🎁</span> 토큰 받기</h3>
+          <h3><span class="sec-icon">${icon("secGift")}</span>토큰 받기<i class="rule"></i></h3>
           <div class="tiles">
             <button class="tile" id="btn-checkin">
-              <span class="t-icon">📅</span><span class="t-label">출석 도장</span>
+              <span class="t-icon">${icon("checkin")}</span><span class="t-label">출석 도장</span>
               <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 3토큰'}</span>
             </button>
             <button class="tile" id="btn-quiz">
-              <span class="t-icon">🧠</span><span class="t-label">안도령의 오행 퀴즈</span>
+              <span class="t-icon">${icon("quiz")}</span><span class="t-label">안도령의 오행 퀴즈</span>
               <span class="t-cost">2개 맞히면 1토큰</span>
             </button>
             <button class="tile" id="btn-pop">
-              <span class="t-icon">🎈</span><span class="t-label">안도령 부풀리기</span>
+              <span class="t-icon">${icon("pop")}</span><span class="t-label">안도령 부풀리기</span>
               <span class="t-cost">1토큰 · 하루 3번</span>
             </button>
             ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
-              <span class="t-icon">🎬</span><span class="t-label">광고 보기</span>
+              <span class="t-icon">${icon("ad")}</span><span class="t-label">광고 보기</span>
               <span class="t-cost">${AD_TOKENS}토큰 + 퀴즈·부풀리기 기회 1회</span>
             </button>` : ''}
           </div>
@@ -968,7 +989,7 @@ function render() {
     case 'need': {
       const it = state.item;
       html = `${header()}
-        <div class="brand sm"><h1>${it.icon} ${esc(it.label)}</h1>
+        <div class="brand sm"><h1><span class="ic-title">${icon(it.icon)}</span> ${esc(it.label)}</h1>
           <p>${it.cost} 토큰</p></div>
         <div class="card">${needForm(it)}${err}
           <button class="btn" id="btn-run" style="margin-top:18px">보기</button>
@@ -998,7 +1019,7 @@ function render() {
       // 카드를 뽑았으면 먼저 뒷면만 보여주고, 눌러서 뒤집게 한다.
       if (state.reveal) {
         html = `${header()}
-          <div class="brand sm"><h1>${r.item.icon} ${esc(r.item.label)}</h1>
+          <div class="brand sm"><h1><span class="ic-title">${icon(r.item.icon)}</span> ${esc(r.item.label)}</h1>
             <p>카드를 눌러 뒤집어 보세요</p></div>
           <div class="card-stage">
             <button class="tarot" id="btn-reveal" aria-label="카드 뒤집기">
@@ -1010,7 +1031,7 @@ function render() {
       const paras = String(r.body || '').split(/\n{2,}|\n/).filter(Boolean)
         .map(t => `<p>${esc(t)}</p>`).join('');
       html = `${header()}
-        <div class="brand sm"><h1>${r.item.icon} ${esc(r.item.label)}</h1></div>
+        <div class="brand sm"><h1><span class="ic-title">${icon(r.item.icon)}</span> ${esc(r.item.label)}</h1></div>
         ${r.card ? `<div class="card-stage"><div class="tarot flipped">
             <span class="tarot-face">${esc(r.card.icon || '🔮')}<b>${esc(r.card.name || '')}</b>
             ${r.upright === false ? '<i>역방향</i>' : '<i>정방향</i>'}</span>
@@ -1341,6 +1362,11 @@ function bind() {
     el.classList.add('flipping');
     setTimeout(() => { state.reveal = false; render(); }, 620);
   });
+
+  // 화면 밝기는 고르는 즉시 바꿔 보여준다 — 저장 버튼을 눌러야 바뀌면 확인이 안 된다.
+  for (const el of document.querySelectorAll('[data-theme]')) {
+    el.onclick = () => { applyTheme(el.dataset.theme); render(); };
+  }
 
   // 성별은 선택 즉시 화면에 표시만 해 둔다(저장은 '저장하기'에서 한 번에).
   for (const el of document.querySelectorAll('[data-gender]')) {
