@@ -112,6 +112,15 @@ export const ICONS = {
   secGift:   S(`<rect x="3.5" y="9" width="17" height="11.5" rx="2"/><path d="M3.5 13.5h17M12 9v11.5"/>
                 <path d="M12 9S10.6 4.5 8.4 4.5a2.2 2.2 0 0 0 0 4.5Z"/>
                 <path d="M12 9s1.4-4.5 3.6-4.5a2.2 2.2 0 0 1 0 4.5Z"/>`),
+
+  // ── 마이페이지 ──
+  secProfile: S(`<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>`),
+  // 반은 해, 반은 달 — 밝기 설정
+  secScreen:  S(`<circle cx="12" cy="12" r="5"/>
+                 <path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
+                 <path d="M12 7a5 5 0 0 0 0 10Z" fill="currentColor" stroke="none" opacity=".55"/>`),
+  secAccount: S(`<path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14"/>
+                 <path d="M17.5 8.5 21 12l-3.5 3.5M21 12h-9"/>`),
 };
 
 /** 없는 이름을 불러도 화면이 비지 않게 빈 자리를 돌려준다. */

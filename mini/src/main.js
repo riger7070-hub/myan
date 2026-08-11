@@ -884,11 +884,33 @@ function render() {
 
     case 'profile': {
       const p = state.profile || {};
+      // 처음 설정하는 사람과 이미 쓰고 있는 사람은 필요한 게 다르다.
+      // 처음이면 "생년월일을 받는 화면", 그다음부터는 "내 것을 확인하고 고치는 화면"이다.
+      const setup = !p.birthYear;
+      const genderLabel = GENDERS.find(g => g.v === p.gender)?.label || '';
+      const sijiLabel = (SIJI.find(([v]) => v === (p.birthHour || ''))?.[1] || '')
+        .replace(/^\S+\s/, '');   // 요약 줄에서는 앞의 그림글자를 뺀다
+
       html = `
-        <div class="brand"><h1>MY;安</h1></div>
+        ${setup ? '<div class="brand"><h1>MY;安</h1></div>' : `
+          ${header()}
+          <section class="hero mypage">
+            <div class="hero-sky"></div>
+            <div class="hero-text">
+              <p class="hero-date">내 정보</p>
+              <h2 class="hero-hi">${esc(p.name || '이름 없음')}</h2>
+              <div class="mp-facts">
+                <span>${esc(p.birthYear)}. ${esc(p.birthMonth)}. ${esc(p.birthDay)}</span>
+                ${sijiLabel ? `<span>${esc(sijiLabel)}</span>` : '<span class="dim">시각 모름</span>'}
+                ${genderLabel ? `<span>${esc(genderLabel)}</span>` : '<span class="dim">성별 미입력</span>'}
+              </div>
+            </div>
+            <div class="mp-token"><b>${state.tokens}</b><span>토큰</span></div>
+          </section>`}
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('secProfile')}</span>${setup ? '생년월일' : '사주 정보'}<i class="rule"></i></h3>
         <div class="card">
-          <h2>생년월일을 알려주세요</h2>
-          <p class="muted">사주를 계산하는 데 필요해요. 태어난 시각까지 넣으면 더 정확해집니다.</p>
+          ${setup ? '<p class="muted" style="margin-bottom:2px">사주를 계산하는 데 필요해요. 태어난 시각까지 넣으면 더 정확해집니다.</p>' : ''}
           <label>이름 (선택)</label>
           <input id="f-name" value="${esc(p.name || '')}" placeholder="어떻게 불러드릴까요">
           <label>생년월일</label>
@@ -904,21 +926,34 @@ function render() {
           <div class="seg">${GENDERS.map(g =>
             `<button type="button" class="seg-btn${g.v === (p.gender || '') ? ' on' : ''}" data-gender="${g.v}">${g.label}</button>`).join('')}</div>
           <p class="muted small">대운 풀이는 남녀에 따라 흐름이 반대로 갑니다.</p>
-          <label>화면</label>
-          <div class="seg">
-            <button type="button" class="seg-btn${currentTheme() === 'dark' ? ' on' : ''}" data-theme="dark">어둡게</button>
-            <button type="button" class="seg-btn${currentTheme() === 'light' ? ' on' : ''}" data-theme="light">밝게</button>
-          </div>
           <button class="btn" id="btn-save" style="margin-top:20px" ${state.busy ? 'disabled' : ''}>
-            ${state.busy ? '저장 중…' : '저장하고 시작하기'}
+            ${state.busy ? '저장 중…' : setup ? '저장하고 시작하기' : '저장하기'}
           </button>
           ${err}
         </div>
-        ${state.profile?.birthYear ? `
-          <button class="btn ghost" id="btn-logout">로그아웃</button>
-          <p class="muted small" style="text-align:center;margin-top:10px">
-            토큰은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
-          </p>` : ''}
+        </section>
+
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('secScreen')}</span>화면<i class="rule"></i></h3>
+          <div class="card">
+            <div class="seg">
+              <button type="button" class="seg-btn${currentTheme() === 'dark' ? ' on' : ''}" data-theme="dark">어둡게</button>
+              <button type="button" class="seg-btn${currentTheme() === 'light' ? ' on' : ''}" data-theme="light">밝게</button>
+            </div>
+            <p class="muted small" style="margin-top:10px">고르지 않으면 휴대폰 설정을 따라갑니다.</p>
+          </div>
+        </section>
+
+        ${setup ? '' : `
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('secAccount')}</span>계정<i class="rule"></i></h3>
+          <div class="card">
+            <button class="btn ghost" id="btn-logout">로그아웃</button>
+            <p class="muted small" style="margin-top:10px">
+              토큰과 지난 기록은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
+            </p>
+          </div>
+        </section>`}
         ${FOOTER}`;
       break;
     }

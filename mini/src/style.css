@@ -222,6 +222,26 @@ a { color: var(--gold-dim); }
   0%, 100% { transform: translateY(0) scale(1); }
   50%      { transform: translateY(-3px) scale(1.04); }
 }
+/* 마이페이지 머리 — 홈 히어로와 같은 결이되 달 대신 잔액을 둔다. */
+.hero.mypage { padding: 22px 22px 20px; margin-bottom: 22px; }
+.mp-facts {
+  display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 12px;
+}
+.mp-facts span {
+  font-size: 0.79rem; color: var(--gold); padding: 4px 10px; border-radius: 999px;
+  background: rgba(201, 169, 110, 0.09); border: 1px solid var(--line);
+}
+:root[data-theme='light'] .mp-facts span { background: rgba(140, 100, 32, 0.07); }
+/* 아직 안 채운 항목은 눌러서 채우라는 뜻으로 흐리게 둔다. */
+.mp-facts span.dim { color: var(--text-dim); border-style: dashed; }
+.mp-token {
+  position: absolute; right: 20px; top: 20px; text-align: right; line-height: 1.2;
+}
+.mp-token b {
+  display: block; font-size: 1.7rem; font-weight: 600; color: var(--gold-light);
+}
+.mp-token span { font-size: 0.74rem; color: var(--text-dim); }
+
 .hero-text { position: relative; }
 .hero-date {
   font-size: 0.78rem; letter-spacing: 0.06em; color: var(--gold);
