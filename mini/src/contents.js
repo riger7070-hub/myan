@@ -106,6 +106,9 @@ export const SECTIONS = [
       { id: 'topic',  icon: '✨', label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
       { id: 'lucky',  icon: '🍀', label: '오늘의 럭키 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
       { id: 'saju',   icon: '📜', label: '내 사주 풀이',        cost: 0, path: '/saju-reading',       need: null, free: true },
+      // 산가지는 서버를 안 부르는 무료 재미다. 토큰이 걸린 놀이들과 같은 칸에 두면
+      // 보상이 있는 줄 알고 눌렀다 실망한다. 오늘의 운세 곁이 제자리다.
+      { id: 'stick',  icon: '🎋', label: '산가지 뽑기',          cost: 0, path: null,                  need: null, free: true, local: true },
     ],
   },
 ];

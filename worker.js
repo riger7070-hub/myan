@@ -2403,7 +2403,9 @@ async function handleMiniCheckin(request, env) {
       `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
        VALUES (?, ?, 'checkin', 0, 0, 'approved', unixepoch())
        ON CONFLICT(id) DO NOTHING`
-    ).bind(`checkin:${userKey}:${today}`, userKey, 0).run();
+    // ⚠️ 물음표가 둘이므로 값도 둘이다. 셋을 넘기면 D1 이 통째로 거부해서
+    //    출석이 '처리에 실패했습니다'로만 보인다(실제로 그랬다).
+    ).bind(`checkin:${userKey}:${today}`, userKey).run();
 
     // 최근 도장을 날짜 역순으로 훑어 연속 일수를 센다.
     const rows = await env.DB.prepare(

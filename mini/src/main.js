@@ -11,6 +11,7 @@
 
 import {
   appLogin, IAP, saveBase64Data, getTossShareLink, share, GoogleAdMob,
+  graniteEvent, closeView,
 } from '@apps-in-toss/web-framework';
 import {
   SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS, SANGAJI,
@@ -182,6 +183,8 @@ function openItem(item) {
   state.item = item;
   state.form = {};
   state.error = '';
+  // 산가지는 서버도 AI 도 부르지 않는다. 콘텐츠 목록에 있지만 처리는 앱 안에서 끝난다.
+  if (item.local) { drawStick(); return; }
   if (item.need) { go('need'); return; }
   runItem(item);
 }
@@ -416,8 +419,24 @@ function tapPop() {
   p.count++;
   if (p.count >= p.taps) {
     p.popped = true;
-    render();
-    claimPop();
+    // 터지는 순간을 보여주고 나서 결과로 넘어간다. 곧장 화면을 갈아 끼우면
+    // 30번 두드린 보람이 없다.
+    const el = document.getElementById('pop-oracle');
+    const stage = document.querySelector('.pop-stage');
+    if (el) el.classList.add('burst');
+    if (stage) {
+      // 사방으로 흩어지는 조각. 요소를 미리 만들어 두지 않고 그때 붙였다 지운다.
+      for (let i = 0; i < 14; i++) {
+        const s = document.createElement('span');
+        s.className = 'spark';
+        const angle = (Math.PI * 2 * i) / 14;
+        s.style.setProperty('--dx', `${Math.cos(angle) * 130}px`);
+        s.style.setProperty('--dy', `${Math.sin(angle) * 130}px`);
+        s.textContent = ['✦', '✧', '·'][i % 3];
+        stage.appendChild(s);
+      }
+    }
+    claimPop(700);
     return;
   }
   // 두드릴 때마다 다시 그리면 무겁다. 크기만 직접 만진다.
@@ -432,8 +451,10 @@ function tapPop() {
   if (wrap) wrap.style.width = `${Math.round((p.count / p.taps) * 100)}%`;
 }
 
-async function claimPop() {
+async function claimPop(delayMs = 0) {
   const p = state.pop;
+  // 터지는 연출이 끝날 시간을 준다. 서버 호출은 그 사이에 함께 진행한다.
+  const shown = delayMs ? new Promise(r => setTimeout(r, delayMs)) : null;
   try {
     const r = await api('/mini/api/pop', {
       method: 'POST', body: { issuedAt: p.issuedAt, sig: p.sig, taps: p.count },
@@ -443,6 +464,7 @@ async function claimPop() {
   } catch (e) {
     state.pop = { ...p, done: { message: e?.message || '보상을 받지 못했어요.' } };
   }
+  if (shown) await shown;
   render();
 }
 
@@ -617,22 +639,39 @@ async function withBusy(fn) {
 //
 // 로딩 화면은 쌓지 않고 갈아 끼운다(replace). 결과를 기다리다 뒤로가면 로딩이 아니라
 // 그 앞 화면으로 돌아가야 자연스럽다.
-function go(screen, { fromPop = false } = {}) {
-  state.screen = screen;
-  if (!fromPop) {
-    const entry = { screen, at: Date.now() };
-    if (screen === 'loading' || history.state?.screen === screen) history.replaceState(entry, '');
-    else history.pushState(entry, '');
+// 화면 스택. 토스 웹뷰의 뒤로가기는 **브라우저 이력을 타지 않는다** — 네이티브가
+// graniteEvent 의 backEvent 로 알려주고, 앱이 아무것도 안 하면 웹뷰가 그대로 닫힌다.
+// 그래서 history API 대신 우리가 직접 스택을 들고 있다가 되돌린다.
+const _stack = [];
+
+function go(screen, { fromBack = false } = {}) {
+  if (!fromBack && state.screen && state.screen !== screen) {
+    // 로딩은 쌓지 않는다. 기다리다 뒤로가면 로딩이 아니라 그 앞 화면으로 돌아가야 한다.
+    if (state.screen !== 'loading' && state.screen !== 'boot') _stack.push(state.screen);
   }
+  state.screen = screen;
   render();
 }
 
-window.addEventListener('popstate', (e) => {
-  const prev = e.state?.screen;
-  if (!prev) return;            // 이력 바닥 — 기본 동작(앱 종료)에 맡긴다
-  // 결과를 기다리는 중이었다면 그 요청은 그냥 버린다(runItem 이 화면을 확인하고 넘긴다).
-  go(prev, { fromPop: true });
-});
+function goBack() {
+  const prev = _stack.pop();
+  if (prev) { go(prev, { fromBack: true }); return; }
+  // 스택이 비었으면 더 돌아갈 곳이 없다 — 그때는 앱을 닫는 게 기대되는 동작이다.
+  closeView().catch(() => {});
+}
+
+// 네이티브 뒤로가기(제스처·하드웨어 버튼)를 받는다.
+try {
+  graniteEvent.addEventListener('backEvent', {
+    onEvent: () => goBack(),
+    onError: (e) => console.warn('[back]', e),
+  });
+} catch (e) {
+  console.warn('[back] 구독 실패', e);
+}
+
+// 안드로이드 일부 환경은 브라우저 이력도 함께 움직인다. 그쪽으로도 들어오면 같이 처리한다.
+window.addEventListener('popstate', () => goBack());
 
 // ── 화면 ──────────────────────────────────────────────────
 
@@ -751,16 +790,12 @@ function render() {
               <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 3토큰'}</span>
             </button>
             <button class="tile" id="btn-quiz">
-              <span class="t-icon">🧠</span><span class="t-label">오행 퀴즈</span>
-              <span class="t-cost">다 맞히면 1토큰</span>
+              <span class="t-icon">🧠</span><span class="t-label">안도령의 오행 퀴즈</span>
+              <span class="t-cost">2개 맞히면 1토큰</span>
             </button>
             <button class="tile" id="btn-pop">
-              <span class="t-icon">🫧</span><span class="t-label">안도령 부풀리기</span>
+              <span class="t-icon">🎈</span><span class="t-label">안도령 부풀리기</span>
               <span class="t-cost">1토큰 · 하루 3번</span>
-            </button>
-            <button class="tile" id="btn-stick">
-              <span class="t-icon">🎋</span><span class="t-label">산가지 뽑기</span>
-              <span class="t-cost">무료</span>
             </button>
             ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
               <span class="t-icon">🎬</span><span class="t-label">광고 보기</span>
@@ -859,8 +894,8 @@ function render() {
       if (!q) { html = ''; break; }
       const done = q.done;
       html = `${header()}
-        <div class="brand sm"><h1>🧠 오행 퀴즈</h1>
-          <p>${done ? '' : '두 문제 이상 맞히면 토큰 1개'}</p></div>
+        <div class="brand sm"><h1>🧠 안도령의 오행 퀴즈</h1>
+          <p>${done ? '' : '안도령이 내는 문제예요. 두 개 이상 맞히면 토큰 1개'}</p></div>
         ${done || !q.tips?.length ? '' : `
           <div class="card hint">
             <button class="hint-toggle" id="btn-tips">
@@ -903,7 +938,7 @@ function render() {
       const p = state.pop;
       if (!p) { html = ''; break; }
       html = `${header()}
-        <div class="brand sm"><h1>🫧 안도령 부풀리기</h1>
+        <div class="brand sm"><h1>🎈 안도령 부풀리기</h1>
           <p>${p.done ? '' : `${p.taps}번 두드리면 펑!`}</p></div>
         ${p.done ? `
           <div class="card" style="text-align:center;padding:30px 22px">

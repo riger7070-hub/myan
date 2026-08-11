@@ -189,6 +189,25 @@ input[type=file] { padding: 11px; font-size: 0.88rem; }
   40%  { filter: brightness(1.5); }
   100% { filter: brightness(1); }
 }
+/* 다 부풀면 확 커졌다가 사라진다. */
+.pop-btn img.burst { animation: burst 0.5s cubic-bezier(0.3, 0, 0.2, 1) forwards; }
+@keyframes burst {
+  0%   { transform: scale(1.9); opacity: 1; }
+  35%  { transform: scale(2.4); opacity: 1; filter: brightness(2.2); }
+  100% { transform: scale(3.4); opacity: 0; filter: brightness(3); }
+}
+.pop-stage { position: relative; }
+.spark {
+  position: absolute; left: 50%; top: 50%;
+  color: var(--gold-light); font-size: 1.4rem; pointer-events: none;
+  animation: spark 0.65s ease-out forwards;
+}
+@keyframes spark {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1); opacity: 0; }
+}
+
 .pop-track {
   height: 10px; border-radius: 999px; overflow: hidden;
   background: rgba(201, 169, 110, 0.12); border: 1px solid var(--line);
