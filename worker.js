@@ -5404,7 +5404,7 @@ async function handleNumerology(request, env) {
     // 1토큰 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'numerology', 2);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'numerology', 1);
     const remainingTokens = await accountBalance(env, acct);

@@ -61,16 +61,27 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
   if (auth && state.session) headers.Authorization = `Bearer ${state.session}`;
 
   let res;
+  // 응답이 영영 안 오면 로딩 화면에 갇힌다. 실제로 그런 신고가 있었다 —
+  // 무엇이 잘못됐는지도 모른 채 기다리게 두느니 끊고 알려주는 게 낫다.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
-    res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    res = await fetch(API + path, {
+      method, headers, signal: ctrl.signal,
+      body: body ? JSON.stringify(body) : undefined,
+    });
   } catch {
     // fetch 가 던지면 브라우저는 이유를 안 알려준다("Failed to fetch"). 원인은 대개
     // CORS 아니면 네트워크인데, 토스 웹뷰엔 개발자 도구가 없어서 실제 오리진을
     // 함께 보여줘야 어느 쪽인지 판단할 수 있다.
-    const err = new Error('서버에 연결하지 못했어요.');
-    err.network = true;
+    const err = new Error(ctrl.signal.aborted
+      ? '응답이 너무 오래 걸려 중단했어요. 토큰을 쓰셨다면 지난 기록을 확인해 주세요.'
+      : '서버에 연결하지 못했어요.');
+    err.network = !ctrl.signal.aborted;
     err.origin = location.origin;
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -114,6 +125,7 @@ function splashHtml() {
     </div>
     <div class="splash-title">MY;安</div>
     <div class="splash-sub">${moon.name} 아래, 안도령이 기다립니다</div>
+    <div class="splash-wait"><div class="spinner"></div>문을 여는 중입니다</div>
   </div>`;
 }
 
@@ -263,7 +275,15 @@ async function runItem(item) {
     // 토큰은 이미 나갔지만 결과는 '지난 기록'에 남으므로 잃어버리지 않는다.
     if (seq !== _runSeq || state.screen !== 'loading') return;
 
-    state.result = { item, ...extractResult(data), card: data.card, upright: data.upright };
+    // 응답 모양이 예상과 달라 여기서 던지면 화면이 로딩에 갇힌다. 본문만이라도 띄운다.
+    let parsed;
+    try {
+      parsed = extractResult(data);
+    } catch (e) {
+      console.error('[extract]', e);
+      parsed = { body: data.reading || '', extras: [] };
+    }
+    state.result = { item, ...parsed, card: data.card, upright: data.upright };
     // 카드를 뽑는 콘텐츠는 결과를 곧장 들이밀지 않는다. 뒤집는 순간이 재미의 절반이다.
     state.reveal = !!data.card;
     go('result');
@@ -1127,7 +1147,9 @@ function render() {
   // 로딩 화면에서만 문구를 돌린다. 다른 화면으로 넘어가면 타이머를 반드시 끈다 —
   // 안 그러면 없어진 요소를 계속 찾으며 돈다.
   if (state.screen === 'loading') startLoadingTicker(); else stopLoadingTicker();
-  bind();
+  // 버튼 연결이 실패해도 화면은 이미 그려져 있다. 여기서 던지면 로딩 화면이
+  // 그대로 남아 "결과가 안 뜬다"로 보인다.
+  try { bind(); } catch (e) { console.error('[bind]', e); }
 }
 
 function needForm(it) {
@@ -1307,4 +1329,14 @@ function bind() {
 // 연출이 끝났는데 아직 확인 중이면 기다리고, 반대면 연출을 끝까지 보여준다.
 state.splashing = true;
 Promise.all([showSplash(), boot().catch(() => { state.screen = 'login'; })])
-  .finally(() => { state.splashing = false; render(); });
+  .finally(async () => {
+    // 연출과 준비가 둘 다 끝난 지금에야 문을 닫는다. 준비가 늦으면 그동안
+    // 여는 화면이 그대로 남아 있으므로 빈 화면을 볼 일이 없다.
+    const el = document.getElementById('splash');
+    if (el) {
+      el.classList.add('done');
+      await new Promise(r => setTimeout(r, 450));   // 사라지는 동안 기다린다
+    }
+    state.splashing = false;
+    render();
+  });

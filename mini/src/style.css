@@ -37,8 +37,19 @@ a { color: var(--gold-dim); }
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: radial-gradient(ellipse 90% 60% at 50% 18%, #1a1610 0%, #0a0807 45%, #050506 100%);
   overflow: hidden;
-  animation: splashOut 0.5s ease-in 2.1s forwards;
+  /* ⚠️ 시간이 지났다고 저절로 사라지면 안 된다. 로그인 확인이 늦어지면
+     연출은 끝났는데 뒤에 아무것도 없어서 빈 화면이 남는다.
+     준비가 끝났을 때 .done 을 붙여 그때 사라지게 한다. */
 }
+.splash.done { animation: splashOut 0.45s ease-in forwards; }
+
+/* 연출이 다 끝났는데도 준비가 안 됐을 때를 위한 자리. 멈춘 게 아니라고 알린다. */
+.splash-wait {
+  position: absolute; bottom: 12%; left: 0; right: 0; text-align: center;
+  color: var(--text-dim); font-size: 0.8rem; opacity: 0;
+  animation: fadeUp 0.6s ease-out 3.2s forwards;
+}
+.splash-wait .spinner { width: 22px; height: 22px; margin-bottom: 10px; }
 .sky { position: absolute; inset: 0; }
 .star {
   position: absolute; width: 2px; height: 2px; border-radius: 50%;
