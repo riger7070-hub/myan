@@ -235,6 +235,7 @@ function bodyFor(item, profile, form) {
     case 'rune':       return base;
     case 'lucky':      return base;
     case 'daeun':      return { ...base, birth, gender: profile.gender || '' };
+    case 'spouse':     return { ...base, birth, gender: profile.gender || '' };
     case 'numerology': return { ...base, birth };
     case 'tojeong':    return { ...base, birth };
     case 'astro':      return { ...base, birth };
@@ -332,6 +333,12 @@ function extractResult(d) {
   add('점수', d.score != null ? `${d.score}점` : '');
   add('사주', d.saju1 || d.saju);
   add('오늘의 기운', d.dayElem);
+  if (d.branch && d.sipsin) add('배우자궁', `${d.branch}(${d.elem || ''}) · ${d.sipsin}`);
+  if (Array.isArray(d.timeline) && d.timeline.length) {
+    // 흔들리는 해만 짚는다. 합(合)은 본문에서 다루므로 목록까지 늘리지 않는다.
+    const shake = d.timeline.filter(t => t.kinds?.some(k => k !== '합'));
+    if (shake.length) add('살펴볼 해', shake.slice(0, 4).map(t => `${t.year}년`).join(', '));
+  }
   add('연도', d.year);
   if (d.myType && d.partnerType) add('유형', `${d.myType} × ${d.partnerType}`);
   if (d.moon && typeof d.moon.illumination === 'number') add('달', `밝기 ${d.moon.illumination}%`);

@@ -1531,6 +1531,7 @@ export default {
     if (path === '/api/zodiac-fortune' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleZodiacFortune(request, env)); }
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAstroTransit(request, env)); }
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAuspiciousDays(request, env)); }
+    if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
     if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDaeun(request, env)); }
     if (path === '/api/name-reading'   && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNameReading(request, env)); }
     if (path === '/api/compat-timing'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleCompatTiming(request, env)); }
@@ -4687,6 +4688,181 @@ function computeDaeun(birth, gender, refYear) {
   return { forward: yun.isForward(), qiyun, periods, current, next, liunian };
 }
 
+// ════════════════════════════════════════════
+//  배우자궁(配偶者宮) 풀이
+// ════════════════════════════════════════════
+// 사주 네 기둥 중 **일지(日支)**, 곧 태어난 날 기둥의 아랫글자가 배우자 자리다.
+// 여기 앉은 글자와 십신으로 배우자상과 관계의 결을 보고, 대운·세운이 이 자리를
+// 충(沖)·형(刑)으로 건드리는 때를 관계가 시험받는 시기로 본다.
+//
+// ⚠️ "이혼 사주"로 만들지 않은 이유가 계산에도 반영돼 있다. 일지가 충을 받는다고
+//    반드시 헤어지는 게 아니다 — 자료들도 한목소리로 그렇게 말하고, 충이 오히려
+//    관계를 새로 깊게 만들기도 한다. 그래서 이 함수는 '이혼 여부'를 판정하지 않고
+//    **어느 해에 어떤 종류의 흔들림이 오는지**만 돌려준다. 판단은 사람 몫이다.
+
+// 지지 육충(六沖) — 정반대 자리끼리 부딪친다(여섯 칸 차이).
+const JJ_CHUNG = { 子:'午', 午:'子', 丑:'未', 未:'丑', 寅:'申', 申:'寅',
+                   卯:'酉', 酉:'卯', 辰:'戌', 戌:'辰', 巳:'亥', 亥:'巳' };
+// 지지 육합(六合) — 맞물려 안정되는 짝.
+const JJ_HAP   = { 子:'丑', 丑:'子', 寅:'亥', 亥:'寅', 卯:'戌', 戌:'卯',
+                   辰:'酉', 酉:'辰', 巳:'申', 申:'巳', 午:'未', 未:'午' };
+// 형(刑) — 삼형과 상형, 자형.
+const JJ_HYUNG = {
+  寅: ['巳', '申'], 巳: ['寅', '申'], 申: ['寅', '巳'],   // 삼형
+  丑: ['戌', '未'], 戌: ['丑', '未'], 未: ['丑', '戌'],   // 삼형
+  子: ['卯'], 卯: ['子'],                                 // 상형
+  辰: ['辰'], 午: ['午'], 酉: ['酉'], 亥: ['亥'],          // 자형
+};
+
+/** 십신. 일간과 상대 오행·음양의 관계로 정한다. */
+const SAENG = { 木:'火', 火:'土', 土:'金', 金:'水', 水:'木' };   // 내가 낳는다
+const GEUK  = { 木:'土', 土:'水', 水:'火', 火:'金', 金:'木' };   // 내가 이긴다
+
+function _sipsin(dayGan, targetElem, targetYang) {
+  const gi = CG.indexOf(dayGan);
+  if (gi < 0) return null;
+  const me = CGO[gi];
+  const myYang = gi % 2 === 0;          // 갑·병·무·경·임이 양
+  const same = myYang === targetYang;
+
+  if (me === targetElem)          return same ? '비견' : '겁재';
+  if (SAENG[me] === targetElem)   return same ? '식신' : '상관';
+  if (GEUK[me] === targetElem)    return same ? '편재' : '정재';
+  if (GEUK[targetElem] === me)    return same ? '편관' : '정관';
+  if (SAENG[targetElem] === me)   return same ? '편인' : '정인';
+  return null;
+}
+
+/** 십신이 배우자를 뜻하는 자리인지. 남자는 재성, 여자는 관성을 배우자로 본다. */
+function _isSpouseStar(sipsin, gender) {
+  if (gender === 'M') return sipsin === '정재' || sipsin === '편재';
+  if (gender === 'F') return sipsin === '정관' || sipsin === '편관';
+  return false;   // 성별을 모르면 단정하지 않는다
+}
+
+const _SIPSIN_MEANING = {
+  비견: '나와 같은 결. 대등한 동반자를 원하고, 서로 자기 자리를 지키려는 힘이 함께 있습니다.',
+  겁재: '가깝고도 겨루는 사이. 함께 나아가지만 몫을 나누는 데서 부딪히기 쉽습니다.',
+  식신: '먹이고 돌보는 자리. 편안하고 너그러운 관계를 만들지만 무뎌지기도 합니다.',
+  상관: '드러내고 표현하는 자리. 솔직해서 가깝지만, 그 솔직함이 상처가 되기도 합니다.',
+  정재: '알뜰하고 성실한 자리. 안정된 살림과 꾸준한 정을 중히 여깁니다.',
+  편재: '넓고 활달한 자리. 씀씀이도 마음도 크지만 한곳에 머물기를 답답해하기도 합니다.',
+  정관: '반듯하고 책임지는 자리. 질서와 도리를 지키려 하고 약속을 무겁게 봅니다.',
+  편관: '강하고 밀어붙이는 자리. 든든하지만 때로 억누르는 힘으로 느껴집니다.',
+  정인: '품고 기르는 자리. 이해받는 느낌이 크지만 기대는 마음도 함께 큽니다.',
+  편인: '깊고 사려 깊은 자리. 속을 잘 헤아리되 거리를 두려는 면도 있습니다.',
+};
+
+/**
+ * 배우자궁을 읽는다.
+ * @param {{year,month,day,hour}} birth
+ * @param {'M'|'F'|null} gender
+ * @param {number} fromYear 시기를 훑기 시작할 해
+ * @param {number} years 몇 해를 볼지
+ */
+function computeSpousePalace(birth, gender, fromYear, years = 10) {
+  const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
+  if (!saju || !saju.dp || saju.dp.length < 2) return null;
+
+  const branch = saju.dp[1];                   // 일지 = 배우자궁
+  const bi = JJ.indexOf(branch);
+  if (bi < 0) return null;
+  const elem = JJO[bi];
+  const yang = bi % 2 === 0;                   // 자·인·진·오·신·술이 양
+  const sipsin = _sipsin(saju.dayGan, elem, yang);
+
+  // 앞으로 몇 해가 이 자리를 어떻게 건드리는지.
+  const timeline = [];
+  for (let i = 0; i < years; i++) {
+    const y = fromYear + i;
+    // 세운 지지는 60갑자 순환에서 온다. 1984년(갑자년)의 지지가 子.
+    const yb = JJ[(((y - 1984) % 12) + 12) % 12];
+    const kinds = [];
+    if (JJ_CHUNG[branch] === yb) kinds.push('충');
+    if ((JJ_HYUNG[branch] || []).includes(yb)) kinds.push('형');
+    if (JJ_HAP[branch] === yb) kinds.push('합');
+    if (kinds.length) timeline.push({ year: y, branch: yb, kinds });
+  }
+
+  return {
+    branch, elem, sipsin,
+    meaning: _SIPSIN_MEANING[sipsin] || '',
+    isSpouseStar: _isSpouseStar(sipsin, gender),
+    chung: JJ_CHUNG[branch] || null,
+    hap: JJ_HAP[branch] || null,
+    timeline,
+    saju: saju.text,
+    dayGan: saju.dayGan,
+  };
+}
+
+async function handleSpousePalace(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { lang = 'ko', birth, gender } = await request.json().catch(() => ({}));
+    const g = _normalizeGender(gender);
+    const now = new Date(Date.now() + 9 * 3600000);
+    const sp = (birth && birth.year)
+      ? computeSpousePalace(birth, g, now.getFullYear(), 10) : null;
+    if (!sp) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+
+    const COST = 3;
+    const paid = await accountSpend(env, acct, 'spouse', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: `배우자궁 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'spouse', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const shake = sp.timeline.filter(t => t.kinds.some(k => k !== '합'));
+    const steady = sp.timeline.filter(t => t.kinds.includes('합'));
+    const prompt = [
+      `상담자의 사주: ${sp.saju}`,
+      `배우자궁(일지)은 ${sp.branch}(${sp.elem}) 이고, 일간 ${sp.dayGan} 기준 십신은 ${sp.sipsin} 입니다.`,
+      `그 자리의 결: ${sp.meaning}`,
+      sp.isSpouseStar ? '이 자리가 배우자를 뜻하는 별과 겹칩니다.' : '',
+      g ? `상담자는 ${g === 'M' ? '남성' : '여성'} 입니다.` : '성별을 모르니 단정하지 말고 두루 짚어 주세요.',
+      shake.length ? `앞으로 이 자리가 흔들리는 해: ${shake.map(t => `${t.year}년(${t.kinds.join('·')})`).join(', ')}` : '앞으로 10년 안에 이 자리를 크게 치는 해는 없습니다.',
+      steady.length ? `자리가 맞물려 안정되는 해: ${steady.map(t => t.year + '년').join(', ')}` : '',
+      '',
+      '이 사람의 배우자궁을 풀어 주세요. 다음 순서로 이어지는 글로 씁니다.',
+      '1) 이 자리가 말해 주는 인연의 결과 어울리는 배우자상',
+      '2) 관계에서 되풀이되기 쉬운 나의 태도 — 장점과 함께',
+      '3) 흔들리는 해가 있다면 그때 무엇을 살피면 좋은지',
+      '4) 지금 곁에 있는 사람과 더 잘 지내기 위한 한 가지',
+      '',
+      '⚠️ 반드시 지킬 것: 헤어짐이나 이혼을 예언하지 마세요. 충이나 형이 든다고 관계가',
+      '끝나는 것이 아니라 "시험을 받는 때"일 뿐이며, 그 시기를 지나며 오히려 깊어지기도',
+      '한다고 분명히 말해 주세요. 겁을 주는 대신 살필 지점과 할 수 있는 일을 짚어 주세요.',
+      '혼자인 분이 읽을 수도 있으니 이미 배우자가 있다고 단정하지 마세요.',
+      '전체 600자 내외.',
+    ].filter(Boolean).join(String.fromCharCode(10));
+
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'spouse', `배우자궁 ${sp.branch}·${sp.sipsin}`, reading,
+      { branch: sp.branch, sipsin: sp.sipsin }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading,
+      branch: sp.branch, elem: sp.elem, sipsin: sp.sipsin,
+      timeline: sp.timeline, remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[SPOUSE]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '오류가 발생했습니다.' } }), 500);
+  }
+}
 async function handleDaeun(request, env) {
   // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
   let refund = null;

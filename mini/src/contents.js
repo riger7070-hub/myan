@@ -101,6 +101,7 @@ export const SECTIONS = [
     items: [
       { id: 'takil',   icon: 'takil',   label: '택일 · 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
       { id: 'compat',  icon: 'compat',  label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'spouse',  icon: 'spouse',  label: '배우자궁 풀이',          cost: 3, path: '/api/spouse-palace',   need: null },
       { id: 'tojeong', icon: 'tojeong', label: '토정비결풍 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
     ],
   },
