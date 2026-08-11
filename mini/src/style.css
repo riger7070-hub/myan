@@ -185,7 +185,23 @@ a { color: var(--gold-dim); }
   letter-spacing: 0.03em;
 }
 
-.tokenbar { display: flex; justify-content: flex-end; margin: 2px 0 16px; }
+/* 홈에서는 왼쪽에 길잡이가 하나 붙는다. 다른 화면에서는 알약만 오른쪽에 남는다. */
+.tokenbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 2px 0 16px;
+}
+.tokenbar > :only-child { margin-left: auto; }
+/* 무료 토큰을 매일 받을 수 있다는 걸 알리는 자리. 메뉴 안에만 두면 처음 오신 분은
+   3토큰을 다 쓰고도 그런 게 있는 줄 모른 채 나가신다. */
+.tb-earn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: none; padding: 6px 2px;
+  font-family: inherit; font-size: 0.82rem; color: var(--gold);
+  cursor: pointer; white-space: nowrap;
+}
+.tb-earn-ic { display: inline-flex; }
+.tb-earn-ic .ic { width: 15px; height: 15px; }
+.tb-earn::after { content: ' ›'; opacity: 0.7; }
 .tb-token {
   background: rgba(201, 169, 110, 0.1); border: 1px solid var(--gold-dim);
   color: var(--gold-light); border-radius: 999px; padding: 7px 14px;

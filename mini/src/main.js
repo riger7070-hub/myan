@@ -886,6 +886,10 @@ function header() {
         aria-expanded="${state.menu ? 'true' : 'false'}">${icon('menu')}</button>
     </div>
     <div class="tokenbar">
+      ${state.screen === 'home' ? `
+        <button class="tb-earn" id="btn-earn2">
+          <span class="tb-earn-ic">${icon('secGift')}</span>무료로 받기
+        </button>` : ''}
       <button class="tb-token" id="btn-charge">${state.tokens} 토큰</button>
     </div>
     ${state.menu ? `
@@ -1431,6 +1435,7 @@ function bind() {
   on('btn-menu', () => { state.menu = !state.menu; render(); });
   on('btn-menu-close', () => { state.menu = false; render(); });
   on('btn-earn', () => go('earn'));
+  on('btn-earn2', () => go('earn'));      // 홈 토큰 줄의 작은 길잡이
   on('btn-share', shareCard);
   on('btn-shareapp', () => { state.menu = false; render(); shareApp(); });
   on('btn-checkin', doCheckin);
