@@ -906,19 +906,29 @@ function render() {
       const p = state.profile || {};
       html = `
         ${header()}
-        <div class="hello">
-          <span class="muted">${p.name ? `${esc(p.name)}님, 반가워요` : '반가워요'}</span>
-        </div>
+        ${(() => {
+          const m = moonToday();
+          const d = new Date(Date.now() + 9 * 3600000);
+          return `
+          <section class="hero">
+            <div class="hero-sky"></div>
+            <div class="hero-moon">${m.icon}</div>
+            <div class="hero-text">
+              <p class="hero-date">${d.getMonth() + 1}월 ${d.getDate()}일 · ${esc(m.name)}</p>
+              <h2 class="hero-hi">${p.name ? `${esc(p.name)}님,<br>오늘은 어떤 기운일까요` : '오늘은 어떤 기운일까요'}</h2>
+            </div>
+          </section>`;
+        })()}
         ${err}
         ${SECTIONS.map(sec => `
           <section class="sec">
-            <h3><span>${sec.icon}</span> ${sec.title}</h3>
+            <h3><span class="sec-icon">${sec.icon}</span>${sec.title}<i class="rule"></i></h3>
             <div class="tiles">
               ${sec.items.map(it => `
                 <button class="tile" data-item="${it.id}">
                   <span class="t-icon">${it.icon}</span>
                   <span class="t-label">${it.label}</span>
-                  <span class="t-cost">${it.cost ? `${it.cost} 토큰` : '무료'}</span>
+                  <span class="t-cost${it.cost ? '' : ' free'}">${it.cost ? `${it.cost} 토큰` : '무료'}</span>
                 </button>`).join('')}
             </div>
           </section>`).join('')}

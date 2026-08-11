@@ -16,8 +16,15 @@
 
 body {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, #17120b 0%, transparent 60%),
+    /* 아주 옅은 별. 고정 좌표라 스크롤해도 같은 밤하늘이다. */
+    radial-gradient(1.5px 1.5px at 14% 8%,  rgba(232,212,168,0.28), transparent),
+    radial-gradient(1.5px 1.5px at 78% 5%,  rgba(232,212,168,0.20), transparent),
+    radial-gradient(1.5px 1.5px at 42% 15%, rgba(232,212,168,0.16), transparent),
+    radial-gradient(1.5px 1.5px at 90% 20%, rgba(232,212,168,0.22), transparent),
+    radial-gradient(1.5px 1.5px at 24% 26%, rgba(232,212,168,0.14), transparent),
+    radial-gradient(ellipse 80% 46% at 50% 0%, #1b150d 0%, transparent 62%),
     var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
   line-height: 1.75;
@@ -158,32 +165,107 @@ a { color: var(--gold-dim); }
 .brand.sm h1 { font-size: 1.5rem; }
 .brand p { color: var(--text-dim); font-size: 0.86rem; margin-top: 8px; }
 
-.hello { margin-bottom: 16px; }
+/* ── 홈 히어로: 오늘의 달과 인사 ── */
+.hero {
+  position: relative; overflow: hidden;
+  border-radius: 20px; padding: 26px 22px 24px;
+  margin: 4px 0 26px;
+  border: 1px solid rgba(201, 169, 110, 0.18);
+  background: linear-gradient(160deg, #1c160e 0%, #100c08 55%, #0a0807 100%);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(232, 212, 168, 0.07);
+}
+/* 위쪽에서 새어 드는 달빛 */
+.hero-sky {
+  position: absolute; left: 50%; top: -70px; width: 260px; height: 200px;
+  margin-left: -130px; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(232,212,168,0.16) 0%, rgba(232,212,168,0) 68%);
+}
+.hero-moon {
+  position: absolute; right: 20px; top: 16px; font-size: 2.5rem; line-height: 1;
+  filter: drop-shadow(0 0 16px rgba(232, 212, 168, 0.45));
+  animation: moonBreathe 5s ease-in-out infinite;
+}
+@keyframes moonBreathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-3px) scale(1.04); }
+}
+.hero-text { position: relative; }
+.hero-date {
+  font-size: 0.78rem; letter-spacing: 0.06em; color: var(--gold);
+  opacity: 0.85; margin-bottom: 10px;
+}
+.hero-hi {
+  font-family: 'Batang', serif; font-size: 1.36rem; font-weight: 400;
+  line-height: 1.55; color: var(--gold-light);
+  /* 히어로 안에서는 제목이 주인공이라 h2 기본 여백을 지운다. */
+  margin: 0; max-width: 82%;
+  /* 한글은 기본값이면 단어 한가운데서 끊긴다("…일까/요"). 어절 단위로 넘긴다. */
+  word-break: keep-all;
+}
+
+.t-label, .reading p, .brand p, .hero-date { word-break: keep-all; }
 
 h2 { font-size: 1.12rem; font-weight: 600; color: var(--gold-light); margin-bottom: 6px; }
 
 /* ── 섹션 ── */
-.sec { margin-bottom: 26px; }
+.sec { margin-bottom: 28px; }
 .sec h3 {
   font-size: 0.92rem; font-weight: 600; color: var(--gold);
-  letter-spacing: 0.04em; margin-bottom: 12px; display: flex; align-items: center; gap: 7px;
+  letter-spacing: 0.04em; margin-bottom: 13px;
+  display: flex; align-items: center; gap: 8px;
 }
-.sec h3 span { font-size: 1.05rem; }
+/* 분류 아이콘을 옅은 원 안에 넣어 제목줄이 가지런히 보이게 한다. */
+.sec-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; font-size: 0.95rem;
+  background: rgba(201, 169, 110, 0.1);
+  border: 1px solid rgba(201, 169, 110, 0.18);
+}
+/* 제목 오른쪽으로 흐려지며 사라지는 선 — 칸이 나뉘는 걸 눈으로 잡아 준다. */
+.sec h3 .rule {
+  flex: 1; height: 1px; margin-left: 2px;
+  background: linear-gradient(90deg, rgba(201, 169, 110, 0.28), transparent);
+}
 
-.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 
 .tile {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 15px;
-  padding: 16px 15px; color: var(--text); font-family: inherit; text-align: left;
-  cursor: pointer; min-height: 108px;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px 15px 14px; color: var(--text); font-family: inherit; text-align: left;
+  cursor: pointer; min-height: 116px;
+  /* 위가 밝고 아래가 어두운 결. 평평한 단색보다 눌러 볼 것처럼 보인다. */
+  background: linear-gradient(158deg, #1a150e 0%, #120e09 52%, #0c0a07 100%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(232, 212, 168, 0.06);
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
 }
-.tile:active { border-color: var(--gold-dim); }
-.tile.wide { flex-direction: row; align-items: center; justify-content: space-between;
-  min-height: 0; width: 100%; margin-bottom: 10px; }
-.t-icon { font-size: 1.5rem; line-height: 1.4; }
-.t-label { font-size: 0.97rem; color: var(--gold-light); font-weight: 500; }
-.t-cost { font-size: 0.78rem; color: var(--text-dim); margin-top: auto; }
+/* 왼쪽 위에서 스며드는 빛 */
+.tile::before {
+  content: ''; position: absolute; left: -30%; top: -60%;
+  width: 120%; height: 120%; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(232, 212, 168, 0.09) 0%, transparent 62%);
+}
+.tile:active {
+  transform: scale(0.975);
+  border-color: rgba(201, 169, 110, 0.42);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(232, 212, 168, 0.1);
+}
+.tile.wide {
+  flex-direction: row; align-items: center; justify-content: space-between;
+  min-height: 0; width: 100%; margin-bottom: 10px; padding: 17px 18px;
+}
+.t-icon {
+  font-size: 1.55rem; line-height: 1.3; position: relative;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+.t-label { font-size: 0.97rem; color: var(--gold-light); font-weight: 500; position: relative; }
+.t-cost {
+  font-size: 0.76rem; color: var(--text-dim); margin-top: auto;
+  position: relative; letter-spacing: 0.02em;
+}
+/* 무료는 눈에 띄어야 한다 — 처음 온 사람이 부담 없이 누를 자리다. */
+.t-cost.free { color: var(--gold); opacity: 0.9; }
 
 /* ── 카드 ── */
 .card {
