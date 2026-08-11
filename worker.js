@@ -4030,7 +4030,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.8, maxOutputTokens:1200, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4095,7 +4095,7 @@ async function handleTarotDraw(request, env) {
     // 카드 해석에는 뽑은 사람의 정보가 하나도 안 들어간다 — 같은 카드·같은 방향이면 같은 글이다.
     // 날짜도 프롬프트에 없으므로 한 번 만들면 계속 쓴다(78장 × 정역 2 × 4개국어 = 624개).
     const { bucket, prompt } = tarotSpec(lang, cardIdx, upright);
-    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt));
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt, { maxOutputTokens: 1000 }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -4207,7 +4207,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     // (띠 12 × 별자리 12 × 4개국어 = 하루 576개, 그마저도 실제로 들어온 조합만 만든다.)
     const reading = await cachedFortune(
       env, `zodiac|${lang}|${animalIndex}|${zodiacIndex}|${_kstYmd()}`,
-      () => geminiText(env, prompt),
+      () => geminiText(env, prompt, { maxOutputTokens: 1000 }),
     );
 
     if (!reading) {
@@ -4337,7 +4337,7 @@ ${transitLines}
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.9, maxOutputTokens:1200, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4587,7 +4587,7 @@ ${dayLines}
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.8, maxOutputTokens:1400, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4932,7 +4932,7 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.85, maxOutputTokens:2400, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5092,7 +5092,7 @@ ${sajuLine}
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.85, maxOutputTokens:1400, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5249,7 +5249,7 @@ ${timing.best.map(line).join('\n')}
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.85, maxOutputTokens:2400, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5316,7 +5316,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
     const raw = await cachedFortune(
       env, `lucky|${lang}|${_kstYmd()}`,
       async () => {
-        const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9 });
+        const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9, maxOutputTokens: 1000 });
         // 캐시에 넣기 전에 걸러야 깨진 JSON 이 하루 종일 재사용되지 않는다.
         try {
           const p = JSON.parse(text);
@@ -5376,7 +5376,7 @@ async function handleTypeCompat(request, env) {
     const on = ON[lang] || ON.ko;
     // 유형 두 개로만 정해진다 — 5 × 5 × 4개국어 = 100개면 전 조합이 채워지고 날짜도 안 탄다.
     const { bucket, prompt } = typeCompatSpec(lang, myType, partnerType);
-    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt));
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt, { maxOutputTokens: 1200 }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -5453,7 +5453,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.85, maxOutputTokens:1000, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5534,7 +5534,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.8, maxOutputTokens:1000, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5615,7 +5615,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     // 오늘의 기운을 함께 엮으므로 날짜까지 넣어 하루 48개.
     const reading = await cachedFortune(
       env, `numerology|${lang}|${lifePath}|${_kstYmd()}`,
-      () => geminiText(env, prompt, { temperature: 0.8 }),
+      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1200 }),
     );
 
     if (!reading) {
@@ -5774,7 +5774,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
             { text: prompt },
             { inlineData: { mimeType: 'image/jpeg', data: b64 } }
           ]}],
-          generationConfig:{ temperature:0.7, thinkingConfig:{ thinkingBudget:0 } },
+          generationConfig:{ temperature:0.7, maxOutputTokens:1600, thinkingConfig:{ thinkingBudget:0 } },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
             { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
@@ -5921,7 +5921,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.85, maxOutputTokens:1000, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5986,7 +5986,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9, thinkingConfig:{ thinkingBudget:0 } } }) }
+          generationConfig:{ temperature:0.9, maxOutputTokens:800, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -6050,7 +6050,7 @@ async function handleRuneReading(request, env) {
 
     // 타로와 같다 — 룬과 방향만으로 글이 정해지고 날짜도 안 들어간다(24 × 2 × 4 = 192개).
     const { bucket, prompt } = runeSpec(lang, idx, upright);
-    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt));
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt, { maxOutputTokens: 1000 }));
 
     if (!reading) {
       await refund(); refund = null;
