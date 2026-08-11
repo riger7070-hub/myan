@@ -97,8 +97,8 @@ function showStreakBanner(count) {
 }
 
 // 마일스톤(3/7/14/30/100일) 도달 시 순수 축하 연출만 한다.
-// 실제 토큰 지급 여부는 서버 체크인 응답의 bonus 플래그(doCheckin())로만 안내한다 —
-// 여기서 클라이언트가 임의로 "🎁 토큰 +N"을 약속하지 않는다.
+// 실제 엽전 지급 여부는 서버 체크인 응답의 bonus 플래그(doCheckin())로만 안내한다 —
+// 여기서 클라이언트가 임의로 "🎁 엽전 +N"을 약속하지 않는다.
 function celebrateStreakMilestone(count) {
   const milestones = [3, 7, 14, 30, 100];
   if (!milestones.includes(count)) return;
@@ -248,7 +248,7 @@ async function shareOhaengCard(ohaeng) {
 
             // 🎁 공유 보너스 지급 (서버가 실제로 지급을 확정한 경우에만 안내)
             if (canGetBonus && await grantShareBonus()) {
-              showToast({ko:'🎁 공유 보너스 토큰 +1',en:'🎁 +1 Share Bonus Token',zh:'🎁 分享奖励代币+1',ja:'🎁 共有ボーナス トークン+1'}[lang]);
+              showToast({ko:'🎁 공유 보너스 엽전 +1',en:'🎁 +1 Share Bonus Token',zh:'🎁 分享奖励代币+1',ja:'🎁 共有ボーナス トークン+1'}[lang]);
             }
 
             return;
@@ -271,7 +271,7 @@ async function shareOhaengCard(ohaeng) {
       // 🎁 공유 보너스 지급 — 서버가 실제로 지급을 확정한 경우에만 문구에 반영
       const granted = canGetBonus && await grantShareBonus();
       const msg = granted
-        ? {ko:'이미지가 저장되었습니다! 🎁 토큰 +1',en:'Image saved! 🎁 +1 Token',zh:'图片已保存! 🎁 代币+1',ja:'画像を保存しました! 🎁 トークン+1'}[lang]
+        ? {ko:'이미지가 저장되었습니다! 🎁 엽전 +1',en:'Image saved! 🎁 +1 Token',zh:'图片已保存! 🎁 代币+1',ja:'画像を保存しました! 🎁 トークン+1'}[lang]
         : {ko:'이미지가 저장되었습니다!',en:'Image saved!',zh:'图片已保存!',ja:'画像を保存しました!'}[lang];
 
       showToast(msg || '이미지가 저장되었습니다!');
@@ -284,13 +284,13 @@ async function shareOhaengCard(ohaeng) {
 }
 
 // 재미 콘텐츠 모달의 오류 표시 공통 헬퍼.
-// 토큰 부족(402)이면 안내에서 끝내지 않고 바로 충전으로 이어지게 버튼을 붙인다.
+// 엽전 부족(402)이면 안내에서 끝내지 않고 바로 충전으로 이어지게 버튼을 붙인다.
 function _resultErrorHtml(res, data) {
   const msg = data?.error?.message || '오류가 발생했습니다.';
   const base = `<div style="font-size:0.85rem;color:var(--text-dim);text-align:center">${msg}</div>`;
   if (res?.status !== 402) return base;
 
-  const label = { ko:'✦ 토큰 충전하기', en:'✦ Get Tokens', zh:'✦ 充值代币', ja:'✦ トークン購入' }[getLang()] || '✦ 토큰 충전하기';
+  const label = { ko:'✦ 엽전 충전하기', en:'✦ Get Tokens', zh:'✦ 充值代币', ja:'✦ トークン購入' }[getLang()] || '✦ 엽전 충전하기';
   return base + `<button class="fif-submit" style="width:100%;margin-top:14px;padding:12px" onclick="_goCharge()">${label}</button>`;
 }
 
@@ -393,7 +393,7 @@ async function checkShareBonus() {
   }
 }
 
-// 실제로 토큰이 지급됐을 때만 true를 반환한다 — 호출부는 이 값으로만 보상 문구를 노출해야 한다.
+// 실제로 엽전이 지급됐을 때만 true를 반환한다 — 호출부는 이 값으로만 보상 문구를 노출해야 한다.
 async function grantShareBonus() {
   const token = getGoogleIdToken();
   if (!token) return false;
@@ -535,10 +535,10 @@ async function callGemini(contents) {
   let res  = await doFetch();
   let data = await res.json();
 
-  // 토큰 부족 (서버에서 차감 실패)
+  // 엽전 부족 (서버에서 차감 실패)
   if (res.status === 402 || res.status === 403) throw { refund: false, noToken: true };
 
-  // 인증 실패 → 토큰 폐기
+  // 인증 실패 → 엽전 폐기
   if (res.status === 401) {
     _googleIdToken = ''; _googleIdTokenExp = 0;
     localStorage.removeItem('myan_id_token');
@@ -551,7 +551,7 @@ async function callGemini(contents) {
     await new Promise(r => setTimeout(r, 3500));
     res  = await doFetch();
     data = await res.json();
-    // 재시도 후에도 429이면 rate-limit 전용 에러 (토큰 미차감이므로 refund: true로 잔액 동기화)
+    // 재시도 후에도 429이면 rate-limit 전용 에러 (엽전 미차감이므로 refund: true로 잔액 동기화)
     if (res.status === 429) throw { refund: true, rateLimited: true };
   }
 
@@ -1210,9 +1210,9 @@ async function send() {
     return;
   }
 
-  // 토큰 차감
+  // 엽전 차감
   if (!checkAndDeductToken()) {
-    // 토큰 부족 트래킹
+    // 엽전 부족 트래킹
     if (typeof Analytics !== 'undefined') {
       Analytics.trackToken('insufficient', getTokens());
     }
@@ -1240,7 +1240,7 @@ async function send() {
         font-size: 0.95rem;
         transition: transform 0.2s;
       " onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-        💰 토큰 충전하러 가기
+        💰 엽전 충전하러 가기
       </button>
     `;
     cw().appendChild(bubble);
@@ -1404,14 +1404,14 @@ window.addEventListener('nativeGoogleSignIn', (ev) => {
 let selGender = '';
 let selGenderMp = '';
 
-/* ── 토큰 시스템 (서버 기반) ── */
+/* ── 엽전 시스템 (서버 기반) ── */
 let _tokenCache = 0;
 let _tokenCacheExpiry = 0;
 const TOKEN_CACHE_TTL = 30000; // 30초
 
 function getTokens() { return _tokenCache; }
 
-// 클라이언트는 더 이상 토큰을 직접 차감하지 않음.
+// 클라이언트는 더 이상 엽전을 직접 차감하지 않음.
 // 서버(/chat)가 호출 시 자동 차감/검증/환불 처리.
 // 이 함수는 호환을 위해 남겨두지만 항상 true를 반환 — 실제 차감은 서버에서.
 function checkAndDeductToken() {
@@ -1438,7 +1438,7 @@ function _spawnTokenPop() {
 
 // 결제 승인·환불 후 서버 잔액으로 다시 맞추기
 async function addTokens(_amount) {
-  _tokenCacheExpiry = 0; // 캐시 무효화 (토큰 변경됨)
+  _tokenCacheExpiry = 0; // 캐시 무효화 (엽전 변경됨)
   await refreshTokens();
 }
 
@@ -1519,7 +1519,7 @@ function _updateTokenDisplaysLegacy() {
   if (chip)  chip.classList.toggle('low', t > 0 && t <= 5);
   if (num)   num.textContent = t;
   if (tmNum) tmNum.textContent = t;
-  // 토큰 0 안내 표시
+  // 엽전 0 안내 표시
   const zeroNote = document.getElementById('mpZeroNote');
   if (zeroNote) {
     const msg = (TX[lang] || TX.ko).mpZeroNote;
@@ -1539,7 +1539,7 @@ let _googleIdToken = '';
 let _googleIdTokenExp = 0;
 
 // ── Silent Token Refresh ──
-// Google ID 토큰은 1시간 유효. 만료 전 자동 재발급하여 토큰이 0이 되는 현상 방지.
+// Google ID 토큰은 1시간 유효. 만료 전 자동 재발급하여 엽전이 0이 되는 현상 방지.
 let _silentRefreshTimer  = null;
 let _silentRefreshActive = false;
 
@@ -1583,7 +1583,7 @@ function _silentTokenRefresh() {
   }
 }
 
-// 토큰/세션 만료로 401을 받았을 때 재로그인 유도 → 로그인 화면(구글 버튼)으로 안내.
+// 엽전/세션 만료로 401을 받았을 때 재로그인 유도 → 로그인 화면(구글 버튼)으로 안내.
 // (FedCM 모드에선 isNotDisplayed/isSkippedMoment가 폐기되어 사용하지 않음)
 let _reauthPrompting = false;
 function _reauthExpired() {
@@ -1670,7 +1670,7 @@ function getGoogleIdToken() {
       if (Date.now() > _googleIdTokenExp - 5*60*1000) {
         _googleIdToken = ''; localStorage.removeItem('myan_id_token'); localStorage.removeItem('myan_session'); return '';
       }
-      _scheduleTokenRefresh(); // 새로고침 후 복원된 토큰에도 타이머 예약
+      _scheduleTokenRefresh(); // 새로고침 후 복원된 엽전에도 타이머 예약
     } catch {}
   }
   return _googleIdToken;
@@ -1705,7 +1705,7 @@ async function _confirmTossPayment({ paymentKey, orderId, amount }) {
         Analytics.trackPayment('success', amount, result.tokensAdded);
       }
 
-      alert('✦ 토큰이 충전되었습니다!');
+      alert('✦ 엽전이 충전되었습니다!');
     } else {
       // 결제 실패 트래킹
       if (typeof Analytics !== 'undefined') {
@@ -1748,9 +1748,9 @@ async function buyToken(pkg) {
   if (!user || !isLoggedIn()) { showLogin(); return; }
 
   const pkgs = {
-    'S': { name: '마이안 토큰 30개',  amount: 4900, tokens: 30  },
-    'M': { name: '마이안 토큰 100개', amount: 12900, tokens: 100 },
-    'L': { name: '마이안 토큰 300개', amount: 29900, tokens: 300 }
+    'S': { name: '마이안 엽전 30개',  amount: 4900, tokens: 30  },
+    'M': { name: '마이안 엽전 100개', amount: 12900, tokens: 100 },
+    'L': { name: '마이안 엽전 300개', amount: 29900, tokens: 300 }
   };
   const selected = pkgs[pkg];
   if (!selected) return;
@@ -1837,7 +1837,7 @@ async function _confirmSubscription({ authKey, customerKey, plan }) {
       await refreshSubscription();
       if (typeof Analytics !== 'undefined') Analytics.trackPayment('success', SUB_PLANS_FE[plan]?.amount, result.tokens);
       const t = getT();
-      alert(t.subStartedMsg || '✦ 구독이 시작되었습니다! 매월 토큰이 자동 지급됩니다.');
+      alert(t.subStartedMsg || '✦ 구독이 시작되었습니다! 매월 엽전이 자동 지급됩니다.');
     } else {
       if (typeof Analytics !== 'undefined') Analytics.trackPayment('fail', SUB_PLANS_FE[plan]?.amount, null, result.error?.message);
       alert(`${(getT().subFailMsg || '구독 처리 실패')}: ${result.error?.message || '고객센터(riger7070@naver.com)로 문의해 주세요.'}`);
@@ -1869,7 +1869,7 @@ function _renderSubUI() {
       ? new Date(_subState.currentPeriodEnd * 1000).toLocaleDateString(getLang() === 'ko' ? 'ko-KR' : getLang())
       : '';
     document.getElementById('subActivePlan').textContent =
-      `✦ ${planName} (${(t.subTokensPerMonth || '매월 {n} 토큰').replace('{n}', _subState.monthlyTokens)})`;
+      `✦ ${planName} (${(t.subTokensPerMonth || '매월 {n} 엽전').replace('{n}', _subState.monthlyTokens)})`;
     document.getElementById('subActiveNext').textContent =
       (t.subNextBilling || '다음 결제일: {date}').replace('{date}', date);
     document.getElementById('subCancelBtn').textContent = t.subCancelBtn || '구독 해지';
@@ -2044,7 +2044,7 @@ async function renderAdminUsage() {
     const statCards = `
       <div style="display:flex;gap:6px;margin-bottom:12px">${periodBtns}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
-        ${[['총 이용', tot.uses], ['소모 토큰', tot.spent], ['이용자', tot.users]]
+        ${[['총 이용', tot.uses], ['소모 엽전', tot.spent], ['이용자', tot.users]]
           .map(([label, val]) => `<div style="background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.15);border-radius:8px;padding:10px 6px;text-align:center"><div style="font-size:1.3rem;font-weight:700;color:#c9a96e">${val ?? 0}</div><div style="font-size:0.66rem;color:#999;margin-top:2px">${label}</div></div>`).join('')}
       </div>`;
 
@@ -2056,7 +2056,7 @@ async function renderAdminUsage() {
       <div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px">
           <span style="font-size:0.8rem;color:#e8dcc8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_pkgLabel(r.pkg)}</span>
-          <span style="font-size:0.72rem;color:#c9a96e;flex-shrink:0">${r.uses}회 · ${r.users}명 · ${r.spent}토큰</span>
+          <span style="font-size:0.72rem;color:#c9a96e;flex-shrink:0">${r.uses}회 · ${r.users}명 · ${r.spent}엽전</span>
         </div>
         <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
           <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,rgba(201,169,110,0.55),#c9a96e);border-radius:3px"></div>
@@ -2090,7 +2090,7 @@ async function adminGrantTokens() {
 
   if (!email || !tokens || tokens <= 0) {
     msgEl.style.color = '#e05a4a';
-    msgEl.textContent = '이메일과 토큰 수를 입력해주세요.';
+    msgEl.textContent = '이메일과 엽전 수를 입력해주세요.';
     return;
   }
 
@@ -2105,7 +2105,7 @@ async function adminGrantTokens() {
     });
     if (!res.ok) throw new Error('fail');
     msgEl.style.color = '#7de8a8';
-    msgEl.textContent = `✓ ${email} 님께 ${tokens}토큰 지급 완료!`;
+    msgEl.textContent = `✓ ${email} 님께 ${tokens}엽전 지급 완료!`;
     document.getElementById('adminGrantEmail').value  = '';
     document.getElementById('adminGrantTokens').value = '';
     document.getElementById('adminGrantNote').value   = '';
@@ -2149,7 +2149,7 @@ function _renderAdminList() {
     return;
   }
 
-  const PKG_NAME = { small:'소 (30토큰)', medium:'중 (100토큰)', large:'대 (300토큰)' };
+  const PKG_NAME = { small:'소 (엽전 30개)', medium:'중 (엽전 100개)', large:'대 (엽전 300개)' };
 
   // innerHTML에 직접 사용자 데이터 삽입 방지 — DOM 빌더 방식으로 교체
   listEl.innerHTML = '';
@@ -2379,7 +2379,7 @@ async function handleGoogleCredential(response) {
 
     // 유저 버튼 업데이트
     updateUserBtn(profile);
-    refreshTokens();  // 서버 토큰 잔액 동기화
+    refreshTokens();  // 서버 엽전 잔액 동기화
 
     // 관리자 배지 확인
     _checkAdminBadge();
@@ -2555,7 +2555,7 @@ function updateUserBtn(user) {
   btn.style.display = 'flex';
 }
 
-// ── Change 1: 무료 토큰 배너 표시 (비로그인 시에만) ──
+// ── Change 1: 무료 엽전 배너 표시 (비로그인 시에만) ──
 function updateFreeBanner() {
   const banner = document.getElementById('freeBanner');
   if (!banner) return;
@@ -2673,7 +2673,7 @@ function renderMyPage() {
   document.getElementById('mpGbM').classList.toggle('active', selGenderMp === 'M');
   document.getElementById('mpGbF').classList.toggle('active', selGenderMp === 'F');
 
-  // ── 토큰 섹션 ──
+  // ── 엽전 섹션 ──
   document.getElementById('tkSectionLbl').textContent      = t.tkSection;
   document.getElementById('mypageTokenUnitLbl').textContent = t.tkUnit;
   document.getElementById('mypageTokenNum').textContent    = getTokens();
@@ -2876,9 +2876,9 @@ function _confirmAction(btnId, confirmText, action) {
   }, 3000);
 }
 
-// 충전 화면에 "이 토큰으로 뭘 얼마에 쓰나"를 보여 준다.
+// 충전 화면에 "이 엽전으로 뭘 얼마에 쓰나"를 보여 준다.
 //
-// 30토큰을 사는 사람은 그게 몇 번인지 모른 채 산다. 기능이 18개에 0~3토큰이 섞여 있어
+// 엽전 30개을 사는 사람은 그게 몇 번인지 모른 채 산다. 기능이 18개에 0~엽전 3개이 섞여 있어
 // 더 그렇다. 값은 _homeSections() 에서 그대로 가져온다 — 여기에 가격표를 따로 적으면
 // 홈에는 2, 안내에는 1 이라고 뜨는 날이 반드시 온다.
 function renderTokenCostGuide() {
@@ -2898,7 +2898,7 @@ function renderTokenCostGuide() {
   const costs = [...byCost.keys()].sort((a, b) => b - a);   // 비싼 것부터 — 값을 먼저 보게
 
   host.innerHTML = `
-    <div class="cost-guide-title">${_escHtml(t.tmCostTitle || '토큰으로 할 수 있는 것')}</div>
+    <div class="cost-guide-title">${_escHtml(t.tmCostTitle || '엽전으로 할 수 있는 것')}</div>
     ${costs.map(c => `
       <div class="cost-guide-row">
         <span class="cost-guide-badge${c ? '' : ' cs-free'}">${c ? '✦' + c : _escHtml(freeLabel)}</span>
@@ -2945,7 +2945,7 @@ const LEGAL_CONTENT = {
       title: '개인정보처리방침',
       body: `
 <h3>제1조 (개인정보의 처리 목적)</h3>
-<p><b>M;Y 安 (마이안)</b>(이하 "회사")은 이용자의 사주 기운 리딩 서비스 제공, 맞춤형 처방 솔루션 매칭, 회원 식별 및 서비스 개선, 유료 콘텐츠(토큰) 정산 및 결제 관리 목적으로 최소한의 개인정보를 처리합니다.</p>
+<p><b>M;Y 安 (마이안)</b>(이하 "회사")은 이용자의 사주 기운 리딩 서비스 제공, 맞춤형 처방 솔루션 매칭, 회원 식별 및 서비스 개선, 유료 콘텐츠(엽전) 정산 및 결제 관리 목적으로 최소한의 개인정보를 처리합니다.</p>
 
 <h3>제2조 (처리하는 개인정보 항목)</h3>
 <p>• 필수항목: 이름(성함), 생년월일, 성별, 이메일 주소 (구글 OAuth 2.0 연동 식별 데이터 포함)</p>
@@ -2994,20 +2994,20 @@ const LEGAL_CONTENT = {
       title: '환불정책',
       body: `
 <h3>제1조 (환불의 기본 원칙)</h3>
-<p>사용자는 구매한 충전형 토큰 중 <b>미사용 잔여 분</b>에 대하여 전자상거래 등에서의 소비자보호에 관한 법률 제17조에 의거하여 청약철회 및 환불을 요청할 수 있습니다.</p>
+<p>사용자는 구매한 충전형 엽전 중 <b>미사용 잔여 분</b>에 대하여 전자상거래 등에서의 소비자보호에 관한 법률 제17조에 의거하여 청약철회 및 환불을 요청할 수 있습니다.</p>
 
 <h3>제2조 (청약철회 및 환불 조건)</h3>
-<p>• 사용자는 유료 결제일로부터 <b>7일 이내</b>에 미사용된 토큰 전체 또는 일부에 대해 환불 신청이 가능합니다.</p>
-<p>• 환불 금액은 사용자가 실제 결제한 금액을 기준으로 하며, 패키지 할인 상품의 경우 기 사용된 토큰의 단가를 정상가 기준으로 역산하여 제외한 후 잔액을 정산합니다.</p>
+<p>• 사용자는 유료 결제일로부터 <b>7일 이내</b>에 미사용된 엽전 전체 또는 일부에 대해 환불 신청이 가능합니다.</p>
+<p>• 환불 금액은 사용자가 실제 결제한 금액을 기준으로 하며, 패키지 할인 상품의 경우 기 사용된 엽전의 단가를 정상가 기준으로 역산하여 제외한 후 잔액을 정산합니다.</p>
 
 <h3>제3조 (청약철회 및 환불의 제한)</h3>
 <p>다음 각 호에 해당하는 경우 환불이 제한될 수 있습니다.</p>
 <p>• 유료 결제 후 7일을 초과하여 청약철회 기간이 경과한 경우</p>
-<p>• 결제를 통해 지급된 토큰을 이미 대화 및 기운 리딩 서비스에 소비하여 사용이 완료된 경우 (디지털 콘텐츠의 개시)</p>
-<p>• 이벤트, 프로모션, 회원가입 보너스 등 서비스 내에서 무상으로 지급된 토큰(무료 대화권)</p>
+<p>• 결제를 통해 지급된 엽전을 이미 대화 및 기운 리딩 서비스에 소비하여 사용이 완료된 경우 (디지털 콘텐츠의 개시)</p>
+<p>• 이벤트, 프로모션, 회원가입 보너스 등 서비스 내에서 무상으로 지급된 엽전(무료 대화권)</p>
 
 <h3>제4조 (자동 환불 및 정산 예외 보장 시스템)</h3>
-<p>AI 통신 서버의 일시적 장애, 구글 API 네트워크 단절, 혹은 시스템 세이프티 필터 작동으로 인하여 사용자의 질문에 대하여 <b>AI의 리딩 답변 문장이 정상적으로 도출되지 않고 공백으로 종료된 경우</b>, 선차감되었던 토큰 1개는 데이터베이스 전산 트랜잭션에 의해 사용되지 않은 것으로 판정되어 <b>실시간으로 즉시 복구(자동 환불)</b> 처리되며 과금되지 않습니다.</p>
+<p>AI 통신 서버의 일시적 장애, 구글 API 네트워크 단절, 혹은 시스템 세이프티 필터 작동으로 인하여 사용자의 질문에 대하여 <b>AI의 리딩 답변 문장이 정상적으로 도출되지 않고 공백으로 종료된 경우</b>, 선차감되었던 엽전 1개는 데이터베이스 전산 트랜잭션에 의해 사용되지 않은 것으로 판정되어 <b>실시간으로 즉시 복구(자동 환불)</b> 처리되며 과금되지 않습니다.</p>
 
 <h3>제5조 (환불 신청 절차)</h3>
 <p>환불을 원하시는 사용자는 1:1 고객센터 이메일(riger7070@naver.com)을 통해 결제 일시, 결제 ID, 가입 이메일 주소를 기재하여 신청해 주셔야 합니다. 전산망 대조 확인 후 영업일 기준 3~5일 이내에 지정하신 계좌로 대금이 반환됩니다.</p>
@@ -3030,12 +3030,12 @@ const LEGAL_CONTENT = {
 <p>• 사용자는 회사가 정한 양식에 따라 사주 정보(이름, 생년월일시, 성별)를 입력하거나 구글 간편 인증을 통해 회원이 될 수 있습니다.</p>
 <p>• 이용자는 본인의 고유 이메일 및 로그인 세션을 안전하게 관리해야 하며, 타인의 명의나 개인정보를 도용하여 전산망을 무단 교란하는 행위를 엄격히 금지합니다.</p>
 
-<h3>제4조 (유료 서비스 및 토큰 이용 규정)</h3>
-<p>• 본 서비스는 가상 재화인 '토큰(Token)' 차감제로 운영됩니다. 질문 1회당 정상 답변이 완결될 때 1토큰이 차감됩니다.</p>
-<p>• 유료 토큰의 가격, 지급 수량 및 정산 방식은 회사가 홈페이지 결제 창에 고지한 내용을 따르며, 회사는 투명한 거래를 위해 모든 결제 요청의 로그를 관계형 데이터베이스(D1)에 영구 기록합니다.</p>
+<h3>제4조 (유료 서비스 및 엽전 이용 규정)</h3>
+<p>• 본 서비스는 가상 재화인 '엽전(Token)' 차감제로 운영됩니다. 질문 1회당 정상 답변이 완결될 때 엽전 1개이 차감됩니다.</p>
+<p>• 유료 엽전의 가격, 지급 수량 및 정산 방식은 회사가 홈페이지 결제 창에 고지한 내용을 따르며, 회사는 투명한 거래를 위해 모든 결제 요청의 로그를 관계형 데이터베이스(D1)에 영구 기록합니다.</p>
 
 <h3>제5조 (서비스의 중단 및 제한)</h3>
-<p>회사는 시스템 점검, 서버 증설, AI 공급처(Google)의 기술적 장애 등 불가항력적인 사유가 발생한 경우 서비스의 전부 또는 일부를 일시적으로 제한하거나 중단할 수 있습니다. 다만, 이 과정에서 전산 오류로 소실된 유료 토큰은 회사의 관리자 기능을 통해 즉시 재지급 보상 처리됩니다.</p>
+<p>회사는 시스템 점검, 서버 증설, AI 공급처(Google)의 기술적 장애 등 불가항력적인 사유가 발생한 경우 서비스의 전부 또는 일부를 일시적으로 제한하거나 중단할 수 있습니다. 다만, 이 과정에서 전산 오류로 소실된 유료 엽전은 회사의 관리자 기능을 통해 즉시 재지급 보상 처리됩니다.</p>
 
 <h3>제6조 (관할 법원)</h3>
 <p>본 약관의 해석 및 회사와 회원 간에 발생한 분쟁에 대한 소송은 회사의 본점 소재지를 관할하는 법원을 전속 관할 법원으로 합니다.</p>
@@ -3097,7 +3097,7 @@ function renderLogin() {
 }
 
 function showLogin() {
-  // 리딩 중 토큰 만료로 재로그인이 필요한 경우 → 재로그인 후 같은 모드로 복귀
+  // 리딩 중 엽전 만료로 재로그인이 필요한 경우 → 재로그인 후 같은 모드로 복귀
   // (대화 내용 저장은 복원하는 곳이 없어져 제거됨. pendingMode만 유지)
   if (getCurrentScreen() === 'CHAT' && mode) {
     pendingMode = mode;
@@ -3373,7 +3373,7 @@ refreshTokens();
       
       // UX 개선: 복구 성공 시 사용자에게 알림 띄우기
       setTimeout(() => {
-        alert(TX[lang]?.tkRedeemOk ? TX[lang].tkRedeemOk(data.tokens || 0) : '결제하신 토큰이 정상 지급되었습니다.');
+        alert(TX[lang]?.tkRedeemOk ? TX[lang].tkRedeemOk(data.tokens || 0) : '결제하신 엽전이 정상 지급되었습니다.');
       }, 1000);
     }
   } catch {}
@@ -3792,7 +3792,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (getGoogleIdToken()) {
         await _confirmTossPayment(_tossData);
       } else {
-        // 로그인 토큰 아직 없으면 sessionStorage에 보관 → 로그인 후 처리
+        // 로그인 엽전 아직 없으면 sessionStorage에 보관 → 로그인 후 처리
         sessionStorage.setItem('myan_pending_toss_payment', JSON.stringify(_tossData));
       }
     }, 800);
@@ -3908,7 +3908,7 @@ function renderStreakUI(data) {
     <button class="streak-checkin-btn" id="streak-checkin-btn" ${alreadyDone?'disabled':''} onclick="doCheckin()">
       ${alreadyDone ? (t.streakDone||'오늘 출석 완료 ✓') : (t.streakCheckin||'오늘 출석 체크')}
     </button>
-    <div class="streak-bonus-msg" id="streak-bonus-msg" style="display:none">${t.streakBonus||'🎉 7일 보너스! +5 토큰'}</div>`;
+    <div class="streak-bonus-msg" id="streak-bonus-msg" style="display:none">${t.streakBonus||'🎉 7일 보너스! +엽전 5개'}</div>`;
 }
 
 async function doCheckin() {
@@ -4177,7 +4177,7 @@ const ACHIEVEMENTS = {
   streak_30: { icon: '💪', ko: '한 달 연속', en: '30-Day Streak', zh: '连续一月', ja: '30日連続' },
   streak_100: { icon: '👑', ko: '백일 달성', en: '100-Day Streak', zh: '百日达成', ja: '百日達成' },
   share_10: { icon: '📤', ko: '공유 전문가', en: 'Share Expert', zh: '分享专家', ja: '共有エキスパート' },
-  tokens_50: { icon: '💰', ko: '토큰 부자', en: 'Token Rich', zh: '代币富翁', ja: 'トークン富豪' }
+  tokens_50: { icon: '💰', ko: '엽전 부자', en: 'Token Rich', zh: '代币富翁', ja: 'トークン富豪' }
 };
 
 function getAchievements() {
@@ -4324,7 +4324,7 @@ async function loadTokenHistory() {
     const history = data.history || [];
 
     if (history.length === 0) {
-      list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim);">아직 토큰 내역이 없습니다.</div>';
+      list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim);">아직 엽전 내역이 없습니다.</div>';
       return;
     }
 
@@ -4401,7 +4401,7 @@ async function renderReferralSection() {
     const t = getT();
     section.innerHTML = `
       <div class="referral-title">${t.referralTitle||'친구 초대'}</div>
-      <div class="referral-desc">${t.referralDesc||'친구가 코드를 입력하면 양쪽 모두 +3 토큰!'}</div>
+      <div class="referral-desc">${t.referralDesc||'친구가 코드를 입력하면 양쪽 모두 +엽전 3개!'}</div>
       ${myCode ? `
         <div class="referral-code-row">
           <div class="referral-code-box">${myCode}</div>
@@ -4449,7 +4449,7 @@ async function _claimReferral() {
     const d = await r.json();
     const t = getT();
     if (d.success) {
-      showToast((t.referralClaimed||'🎉 코드 적용! +{n} 토큰').replace('{n}', d.bonus));
+      showToast((t.referralClaimed||'🎉 코드 적용! +{n} 엽전').replace('{n}', d.bonus));
       renderReferralSection();
     } else {
       showToast(d.error?.message || '오류가 발생했습니다.');
@@ -4594,7 +4594,7 @@ function renderSajuResult(data, m) {
         <div style="text-align:center;font-size:1.4rem;color:var(--gold);letter-spacing:1px;margin-bottom:26px">✨ 간단 풀이</div>
         ${_ohaengGaugeHtml(data.ohaeng||{})}
         <div id="sjReadingBody" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:16px;padding:32px 24px;margin-top:22px"></div>
-        <div style="font-size:0.72rem;color:var(--text-dim);margin:26px 0 10px">${t.detailTitle||'상세 풀이'} (토큰 2)</div>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin:26px 0 10px">${t.detailTitle||'상세 풀이'} (엽전 2)</div>
         <div id="sjDetailBtns" style="display:flex;gap:8px;flex-wrap:wrap;opacity:0.4;pointer-events:none;transition:opacity .3s">${detailBtnsHtml}</div>
         <button id="sjRetryBtn" onclick="showSajuInput('${m}')" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text-dim);cursor:pointer;font-size:0.95rem;opacity:0.4;pointer-events:none;transition:opacity .3s">다시 입력</button>
       </div>
@@ -4669,7 +4669,7 @@ async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
     if (contEl && data.reading) {
       contEl.innerHTML = `<div class="detail-area-card"><div class="detail-area-body" id="detailBody-${category}"></div></div>`;
       if (data.remaining !== undefined) {
-        contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>`;
+        contEl.innerHTML += `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>`;
       }
       contEl.innerHTML += `<button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:${JSON.stringify(catMeta?.icon || "🔍")},title:${JSON.stringify(catLabel)},filename:"myan-detail"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>`;
       contEl.style.display = '';
@@ -4772,7 +4772,7 @@ function showDetailReadingHistory() {
 }
 
 // ════════════════════════════════════════════
-//  타로카드 뽑기 (재미 콘텐츠, 1토큰)
+//  타로카드 뽑기 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 let _tarotPicking = false;
 
@@ -4856,7 +4856,7 @@ async function _tarotPick(idx) {
       resultEl.innerHTML = `
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.card.name}${data.upright ? '' : ` (${t.tarotReversed || '역방향'})`}</div>
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="tarotReadingBody"></div></div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:${JSON.stringify(data.card.icon)},title:${JSON.stringify(data.card.name + (data.upright ? "" : " (" + (t.tarotReversed||"역방향") + ")"))},filename:"myan-tarot"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('tarotReadingBody');
@@ -4868,7 +4868,7 @@ async function _tarotPick(idx) {
 }
 
 // ════════════════════════════════════════════
-//  띠·별자리 운세 (재미 콘텐츠, 1토큰)
+//  띠·별자리 운세 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 // 천궁도 트랜싯 — 실제 행성 위치로 보는 오늘.
 // 다른 콘텐츠와 달리 AI 글만 보여주지 않고 **근거가 된 하늘**을 함께 띄운다.
@@ -4978,7 +4978,7 @@ async function openAstroTransit() {
 
       <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="astroReadingBody"></div></div>
       <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.astroNote)}</div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🪐",title:${JSON.stringify(t.astroTitle + " · " + sunSign)},filename:"myan-astro"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('astroReadingBody');
@@ -4991,7 +4991,7 @@ async function openAstroTransit() {
 }
 
 // ════════════════════════════════════════════
-//  택일 — 목적을 고르면 만세력에서 좋은 날을 골라 준다 (2토큰)
+//  택일 — 목적을 고르면 만세력에서 좋은 날을 골라 준다 (엽전 2개)
 //
 //  길흉 판단은 전부 서버(worker.js 의 pickAuspiciousDays)가 역서 데이터로 끝낸다.
 //  여기에 규칙을 한 줄이라도 두면 서버가 고른 날과 화면에 뜨는 설명이 어긋나므로,
@@ -5116,7 +5116,7 @@ async function openAuspiciousDays() {
 
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="takilReadingBody"></div></div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.takilNote)}</div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" id="takilShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
       `;
 
@@ -5140,7 +5140,7 @@ async function openAuspiciousDays() {
 }
 
 // ════════════════════════════════════════════
-//  대운 — 10년마다 바뀌는 운의 흐름 (3토큰)
+//  대운 — 10년마다 바뀌는 운의 흐름 (엽전 3개)
 //
 //  방향(순행·역행)과 기운(起運) 시점은 성별과 절기 거리로 정해지는 계산값이라
 //  전부 서버가 낸다. 여기서는 받은 구간을 시간순으로 그리고 지금 자리만 강조한다.
@@ -5174,7 +5174,7 @@ async function openDaeun() {
     openMyPage();
     return;
   }
-  // 대운은 방향이 성별로 갈려서 성별 없이는 세울 수 없다 — 토큰을 쓰기 전에 여기서 막는다.
+  // 대운은 방향이 성별로 갈려서 성별 없이는 세울 수 없다 — 엽전을 쓰기 전에 여기서 막는다.
   if (_u.gender !== 'M' && _u.gender !== 'F') {
     showToast(t.daeunNeedGender || '마이페이지에서 성별을 등록해 주세요.');
     openMyPage();
@@ -5250,7 +5250,7 @@ async function openDaeun() {
 
       <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="daeunReadingBody"></div></div>
       <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.daeunNote)}</div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" id="daeunShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
     `;
 
@@ -5270,7 +5270,7 @@ async function openDaeun() {
 }
 
 // ════════════════════════════════════════════
-//  이름 풀이 — 한글 초성의 발음오행 (2토큰)
+//  이름 풀이 — 한글 초성의 발음오행 (엽전 2개)
 //
 //  오행 배정과 상생·상극 판정은 서버가 한다. 같은 표를 여기에 또 두면 화면과 본문이
 //  어긋나므로, 이 파일은 서버가 준 글자별 오행을 색으로 그리기만 한다.
@@ -5373,7 +5373,7 @@ async function openNameReading() {
 
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="nameReadingBody"></div></div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.nameNote)}</div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" id="nameShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
       `;
 
@@ -5396,7 +5396,7 @@ async function openNameReading() {
 }
 
 // ════════════════════════════════════════════
-//  궁합 시기 — 두 사람에게 언제가 좋은 해인지 (3토큰)
+//  궁합 시기 — 두 사람에게 언제가 좋은 해인지 (엽전 3개)
 //
 //  합·충 판정과 좋은 해 선별은 서버가 끝낸다. 여기서는 연도별 관계를 표로 그린다.
 // ════════════════════════════════════════════
@@ -5534,7 +5534,7 @@ async function openCompatTiming() {
 
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-body" id="ctReadingBody"></div></div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;line-height:1.5">${_escHtml(t.ctNote)}</div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit || '잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" id="ctShare" style="width:100%;margin-top:10px">📤 ${{ko:'공유하기',en:'Share',zh:'分享',ja:'共有'}[lang] || '공유하기'}</button>
       `;
 
@@ -5611,7 +5611,7 @@ async function openZodiacFortune() {
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${animalLabel}${animalSuffix} · ${zodiacLabel}</div>
         ${data.moon ? `<div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:6px">${MOON_PHASE_ICONS[data.moon.index]} ${MOON_PHASE_NAMES[lang]?.[data.moon.index] || ''} · ${data.moon.illumination}%${data.mercury?.retrograde ? ` &nbsp;·&nbsp; <span style="color:#e08a7a">☿ ${t.mercuryRetro || '수성 역행'}</span>` : ''}</div>` : ''}
         <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="zodiacReadingBody"></div></div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🐉",title:${JSON.stringify(animalLabel + animalSuffix + " · " + zodiacLabel)},filename:"myan-zodiac"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('zodiacReadingBody');
@@ -5624,7 +5624,7 @@ async function openZodiacFortune() {
 }
 
 // ════════════════════════════════════════════
-//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
+//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 async function openLuckyPicks() {
   const token = getGoogleIdToken();
@@ -5673,7 +5673,7 @@ async function openLuckyPicks() {
         <div class="detail-area-card"><div class="detail-area-title">🎨 ${t.luckyColor||'럭키 컬러'}${p.color?.name ? ' · ' + p.color.name : ''}</div><div class="detail-area-body">${p.color?.reason||''}</div></div>
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🍽️ ${t.luckyFood||'럭키 음식'}${p.food?.name ? ' · ' + p.food.name : ''}</div><div class="detail-area-body">${p.food?.reason||''}</div></div>
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🎵 ${t.luckySong||'럭키 무드'}${p.song?.name ? ' · ' + p.song.name : ''}</div><div class="detail-area-body">${p.song?.reason||''}</div></div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🍀",title:${JSON.stringify(t.luckyTitle || "오늘의 럭키 아이템")},subtitle:${JSON.stringify([p.color?.name,p.food?.name,p.song?.name].filter(Boolean).join(" · ").replace(/'/g, "’"))},filename:"myan-lucky"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
     }
@@ -5684,7 +5684,7 @@ async function openLuckyPicks() {
 }
 
 // ════════════════════════════════════════════
-//  오행 유형 궁합 테스트 (재미 콘텐츠) — 퀴즈는 무료, 궁합 해석만 1토큰
+//  오행 유형 궁합 테스트 (재미 콘텐츠) — 퀴즈는 무료, 궁합 해석만 엽전 1개
 // ════════════════════════════════════════════
 let _typeTestState = null;
 
@@ -5789,7 +5789,7 @@ async function _typeTestPickPartner(partnerType) {
     }
     areaEl.innerHTML = `
       <div class="detail-area-card"><div class="detail-area-body" id="typeCompatBody"></div></div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🔯",title:${JSON.stringify((ON_KR[s.myType]||s.myType) + " × " + (ON_KR[partnerType]||partnerType))},filename:"myan-typecompat"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('typeCompatBody');
@@ -5800,7 +5800,7 @@ async function _typeTestPickPartner(partnerType) {
 }
 
 // ════════════════════════════════════════════
-//  오늘의 운세 모음 (재미 콘텐츠, 1토큰)
+//  오늘의 운세 모음 (재미 콘텐츠, 엽전 1개)
 //  짝사랑 / 관계 신뢰 / 가족 / 미래 / 학업 / 성격 / 인상 / 성공
 // ════════════════════════════════════════════
 function openFortuneTopics() {
@@ -5879,7 +5879,7 @@ async function _fortuneTopicPick(key) {
     resultEl.innerHTML = `
       <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.icon || ''} ${topicLabel}</div>
       <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="fortuneTopicBody"></div></div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:${JSON.stringify(data.icon || "✨")},title:${JSON.stringify(topicLabel)},filename:"myan-fortune"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       <button class="oracle-skip-btn" style="width:100%;margin-top:8px" onclick="_fortuneTopicBack()">${backLabel}</button>
     `;
@@ -5899,7 +5899,7 @@ function _fortuneTopicBack() {
 }
 
 // ════════════════════════════════════════════
-//  주역(周易) 괘 풀이 (재미 콘텐츠, 1토큰)
+//  주역(周易) 괘 풀이 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 function openIching() {
   const token = getGoogleIdToken();
@@ -5965,7 +5965,7 @@ async function _ichingCast() {
     resultEl.innerHTML = `
       <div style="margin-bottom:14px">${barsHtml}</div>
       <div class="detail-area-card"><div class="detail-area-body" id="ichingReadingBody"></div></div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🀄",title:${JSON.stringify(t.ichingTitle || "주역 괘 풀이")},filename:"myan-iching"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('ichingReadingBody');
@@ -5977,7 +5977,7 @@ async function _ichingCast() {
 }
 
 // ════════════════════════════════════════════
-//  수비학(數秘學) 라이프패스 넘버 (재미 콘텐츠, 1토큰)
+//  수비학(數秘學) 라이프패스 넘버 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 async function openNumerology() {
   const token = getGoogleIdToken();
@@ -6032,7 +6032,7 @@ async function openNumerology() {
         <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.6rem">${data.lifePath}</div>
         <div style="text-align:center;font-size:0.78rem;color:var(--text-dim);margin-bottom:10px">${t.numerologyYourNumber || '당신의 라이프패스 넘버'}</div>
         <div class="detail-area-card"><div class="detail-area-body" id="numerologyReadingBody"></div></div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🔢",title:${JSON.stringify((t.numerologyYourNumber || "라이프패스 넘버") + " " + data.lifePath)},filename:"myan-numerology"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('numerologyReadingBody');
@@ -6045,7 +6045,7 @@ async function openNumerology() {
 }
 
 // ════════════════════════════════════════════
-//  토정비결풍 신년운세 (재미 콘텐츠, 2토큰)
+//  토정비결풍 신년운세 (재미 콘텐츠, 엽전 2개)
 // ════════════════════════════════════════════
 async function openTojeong() {
   const token = getGoogleIdToken();
@@ -6099,7 +6099,7 @@ async function openTojeong() {
       resultEl.style.display = '';
       resultEl.innerHTML = `
         <div class="detail-area-card"><div class="detail-area-body" id="tojeongReadingBody"></div></div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🧧",title:${JSON.stringify((data.year || "") + " " + (t.tojeongTitle || "토정비결풍 신년운세"))},filename:"myan-tojeong"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('tojeongReadingBody');
@@ -6112,7 +6112,7 @@ async function openTojeong() {
 }
 
 // ════════════════════════════════════════════
-//  관상·손금 사진 분석 (재미 콘텐츠, 2토큰)
+//  관상·손금 사진 분석 (재미 콘텐츠, 엽전 2개)
 // ════════════════════════════════════════════
 let _photoReadingType = null;
 let _photoReadingDataUrl = null;
@@ -6237,7 +6237,7 @@ async function _photoReadingSubmit() {
     if (bodyEl) {
       bodyEl.innerHTML = `
         <div class="detail-area-card"><div class="detail-area-body" id="photoReadingText"></div></div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       `;
       const textEl = document.getElementById('photoReadingText');
       if (textEl) revealSentences(textEl, data.reading, lang, { scrollEl: bodyEl, stagger: 0 });
@@ -6317,7 +6317,7 @@ async function _deletePhotoReading(id) {
 }
 
 // ════════════════════════════════════════════
-//  꿈해몽 (재미 콘텐츠, 1토큰)
+//  꿈해몽 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 function openDreamInterpretation() {
   const token = getGoogleIdToken();
@@ -6376,7 +6376,7 @@ async function _dreamSubmit() {
     btn.style.display = 'none';
     resultEl.innerHTML = `
       <div class="detail-area-card"><div class="detail-area-body" id="dreamReadingBody"></div></div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🌙",title:${JSON.stringify(t.dreamTitle || "꿈해몽")},filename:"myan-dream"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('dreamReadingBody');
@@ -6388,7 +6388,7 @@ async function _dreamSubmit() {
 }
 
 // ════════════════════════════════════════════
-//  오늘의 로또번호 추천 (재미 콘텐츠, 1토큰)
+//  오늘의 로또번호 추천 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 async function openLottoNumbers() {
   const token = getGoogleIdToken();
@@ -6438,7 +6438,7 @@ async function openLottoNumbers() {
         <div>${ballsHtml}</div>
         <div class="detail-area-card" style="margin-top:14px;text-align:left"><div class="detail-area-body" id="lottoReadingBody"></div></div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:10px">${t.lottoDisclaimer || '재미로 보는 참고용입니다. 당첨을 보장하지 않아요.'}</div>
-        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+        ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
         <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🎱",title:${JSON.stringify(t.lottoTitle || "오늘의 로또번호")},subtitle:${JSON.stringify(data.numbers.join(" · "))},filename:"myan-lotto"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('lottoReadingBody');
@@ -6451,7 +6451,7 @@ async function openLottoNumbers() {
 }
 
 // ════════════════════════════════════════════
-//  룬 문자 점 (재미 콘텐츠, 1토큰)
+//  룬 문자 점 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 function openRuneReading() {
   const token = getGoogleIdToken();
@@ -6513,7 +6513,7 @@ async function _runeDraw() {
     resultEl.innerHTML = `
       <div style="text-align:center;font-weight:700;color:var(--gold);font-size:1.05rem">${data.name}(${data.nameKo})${data.upright ? '' : ` · ${t.runeReversed || '역방향'}`}</div>
       <div class="detail-area-card" style="margin-top:12px"><div class="detail-area-body" id="runeReadingBody"></div></div>
-      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 토큰'}: ${data.remaining}</div>` : ''}
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
       <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"ᚱ",title:${JSON.stringify(data.name + "(" + data.nameKo + ")" + (data.upright ? "" : " · " + (t.runeReversed||"역방향")))},filename:"myan-rune"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('runeReadingBody');
@@ -6993,11 +6993,11 @@ function _showPromoModal(code) {
       <div class="modal-title" style="margin-bottom:8px">M;Y 安 카페 혜택</div>
       <div style="font-size:0.88rem;color:var(--text-dim);margin-bottom:20px;line-height:1.7">
         방문해 주셔서 감사합니다!<br>
-        <strong style="color:var(--gold)">무료 토큰 3개</strong>를 드립니다.<br>
+        <strong style="color:var(--gold)">무료 엽전 3개</strong>를 드립니다.<br>
         <span style="font-size:0.78rem;opacity:0.6">계정당 1회 사용 가능</span>
       </div>
       <button id="promo-claim-btn" style="width:100%;padding:14px;border-radius:12px;background:var(--gold);color:#1a1610;font-weight:700;font-size:1rem;border:none;cursor:pointer">
-        🎁 토큰 3개 받기
+        🎁 엽전 3개 받기
       </button>
       <button onclick="document.getElementById('promo-modal').remove()" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;font-size:0.85rem">
         닫기
@@ -7028,7 +7028,7 @@ function _showPromoModal(code) {
       const data = await r.json();
       overlay.remove();
       if (data.success) {
-        showToast(`🎉 토큰 ${data.tokensGiven}개 지급! 잔여: ${data.remaining}개`);
+        showToast(`🎉 엽전 ${data.tokensGiven}개 지급! 잔여: ${data.remaining}개`);
         if (typeof refreshTokens === 'function') refreshTokens();
         if (typeof updateAllTokenDisplays === 'function') updateAllTokenDisplays();
       } else {
@@ -7069,11 +7069,11 @@ function _showDynamicPromoModal(token) {
       <div class="modal-title" style="margin-bottom:8px">M;Y 安 카페 혜택</div>
       <div style="font-size:0.88rem;color:var(--text-dim);margin-bottom:20px;line-height:1.7">
         방문해 주셔서 감사합니다!<br>
-        <strong style="color:var(--gold)">무료 토큰 3개</strong>를 드립니다.<br>
+        <strong style="color:var(--gold)">무료 엽전 3개</strong>를 드립니다.<br>
         <span style="font-size:0.78rem;opacity:0.6">1회용 코드 · 계정당 1회</span>
       </div>
       <button id="promo-claim-btn" style="width:100%;padding:14px;border-radius:12px;background:var(--gold);color:#1a1610;font-weight:700;font-size:1rem;border:none;cursor:pointer">
-        🎁 토큰 5개 받기
+        🎁 엽전 5개 받기
       </button>
       <button onclick="document.getElementById('promo-modal').remove()" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;font-size:0.85rem">닫기</button>
     </div>`;
@@ -7094,7 +7094,7 @@ function _showDynamicPromoModal(token) {
       const data = await r.json();
       overlay.remove();
       if (data.success) {
-        showToast(`🎉 토큰 ${data.tokensGiven}개 지급! 잔여: ${data.remaining}개`);
+        showToast(`🎉 엽전 ${data.tokensGiven}개 지급! 잔여: ${data.remaining}개`);
         if (typeof refreshTokens === 'function') refreshTokens();
         if (typeof updateAllTokenDisplays === 'function') updateAllTokenDisplays();
       } else {
@@ -7449,7 +7449,7 @@ async function showSajuHistory() {
     }
 
     // 기록 렌더링.
-    // 예전엔 본문을 2줄로 잘라 보여주기만 하고 펼칠 방법이 없어서, 토큰을 쓰고 받은 풀이를
+    // 예전엔 본문을 2줄로 잘라 보여주기만 하고 펼칠 방법이 없어서, 엽전을 쓰고 받은 풀이를
     // 다시 읽을 수가 없었다. 본문은 이미 응답에 다 들어있으므로 접힌 상태로 전부 심어두고
     // 버튼으로 max-height 만 토글한다(다시 fetch 하지 않는다).
     content.innerHTML = entries.map((en, i) => {

@@ -347,7 +347,7 @@ function computeSaju(year, month, day, hourInput) {
 }
 
 // ════════════════════════════
-//  로컬(무료) 간단 사주 풀이 — Gemini 미호출, 토큰 미차감. 코드로 생성
+//  로컬(무료) 간단 사주 풀이 — Gemini 미호출, 엽전 미차감. 코드로 생성
 // ════════════════════════════
 const _GAN_TRAIT = {
   ko:{甲:'곧게 뻗는 큰 나무처럼 추진력과 리더십이 있어요',乙:'유연한 화초처럼 섬세하고 적응력이 좋아요',丙:'밝은 태양처럼 열정적이고 표현력이 풍부해요',丁:'따뜻한 촛불처럼 세심하고 헌신적이에요',戊:'든든한 산처럼 포용력 있고 안정적이에요',己:'비옥한 밭처럼 현실감각과 보살핌이 있어요',庚:'단단한 쇠처럼 결단력 있고 의리가 있어요',辛:'빛나는 보석처럼 예리하고 자존심이 강해요',壬:'큰 강물처럼 지혜롭고 포용력이 커요',癸:'맑은 이슬처럼 직관적이고 순수해요'},
@@ -593,7 +593,7 @@ function sanitizeName(name) {
   return String(name).trim().replace(/[<>'"&]/g, '').slice(0, 50);
 }
 
-// 무료 간단 풀이 엔드포인트 (Gemini 미호출 · 토큰 미차감)
+// 무료 간단 풀이 엔드포인트 (Gemini 미호출 · 엽전 미차감)
 async function handleSajuReading(request, env) {
   try {
     // Body 크기 제한 (10KB)
@@ -1121,7 +1121,7 @@ async function hmacVerify(secret, data, signature) {
 //
 // ⚠️ 원장은 절대 섞이지 않는다. 웹은 payment_requests(user_email), 미니앱은
 //    mini_payment_requests(user_key) 로 물리적으로 다른 테이블을 쓴다. 두 서비스는
-//    계정도 토큰도 별개라는 계약이고, test/mini-isolation.test.mjs 가 이를 지킨다.
+//    계정도 엽전도 별개라는 계약이고, test/mini-isolation.test.mjs 가 이를 지킨다.
 //
 // 테이블·컬럼 이름은 아래 고정 표에서만 온다. 사용자 입력이 SQL 로 흘러들지 않는다.
 const _LEDGERS = {
@@ -1165,7 +1165,7 @@ async function accountBalance(env, acct) {
 }
 
 /**
- * 토큰을 차감한다. 잔액 조건을 INSERT 안에 넣은 한 문장이라, 동시에 들어온 두 요청이
+ * 엽전을 차감한다. 잔액 조건을 INSERT 안에 넣은 한 문장이라, 동시에 들어온 두 요청이
  * 같은 잔액을 보고 둘 다 통과하는 일이 없다.
  * @returns {boolean} 잔액이 모자라면 false (이때는 아무것도 쓰이지 않는다)
  */
@@ -1196,7 +1196,7 @@ async function accountRefund(env, acct, feature, cost) {
   }
 }
 
-// 유료 기능의 토큰 환불. 차감할 때 쓴 값을 그대로 넘겨야 환불이 원래 청구와 어긋나지 않는다.
+// 유료 기능의 엽전 환불. 차감할 때 쓴 값을 그대로 넘겨야 환불이 원래 청구와 어긋나지 않는다.
 // 호출부는 차감 직후 refund 클로저를 만들어 두고, 실패 분기와 catch 양쪽에서 이걸 쓴다.
 async function refundTokens(env, email, feature, cost) {
   const id = `${feature}_refund_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1440,7 +1440,7 @@ async function ensureDBExt(env) {
   //   CREATE INDEX IF NOT EXISTS idx_sub_status_due ON subscriptions (status, current_period_end);
 
   // ── 앱인토스 미니앱 전용 ──
-  // 웹과 완전히 분리된 서비스다. 계정도 토큰도 서로 통하지 않는다.
+  // 웹과 완전히 분리된 서비스다. 계정도 엽전도 서로 통하지 않는다.
   // 웹은 구글 로그인(이메일이 키)이지만 미니앱은 토스 로그인이다. 토스는 이메일을
   // 안 줄 수도 있어서(null 가능) 키로 쓸 수 없다.
   //
@@ -1599,7 +1599,7 @@ export default {
     // ── 로그인 기록 ──
     if (path === '/auth/login' && method === 'POST') { await ensureDBExt(env); return handleAuthLogin(request, env); }
 
-    // ── 앱인토스 미니앱 (/mini/*) — 웹과 계정·토큰이 완전히 분리된 별도 서비스 ──
+    // ── 앱인토스 미니앱 (/mini/*) — 웹과 계정·엽전이 완전히 분리된 별도 서비스 ──
     if (path === '/mini/api/auth/login' && method === 'POST') { await ensureDBExt(env); return handleMiniAuthLogin(request, env); }
     if (path === '/mini/api/me'         && method === 'GET')  { await ensureDBExt(env); return handleMiniMe(request, env); }
     if (path === '/mini/api/profile'    && method === 'POST') { await ensureDBExt(env); return handleMiniSaveProfile(request, env); }
@@ -1703,7 +1703,7 @@ export default {
 };
 
 // ════════════════════════════
-//  토큰 핸들러 & 헬퍼 함수
+//  엽전 핸들러 & 헬퍼 함수
 // ════════════════════════════
 
 // ── 자체 세션 토큰 (HS256 JWT, 30일) ──
@@ -1714,7 +1714,7 @@ const SESSION_TTL = 30 * 24 * 60 * 60; // 30일(초)
 // SESSION_SECRET 이 없으면 세션 발급·검증을 아예 하지 않는다(폴백 금지).
 // 예전엔 ADMIN_SECRET → GEMINI_API_KEY → 'myan-dev-secret' 순으로 폴백했는데,
 // 마지막 값이 이 공개 저장소에 그대로 박혀 있어서 시크릿이 비는 순간 누구나
-// 임의 이메일로 세션 토큰을 위조할 수 있었다(= 전 계정 탈취 + 토큰 무한 지급).
+// 임의 이메일로 세션 토큰을 위조할 수 있었다(= 전 계정 탈취 + 엽전 무한 지급).
 // UNGI_PIN/CAFE_STAFF_PIN/PROMO_ADMIN_PIN 과 같은 원칙 — 시크릿이 없으면 거부한다.
 // 던진 예외는 verifySessionToken 경로에선 getEmailFromToken 의 try/catch 가 받아
 // 인증 거부(null)로 떨어지고, 발급 경로에선 handleAuthLogin 이 500 으로 돌려준다.
@@ -1770,7 +1770,7 @@ async function getEmailFromToken(idToken, env) {
         const subject = await verifySessionToken(idToken, env);
         // 미니앱 세션('mini:<userKey>')은 웹 사용자로 통과시키지 않는다.
         // 그냥 두면 웹 원장(payment_requests.user_email)에 'mini:...' 행이 생겨
-        // 두 서비스의 계정·토큰이 섞인다. 미니앱은 getMiniCiFromRequest 로만 인증한다.
+        // 두 서비스의 계정·엽전이 섞인다. 미니앱은 getMiniCiFromRequest 로만 인증한다.
         if (typeof subject === 'string' && subject.startsWith('mini:')) return null;
         return subject;
       }
@@ -1964,13 +1964,13 @@ async function handleMiniAuthLogin(request, env) {
     ).bind(userKey, name || null, birth?.year ?? null, birth?.month ?? null, birth?.day ?? null, genderCode).run();
   } catch (e) {
     // 여기서 조용히 넘어가면 안 된다. 행이 없는 채로 세션만 나가면 로그인은 된 것처럼
-    // 보이는데 프로필 저장도 토큰 지급도 대상이 없어 전부 무효가 된다.
+    // 보이는데 프로필 저장도 엽전 지급도 대상이 없어 전부 무효가 된다.
     // (실제로 컬럼명을 바꾸기 전에 로그인한 사용자가 이 상태에 빠졌다.)
     console.error('[MINI AUTH UPSERT]', e?.message);
     return miniCors(request, JSON.stringify({ error: { message: '로그인 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
   }
 
-  // 처음 온 사람에게 체험용 토큰을 준다. 한 번도 못 써보고 결제 화면부터 만나면
+  // 처음 온 사람에게 체험용 엽전을 준다. 한 번도 못 써보고 결제 화면부터 만나면
   // 대부분 그냥 나간다. 두 번째 로그인부터는 id 충돌로 조용히 무시된다.
   await _miniGrantSignup(env, userKey);
 
@@ -2165,21 +2165,27 @@ async function handleMiniUnlink(request, env) {
 // ════════════════════════════════════════════
 // 클라이언트가 IAP.createOneTimePurchaseOrder() 로 결제하면 processProductGrant 콜백에서
 // 이 서버의 /mini/api/payment/grant 를 부른다. 서버는 orderId 를 토스에 **직접 물어**
-// 결제 사실을 확인한 뒤에만 토큰을 넣는다. 지급이 끝나면 클라이언트가
+// 결제 사실을 확인한 뒤에만 엽전을 넣는다. 지급이 끝나면 클라이언트가
 // IAP.completeProductGrant 로 앱에 알린다.
 //
 // ⚠️ 클라이언트가 보낸 금액·수량은 절대 믿지 않는다. sku 만 받고 지급량은 아래 표에서 정한다.
-//    안 그러면 요청을 조작해 토큰을 원하는 만큼 받아갈 수 있다.
+//    안 그러면 요청을 조작해 엽전을 원하는 만큼 받아갈 수 있다.
 //
 // ⚠️ SKU 문자열은 앱인토스 콘솔에 등록한 상품 ID 와 **정확히** 같아야 한다.
 //    콘솔에서 상품을 만든 뒤 이 표를 맞춰야 결제가 지급으로 이어진다.
-//    amount 는 기록용(공급가·VAT 제외)이고 실제 청구는 콘솔 설정을 따른다.
-// 10개 3,900원(개당 390원)을 진입 가격으로 두고, 위로 갈수록 개당 단가를 낮춘다.
+//    amount 는 원장에 남기는 기록용이고 실제 청구는 콘솔 설정을 따르지만,
+//    앱 화면에 그대로 보여 주는 값이므로 판매가와 어긋나면 안 된다.
+//
+// ⚠️ 콘솔은 **공급가**를 받고 판매가 = 공급가 × 1.1(VAT) 로 계산한다.
+//    그래서 판매가는 11 의 배수만 나온다 — 처음 계획한 3,900·27,900 은 만들 수 없었다.
+//    공급가 3,500 → 3,850 / 9,000 → 9,900 / 25,000 → 27,500
+//
+// 10개를 진입 가격으로 두고 위로 갈수록 개당 단가를 낮춘다.
 // 많이 살수록 이득이라는 게 눈에 보여야 한 칸 위를 고르게 된다.
 const MINI_PRODUCTS = {
-  token_10:  { tokens: 10,  amount: 3900,  label: '토큰 10개' },   // 390원/개
-  token_30:  { tokens: 30,  amount: 9900,  label: '토큰 30개' },   // 330원/개
-  token_100: { tokens: 100, amount: 27900, label: '토큰 100개' },  // 279원/개
+  token_10:  { tokens: 10,  amount: 3850,  label: '엽전 10개' },   // 385원/개
+  token_30:  { tokens: 30,  amount: 9900,  label: '엽전 30개' },   // 330원/개
+  token_100: { tokens: 100, amount: 27500, label: '엽전 100개' },  // 275원/개
 };
 
 // 결제가 끝난 상태. PURCHASED 는 지급까지 끝난 상태, PAYMENT_COMPLETED 는 결제만 끝나고
@@ -2286,7 +2292,7 @@ async function _miniRefundOrder(env, orderId, userKey) {
   }
 }
 
-// ── 미니앱 토큰 차감·환불 ──
+// ── 미니앱 엽전 차감·환불 ──
 // 웹과 같은 append-only 규칙이다. 잔액을 읽고 나서 쓰는 2단계로 하면 동시 요청이
 // 같은 잔액을 보고 둘 다 통과한다. 조건을 INSERT 안에 넣어 한 문장으로 끝낸다.
 async function _miniSpend(env, userKey, feature, cost) {
@@ -2378,7 +2384,7 @@ async function handleMiniAdReward(request, env) {
           ok: true, granted: true, tokens: MINI_AD_TOKENS,
           remainToday: MINI_AD_DAILY_MAX - n,
           balance: await _miniBalance(env, userKey),
-          message: `토큰 ${MINI_AD_TOKENS}개를 드렸어요. 오늘 ${MINI_AD_DAILY_MAX - n}번 더 받을 수 있어요.`,
+          message: `엽전 ${MINI_AD_TOKENS}개를 드렸어요. 오늘 ${MINI_AD_DAILY_MAX - n}번 더 받을 수 있어요.`,
         }), 200);
       }
     }
@@ -2396,8 +2402,8 @@ async function handleMiniAdReward(request, env) {
 // ════════════════════════════════════════════
 //  미니앱 놀이 — 출석 · 퀴즈 · 산가지
 // ════════════════════════════════════════════
-// 보상을 "운"이 아니라 "행동"에 붙인다. 뽑기 결과에 따라 토큰이 나오면 사행성으로
-// 지적받을 수 있어서, 산가지는 재미(무료)만 주고 토큰은 출석·퀴즈·광고로만 나간다.
+// 보상을 "운"이 아니라 "행동"에 붙인다. 뽑기 결과에 따라 엽전이 나오면 사행성으로
+// 지적받을 수 있어서, 산가지는 재미(무료)만 주고 엽전은 출석·퀴즈·광고로만 나간다.
 const MINI_CHECKIN_TOKENS = 3;   // 7일 개근
 const MINI_QUIZ_TOKENS    = 1;   // 퀴즈 만점, 하루 1회
 const MINI_CHECKIN_CYCLE  = 7;
@@ -2409,7 +2415,7 @@ async function handleMiniCheckin(request, env) {
   const today = _kstToday();
 
   try {
-    // 도장은 토큰 0짜리 행이다. 원장에 함께 두면 표를 더 만들지 않아도 되고,
+    // 도장은 엽전 0짜리 행이다. 원장에 함께 두면 표를 더 만들지 않아도 되고,
     // id 가 날짜라 하루 한 번만 찍힌다.
     await env.DB.prepare(
       `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
@@ -2451,7 +2457,7 @@ async function handleMiniCheckin(request, env) {
       toNext: MINI_CHECKIN_CYCLE - (streak % MINI_CHECKIN_CYCLE || MINI_CHECKIN_CYCLE),
       balance: await _miniBalance(env, userKey),
       message: granted
-        ? `${MINI_CHECKIN_CYCLE}일 개근! 토큰 ${MINI_CHECKIN_TOKENS}개를 드렸어요.`
+        ? `${MINI_CHECKIN_CYCLE}일 개근! 엽전 ${MINI_CHECKIN_TOKENS}개를 드렸어요.`
         : `${streak}일째 오셨어요.`,
     }), 200);
   } catch (e) {
@@ -2643,18 +2649,18 @@ async function handleMiniQuizSubmit(request, env) {
     ok: true, results, allRight, granted,
     tokens: granted ? MINI_QUIZ_TOKENS : 0,
     balance: await _miniBalance(env, userKey),
-    message: !allRight ? `${correctCount}문제 맞히셨어요. ${MINI_QUIZ_PASS}문제부터 토큰을 드려요.`
-      : granted ? `${correctCount}문제 맞히셨어요! 토큰 ${MINI_QUIZ_TOKENS}개를 드렸어요.`
+    message: !allRight ? `${correctCount}문제 맞히셨어요. ${MINI_QUIZ_PASS}문제부터 엽전을 드려요.`
+      : granted ? `${correctCount}문제 맞히셨어요! 엽전 ${MINI_QUIZ_TOKENS}개를 드렸어요.`
       : '잘 푸셨어요. 오늘 보상은 이미 받으셨습니다.',
   }), 200);
 }
 
 // ── 안도령 부풀리기 ──
-// 두드려서 부풀리고 터뜨리면 토큰을 준다. 보상이 운이 아니라 두드린 횟수에 붙으므로
+// 두드려서 부풀리고 터뜨리면 엽전을 준다. 보상이 운이 아니라 두드린 횟수에 붙으므로
 // 사행성 소지가 없다.
 //
 // ⚠️ 클라이언트 말을 그대로 믿으면 안 된다. 앱을 고치지 않아도 보상 엔드포인트만
-// 직접 부르면 토큰이 나온다. 그래서 서버가 목표 횟수와 발급 시각을 서명해 내려주고,
+// 직접 부르면 엽전이 나온다. 그래서 서버가 목표 횟수와 발급 시각을 서명해 내려주고,
 // 제출할 때 (1) 서명이 맞는지 (2) 사람이 두드릴 만한 시간이 걸렸는지를 본다.
 const MINI_POP_TOKENS    = 1;
 const MINI_POP_TAPS      = 30;     // 터뜨리는 데 필요한 두드림 수
@@ -2721,7 +2727,7 @@ async function handleMiniPopClaim(request, env) {
           ok: true, granted: true, tokens: MINI_POP_TOKENS,
           remainToday: maxToday - n,
           balance: await _miniBalance(env, userKey),
-          message: `펑! 토큰 ${MINI_POP_TOKENS}개를 드렸어요. 오늘 ${maxToday - n}번 더 할 수 있어요.`,
+          message: `펑! 엽전 ${MINI_POP_TOKENS}개를 드렸어요. 오늘 ${maxToday - n}번 더 할 수 있어요.`,
         }), 200);
       }
     }
@@ -2736,7 +2742,7 @@ async function handleMiniPopClaim(request, env) {
   }
 }
 
-// ── 미니앱 오늘의 운세 (유료 1토큰) ──
+// ── 미니앱 오늘의 운세 (유료 엽전 1개) ──
 const MINI_TODAY_COST = 1;
 
 async function handleMiniDailyFortune(request, env) {
@@ -2757,7 +2763,7 @@ async function handleMiniDailyFortune(request, env) {
   // 먼저 차감한다. Gemini 를 부르고 나서 차감하면 그 사이에 여러 번 눌러 공짜로 볼 수 있다.
   const spendId = await _miniSpend(env, userKey, 'today', MINI_TODAY_COST);
   if (!spendId) {
-    return miniCors(request, JSON.stringify({ error: { message: '토큰이 부족합니다.', code: 'NO_TOKEN' } }), 402);
+    return miniCors(request, JSON.stringify({ error: { message: '엽전이 부족합니다.', code: 'NO_TOKEN' } }), 402);
   }
 
   try {
@@ -2790,7 +2796,7 @@ async function handleMiniDailyFortune(request, env) {
 
     if (!reading) {
       await _miniRefundSpend(env, spendId, userKey, MINI_TODAY_COST);
-      return miniCors(request, JSON.stringify({ error: { message: '운세를 불러오지 못했습니다. 토큰은 돌려드렸어요.' } }), 502);
+      return miniCors(request, JSON.stringify({ error: { message: '운세를 불러오지 못했습니다. 엽전은 돌려드렸어요.' } }), 502);
     }
 
     return miniCors(request, JSON.stringify({
@@ -2805,7 +2811,7 @@ async function handleMiniDailyFortune(request, env) {
     // fetch 가 던지는 경우(연결 끊김·타임아웃)도 여기로 온다. 차감만 남으면 안 된다.
     console.error('[MINI TODAY]', e?.message);
     await _miniRefundSpend(env, spendId, userKey, MINI_TODAY_COST);
-    return miniCors(request, JSON.stringify({ error: { message: '오류가 발생했습니다. 토큰은 돌려드렸어요.' } }), 500);
+    return miniCors(request, JSON.stringify({ error: { message: '오류가 발생했습니다. 엽전은 돌려드렸어요.' } }), 500);
   }
 }
 
@@ -2817,10 +2823,10 @@ async function handleAuthLogin(request, env) {
   let info;
   try {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
-    if (!res.ok) return cors(JSON.stringify({ error: '유효하지 않은 토큰입니다.' }), 401);
+    if (!res.ok) return cors(JSON.stringify({ error: '유효하지 않은 엽전입니다.' }), 401);
     info = await res.json();
   } catch {
-    return cors(JSON.stringify({ error: '토큰 검증 실패' }), 401);
+    return cors(JSON.stringify({ error: '엽전 검증 실패' }), 401);
   }
   if (!info.email || info.email_verified !== 'true') {
     return cors(JSON.stringify({ error: '이메일 인증되지 않은 계정입니다.' }), 401);
@@ -2874,7 +2880,7 @@ async function handleAuthLogin(request, env) {
     }
   }
 
-  // 자체 세션 토큰 발급 (이후 요청은 이 토큰으로 로컬 검증)
+  // 자체 세션 토큰 발급 (이후 요청은 이 엽전으로 로컬 검증)
   // SESSION_SECRET 미설정이면 _sessionSecret() 이 던진다 — 스택을 흘리지 않고 한국어로 응답.
   let session;
   try {
@@ -2965,7 +2971,7 @@ async function handleAdminUsage(request, env) {
   const days = (Number.isFinite(daysRaw) && daysRaw > 0) ? Math.min(daysRaw, 365) : 0; // 0 = 전체 기간
   const since = days > 0 ? Math.floor(Date.now() / 1000) - days * 86400 : 0;
 
-  // 소비 집계(tokens < 0) — 기능별 사용 횟수·소모 토큰·이용자 수.
+  // 소비 집계(tokens < 0) — 기능별 사용 횟수·소모 엽전·이용자 수.
   // 지급/환불 행은 tokens > 0 이라 자연히 제외된다.
   const usage = await env.DB.prepare(`
     SELECT pkg,
@@ -3153,7 +3159,7 @@ async function handleAdminGrantTokens(request, env) {
   
   const tokenCount = parseInt(tokens, 10);
   if (!email || isNaN(tokenCount) || tokenCount <= 0 || tokenCount > 9999) {
-    return cors(JSON.stringify({ error: { message: '올바른 이메일과 1개 이상의 토큰 수량을 입력해주세요.' } }), 400);
+    return cors(JSON.stringify({ error: { message: '올바른 이메일과 1개 이상의 엽전 수량을 입력해주세요.' } }), 400);
   }
 
   const id = `grant_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -3169,7 +3175,7 @@ async function handleAdminGrantTokens(request, env) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: env.TELEGRAM_CHAT_ID,
-        text: `🎁 관리자 직접 충전\n👤 ${email}\n✦ ${tokenCount}토큰 지급 완료\n📝 ${note || '사유 없음'}`,
+        text: `🎁 관리자 직접 충전\n👤 ${email}\n✦ ${tokenCount}엽전 지급 완료\n📝 ${note || '사유 없음'}`,
       }),
     }).catch(() => {});
   }
@@ -3208,12 +3214,12 @@ async function handleTelegramApprove(request, env) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: env.TELEGRAM_CHAT_ID,
-        text: `✅ 승인 완료!\n👤 ${row.user_email}\n🎁 ${row.tokens}토큰 지급됨`,
+        text: `✅ 승인 완료!\n👤 ${row.user_email}\n🎁 ${row.tokens}엽전 지급됨`,
       }),
     }).catch(() => {});
   }
 
-  return htmlPage('✅ 승인 완료!', `${row.user_email} 님께 ${row.tokens}토큰이 지급됩니다.`);
+  return htmlPage('✅ 승인 완료!', `${row.user_email} 님께 ${row.tokens}엽전이 지급됩니다.`);
 }
 
 function htmlPage(title, desc) {
@@ -3353,7 +3359,7 @@ async function handlePaymentVerify(request, env) {
 // ════════════════════════════
 //  구독(멤버십) — 토스 빌링(정기결제)
 // ════════════════════════════
-// 요금제: 금액·지급 토큰은 서버에서 결정 (클라이언트 조작 차단)
+// 요금제: 금액·지급 엽전은 서버에서 결정 (클라이언트 조작 차단)
 const SUB_PLANS = {
   basic:   { amount: 9900,  tokens: 120, name: '마이안 베이직 멤버십' },
   premium: { amount: 19900, tokens: 280, name: '마이안 프리미엄 멤버십' },
@@ -3361,7 +3367,7 @@ const SUB_PLANS = {
 const SUB_PERIOD_SEC = 30 * 24 * 60 * 60; // 결제 주기(30일)
 const SUB_MAX_FAILS  = 3;                  // 연속 결제 실패 허용 횟수 (이후 past_due)
 
-// 구독 토큰 지급 — 기존 잔액 계산(payment_requests, status='approved')과 동일 경로로 적립
+// 구독 엽전 지급 — 기존 잔액 계산(payment_requests, status='approved')과 동일 경로로 적립
 async function grantSubscriptionTokens(env, email, plan, tokens, amount, orderId) {
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(`
@@ -3444,7 +3450,7 @@ async function handleSubscriptionConfirm(request, env) {
       return cors(JSON.stringify({ error: { message: charge.data.message || '구독 결제에 실패했습니다.' } }), 400);
     }
 
-    // 3. 구독 레코드 저장(있으면 갱신) + 토큰 지급
+    // 3. 구독 레코드 저장(있으면 갱신) + 엽전 지급
     const now = Math.floor(Date.now() / 1000);
     const periodEnd = now + SUB_PERIOD_SEC;
     await env.DB.prepare(`
@@ -3483,7 +3489,7 @@ async function handleSubscriptionGet(request, env) {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 필요' } }), 401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 토큰' } }), 401);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 엽전' } }), 401);
     if (!env.DB) return cors(JSON.stringify({ active: false }));
     const sub = await env.DB.prepare(
       'SELECT plan, status, amount, monthly_tokens, current_period_end FROM subscriptions WHERE user_email = ?'
@@ -3504,13 +3510,13 @@ async function handleSubscriptionGet(request, env) {
   }
 }
 
-// 구독 해지 (이미 지급된 토큰은 유지, 다음 주기부터 자동결제 중단)
+// 구독 해지 (이미 지급된 엽전은 유지, 다음 주기부터 자동결제 중단)
 async function handleSubscriptionCancel(request, env) {
   try {
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!idToken) return cors(JSON.stringify({ error: { message: '인증 필요' } }), 401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 토큰' } }), 401);
+    if (!email) return cors(JSON.stringify({ error: { message: '유효하지 않은 엽전' } }), 401);
     if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
     const now = Math.floor(Date.now() / 1000);
     const res = await env.DB.prepare(
@@ -3722,7 +3728,7 @@ function handlePrivacyPage() {
 <div class="box">
   <p><strong>Google 로그인 시 수집:</strong></p>
   <ul>
-    <li>이메일 주소 (서비스 식별 및 토큰 관리, 서버 저장)</li>
+    <li>이메일 주소 (서비스 식별 및 엽전 관리, 서버 저장)</li>
     <li>이름 (리딩 서비스 제공 및 계정 표시, 서버 저장)</li>
     <li>프로필 사진 (선택, 화면 표시용, 서버 저장)</li>
     <li>언어 설정(locale) (서비스 언어 제공, 서버 저장)</li>
@@ -3738,7 +3744,7 @@ function handlePrivacyPage() {
   <ul>
     <li>생년월일 (사주 풀이 서비스 제공, 기기에만 저장)</li>
     <li>성별·거주지역 (선택, 정밀 풀이 목적, 기기에만 저장)</li>
-    <li>결제 기록 (토큰 잔액 관리, 서버 저장)</li>
+    <li>결제 기록 (엽전 잔액 관리, 서버 저장)</li>
   </ul>
   <p style="margin-top:10px"><strong>게스트(비회원) 체험 시 수집:</strong></p>
   <ul>
@@ -3749,7 +3755,7 @@ function handlePrivacyPage() {
 <h2>2. 개인정보 이용 목적</h2>
 <ul>
   <li>AI 사주 리딩 서비스 제공</li>
-  <li>토큰 잔액 관리 및 결제 처리</li>
+  <li>엽전 잔액 관리 및 결제 처리</li>
   <li>서비스 이용 내역 관리 및 오류 대응</li>
   <li>로그인·접속 기록을 통한 보안 및 부정 이용(어뷰징) 방지</li>
   <li>서비스 이용 통계 분석 및 품질 개선</li>
@@ -3757,7 +3763,7 @@ function handlePrivacyPage() {
 </ul>
 
 <h2>3. 개인정보 보유 및 파기</h2>
-<p>회원 탈퇴 시 서버에 저장된 모든 데이터(이메일, 이름·프로필·언어 설정, 토큰 잔액, 결제 기록, 로그인·접속 기록)를 즉시 파기합니다. 생년월일 등 기기 로컬 데이터는 앱 삭제 또는 회원 탈퇴 시 파기됩니다. 게스트 체험 기록은 횟수 제한 목적 달성 후 일정 기간 경과 시 파기됩니다.</p>
+<p>회원 탈퇴 시 서버에 저장된 모든 데이터(이메일, 이름·프로필·언어 설정, 엽전 잔액, 결제 기록, 로그인·접속 기록)를 즉시 파기합니다. 생년월일 등 기기 로컬 데이터는 앱 삭제 또는 회원 탈퇴 시 파기됩니다. 게스트 체험 기록은 횟수 제한 목적 달성 후 일정 기간 경과 시 파기됩니다.</p>
 
 <h2>4. 개인정보 제3자 제공</h2>
 <p>회사는 이용자의 동의 없이 개인정보를 제3자에게 제공하지 않습니다. 단, 법령에 의한 요청이 있는 경우는 예외로 합니다.</p>
@@ -3811,26 +3817,26 @@ function handleTermsPage() {
   <li>명리학 기반 AI 사주·일진 리딩 서비스</li>
   <li>나만의 리딩 (1인 사주 분석)</li>
   <li>우리의 조화 (2인 궁합·관계 분석)</li>
-  <li>위 서비스는 토큰(이용권)을 소비하여 이용합니다</li>
+  <li>위 서비스는 엽전(이용권)을 소비하여 이용합니다</li>
 </ul>
 
 <h2>제3조 (회원가입 및 로그인)</h2>
-<p>본 서비스는 Google 소셜 로그인을 통해 가입 및 이용이 가능합니다. 가입 시 신규 이용자에게 무료 토큰이 지급됩니다.</p>
+<p>본 서비스는 Google 소셜 로그인을 통해 가입 및 이용이 가능합니다. 가입 시 신규 이용자에게 무료 엽전이 지급됩니다.</p>
 
-<h2>제4조 (토큰 및 결제)</h2>
+<h2>제4조 (엽전 및 결제)</h2>
 <div class="box">
   <ul>
-    <li>토큰은 AI 리딩 서비스 이용에 사용되는 디지털 이용권입니다</li>
-    <li>결제 완료 즉시 토큰이 지급됩니다</li>
-    <li>토큰은 현금으로 환급되지 않습니다</li>
-    <li>미사용 토큰은 회원 탈퇴 시 소멸됩니다</li>
+    <li>엽전은 AI 리딩 서비스 이용에 사용되는 디지털 이용권입니다</li>
+    <li>결제 완료 즉시 엽전이 지급됩니다</li>
+    <li>엽전은 현금으로 환급되지 않습니다</li>
+    <li>미사용 엽전은 회원 탈퇴 시 소멸됩니다</li>
   </ul>
 </div>
 
 <h2>제5조 (환불 정책)</h2>
 <ul>
-  <li>결제 후 7일 이내, 미사용 토큰에 한해 환불 가능합니다</li>
-  <li>토큰을 1개 이상 사용한 경우 부분 환불이 적용될 수 있습니다</li>
+  <li>결제 후 7일 이내, 미사용 엽전에 한해 환불 가능합니다</li>
+  <li>엽전을 1개 이상 사용한 경우 부분 환불이 적용될 수 있습니다</li>
   <li>환불 요청: <a href="mailto:riger7070@naver.com">riger7070@naver.com</a> 또는 010-6466-5717</li>
   <li>「콘텐츠산업진흥법」 및 「전자상거래법」에 따라 처리됩니다</li>
 </ul>
@@ -3916,7 +3922,7 @@ function handleDeleteAccountPage() {
 
     <h2>삭제되는 데이터</h2>
     <ol>
-      <li>서버에 저장된 토큰 잔액 및 결제 기록</li>
+      <li>서버에 저장된 엽전 잔액 및 결제 기록</li>
       <li>사용자 식별 이메일 정보</li>
       <li>앱 내 로컬 저장 데이터 (이름, 생년월일 등)</li>
     </ol>
@@ -3954,7 +3960,7 @@ async function handleWithdraw(request, env) {
 
     await ensureDBExt(env);
 
-    // 해당 이메일의 모든 결제/토큰 기록 삭제
+    // 해당 이메일의 모든 결제/엽전 기록 삭제
     await env.DB.prepare(
       'DELETE FROM payment_requests WHERE user_email = ?'
     ).bind(email).run();
@@ -4006,13 +4012,13 @@ async function handleDetailReading(request, env) {
       sajuBlock = `\n\n[이 사람의 사주 원국 — 서버에서 만세력(절기 반영)으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}\n반드시 위 사주의 일간(日干=본질)과 오행 분포를 반영하여, 오늘(${date})의 ${ohaeng} 기운이 이 사람에게 어떻게 작용하는지 개인 맞춤으로 풀어주세요.`;
     }
 
-    // 2토큰 차감 (atomic INSERT — 잔액 >= 2 일 때만 삽입)
+    // 엽전 2개 차감 (atomic INSERT — 잔액 >= 2 일 때만 삽입)
     const paid = await accountSpend(env, acct, 'detail', 2);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '상세 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '상세 풀이는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'detail', 2);
-    // 차감 후 잔여 토큰 계산
+    // 차감 후 잔여 엽전 계산
     const remainingTokens = await accountBalance(env, acct);
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
@@ -4038,7 +4044,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'detail', cat.title, reading, { category, date, ohaeng }).catch(() => {});
@@ -4052,7 +4058,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
 }
 
 // ════════════════════════════════════════════
-//  타로카드 뽑기 (재미 콘텐츠, 1토큰)
+//  타로카드 뽑기 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 // key는 프론트 js/constants.js의 TAROT_CARDS와 순서를 맞출 것
 const TAROT_CARDS = [
@@ -4080,10 +4086,10 @@ async function handleTarotDraw(request, env) {
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
 
-    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    // 엽전 1개 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
     const paid = await accountSpend(env, acct, 'tarot', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '타로카드 뽑기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '타로카드 뽑기는 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'tarot', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -4099,7 +4105,7 @@ async function handleTarotDraw(request, env) {
 
     if (!reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '카드 해석을 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'tarot', card.name, reading, { cardIndex: cardIdx, upright }).catch(() => {});
@@ -4117,7 +4123,7 @@ async function handleTarotDraw(request, env) {
 }
 
 // ════════════════════════════════════════════
-//  띠·별자리 운세 (재미 콘텐츠, 1토큰)
+//  띠·별자리 운세 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 // 인덱스는 프론트 js/constants.js의 ZODIAC_ANIMAL_NAMES/WESTERN_ZODIAC_NAMES와 순서를 맞출 것
 const ZODIAC_ANIMALS_KO = ['원숭이','닭','개','돼지','쥐','소','호랑이','토끼','용','뱀','말','양'];
@@ -4165,10 +4171,10 @@ async function handleZodiacFortune(request, env) {
     const il = ilchin();
     const on = ON[lang] || ON.ko;
 
-    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    // 엽전 1개 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
     const paid = await accountSpend(env, acct, 'zodiac', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '띠·별자리 운세는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '띠·별자리 운세는 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'zodiac', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -4212,7 +4218,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '운세를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'zodiac', `${animal}띠·${zodiac}`, reading, { animalIndex, zodiacIndex }).catch(() => {});
@@ -4231,7 +4237,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 }
 
 // ════════════════════════════════════════════
-//  천궁도 트랜싯 — 실제 행성 위치로 보는 오늘의 하늘 (1토큰)
+//  천궁도 트랜싯 — 실제 행성 위치로 보는 오늘의 하늘 (엽전 1개)
 //
 //  다른 콘텐츠와 달리 AI 에게 "알아서 지어내라"고 하지 않는다. 별자리 배치와 각도는
 //  전부 코드가 실제 궤도 계산으로 산출해서 넘기고, AI 는 그 사실을 해석만 한다.
@@ -4289,11 +4295,11 @@ async function handleAstroTransit(request, env) {
     const today = buildChart(new Date());
     const transits = transitAspects(natal, today).slice(0, ASTRO_TOP_TRANSITS);
 
-    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    // 엽전 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 1;
     const paid = await accountSpend(env, acct, 'astro', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `천궁도 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `천궁도 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'astro', COST);
     const remainingTokens = await accountBalance(env, acct);
@@ -4345,7 +4351,7 @@ ${transitLines}
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '천궁도 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '천궁도 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     const title = `${S[today.sun.signIndex]}의 계절`;
@@ -4365,7 +4371,7 @@ ${transitLines}
 }
 
 // ════════════════════════════════════════════
-//  택일(擇日) — 목적에 맞는 좋은 날 고르기 (2토큰)
+//  택일(擇日) — 목적에 맞는 좋은 날 고르기 (엽전 2개)
 //
 //  천궁도와 같은 원칙이다. 길흉 판단을 AI 에게 맡기지 않는다.
 //  lunar-javascript 가 들고 있는 실제 역법 데이터(일진의 의宜/기忌, 길신, 흉살, 충)로
@@ -4534,16 +4540,16 @@ async function handleAuspiciousDays(request, env) {
     const all = pickAuspiciousDays(purpose, { year: sy, month: sm, day: sd }, { yearZhi, days: scanDays });
     const picks = (all || []).slice(0, TAKIL_TOP);
 
-    // 후보가 없으면 차감하지 않는다. 못 준 결과에 토큰을 받을 수는 없다.
+    // 후보가 없으면 차감하지 않는다. 못 준 결과에 엽전을 받을 수는 없다.
     if (!picks.length) {
       return cors(JSON.stringify({ error: { message: `${startYmd}부터 ${scanDays}일 안에는 마땅한 날이 없습니다. 기간을 넓혀 다시 보아 주세요.` } }), 404);
     }
 
-    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    // 엽전 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 2;
     const paid = await accountSpend(env, acct, 'takil', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `택일은 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `택일은 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'takil', COST);
     const remainingTokens = await accountBalance(env, acct);
@@ -4595,7 +4601,7 @@ ${dayLines}
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '택일 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '택일 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'takil', `${purposeLabel} · ${localized[0].ymd}`, reading,
@@ -4613,7 +4619,7 @@ ${dayLines}
 }
 
 // ════════════════════════════════════════════
-//  대운(大運) — 10년 단위로 바뀌는 운의 흐름 (3토큰)
+//  대운(大運) — 10년 단위로 바뀌는 운의 흐름 (엽전 3개)
 //
 //  사주가 "타고난 판"이라면 대운은 "시간에 따라 바뀌는 판"이다. 여기서도 계산은
 //  코드가 끝낸다. 대운의 방향(순행·역행)과 기운(起運) 시점, 각 구간의 간지는
@@ -4814,7 +4820,7 @@ async function handleSpousePalace(request, env) {
     const COST = 3;
     const paid = await accountSpend(env, acct, 'spouse', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `배우자궁 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `배우자궁 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'spouse', COST);
     const remainingTokens = await accountBalance(env, acct);
@@ -4846,7 +4852,7 @@ async function handleSpousePalace(request, env) {
     const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
     if (!reading) {
       if (refund) await refund().catch(() => {});
-      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'spouse', `배우자궁 ${sp.branch}·${sp.sipsin}`, reading,
@@ -4887,11 +4893,11 @@ async function handleDaeun(request, env) {
       return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
     }
 
-    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    // 엽전 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 6;
     const paid = await accountSpend(env, acct, 'daeun', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `대운 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `대운 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'daeun', COST);
     const remainingTokens = await accountBalance(env, acct);
@@ -4940,7 +4946,7 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '대운 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '대운 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     const title = daeun.current
@@ -4964,7 +4970,7 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
 }
 
 // ════════════════════════════════════════════
-//  이름 풀이 — 한글 이름의 발음오행과 사주의 궁합 (2토큰)
+//  이름 풀이 — 한글 이름의 발음오행과 사주의 궁합 (엽전 2개)
 //
 //  전통 작명은 발음오행(오음오행)·수리오행(획수)·자원오행(한자 부수) 셋을 함께 본다.
 //  여기서 다루는 것은 그중 발음오행 하나뿐이다. 나머지 둘은 한자 획수·부수 표가
@@ -5046,11 +5052,11 @@ async function handleNameReading(request, env) {
       return cors(JSON.stringify({ error: { message: '한글 이름을 2~6글자로 입력해 주세요.' } }), 400);
     }
 
-    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    // 엽전 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 4;
     const paid = await accountSpend(env, acct, 'name', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `이름 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `이름 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'name', COST);
     const remainingTokens = await accountBalance(env, acct);
@@ -5100,7 +5106,7 @@ ${sajuLine}
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '이름 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '이름 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'name', analysis.chars.map(c => c.ch).join(''), reading,
@@ -5122,7 +5128,7 @@ ${sajuLine}
 }
 
 // ════════════════════════════════════════════
-//  궁합 심화 — 두 사람에게 언제가 좋은 시기인지 (3토큰)
+//  궁합 심화 — 두 사람에게 언제가 좋은 시기인지 (엽전 3개)
 //
 //  기존 궁합이 "둘이 어떤 조합인지"를 본다면 여기서는 "언제인지"를 본다. 판단 근거는
 //  세운(그 해의 지지)이 각자의 일지(日支)와 맺는 관계다 — 육합·삼합이면 풀리고
@@ -5210,11 +5216,11 @@ async function handleCompatTiming(request, env) {
       fromYear, YEARS);
     if (!timing) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
 
-    // 토큰 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
+    // 엽전 비용은 한 번만 정해 차감·환불 양쪽에서 같은 값을 쓴다
     const COST = 6;
     const paid = await accountSpend(env, acct, 'compat', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `궁합 시기 풀이는 토큰 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `궁합 시기 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'compat', COST);
     const remainingTokens = await accountBalance(env, acct);
@@ -5257,7 +5263,7 @@ ${timing.best.map(line).join('\n')}
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '궁합 시기 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '궁합 시기 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'compat', `${nameA} × ${nameB} · ${timing.best[0].year}`, reading,
@@ -5276,7 +5282,7 @@ ${timing.best.map(line).join('\n')}
 }
 
 // ════════════════════════════════════════════
-//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 1토큰)
+//  오늘의 럭키 컬러·음식·노래 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 async function handleLuckyPicks(request, env) {
   // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
@@ -5291,10 +5297,10 @@ async function handleLuckyPicks(request, env) {
     const il = ilchin();
     const on = ON[lang] || ON.ko;
 
-    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    // 엽전 1개 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
     const paid = await accountSpend(env, acct, 'lucky', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '오늘의 럭키 아이템은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '오늘의 럭키 아이템은 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'lucky', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5332,7 +5338,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
     const hasPick = !!(picks?.color?.name || picks?.food?.name || picks?.song?.name);
     if (!hasPick) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '행운 아이템을 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'lucky', null, JSON.stringify(picks), null).catch(() => {});
@@ -5346,8 +5352,8 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
 }
 
 // ════════════════════════════════════════════
-//  오행 유형 궁합 테스트 (재미 콘텐츠, 1토큰)
-//  유형 판정(퀴즈)은 프론트에서 무료로 처리, 궁합 해석만 여기서 1토큰
+//  오행 유형 궁합 테스트 (재미 콘텐츠, 엽전 1개)
+//  유형 판정(퀴즈)은 프론트에서 무료로 처리, 궁합 해석만 여기서 엽전 1개
 // ════════════════════════════════════════════
 const TYPE_ELEMENTS = ['木','火','土','金','水'];
 
@@ -5365,10 +5371,10 @@ async function handleTypeCompat(request, env) {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 유형입니다.' } }), 400);
     }
 
-    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    // 엽전 1개 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
     const paid = await accountSpend(env, acct, 'typecompat', 2);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '궁합 보기는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '궁합 보기는 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'typecompat', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5380,7 +5386,7 @@ async function handleTypeCompat(request, env) {
 
     if (!reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '궁합 해석을 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'typecompat', `${on[myType]}×${on[partnerType]}`, reading, { myType, partnerType }).catch(() => {});
@@ -5394,7 +5400,7 @@ async function handleTypeCompat(request, env) {
 }
 
 // ════════════════════════════════════════════
-//  오늘의 운세 모음 (재미 콘텐츠, 1토큰)
+//  오늘의 운세 모음 (재미 콘텐츠, 엽전 1개)
 //  짝사랑 / 관계 신뢰 / 가족 / 미래 / 학업 / 성격 / 인상 / 성공
 //  key는 프론트 js/constants.js의 FORTUNE_TOPICS와 순서를 맞출 것
 //  ※ '외도'는 관계 신뢰 기운으로 순화 — 단정적 의심/예언 대신 신뢰를 키우는 방향으로 안내(브랜드 원칙 준수)
@@ -5423,10 +5429,10 @@ async function handleFortuneTopic(request, env) {
     const t = FORTUNE_TOPICS[topic];
     if (!t) return cors(JSON.stringify({ error: { message: '올바르지 않은 주제입니다.' } }), 400);
 
-    // 1토큰 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
+    // 엽전 1개 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
     const paid = await accountSpend(env, acct, 'fortune', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: `${t.title}은(는) 토큰 1개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
+      return cors(JSON.stringify({ error: { message: `${t.title}은(는) 엽전 1개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
     refund = () => accountRefund(env, acct, 'fortune', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5461,7 +5467,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'fortune', t.title, reading, { topic }).catch(() => {});
@@ -5475,7 +5481,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 }
 
 // ════════════════════════════════════════════
-//  주역(周易) 괘 풀이 — 재미 콘텐츠, 1토큰
+//  주역(周易) 괘 풀이 — 재미 콘텐츠, 엽전 1개
 //  전통 삼전법(三錢法, 동전 3개 던지기) 그대로 구현: 효 하나당 동전 3개 합(6~9)으로
 //  노음(6,변효)/소양(7)/소음(8)/노양(9,변효) 결정 — 실제 확률적 무작위성은 서버에서 생성.
 //  64괘 이름 매칭·해석은 AI에 위임(64괘 이름은 안정적인 공개 고전 지식이라 사주 만세력처럼
@@ -5501,10 +5507,10 @@ async function handleIching(request, env) {
     const { lang = 'ko', question = '' } = await request.json().catch(() => ({}));
     const cleanQuestion = String(question || '').trim().slice(0, 200);
 
-    // 1토큰 차감 (atomic INSERT)
+    // 엽전 1개 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'iching', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '주역 괘 풀이는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '주역 괘 풀이는 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'iching', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5542,7 +5548,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'iching', null, reading, { lines: lines.map(l => ({ yang:l.yang, changing:l.changing })), hasChanging, question: cleanQuestion || null }).catch(() => {});
@@ -5560,7 +5566,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
 }
 
 // ════════════════════════════════════════════
-//  수비학(數秘學) 라이프패스 넘버 — 재미 콘텐츠, 1토큰
+//  수비학(數秘學) 라이프패스 넘버 — 재미 콘텐츠, 엽전 1개
 //  생년월일 전체 자릿수를 합산해 한 자리로 축약(11/22/33 마스터 넘버는 축약하지 않음) —
 //  100% 결정론적 계산이라 서버에서 직접 산출(AI는 해석만, 재계산 금지)
 // ════════════════════════════════════════════
@@ -5590,10 +5596,10 @@ async function handleNumerology(request, env) {
       return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
     }
 
-    // 1토큰 차감 (atomic INSERT)
+    // 엽전 1개 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'numerology', 2);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '수비학 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '수비학 풀이는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'numerology', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5620,7 +5626,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '수비학 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'numerology', `${lifePath}`, reading, { lifePath }).catch(() => {});
@@ -5634,7 +5640,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 }
 
 // ════════════════════════════════════════════
-//  토정비결풍 신년운세 — 재미 콘텐츠, 2토큰
+//  토정비결풍 신년운세 — 재미 콘텐츠, 엽전 2개
 //  ※ 정통 토정비결의 원문 괘사(고전 텍스트)는 신뢰성 있게 재현할 방법이 없어 그대로 인용하지
 //  않음. 대신 서버가 계산한 정확한 사주 원국을 바탕으로 "그 해 신수를 총운·재물·애정·건강별로
 //  짚어보는" 전통 신년운세의 정신을 살려 AI가 생성 — 정통 원문의 대체가 아님을 프론트에 안내.
@@ -5655,10 +5661,10 @@ async function handleTojeong(request, env) {
     const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
     if (!saju) return cors(JSON.stringify({ error: { message: '사주 계산에 실패했습니다.' } }), 400);
 
-    // 2토큰 차감 (atomic INSERT — 정식 상세풀이와 동일한 무게)
+    // 엽전 2개 차감 (atomic INSERT — 정식 상세풀이와 동일한 무게)
     const paid = await accountSpend(env, acct, 'tojeong', 4);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'tojeong', 2);
     const remainingTokens = await accountBalance(env, acct);
@@ -5691,7 +5697,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'tojeong', `${thisYear}`, reading, { year: thisYear }).catch(() => {});
@@ -5705,7 +5711,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 }
 
 // ════════════════════════════════════════════
-//  관상·손금 사진 분석 (재미 콘텐츠, 2토큰)
+//  관상·손금 사진 분석 (재미 콘텐츠, 엽전 2개)
 //  사용자가 올린 얼굴/손 사진을 Gemini Vision으로 분석. 저장을 원한다고 명시적으로
 //  확인했으므로 photo_readings 테이블에 이미지·결과를 저장해 마이페이지에서 다시 볼 수 있게 함.
 // ════════════════════════════════════════════
@@ -5739,10 +5745,10 @@ async function handlePhotoReading(request, env) {
       return cors(JSON.stringify({ error: { message: '사진 용량이 너무 큽니다. 더 작은 사진으로 다시 시도해 주세요.' } }), 413);
     }
 
-    // 2토큰 차감 (atomic INSERT)
+    // 엽전 2개 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'photo_reading', 4);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 토큰 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'photo_reading', 2);
     const remainingTokens = await accountBalance(env, acct);
@@ -5789,9 +5795,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
     if (!resp.ok || !reading) {
-      // API 오류 또는 세이프티 필터 등으로 응답이 비면 토큰 환불
+      // API 오류 또는 세이프티 필터 등으로 응답이 비면 엽전 환불
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '사진을 분석하지 못했습니다. 다른 사진으로 다시 시도해 주세요. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '사진을 분석하지 못했습니다. 다른 사진으로 다시 시도해 주세요. 엽전은 환불되었습니다.' } }), 422);
     }
 
     // 저장 (마이페이지에서 다시 볼 수 있도록 이미지 + 결과 보관) — 용량 관리를 위해 사용자당 최대 20개만 유지
@@ -5882,7 +5888,7 @@ async function handleDeletePhotoReading(request, env) {
 }
 
 // ════════════════════════════════════════════
-//  꿈해몽 (재미 콘텐츠, 1토큰)
+//  꿈해몽 (재미 콘텐츠, 엽전 1개)
 // ════════════════════════════════════════════
 async function handleDreamInterpretation(request, env) {
   // 차감이 끝난 뒤 실패하면 되돌린다. 차감·환불이 같은 값을 쓰도록 한 곳에서만 만든다.
@@ -5897,10 +5903,10 @@ async function handleDreamInterpretation(request, env) {
     const cleanDream = String(dream || '').trim().slice(0, 500);
     if (!cleanDream) return cors(JSON.stringify({ error: { message: '꿈 내용을 입력해 주세요.' } }), 400);
 
-    // 1토큰 차감 (atomic INSERT)
+    // 엽전 1개 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'dream', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '꿈해몽은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '꿈해몽은 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'dream', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5929,7 +5935,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'dream', cleanDream.slice(0, 30), reading, { dream: cleanDream }).catch(() => {});
@@ -5943,7 +5949,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 }
 
 // ════════════════════════════════════════════
-//  오늘의 로또번호 추천 (재미 콘텐츠, 1토큰)
+//  오늘의 로또번호 추천 (재미 콘텐츠, 엽전 1개)
 //  숫자 자체는 서버에서 진짜 무작위로 뽑음(AI는 재계산·해석만) — 참고용 오락 콘텐츠
 // ════════════════════════════════════════════
 function _lottoNumbers() {
@@ -5963,10 +5969,10 @@ async function handleLottoNumbers(request, env) {
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
 
-    // 1토큰 차감 (atomic INSERT)
+    // 엽전 1개 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'lotto', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '오늘의 로또번호는 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '오늘의 로또번호는 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'lotto', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -5994,7 +6000,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'lotto', numbers.join(', '), reading, { numbers }).catch(() => {});
@@ -6008,7 +6014,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 }
 
 // ════════════════════════════════════════════
-//  룬 문자 점 (재미 콘텐츠, 1토큰) — 엘더 푸타르크 24개 룬
+//  룬 문자 점 (재미 콘텐츠, 엽전 1개) — 엘더 푸타르크 24개 룬
 // ════════════════════════════════════════════
 const RUNE_NAMES = [
   { en:'Fehu',     ko:'페후' },   { en:'Uruz',     ko:'우루즈' },
@@ -6036,10 +6042,10 @@ async function handleRuneReading(request, env) {
 
     const { lang = 'ko' } = await request.json().catch(() => ({}));
 
-    // 1토큰 차감 (atomic INSERT)
+    // 엽전 1개 차감 (atomic INSERT)
     const paid = await accountSpend(env, acct, 'rune', 1);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '룬 문자 점은 토큰 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: '룬 문자 점은 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
     }
     refund = () => accountRefund(env, acct, 'rune', 1);
     const remainingTokens = await accountBalance(env, acct);
@@ -6054,7 +6060,7 @@ async function handleRuneReading(request, env) {
 
     if (!reading) {
       await refund(); refund = null;
-      return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 토큰은 환불되었습니다.' } }), 422);
+      return cors(JSON.stringify({ error: { message: '룬 해석을 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
 
     await saveFeatureHistory(env, accountHistoryKey(acct), 'rune', `${rune.en}(${rune.ko})`, reading, { index: idx, upright }).catch(() => {});
@@ -6275,7 +6281,7 @@ async function handleStreakCheckin(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
 
     const today = _todayKST();
     const row = await env.DB.prepare('SELECT * FROM user_streaks WHERE user_email=?').bind(email).first();
@@ -6323,7 +6329,7 @@ async function handleGetStreak(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     const row = await env.DB.prepare('SELECT * FROM user_streaks WHERE user_email=?').bind(email).first();
     if (!row) return cors(JSON.stringify({current:0,max:0,total:0,lastCheckin:null}),200);
     return cors(JSON.stringify({current:row.current_streak,max:row.max_streak,total:row.total_checkins,lastCheckin:row.last_checkin}),200);
@@ -6340,7 +6346,7 @@ async function handleOhaengHistory(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     const rows = await env.DB.prepare(
       'SELECT date,ohaeng FROM ohaeng_history WHERE user_email=? ORDER BY date DESC LIMIT 90'
     ).bind(email).all();
@@ -6358,7 +6364,7 @@ async function handleWeeklyReport(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
 
     const cutoff = new Date(Date.now()+9*3600000-6*86400000).toISOString().slice(0,10);
     const rows = await env.DB.prepare(
@@ -6395,7 +6401,7 @@ async function handleShareBonus(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
 
     const today = _todayKST();
     const row = await env.DB.prepare('SELECT last_share_bonus FROM user_streaks WHERE user_email=?').bind(email).first();
@@ -6428,7 +6434,7 @@ async function handleFeedback(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     const { date, ohaeng, isCorrect } = await request.json().catch(()=>({}));
     if (!date||!ohaeng) return cors(JSON.stringify({error:{message:'date,ohaeng 필수'}}),400);
     const id = `${email}:${date}`;
@@ -6450,7 +6456,7 @@ async function handleReferralGenerate(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     // 기존 코드 확인
     const existing = await env.DB.prepare('SELECT code FROM referrals WHERE referrer_email=? AND referee_email IS NULL LIMIT 1').bind(email).first();
     if (existing) return cors(JSON.stringify({code:existing.code}),200);
@@ -6468,7 +6474,7 @@ async function handleReferralClaim(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     const { code } = await request.json().catch(()=>({}));
     if (!code) return cors(JSON.stringify({error:{message:'code 필수'}}),400);
     const ref = await env.DB.prepare('SELECT * FROM referrals WHERE code=?').bind(code.toUpperCase()).first();
@@ -6482,7 +6488,7 @@ async function handleReferralClaim(request, env) {
     if (!claimRes.meta?.rows_written) {
       return cors(JSON.stringify({error:{message:'이미 사용된 코드'}}),409);
     }
-    // 보상: 양쪽 3토큰 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    // 보상: 양쪽 엽전 3개 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
     const refId1 = `ref_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const refId2 = `ref_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     await env.DB.prepare(
@@ -6504,7 +6510,7 @@ async function handleGetReferral(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     const refs = await env.DB.prepare('SELECT code,referee_email,rewarded_at FROM referrals WHERE referrer_email=?').bind(email).all();
     const myCode = (refs.results||[]).find(r=>!r.referee_email);
     return cors(JSON.stringify({
@@ -6517,14 +6523,14 @@ async function handleGetReferral(request, env) {
 }
 
 // ════════════════════════════
-//  토큰 내역 조회
+//  엽전 내역 조회
 // ════════════════════════════
 async function handleTokenHistory(request, env) {
   try {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
 
     const history = [];
 
@@ -6620,7 +6626,7 @@ async function handleUngiAdminLogin(request, env) {
     // Google 토큰 검증
     const email = await getEmailFromToken(idToken, env);
     if (!email) {
-      return cors(JSON.stringify({ error: { message: '유효하지 않은 토큰' } }), 401);
+      return cors(JSON.stringify({ error: { message: '유효하지 않은 엽전' } }), 401);
     }
 
     // 관리자 이메일 체크
@@ -6636,7 +6642,7 @@ async function handleUngiAdminLogin(request, env) {
 }
 
 // ════════════════════════════
-//  운기 토큰 지급 핸들러
+//  운기 엽전 지급 핸들러
 // ════════════════════════════
 async function handleUngiGiveTokens(request, env) {
   try {
@@ -6696,7 +6702,7 @@ async function handleUngiGiveTokens(request, env) {
     }
 
     if (tokens < 1 || tokens > 10) {
-      return cors(JSON.stringify({ error: { message: '토큰은 1~10개만 가능' } }), 400);
+      return cors(JSON.stringify({ error: { message: '엽전은 1~10개만 가능' } }), 400);
     }
 
     // 사용자 존재 확인
@@ -6705,7 +6711,7 @@ async function handleUngiGiveTokens(request, env) {
       return cors(JSON.stringify({ error: { message: '존재하지 않는 사용자' } }), 404);
     }
 
-    // 토큰 지급 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
+    // 엽전 지급 (원장에 새 행 추가 — UPDATE 금지: 기존 결제 행 수만큼 중복 지급되는 버그가 됨)
     const grantId = `ungi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await env.DB.prepare(
       `INSERT INTO payment_requests (id, user_email, pkg, amount, tokens, status, approved_at)
@@ -6821,7 +6827,7 @@ async function handleOhaengHistorySave(request, env) {
     const idToken = (request.headers.get('Authorization')||'').replace('Bearer ','').trim();
     if (!idToken) return cors(JSON.stringify({error:{message:'인증 필요'}}),401);
     const email = await getEmailFromToken(idToken, env);
-    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 토큰'}}),401);
+    if (!email) return cors(JSON.stringify({error:{message:'유효하지 않은 엽전'}}),401);
     const { date, ohaeng } = await request.json().catch(()=>({}));
     if (!date||!ohaeng) return cors(JSON.stringify({error:{message:'date,ohaeng 필수'}}),400);
     const id = `${email}:${date}`;
@@ -6854,7 +6860,7 @@ async function handlePromoClaim(request, env) {
 
   const { code, pin, promo_token } = await request.json().catch(() => ({}));
 
-  // 다이나믹 1회용 토큰 처리
+  // 다이나믹 1회용 엽전 처리
   if (promo_token) {
     return handleDynamicPromoClaim(request, env, email, promo_token);
   }
@@ -6881,7 +6887,7 @@ async function handlePromoClaim(request, env) {
     return cors(JSON.stringify({ error: '이미 사용된 코드입니다. 계정당 1회만 사용 가능합니다.' }), 409);
   }
 
-  // 토큰 지급.
+  // 엽전 지급.
   // 위의 중복 확인은 동시 요청 두 개를 나란히 통과시키므로(둘 다 기록 전 상태를 읽는다) 그것만으로는
   // 두 번 지급되는 걸 막지 못한다. claim id 를 이메일+코드로 고정해 클레임 기록 자체를 관문으로 쓴다 —
   // 먼저 도착한 요청만 행을 만들고, 나중 요청은 PRIMARY KEY 충돌로 밀려 지급까지 가지 못한다.
@@ -6898,7 +6904,7 @@ async function handlePromoClaim(request, env) {
      VALUES (?, ?, 'promo', 0, ?, 'approved', unixepoch())`
   ).bind(`grant_${claimId}`, email, promo.tokens).run();
 
-  // 잔여 토큰 반환
+  // 잔여 엽전 반환
   const bal = await env.DB.prepare(
     `SELECT COALESCE(SUM(tokens), 0) AS t FROM payment_requests WHERE user_email = ? AND status = 'approved'`
   ).bind(email).first();
@@ -6913,25 +6919,25 @@ async function handlePromoClaim(request, env) {
 
 
 // ════════════════════════════════════════════
-//  다이나믹 QR 프로모 (1회용 토큰 시스템)
+//  다이나믹 QR 프로모 (1회용 엽전 시스템)
 // ════════════════════════════════════════════
 // 카운터 태블릿용 관리자 PIN — 소스에 하드코딩하지 않고 `wrangler secret put PROMO_ADMIN_PIN`으로 설정
-const PROMO_TOKEN_TTL = 600;   // 토큰 유효시간: 10분 (초)
-const PROMO_TOKENS_REWARD = 3; // 지급 토큰 수
+const PROMO_TOKEN_TTL = 600;   // 엽전 유효시간: 10분 (초)
+const PROMO_TOKENS_REWARD = 3; // 지급 엽전 수
 
-// 랜덤 토큰 생성
+// 랜덤 엽전 생성
 function _genToken() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-// [관리자] 새 1회용 토큰 생성 (카운터 태블릿에서 호출)
+// [관리자] 새 1회용 엽전 생성 (카운터 태블릿에서 호출)
 async function handlePromoGenerate(request, env) {
   const { adminPin } = await request.json().catch(() => ({}));
   if (!env.PROMO_ADMIN_PIN || adminPin !== env.PROMO_ADMIN_PIN) {
     return cors(JSON.stringify({ error: '관리자 PIN이 올바르지 않습니다.' }), 403);
   }
-  // 기존 미사용 토큰 무효화
+  // 기존 미사용 엽전 무효화
   await env.DB.prepare(
     `UPDATE dynamic_promo_tokens SET used_at = unixepoch(), used_by = 'expired'
      WHERE used_at IS NULL AND created_at < unixepoch() - ?`
@@ -6946,7 +6952,7 @@ async function handlePromoGenerate(request, env) {
   return cors(JSON.stringify({ success: true, token, url, ttl: PROMO_TOKEN_TTL }), 200);
 }
 
-// [관리자] 현재 유효한 토큰 조회
+// [관리자] 현재 유효한 엽전 조회
 async function handlePromoCurrent(request, env) {
   const adminPin = new URL(request.url).searchParams.get('pin');
   if (!env.PROMO_ADMIN_PIN || adminPin !== env.PROMO_ADMIN_PIN) {
@@ -6965,9 +6971,9 @@ async function handlePromoCurrent(request, env) {
   return cors(JSON.stringify({ token: row.token, url, remaining }), 200);
 }
 
-// [손님] 1회용 토큰으로 클레임
+// [손님] 1회용 엽전으로 클레임
 async function handleDynamicPromoClaim(request, env, email, token) {
-  // 토큰 유효성 확인
+  // 엽전 유효성 확인
   const tokenRow = await env.DB.prepare(
     `SELECT token, tokens_given, used_at FROM dynamic_promo_tokens
      WHERE token = ? AND used_at IS NULL AND created_at > unixepoch() - ?`
@@ -6985,7 +6991,7 @@ async function handleDynamicPromoClaim(request, env, email, token) {
     return cors(JSON.stringify({ error: '이미 프로모 혜택을 사용하셨습니다. (계정당 1회)' }), 409);
   }
 
-  // 토큰 소비 처리.
+  // 엽전 소비 처리.
   // used_at IS NULL 조건이 있어야 1회용 코드가 정말 1회가 된다 — 위의 SELECT 는 동시에 들어온
   // 두 요청(특히 서로 다른 계정)을 나란히 통과시키므로, 조건 없이 UPDATE 하면 둘 다 지급받는다.
   const consumed = await env.DB.prepare(
@@ -7120,7 +7126,7 @@ function startTimer(ttl) {
   }, 1000);
 }
 
-// 페이지 로드 시 현재 유효한 토큰 확인
+// 페이지 로드 시 현재 유효한 엽전 확인
 (async () => {
   const r = await fetch('/api/promo/current?pin=' + PIN);
   const d = await r.json();

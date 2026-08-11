@@ -125,7 +125,7 @@ export const SECTIONS = [
       { id: 'topic',  icon: 'topic',  label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
       { id: 'lucky',  icon: 'lucky',  label: '오늘의 럭키 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
       { id: 'saju',   icon: 'saju',   label: '내 사주 풀이',        cost: 0, path: '/saju-reading',       need: null, free: true },
-      // 산가지는 서버를 안 부르는 무료 재미다. 토큰이 걸린 놀이들과 같은 칸에 두면
+      // 산가지는 서버를 안 부르는 무료 재미다. 엽전이 걸린 놀이들과 같은 칸에 두면
       // 보상이 있는 줄 알고 눌렀다 실망한다. 오늘의 운세 곁이 제자리다.
       { id: 'stick',  icon: 'stick',  label: '산가지 뽑기',         cost: 0, path: null,                  need: null, free: true, local: true },
     ],
@@ -133,8 +133,8 @@ export const SECTIONS = [
 ];
 
 // 산가지(算가지) 뽑기. 서버도 AI 도 부르지 않는 순수 재미다.
-// 결과에 토큰을 걸지 않는 이유: 운에 따라 보상이 나오면 사행성으로 지적받을 수 있다.
-// 토큰은 출석·퀴즈·광고처럼 확인 가능한 행동에만 붙인다.
+// 결과에 엽전을 걸지 않는 이유: 운에 따라 보상이 나오면 사행성으로 지적받을 수 있다.
+// 엽전은 출석·퀴즈·광고처럼 확인 가능한 행동에만 붙인다.
 export const SANGAJI = [
   { n: '一', t: '길(吉)',   m: '막혔던 곳이 트입니다. 미뤄 둔 연락을 오늘 해보세요.' },
   { n: '二', t: '평(平)',   m: '크게 좋지도 나쁘지도 않은 날. 하던 일을 꾸준히 하면 됩니다.' },

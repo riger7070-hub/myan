@@ -1,11 +1,11 @@
 // M;Y 安 앱인토스 미니앱.
 //
-// 웹 서비스(myan.riger7070.workers.dev)와 **계정도 토큰도 완전히 분리된 별도 서비스**다.
-// 여기서 산 토큰은 웹에서 못 쓰고 반대도 마찬가지다. 서버가 세션 subject 로 구분한다
+// 웹 서비스(myan.riger7070.workers.dev)와 **계정도 엽전도 완전히 분리된 별도 서비스**다.
+// 여기서 산 엽전은 웹에서 못 쓰고 반대도 마찬가지다. 서버가 세션 subject 로 구분한다
 // (웹은 이메일, 미니앱은 'mini:<userKey>'). test/mini-isolation.test.mjs 참고.
 //
 // 콘텐츠 자체는 웹과 같은 서버 엔드포인트를 쓴다. 서버의 계정 계층(resolveAccount)이
-// 누가 불렀는지 알아서 각자의 원장에서 토큰을 뺀다.
+// 누가 불렀는지 알아서 각자의 원장에서 엽전을 뺀다.
 //
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
@@ -39,10 +39,12 @@ const SESSION_KEY = 'myan_mini_session';
 
 // ⚠️ 콘솔에 등록한 상품 ID 와 정확히 같아야 한다. 서버의 MINI_PRODUCTS 와도 맞춰야
 // 결제가 지급으로 이어진다(worker.js 의 MINI_PRODUCTS 주석 참고).
+// price 는 사용자가 실제로 내는 값(판매가)이다. 콘솔은 공급가를 받아
+// 판매가 = 공급가 × 1.1 로 계산하므로 11 의 배수만 나온다.
 const PRODUCTS = [
-  { sku: 'token_10',  tokens: 10,  label: '토큰 10개',  price: '3,900원' },
-  { sku: 'token_30',  tokens: 30,  label: '토큰 30개',  price: '9,900원' },
-  { sku: 'token_100', tokens: 100, label: '토큰 100개', price: '27,900원' },
+  { sku: 'token_10',  tokens: 10,  label: '엽전 10개',  price: '3,850원' },
+  { sku: 'token_30',  tokens: 30,  label: '엽전 30개',  price: '9,900원' },
+  { sku: 'token_100', tokens: 100, label: '엽전 100개', price: '27,500원' },
 ];
 
 
@@ -92,7 +94,7 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
     // CORS 아니면 네트워크인데, 토스 웹뷰엔 개발자 도구가 없어서 실제 오리진을
     // 함께 보여줘야 어느 쪽인지 판단할 수 있다.
     const err = new Error(ctrl.signal.aborted
-      ? '응답이 너무 오래 걸려 중단했어요. 토큰을 쓰셨다면 지난 기록을 확인해 주세요.'
+      ? '응답이 너무 오래 걸려 중단했어요. 엽전을 쓰셨다면 지난 기록을 확인해 주세요.'
       : '서버에 연결하지 못했어요.');
     err.network = !ctrl.signal.aborted;
     err.origin = location.origin;
@@ -163,7 +165,7 @@ async function boot() {
       state.profile = me.profile;
       state.tokens = me.tokens;
       // 결제는 됐는데 지급 직전에 앱이 꺼진 주문을 여기서 마저 처리한다.
-      // 이게 없으면 사용자는 돈만 내고 토큰을 못 받는다.
+      // 이게 없으면 사용자는 돈만 내고 엽전을 못 받는다.
       recoverPendingOrders();
       go(state.profile?.birthYear ? 'home' : 'profile');
       return;
@@ -290,7 +292,7 @@ async function runItem(item) {
     else if (!item.free) refreshTokens();
 
     // 사용자가 이미 뒤로 나갔으면(또는 다른 콘텐츠를 눌렀으면) 화면을 뺏지 않는다.
-    // 토큰은 이미 나갔지만 결과는 '지난 기록'에 남으므로 잃어버리지 않는다.
+    // 엽전은 이미 나갔지만 결과는 '지난 기록'에 남으므로 잃어버리지 않는다.
     if (seq !== _runSeq || state.screen !== 'loading') return;
 
     // 응답 모양이 예상과 달라 여기서 던지면 화면이 로딩에 갇힌다. 본문만이라도 띄운다.
@@ -307,7 +309,7 @@ async function runItem(item) {
     go('result');
   } catch (e) {
     if (seq !== _runSeq || state.screen !== 'loading') return;
-    if (e.status === 402) { state.error = '토큰이 부족해요.'; go('charge'); return; }
+    if (e.status === 402) { state.error = '엽전이 부족해요.'; go('charge'); return; }
     state.error = e?.message || '오류가 발생했습니다.';
     if (e?.network && e.origin) state.error += `\n(요청 출처: ${e.origin})`;
     // 입력을 받은 콘텐츠면 그 화면으로 돌려보낸다. 홈으로 보내면 방금 적은 걸 다시 써야 한다.
@@ -440,8 +442,8 @@ function buyTokens(product) {
 }
 
 // ── 친구에게 알리기 ─────────────────────────────────────────
-// 토큰 보상은 붙이지 않는다. 공유창을 띄운 것만으로 줄 수밖에 없는데(실제로 보냈는지는
-// 앱이 알 수 없다) 그러면 눌렀다 닫기만 반복해도 토큰이 나온다. 토큰은 출석·퀴즈·광고
+// 엽전 보상은 붙이지 않는다. 공유창을 띄운 것만으로 줄 수밖에 없는데(실제로 보냈는지는
+// 앱이 알 수 없다) 그러면 눌렀다 닫기만 반복해도 엽전이 나온다. 엽전은 출석·퀴즈·광고
 // 처럼 확인 가능한 행동에만 붙인다.
 async function shareApp() {
   await withBusy(async () => {
@@ -524,7 +526,7 @@ async function submitQuiz() {
 
 // ── 안도령 부풀리기 ──
 // 서버가 목표 횟수와 발급 시각을 서명해 준다. 다 두드리면 그걸 그대로 돌려주고,
-// 서버가 서명과 걸린 시간을 확인한 뒤 토큰을 준다.
+// 서버가 서명과 걸린 시간을 확인한 뒤 엽전을 준다.
 async function startPop() {
   await withBusy(async () => {
     const r = await api('/mini/api/pop');
@@ -588,17 +590,17 @@ async function claimPop(delayMs = 0) {
   render();
 }
 
-/** 산가지 뽑기. 서버를 부르지 않는 무료 재미다 — 결과에 토큰이 걸리면 사행성이 된다. */
+/** 산가지 뽑기. 서버를 부르지 않는 무료 재미다 — 결과에 엽전이 걸리면 사행성이 된다. */
 function drawStick() {
   const s = SANGAJI[Math.floor(Math.random() * SANGAJI.length)];
   state.stick = s;
   go('stick');
 }
 
-// ── 광고 보고 토큰 받기 ─────────────────────────────────────
+// ── 광고 보고 엽전 받기 ─────────────────────────────────────
 //
 // 보상은 SDK 가 'userEarnedReward' 를 보낼 때만 준다. 광고를 닫기만 한 경우
-// (dismissed)에는 주지 않는다 — 그렇게 하면 광고를 띄우고 바로 닫아도 토큰이 나온다.
+// (dismissed)에는 주지 않는다 — 그렇게 하면 광고를 띄우고 바로 닫아도 엽전이 나온다.
 // 하루 상한은 서버가 쥐고 있어서 클라이언트를 고쳐도 넘길 수 없다.
 async function watchAd() {
   if (!AD_UNIT_ID) { state.toast = '광고가 아직 준비되지 않았어요.'; render(); return; }
@@ -864,15 +866,14 @@ function stopLoadingTicker() {
 
 // 메뉴에 담기는 것들. 홈 아래쪽에 흩어져 있던 것을 한자리에 모았다.
 const MENU_ITEMS = [
-  { id: 'btn-earn',        icon: 'secGift',  label: '무료 토큰 받기', sub: '출석 · 퀴즈 · 부풀리기' },
+  { id: 'btn-earn',        icon: 'secGift',  label: '무료 엽전 받기', sub: '출석 · 퀴즈 · 부풀리기' },
   { id: 'btn-history',     icon: 'saju',     label: '지난 기록',      sub: '풀이를 다시 볼 수 있어요' },
   { id: 'btn-editprofile', icon: 'secProfile', label: '내 정보',      sub: '이름 · 생년월일 · 화면 밝기' },
   { id: 'btn-shareapp',    icon: 'share',    label: '친구에게 알리기', sub: '' },
 ];
 
 function header() {
-  // 좌우 칸의 폭을 같게 두어야 제목이 진짜 가운데에 온다. 예전에는 오른쪽에 토큰
-  // 알약이 있어서 그 폭만큼 제목이 왼쪽으로 밀렸다.
+  // 좌우 칸의 폭을 같게 두어야 제목이 진짜 가운데에 온다. 예전에는 오른쪽에 엽전 // 알약이 있어서 그 폭만큼 제목이 왼쪽으로 밀렸다.
   const back = state.screen === 'home'
     ? '<span class="tb-slot"></span>'
     : '<button class="tb-slot tb-back" id="btn-home" aria-label="뒤로">‹</button>';
@@ -890,7 +891,7 @@ function header() {
         <button class="tb-earn" id="btn-earn2">
           <span class="tb-earn-ic">${icon('secGift')}</span>무료로 받기
         </button>` : ''}
-      <button class="tb-token" id="btn-charge">${state.tokens} 토큰</button>
+      <button class="tb-token" id="btn-charge">${state.tokens} 엽전</button>
     </div>
     ${state.menu ? `
       <div class="menu-scrim" id="btn-menu-close"></div>
@@ -954,7 +955,7 @@ function render() {
                 ${genderLabel ? `<span>${esc(genderLabel)}</span>` : '<span class="dim">성별 미입력</span>'}
               </div>
             </div>
-            <div class="mp-token"><b>${state.tokens}</b><span>토큰</span></div>
+            <div class="mp-token"><b>${state.tokens}</b><span>엽전</span></div>
           </section>`}
         <section class="sec">
           <h3><span class="sec-icon">${icon('secProfile')}</span>${setup ? '생년월일' : '사주 정보'}<i class="rule"></i></h3>
@@ -999,7 +1000,7 @@ function render() {
           <div class="card">
             <button class="btn ghost" id="btn-logout">로그아웃</button>
             <p class="muted small" style="margin-top:10px">
-              토큰과 지난 기록은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
+              엽전과 지난 기록은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
             </p>
           </div>
         </section>`}
@@ -1033,7 +1034,7 @@ function render() {
                 <button class="tile" data-item="${it.id}">
                   <span class="t-icon">${icon(it.icon)}</span>
                   <span class="t-label">${it.label}</span>
-                  <span class="t-cost${it.cost ? '' : ' free'}">${it.cost ? `${it.cost} 토큰` : '무료'}</span>
+                  <span class="t-cost${it.cost ? '' : ' free'}">${it.cost ? `${it.cost} 엽전` : '무료'}</span>
                 </button>`).join('')}
             </div>
           </section>`).join('')}
@@ -1045,26 +1046,26 @@ function render() {
     case 'earn':
       html = `${header()}
         <section class="sec">
-          <h3><span class="sec-icon">${icon('secGift')}</span>무료 토큰 받기<i class="rule"></i></h3>
+          <h3><span class="sec-icon">${icon('secGift')}</span>무료 엽전 받기<i class="rule"></i></h3>
           <p class="muted small" style="margin:-4px 0 12px">모두 하루에 한 번씩 하실 수 있어요</p>
         </section>
         ${err}
         <div class="tiles">
           <button class="tile" id="btn-checkin">
             <span class="t-icon">${icon('checkin')}</span><span class="t-label">출석 도장</span>
-            <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 3토큰'}</span>
+            <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 엽전 3개'}</span>
           </button>
           <button class="tile" id="btn-quiz">
             <span class="t-icon">${icon('quiz')}</span><span class="t-label">안도령의 오행 퀴즈</span>
-            <span class="t-cost">2개 맞히면 1토큰</span>
+            <span class="t-cost">2개 맞히면 엽전 1개</span>
           </button>
           <button class="tile" id="btn-pop">
             <span class="t-icon">${icon('pop')}</span><span class="t-label">안도령 부풀리기</span>
-            <span class="t-cost">1토큰 · 하루 1번</span>
+            <span class="t-cost">엽전 1개 · 하루 1번</span>
           </button>
           ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
             <span class="t-icon">${icon('ad')}</span><span class="t-label">광고 보기</span>
-            <span class="t-cost">${AD_TOKENS}토큰 + 퀴즈·부풀리기 기회 1회</span>
+            <span class="t-cost">${AD_TOKENS}엽전 + 퀴즈·부풀리기 기회 1회</span>
           </button>` : ''}
         </div>
         <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
@@ -1075,7 +1076,7 @@ function render() {
       const it = state.item;
       html = `${header()}
         <div class="brand sm"><h1><span class="ic-title">${icon(it.icon)}</span> ${esc(it.label)}</h1>
-          <p>${it.cost} 토큰</p></div>
+          <p>${it.cost} 엽전</p></div>
         <div class="card">${needForm(it)}${err}
           <button class="btn" id="btn-run" style="margin-top:18px">보기</button>
         </div>
@@ -1189,7 +1190,7 @@ function render() {
       const done = q.done;
       html = `${header()}
         <div class="brand sm"><h1><span class="ic-title">${icon('quiz')}</span>안도령의 오행 퀴즈</h1>
-          <p>${done ? '' : '안도령이 내는 문제예요. 두 개 이상 맞히면 토큰 1개'}</p></div>
+          <p>${done ? '' : '안도령이 내는 문제예요. 두 개 이상 맞히면 엽전 1개'}</p></div>
         ${done || !q.tips?.length ? '' : `
           <div class="card hint">
             <button class="hint-toggle" id="btn-tips">
@@ -1296,7 +1297,7 @@ function render() {
           <button class="btn ghost" id="btn-stick">다시 뽑기</button>
           <button class="btn ghost" id="btn-home2">홈으로</button>
         </div>
-        <div class="ai-notice">산가지는 재미로 보는 것이며, 토큰이 걸려 있지 않습니다.</div>
+        <div class="ai-notice">산가지는 재미로 보는 것이며, 엽전이 걸려 있지 않습니다.</div>
         ${FOOTER}`;
       break;
     }
@@ -1306,7 +1307,7 @@ function render() {
       // 그린다(콘솔 등록 전에는 눌러도 실패하므로 그 사실을 함께 알린다).
       const list = state.catalog ?? PRODUCTS.map(p => ({ ...p, known: true }));
       html = `${header()}
-        <div class="brand sm"><h1>토큰 충전</h1><p>현재 ${state.tokens} 토큰</p></div>
+        <div class="brand sm"><h1>엽전 충전</h1><p>현재 ${state.tokens} 엽전</p></div>
         ${err}
         ${state.catalogError ? `<div class="card"><p class="err">${esc(state.catalogError)}</p>
           <p class="muted small">앱인토스 콘솔에서 인앱 상품을 먼저 등록해야 결제가 열립니다.</p></div>` : ''}
@@ -1426,7 +1427,7 @@ function bind() {
   on('btn-editprofile', () => go('profile'));
   on('btn-history', loadHistory);
   on('btn-logout', () => {
-    // 세션만 지운다. 토큰과 기록은 서버의 계정(userKey)에 남아 있어서
+    // 세션만 지운다. 엽전과 기록은 서버의 계정(userKey)에 남아 있어서
     // 다시 로그인하면 그대로 돌아온다.
     localStorage.removeItem(SESSION_KEY);
     Object.assign(state, { session: '', profile: null, tokens: 0, history: [], result: null, error: '' });
@@ -1435,7 +1436,7 @@ function bind() {
   on('btn-menu', () => { state.menu = !state.menu; render(); });
   on('btn-menu-close', () => { state.menu = false; render(); });
   on('btn-earn', () => go('earn'));
-  on('btn-earn2', () => go('earn'));      // 홈 토큰 줄의 작은 길잡이
+  on('btn-earn2', () => go('earn'));      // 홈 엽전 줄의 작은 길잡이
   on('btn-share', shareCard);
   on('btn-shareapp', () => { state.menu = false; render(); shareApp(); });
   on('btn-checkin', doCheckin);

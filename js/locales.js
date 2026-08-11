@@ -18,9 +18,9 @@ const TX = {
     kiLabel:'오늘의 강한 기운',
     actLabel:'오늘 하면 좋은 것',
     revisit:'✦ 일진은 매일 바뀝니다. 내일 오시면 오늘과 다른 처방을 받으실 수 있습니다.',
-    err:'잠시 기운이 엇갈렸습니다(시스템 오류). 토큰은 차감되지 않았으니 잠시 후 다시 시도해 주세요.',
+    err:'잠시 기운이 엇갈렸습니다(시스템 오류). 엽전은 차감되지 않았으니 잠시 후 다시 시도해 주세요.',
     noLogin:'로그인이 필요합니다. 다시 로그인해 주세요.',
-    errSafety:'질문이 기운 리딩의 범위를 벗어나 답변이 생성되지 않았습니다. 사주·오행·에너지 흐름에 관한 질문을 해주세요. (사용된 토큰은 차감되지 않고 안전하게 복구되었습니다.)',
+    errSafety:'질문이 기운 리딩의 범위를 벗어나 답변이 생성되지 않았습니다. 사주·오행·에너지 흐름에 관한 질문을 해주세요. (사용된 엽전은 차감되지 않고 안전하게 복구되었습니다.)',
     g1: il=>`오늘의 기운을 함께 살펴볼게요. ✨\n오늘은 ${CG_K[il.ci]}${JJ_K[il.ji]}(${CG[il.ci]}${JJ[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 은은하게 흐르고 있는 날이네요.\n\n성함과 생년월일을 알려주시면, 이 기운이 오늘 나에게 어떻게 닿는지 풀어드릴게요. 태어난 시간도 알고 계시다면 함께 적어주세요.`,
     g2: il=>`두 분의 이야기를 함께 살펴볼게요. 🌿\n오늘은 ${CG_K[il.ci]}${JJ_K[il.ji]}(${CG[il.ci]}${JJ[il.ji]})일이에요 — ${ON.ko[il.o]}의 기운이 온화하게 머물고 있어요.\n\n두 분의 성함과 생년월일을 각각 알려주시면, 서로의 오행이 오늘 일진과 어떻게 어우러지는지 풀어드릴게요.`,
     sys:'반드시 한국어로 답변해 주세요.',
@@ -61,28 +61,28 @@ const TX = {
     detailTitle:'상세 풀이', detailSub:'AI 심층 분석', detailLoading:'AI가 상세 분석 중... (약 10초)',
     oracleEnter:'어서 오십시오, 손님.\n먼 길 오시느라 수고 많으셨습니다.', oracleFlip:'만세력을 넘깁니다…', oraclePillars:'사주 네 기둥을 세웁니다…', oracleExit:'기운이 도착했습니다.',
     detailCardTitle:{health:'건강운',wealth:'재물운',love:'연애운',career:'직장·사업운'},
-    tokenUnit:'잔여 토큰',
+    tokenUnit:'잔여 엽전',
     streakTitle:'출석 스트릭', streakCurrent:'현재', streakMax:'최고', streakTotal:'총 출석',
-    streakCheckin:'오늘 출석 체크', streakDone:'오늘 출석 완료 ✓', streakBonus:'🎉 7일 보너스! +5 토큰', streakDay:'일',
+    streakCheckin:'오늘 출석 체크', streakDone:'오늘 출석 완료 ✓', streakBonus:'🎉 7일 보너스! +엽전 5개', streakDay:'일',
     heatmapTitle:'90일 오행 기록',
     luckyTitle:'오늘의 행운', luckyColor:'행운색', luckyNumber:'행운숫자', luckyDir:'행운방향', luckyStone:'행운석',
     feedbackLabel:'이 운세가 맞았나요?', feedbackYes:'맞아요', feedbackNo:'달라요',
     referralTitle:'친구 초대', referralGenerate:'내 초대 코드 생성', referralCopy:'복사',
-    referralDesc:'친구가 코드를 입력하면 양쪽 모두 +3 토큰!',
+    referralDesc:'친구가 코드를 입력하면 양쪽 모두 +엽전 3개!',
     referralInputPlaceholder:'초대 코드 입력', referralClaimBtn:'적용',
-    referralUsed:'초대 성공: {n}명', referralClaimed:'🎉 코드 적용! +{n} 토큰',
+    referralUsed:'초대 성공: {n}명', referralClaimed:'🎉 코드 적용! +{n} 엽전',
     profileShareText:'M;Y 安에서 {s}일 연속 운세 확인 중! (총 {t}회) myan.riger7070.workers.dev',
     ohiLabel:'오늘의 기운', ohiActive:'오늘의 기운',
     shareCancel:'취소', shareCopyBtn:'링크 복사',
     instaToast:'텍스트 복사 완료! Instagram 앱에서 붙여넣기 하세요 📸',
     wdSessionExpired:'세션이 만료됐습니다. 다시 로그인 후 탈퇴해 주세요.',
-    tkSection:'잔여 토큰', tkUnit:'TOKENS',
-    noToken:'토큰이 부족합니다.\n마이페이지에서 충전 후 이용해 주세요.',
+    tkSection:'잔여 엽전', tkUnit:'TOKENS',
+    noToken:'엽전이 부족합니다.\n마이페이지에서 충전 후 이용해 주세요.',
     tkPkgS:'소', tkPkgM:'중', tkPkgL:'대', tkSub:'구독형', tkUnlimited:'무제한',
     tkPayBtn:'Toss로 결제하기',
     tkAfterPay:'결제 완료 후 운영자에게 받은 바우처 코드를 아래에 입력해 주세요.',
     tkVoucher:'바우처 코드', tkVoucherPh:'코드를 입력하세요', tkRedeem:'적용',
-    tkRedeemOk: n=>`✦ ${n} 토큰이 충전되었습니다!`,
+    tkRedeemOk: n=>`✦ ${n} 엽전이 충전되었습니다!`,
     tkRedeemFail:'유효하지 않거나 이미 사용된 코드입니다.',
     loginTitle:'다시 찾아주셨네요.\n어서 오세요.',
     loginId:'아이디', loginPw:'비밀번호', loginBtn:'로그인',
@@ -93,15 +93,15 @@ const TX = {
     googleSignInFail:'구글 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.',
     mpSupport:'✉ 1:1 고객센터',
     quickFortuneTitle:'오늘의 행운', quickFortuneDesc:'포춘쿠키 메시지 보기',
-    quickTokenTitle:'토큰 충전', quickTokenDesc:'대화권 충전하기',
+    quickTokenTitle:'엽전 충전', quickTokenDesc:'대화권 충전하기',
     quickSupportTitle:'1대1 상담', quickSupportDesc:'카카오로 바로 상담',
-    tmNote:'정상적으로 리딩 답변이 완료될 때만 1토큰이 차감됩니다.\n신규 가입 시 3토큰이 무료 지급됩니다.',
+    tmNote:'정상적으로 리딩 답변이 완료될 때만 엽전 1개이 차감됩니다.\n신규 가입 시 엽전 3개이 무료 지급됩니다.',
     guideSkip:'오늘 하루 보지 않기',
     guideTitle:'M;Y 安 이용 안내',
     guideItems:[
       '✦  M;Y 安은 사주 오행(五行) 이론에 기반한 AI 기운 해석 서비스입니다.',
-      '✦  리딩 답변이 정상적으로 완료될 때만 토큰 1개가 사용됩니다. 시스템 오류나 가이드라인 차단으로 답변을 받지 못하신 경우 토큰은 차감되지 않고 안전하게 보존됩니다.',
-      '✦  토큰이 소진되면 마이페이지에서 충전할 수 있습니다.',
+      '✦  리딩 답변이 정상적으로 완료될 때만 엽전 1개가 사용됩니다. 시스템 오류나 가이드라인 차단으로 답변을 받지 못하신 경우 엽전은 차감되지 않고 안전하게 보존됩니다.',
+      '✦  엽전이 소진되면 마이페이지에서 충전할 수 있습니다.',
       '✦  본 서비스는 의료·법률·금융 상담을 대체하지 않습니다.',
       '✦  일진은 매일 자정에 갱신되어 새로운 기운 처방이 제공됩니다.',
     ],
@@ -111,42 +111,42 @@ const TX = {
     drHome:'처음으로', drHomeSub:'메인 화면으로 돌아가기',
     drSoloTitle:'나만의 리딩', drSoloSub:'오늘 나의 오행 기운 풀이',
     drCoupleTitle:'우리의 조화', drCoupleSub:'두 사람의 오행 궁합 풀이',
-    drMypageTitle:'마이페이지', drMypageSub:'토큰 · 생년월일 · 설정',
+    drMypageTitle:'마이페이지', drMypageSub:'엽전 · 생년월일 · 설정',
     drCalTitle:'나의 기운 캘린더', drCalSub:'리딩 기록 · 오행 색 달력',
-    drTarotTitle:'오늘의 타로', drTarotSub:'재미로 보는 카드 한 장 (토큰 1)',
+    drTarotTitle:'오늘의 타로', drTarotSub:'재미로 보는 카드 한 장 (엽전 1)',
     tarotTitle:'오늘의 타로', tarotShuffling:'카드를 섞는 중...', tarotReversed:'역방향', tarotPickCard:'마음에 드는 카드를 한 장 골라보세요',
-    drZodiacTitle:'띠·별자리 운세', drZodiacSub:'오늘의 띠·별자리 운세 (토큰 1)',
+    drZodiacTitle:'띠·별자리 운세', drZodiacSub:'오늘의 띠·별자리 운세 (엽전 1)',
     zodiacTitle:'띠·별자리 운세', zodiacLoading:'운세를 계산하는 중...', zodiacNeedBirth:'먼저 마이페이지에서 생년월일을 등록해 주세요.',
     astroTitle:'천궁도 트랜싯', astroSub:'실제 행성 위치로 보는 오늘', astroLoading:'하늘을 계산하는 중...',
     astroSkyToday:'오늘의 하늘', astroNatal:'태어난 날의 하늘', astroTransits:'오늘 맺는 각',
     astroNoTransit:'오늘은 뚜렷한 각이 없습니다 — 조용한 하늘이에요', astroRetro:'역행', astroCusp:'경계',
     astroNote:'행성 위치는 실제 궤도 계산으로 구한 값입니다. 출생 시각은 쓰지 않아 달 위치에 오차가 있을 수 있어요.',
-    takilTitle:'택일 · 좋은 날 고르기', takilSub:'만세력으로 고르는 결혼·이사·개업 날짜 (토큰 2)', takilLoading:'역서를 넘겨 보는 중...',
+    takilTitle:'택일 · 좋은 날 고르기', takilSub:'만세력으로 고르는 결혼·이사·개업 날짜 (엽전 2)', takilLoading:'역서를 넘겨 보는 중...',
     takilPurposeAsk:'어떤 일의 날짜를 고를까요?', takilFromLabel:'언제부터', takilRangeLabel:'찾는 기간', takilRun:'좋은 날 찾기',
     takilP_wedding:'결혼·약혼', takilP_moving:'이사·입주', takilP_opening:'개업·창업', takilP_contract:'계약·거래', takilP_travel:'여행·출장',
     takilP_medical:'치료·수술', takilP_build:'공사·수리', takilP_meeting:'만남·모임', takilP_ritual:'고사·기도',
     takilBest:'가장 좋은 날', takilAlso:'다음으로 좋은 날', takilGood:'길신', takilBad:'조심할 살', takilChong:'충하는 띠', takilLunarShort:'음력',
     takilNote:'일진과 의기(宜忌), 길신·흉살은 만세력 데이터를 그대로 쓴 값입니다. 생년월일을 등록해 두면 띠를 충하는 날은 미리 빼고 골라 드려요.',
-    daeunTitle:'대운 · 10년의 흐름', daeunSub:'10년마다 바뀌는 운의 결 (토큰 3)', daeunLoading:'대운을 세우는 중...',
+    daeunTitle:'대운 · 10년의 흐름', daeunSub:'10년마다 바뀌는 운의 결 (엽전 3)', daeunLoading:'대운을 세우는 중...',
     daeunNeedGender:'대운은 성별에 따라 방향이 달라집니다. 마이페이지에서 성별을 등록해 주세요.',
     daeunForward:'순행', daeunBackward:'역행', daeunNow:'지금', daeunNext:'다음 대운', daeunThisYear:'올해 세운',
     daeunAge:'{a}~{b}세', daeunQiyun:'태어나고 {y}년 {m}개월 뒤부터 대운이 돌기 시작합니다',
     daeunNotStarted:'아직 대운이 시작되기 전입니다', daeunPillars:'네 기둥',
     daeunNote:'대운의 방향과 기운(起運) 시점은 만세력의 절기 거리로 계산한 값입니다. 태어난 시각(시진)을 등록해 두면 기운 시점이 더 정확해져요.',
-    nameTitle:'이름 풀이', nameSub:'한글 이름의 발음오행과 사주의 궁합 (토큰 2)', nameLoading:'이름을 소리로 풀어 보는 중...',
+    nameTitle:'이름 풀이', nameSub:'한글 이름의 발음오행과 사주의 궁합 (엽전 2)', nameLoading:'이름을 소리로 풀어 보는 중...',
     nameAsk:'풀어 볼 이름을 적어 주세요', namePlaceholder:'성을 포함한 한글 이름 (2~6자)', nameRun:'이름 풀기',
     nameFlow:'소리의 흐름', nameSaeng:'상생', nameGeuk:'상극', nameBihwa:'비화',
     nameFills:'사주에 없던 기운을 채웁니다', nameOvers:'이미 센 기운을 더 보탭니다',
-    ctTitle:'궁합 시기', ctSub:'두 사람에게 언제가 좋은 때인지 (토큰 3)', ctLoading:'두 분의 시기를 맞춰 보는 중...',
+    ctTitle:'궁합 시기', ctSub:'두 사람에게 언제가 좋은 때인지 (엽전 3)', ctLoading:'두 분의 시기를 맞춰 보는 중...',
     ctAsk:'상대방의 생년월일을 알려 주세요', ctPartnerName:'상대방 이름(선택)', ctMe:'나', ctPartner:'상대',
     ctRun:'시기 보기', ctBest:'특히 좋은 해', ctTimeline:'앞으로 10년',
     ctYukhap:'육합', ctSamhap:'삼합', ctChung:'충', ctNone:'무난',
     ctNeedBirth:'먼저 마이페이지에서 생년월일을 등록해 주세요.',
     ctNote:'그 해의 지지가 각자의 일지(日支)와 맺는 관계로 본 시기입니다. 성별을 등록해 두면 그 해에 지나는 대운도 함께 봅니다. 좋은 해가 보장을, 충이 든 해가 이별을 뜻하지는 않습니다.',
     nameNote:'발음오행(초성의 오음오행)만 본 결과입니다. 획수(수리)와 한자 뜻(자원)은 보지 않았어요. 이름의 좋고 나쁨을 가르는 잣대가 아니라 기운의 결을 보는 하나의 관점입니다.',
-    drLuckyTitle:'오늘의 럭키 아이템', drLuckySub:'럭키 컬러·음식·노래 추천 (토큰 1)',
+    drLuckyTitle:'오늘의 럭키 아이템', drLuckySub:'럭키 컬러·음식·노래 추천 (엽전 1)',
     luckyTitle:'오늘의 럭키 아이템', luckyLoading:'오늘의 행운을 찾는 중...', luckyColor:'럭키 컬러', luckyFood:'럭키 음식', luckySong:'럭키 무드',
-    drTypeTitle:'오행 유형·궁합 테스트', drTypeSub:'나의 유형 찾고 궁합 보기 (토큰 1)',
+    drTypeTitle:'오행 유형·궁합 테스트', drTypeSub:'나의 유형 찾고 궁합 보기 (엽전 1)',
     typeTitle:'오행 유형 테스트', typeProgress:'{n} / {total}', typeResultTitle:'당신의 유형은',
     typePickPartner:'궁합 볼 상대의 유형을 골라주세요', typeCompatLoading:'궁합을 분석하는 중...', typeRetake:'다시 하기',
     typeQ: [
@@ -163,35 +163,35 @@ const TX = {
       金:'원칙적이고 완벽을 추구하는 계획형이에요. 맡은 일은 확실하게 끝내는 타입!',
       水:'차분하고 유연한 지혜형이에요. 상황을 조용히 관찰하고 현명하게 대처해요!',
     },
-    drFortuneTitle:'오늘의 운세 모음', drFortuneSub:'짝사랑·가족·미래 등 궁금한 운세를 골라보세요 (토큰 1)',
+    drFortuneTitle:'오늘의 운세 모음', drFortuneSub:'짝사랑·가족·미래 등 궁금한 운세를 골라보세요 (엽전 1)',
     fortuneModalTitle:'오늘의 운세 모음', fortuneModalSub:'궁금한 주제를 골라보세요', fortuneLoading:'기운을 살펴보는 중...',
     fortuneNeedBirthHint:'생년월일을 등록하면 사주를 반영한 더 정확한 풀이를 받을 수 있어요 →',
     fortuneTopicTitle:{ crush:'짝사랑운', trust:'관계 신뢰 기운', family:'가족운', future:'미래운', grades:'학업·성적운', personality:'성격 분석', appearance:'인상·이미지운', success:'성공운' },
-    drIchingTitle:'주역 괘 풀이', drIchingSub:'동전을 던져 괘를 뽑아보세요 (토큰 1)',
+    drIchingTitle:'주역 괘 풀이', drIchingSub:'동전을 던져 괘를 뽑아보세요 (엽전 1)',
     ichingTitle:'주역 괘 풀이', ichingAskPlaceholder:'궁금한 것을 적어보세요 (선택)', ichingCastBtn:'괘 뽑기',
     ichingCasting:'괘를 뽑는 중...', ichingChanging:'변효',
-    drNumerologyTitle:'수비학 라이프패스 넘버', drNumerologySub:'생년월일로 보는 숫자점 (토큰 1)',
+    drNumerologyTitle:'수비학 라이프패스 넘버', drNumerologySub:'생년월일로 보는 숫자점 (엽전 1)',
     numerologyTitle:'라이프패스 넘버', numerologyLoading:'숫자를 계산하는 중...', numerologyNeedBirth:'먼저 마이페이지에서 생년월일을 등록해 주세요.', numerologyYourNumber:'당신의 라이프패스 넘버',
-    drTojeongTitle:'토정비결풍 신년운세', drTojeongSub:'올 한 해 신수를 짚어보세요 (토큰 2)',
+    drTojeongTitle:'토정비결풍 신년운세', drTojeongSub:'올 한 해 신수를 짚어보세요 (엽전 2)',
     tojeongTitle:'토정비결풍 신년운세', tojeongLoading:'한 해의 신수를 살펴보는 중...', tojeongNeedBirth:'먼저 마이페이지에서 생년월일을 등록해 주세요.', tojeongNotice:'정통 토정비결 원문이 아닌, 사주를 바탕으로 AI가 그 정신을 살려 생성한 신년운세입니다.',
-    drPhotoTitle:'관상·손금 보기', drPhotoSub:'사진으로 보는 얼굴·손금 풀이 (토큰 2)',
+    drPhotoTitle:'관상·손금 보기', drPhotoSub:'사진으로 보는 얼굴·손금 풀이 (엽전 2)',
     photoModalTitle:'관상·손금 보기', photoPickType:'어떤 것을 볼까요?', photoTypeFace:'관상', photoTypePalm:'손금',
     photoUploadNotice:'업로드하신 사진은 AI 분석을 위해 서버에 저장되며, 마이페이지에서 언제든 다시 보거나 삭제할 수 있습니다.',
     photoChooseFile:'사진 선택', photoRetake:'다시 선택', photoSubmitBtn:'분석 시작', photoAnalyzing:'사진을 분석하는 중...',
     photoGalleryTitle:'관상·손금 기록', photoGalleryEmpty:'아직 기록이 없습니다', photoDeleteConfirm:'이 기록을 삭제할까요?', photoDeleted:'삭제되었습니다',
     histTitle:'내 기록', histLoading:'기록을 불러오는 중...', histEmpty:'아직 기록이 없습니다', histEmptySub:'풀이를 받으면 자동으로 저장됩니다',
     histFailed:'기록을 불러오지 못했습니다', histExpand:'전체 보기', histCollapse:'접기', histMe:'나', histP1:'첫 번째 분', histP2:'두 번째 분',
-    drDreamTitle:'꿈해몽', drDreamSub:'꿈 내용을 입력하면 AI가 해몽해드려요 (토큰 1)',
+    drDreamTitle:'꿈해몽', drDreamSub:'꿈 내용을 입력하면 AI가 해몽해드려요 (엽전 1)',
     dreamTitle:'꿈해몽', dreamPlaceholder:'어떤 꿈을 꾸셨나요? (예: 물에 빠지는 꿈을 꿨어요)', dreamSubmitBtn:'해몽 보기', dreamLoading:'꿈을 해몽하는 중...',
-    drLottoTitle:'오늘의 로또번호', drLottoSub:'AI가 뽑아주는 오늘의 행운번호 (토큰 1)',
+    drLottoTitle:'오늘의 로또번호', drLottoSub:'AI가 뽑아주는 오늘의 행운번호 (엽전 1)',
     lottoTitle:'오늘의 로또번호', lottoLoading:'번호를 뽑는 중...', lottoDisclaimer:'재미로 보는 참고용입니다. 당첨을 보장하지 않아요.',
-    drRuneTitle:'룬 문자 점', drRuneSub:'북유럽 룬 문자로 보는 오늘의 기운 (토큰 1)',
+    drRuneTitle:'룬 문자 점', drRuneSub:'북유럽 룬 문자로 보는 오늘의 기운 (엽전 1)',
     runeTitle:'룬 문자 점', runeDrawBtn:'룬 뽑기', runeDrawing:'룬을 뽑는 중...', runeReversed:'역방향',
     quickExperienceTitle:'재미로 보는 운세', quickExperienceDesc:'타로·주역·관상 등 다양한 콘텐츠',
     csEast:'동양 점술', csWest:'서양 점술', csDaily:'오늘의 운세',
     csMe:'사주로 보는 나', csTiming:'때를 고르다', csAsk:'물어보는 점',
-    tmCostTitle:'토큰으로 할 수 있는 것',
-    tmCostNote:'사주 리딩은 1토큰, 두 사람 궁합은 2토큰입니다. AI가 답을 만들지 못하면 토큰은 자동으로 돌려드립니다.',
+    tmCostTitle:'엽전으로 할 수 있는 것',
+    tmCostNote:'사주 리딩은 엽전 1개, 두 사람 궁합은 엽전 2개입니다. AI가 답을 만들지 못하면 엽전은 자동으로 돌려드립니다.',
     mercuryRetro:'수성 역행',
     experienceHubTitle:'재미로 보는 운세', experienceHubSub:'궁금한 콘텐츠를 골라보세요',
     drThemeTitle:'테마', drDark:'🌙 다크', drLight:'☀️ 라이트',
@@ -206,21 +206,21 @@ const TX = {
     suggestChips:['오늘 재물운','이직해도 될까요?','오늘 피해야 할 것','지금 연애운','오늘 하루 총운'],
     suggestChipsDuo:['우리 궁합 어때요?','요즘 사이가 멀어진 것 같아요','언제 결혼하면 좋을까요?','싸움이 잦아요, 왜일까요?','서로 잘 맞는 부분이 있을까요?'],
     // 마이페이지 하단
-    mpZeroNote:'토큰이 없습니다. 아래에서 충전하시면 리딩을 계속하실 수 있어요 ✦',
-    mpBotCharge:'토큰 충전', mpBotChargeDesc:'잔여 토큰 충전하기',
+    mpZeroNote:'엽전이 없습니다. 아래에서 충전하시면 리딩을 계속하실 수 있어요 ✦',
+    mpBotCharge:'엽전 충전', mpBotChargeDesc:'잔여 엽전 충전하기',
     mpBotSupport:'1:1 카카오 상담', mpBotSupportDesc:'궁금한 점을 바로 물어보세요',
     // 멤버십 구독
-    subSecTitle:'멤버십 구독 · 매월 토큰 자동 지급',
+    subSecTitle:'멤버십 구독 · 매월 엽전 자동 지급',
     subTokenLabel:'월 구독',
     subBasicName:'베이직', subPremName:'프리미엄',
     subBasicPrice:'월 9,900원', subPremPrice:'월 19,900원',
     subSubscribeBtn:'구독하기', subPremBest:'BEST',
     subPlanNames:{ basic:'베이직 멤버십', premium:'프리미엄 멤버십' },
-    subTokensPerMonth:'매월 {n} 토큰', subNextBilling:'다음 결제일: {date}',
+    subTokensPerMonth:'매월 {n} 엽전', subNextBilling:'다음 결제일: {date}',
     subCancelBtn:'구독 해지',
     subCancelConfirm:'정말 구독을 해지하시겠어요? 다음 결제일부터 자동 결제가 중단됩니다.',
     subCanceledToast:'구독이 해지되었습니다.',
-    subStartedMsg:'✦ 구독이 시작되었습니다! 매월 토큰이 자동 지급됩니다.',
+    subStartedMsg:'✦ 구독이 시작되었습니다! 매월 엽전이 자동 지급됩니다.',
     subFailMsg:'구독 처리에 실패했습니다.',
 
   },
@@ -966,7 +966,7 @@ function render() {
   const qtd = document.getElementById('quickTokenDesc');
   const qst = document.getElementById('quickSupportTitle');
   const qsd = document.getElementById('quickSupportDesc');
-  if (qtt) qtt.textContent = t.quickTokenTitle   || '토큰 충전';
+  if (qtt) qtt.textContent = t.quickTokenTitle   || '엽전 충전';
   if (qtd) qtd.textContent = t.quickTokenDesc    || '대화권 충전하기';
   if (qst) qst.textContent = t.quickSupportTitle || '1대1 상담';
   if (qsd) qsd.textContent = t.quickSupportDesc  || '이메일로 문의하기';
@@ -983,7 +983,7 @@ function render() {
 function _renderTokenModal() {
   const t = TX[lang] || TX.ko;
   const _s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  _s('tmTitle',      t.tkSection || '토큰 충전');
+  _s('tmTitle',      t.tkSection || '엽전 충전');
   _s('tmBalanceLbl', t.tkUnit    || 'TOKENS');
   _s('tmBadge0',     t.tkPkgS   || '소');
   _s('tmBadge1',     t.tkPkgM   || '중');
@@ -1070,7 +1070,7 @@ function startMode(m) {
     return;
   }
 
-  // 3. 구글 가입자인데 로그아웃 상태 또는 토큰 유실 → 즉시 로그인 게이트
+  // 3. 구글 가입자인데 로그아웃 상태 또는 엽전 유실 → 즉시 로그인 게이트
   if (!user.passwordHash && (!isLoggedIn() || !getGoogleIdToken())) {
     pendingMode = m;
     showLogin();
@@ -1120,7 +1120,7 @@ function closeGuideModal() {
 }
 
 function _enterMode(m, user) {
-  // 토큰 충전 모달 특수 처리
+  // 엽전 충전 모달 특수 처리
   if (m === '_token') {
     openTokenModal();
     return;
