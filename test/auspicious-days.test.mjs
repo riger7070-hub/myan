@@ -108,8 +108,11 @@ const geminiOk = text => {
 // (핸들러는 과거 시작일을 거부한다) 테스트가 시한폭탄이 된다.
 function findEmptyWindow(purposeKey, span) {
   const p = TAKIL_PURPOSES[purposeKey];
-  const now = new Date();
-  let solar = Solar.fromYmd(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate());
+  // ⚠️ 기준일은 핸들러와 같은 KST 여야 한다. UTC 로 잡으면 00:00~09:00 KST 사이에
+  // '오늘'이 한국의 어제가 되고, 핸들러는 지난 날을 400 으로 막는다 — 404 를 기대하는
+  // 이 테스트가 하루 중 아홉 시간 동안만 깨진다(핸들러의 _kstYmd 와 맞춘다).
+  const kst = new Date(Date.now() + 9 * 3600000);
+  let solar = Solar.fromYmd(kst.getUTCFullYear(), kst.getUTCMonth() + 1, kst.getUTCDate());
   for (let i = 0; i < 600; i++, solar = solar.next(1)) {
     const start = { year: solar.getYear(), month: solar.getMonth(), day: solar.getDay() };
     if (!pickAuspiciousDays(purposeKey, start, { days: span }).length) return solar.toYmd();
