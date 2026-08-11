@@ -72,6 +72,11 @@ const app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// '엽전'이라는 낱말 앞에 붙이는 작은 엽전 글자. 재화 이름을 토큰에서 엽전으로 바꾸면서
+// 화면에는 여전히 글자만 있어 그게 무엇인지 한 박자 늦게 읽혔다.
+// 크기를 em 으로 잡아 두어(style.css 의 .coin-ic) 붙는 자리의 글자 크기를 그대로 따라간다.
+const COIN = `<span class="coin-ic">${icon('yeopjeon')}</span>`;
+
 // ── 서버 호출 ──────────────────────────────────────────────
 
 async function api(path, { method = 'GET', body, auth = true } = {}) {
@@ -891,7 +896,7 @@ function header() {
         <button class="tb-earn" id="btn-earn2">
           <span class="tb-earn-ic">${icon('secGift')}</span>무료로 받기
         </button>` : ''}
-      <button class="tb-token" id="btn-charge">${state.tokens} 엽전</button>
+      <button class="tb-token" id="btn-charge">${COIN}${state.tokens} 엽전</button>
     </div>
     ${state.menu ? `
       <div class="menu-scrim" id="btn-menu-close"></div>
@@ -955,7 +960,7 @@ function render() {
                 ${genderLabel ? `<span>${esc(genderLabel)}</span>` : '<span class="dim">성별 미입력</span>'}
               </div>
             </div>
-            <div class="mp-token"><b>${state.tokens}</b><span>엽전</span></div>
+            <div class="mp-token"><b>${state.tokens}</b><span>${COIN}엽전</span></div>
           </section>`}
         <section class="sec">
           <h3><span class="sec-icon">${icon('secProfile')}</span>${setup ? '생년월일' : '사주 정보'}<i class="rule"></i></h3>
@@ -1000,7 +1005,7 @@ function render() {
           <div class="card">
             <button class="btn ghost" id="btn-logout">로그아웃</button>
             <p class="muted small" style="margin-top:10px">
-              엽전과 지난 기록은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
+              ${COIN}엽전과 지난 기록은 계정에 남아 있어요. 다시 로그인하면 그대로 쓰실 수 있습니다.
             </p>
           </div>
         </section>`}
@@ -1034,7 +1039,7 @@ function render() {
                 <button class="tile" data-item="${it.id}">
                   <span class="t-icon">${icon(it.icon)}</span>
                   <span class="t-label">${it.label}</span>
-                  <span class="t-cost${it.cost ? '' : ' free'}">${it.cost ? `${it.cost} 엽전` : '무료'}</span>
+                  <span class="t-cost${it.cost ? '' : ' free'}">${it.cost ? `${COIN}${it.cost} 엽전` : '무료'}</span>
                 </button>`).join('')}
             </div>
           </section>`).join('')}
@@ -1046,26 +1051,26 @@ function render() {
     case 'earn':
       html = `${header()}
         <section class="sec">
-          <h3><span class="sec-icon">${icon('secGift')}</span>무료 엽전 받기<i class="rule"></i></h3>
+          <h3><span class="sec-icon">${icon('secGift')}</span>무료 ${COIN}엽전 받기<i class="rule"></i></h3>
           <p class="muted small" style="margin:-4px 0 12px">모두 하루에 한 번씩 하실 수 있어요</p>
         </section>
         ${err}
         <div class="tiles">
           <button class="tile" id="btn-checkin">
             <span class="t-icon">${icon('checkin')}</span><span class="t-label">출석 도장</span>
-            <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 엽전 3개'}</span>
+            <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : `7일 개근 ${COIN}엽전 3개`}</span>
           </button>
           <button class="tile" id="btn-quiz">
             <span class="t-icon">${icon('quiz')}</span><span class="t-label">안도령의 오행 퀴즈</span>
-            <span class="t-cost">2개 맞히면 엽전 1개</span>
+            <span class="t-cost">2개 맞히면 ${COIN}엽전 1개</span>
           </button>
           <button class="tile" id="btn-pop">
             <span class="t-icon">${icon('pop')}</span><span class="t-label">안도령 부풀리기</span>
-            <span class="t-cost">엽전 1개 · 하루 1번</span>
+            <span class="t-cost">${COIN}엽전 1개 · 하루 1번</span>
           </button>
           ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
             <span class="t-icon">${icon('ad')}</span><span class="t-label">광고 보기</span>
-            <span class="t-cost">${AD_TOKENS}엽전 + 퀴즈·부풀리기 기회 1회</span>
+            <span class="t-cost">${COIN}${AD_TOKENS}엽전 + 퀴즈·부풀리기 기회 1회</span>
           </button>` : ''}
         </div>
         <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
@@ -1076,7 +1081,7 @@ function render() {
       const it = state.item;
       html = `${header()}
         <div class="brand sm"><h1><span class="ic-title">${icon(it.icon)}</span> ${esc(it.label)}</h1>
-          <p>${it.cost} 엽전</p></div>
+          <p>${COIN}${it.cost} 엽전</p></div>
         <div class="card">${needForm(it)}${err}
           <button class="btn" id="btn-run" style="margin-top:18px">보기</button>
         </div>
@@ -1190,7 +1195,7 @@ function render() {
       const done = q.done;
       html = `${header()}
         <div class="brand sm"><h1><span class="ic-title">${icon('quiz')}</span>안도령의 오행 퀴즈</h1>
-          <p>${done ? '' : '안도령이 내는 문제예요. 두 개 이상 맞히면 엽전 1개'}</p></div>
+          <p>${done ? '' : `안도령이 내는 문제예요. 두 개 이상 맞히면 ${COIN}엽전 1개`}</p></div>
         ${done || !q.tips?.length ? '' : `
           <div class="card hint">
             <button class="hint-toggle" id="btn-tips">
@@ -1297,7 +1302,7 @@ function render() {
           <button class="btn ghost" id="btn-stick">다시 뽑기</button>
           <button class="btn ghost" id="btn-home2">홈으로</button>
         </div>
-        <div class="ai-notice">산가지는 재미로 보는 것이며, 엽전이 걸려 있지 않습니다.</div>
+        <div class="ai-notice">산가지는 재미로 보는 것이며, ${COIN}엽전이 걸려 있지 않습니다.</div>
         ${FOOTER}`;
       break;
     }
@@ -1306,15 +1311,29 @@ function render() {
       // 콘솔에 등록된 상품을 우선 보여준다. 아직 못 받았으면 코드에 적어 둔 목록으로
       // 그린다(콘솔 등록 전에는 눌러도 실패하므로 그 사실을 함께 알린다).
       const list = state.catalog ?? PRODUCTS.map(p => ({ ...p, known: true }));
+      // 콘솔이 준 상품인데 앱이 모르는 것들. 상품 번호(SKU)가 양쪽에서 어긋났다는 뜻이다.
+      // 예전에는 '서버 미등록'이라고만 적었는데, 그건 사실과 반대로 읽힌다 — 그 상품은
+      // 콘솔에 **있고**(거기서 받아왔다), 모르는 쪽은 앱이다. 게다가 어느 번호가 어긋났는지
+      // 안 보여줘서, 화면만 봐서는 콘솔에서 무엇을 고쳐야 할지 알 수 없었다. 그래서 실제
+      // 번호를 양쪽 다 적어 준다 — 이 화면 하나로 원인이 끝나야 한다.
+      const unknown = (state.catalog || []).filter(p => p.known === false);
       html = `${header()}
-        <div class="brand sm"><h1>엽전 충전</h1><p>현재 ${state.tokens} 엽전</p></div>
+        <div class="brand sm"><h1>${COIN}엽전 충전</h1><p>현재 ${COIN}${state.tokens} 엽전</p></div>
         ${err}
         ${state.catalogError ? `<div class="card"><p class="err">${esc(state.catalogError)}</p>
           <p class="muted small">앱인토스 콘솔에서 인앱 상품을 먼저 등록해야 결제가 열립니다.</p></div>` : ''}
+        ${unknown.length ? `<div class="card">
+          <p class="err">콘솔의 상품 번호와 앱이 아는 번호가 다릅니다.</p>
+          <p class="muted small">콘솔에 등록된 번호: ${unknown.map(p => esc(p.sku)).join(', ')}</p>
+          <p class="muted small">앱이 아는 번호: ${PRODUCTS.map(p => esc(p.sku)).join(', ')}</p>
+          <p class="muted small">둘 중 한쪽을 다른 쪽에 맞춰야 결제가 열립니다.
+            콘솔 상품의 번호를 바꿀 수 없다면 앱 쪽 번호를 고쳐야 합니다.</p></div>` : ''}
         ${list.map(p => `
           <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
             <span class="t-label">${esc(p.label)}</span>
-            <span class="t-cost">${p.known === false ? '서버 미등록' : esc(p.price || '토스로 결제')}</span>
+            <span class="t-cost">${p.known === false
+              ? `앱이 모르는 상품 · ${esc(p.sku)}`
+              : esc(p.price || '토스로 결제')}</span>
           </button>`).join('')}
         ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
           콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
