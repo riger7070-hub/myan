@@ -1,0 +1,87 @@
+<!-- 인앱 상품 이미지 원본 (1024×1024).
+     tools/build-store-images.mjs 가 이 파일을 열어 PNG 로 찍어 낸다.
+     ?tokens=10 처럼 붙여 개수를 바꾼다. -->
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1024px; height: 1024px; overflow: hidden; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: #0b0906;
+    font-family: 'Noto Serif KR', 'Batang', serif;
+  }
+  /* 밤하늘 — 가운데가 살짝 밝다 */
+  .sky {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% 42%, rgba(201,169,110,0.16) 0%, rgba(201,169,110,0.05) 38%, transparent 66%),
+      linear-gradient(158deg, #1a150e 0%, #120e09 52%, #0a0806 100%);
+  }
+  .stars { position: absolute; inset: 0; }
+  .stars i {
+    position: absolute; width: 3px; height: 3px; border-radius: 50%;
+    background: #e8d4a8; opacity: .5;
+  }
+  .wrap { position: relative; text-align: center; }
+
+  /* 엽전 — 둥근 밖, 네모난 안 */
+  .coin { position: relative; width: 560px; height: 560px; margin: 0 auto; }
+  .coin svg { width: 100%; height: 100%; display: block; }
+
+  /* 숫자는 엽전 가운데 네모(560px 중 36%) 안에 들어와야 한다.
+     넘치면 테두리를 파고들어 엽전이 아니라 얼룩처럼 보인다. */
+  .num {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 150px; font-weight: 700; color: #f0e2c2;
+    letter-spacing: -0.03em;
+    text-shadow: 0 0 44px rgba(201,169,110,0.5);
+  }
+  .num.small { font-size: 108px; }   /* 세 자리 */
+
+  .label {
+    margin-top: 26px;
+    font-size: 74px; color: #c9a96e; letter-spacing: 0.16em;
+  }
+  .brand {
+    margin-top: 14px;
+    font-size: 38px; color: rgba(201,169,110,0.55); letter-spacing: 0.34em;
+  }
+</style>
+<div class="sky"></div>
+<div class="stars" id="stars"></div>
+<div class="wrap">
+  <div class="coin">
+    <svg viewBox="0 0 200 200" fill="none" stroke="#c9a96e" stroke-width="2.4">
+      <circle cx="100" cy="100" r="94" opacity=".28"/>
+      <circle cx="100" cy="100" r="86" opacity=".85"/>
+      <circle cx="100" cy="100" r="78" opacity=".3"/>
+      <rect x="64" y="64" width="72" height="72" rx="5" opacity=".55"/>
+    </svg>
+    <div class="num" id="num">10</div>
+  </div>
+  <div class="label">토큰</div>
+  <div class="brand">M;Y 安</div>
+</div>
+<script>
+  const p = new URLSearchParams(location.search);
+  const n = p.get('tokens') || '10';
+  const el = document.getElementById('num');
+  el.textContent = n;
+  if (n.length >= 3) el.classList.add('small');
+
+  // 별은 매번 같은 자리에 찍혀야 한다 — 이미지를 다시 뽑을 때마다 달라지면
+  // 무엇이 바뀐 건지 알 수 없다. 그래서 난수 대신 고정된 식을 쓴다.
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const host = document.getElementById('stars');
+  for (let i = 0; i < 46; i++) {
+    const s = document.createElement('i');
+    s.style.left = (rnd() * 100).toFixed(2) + '%';
+    s.style.top = (rnd() * 100).toFixed(2) + '%';
+    s.style.opacity = (0.16 + rnd() * 0.5).toFixed(2);
+    const sz = (2 + rnd() * 3).toFixed(1);
+    s.style.width = s.style.height = sz + 'px';
+    host.appendChild(s);
+  }
+</script>
