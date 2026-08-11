@@ -143,6 +143,33 @@ test('잔액 필드 이름을 서버와 맞춰 읽는다', () => {
     '서버가 더 이상 remaining 으로 돌려주지 않는다 — 앱도 함께 고칠 것');
 });
 
+test('상품 목록이 서버와 앱에서 같다', () => {
+  // SKU 든 지급량이든 한쪽만 고치면 "결제는 됐는데 토큰이 안 들어오는" 상태가 된다.
+  const mainSrc = readFileSync(join(ROOT, 'mini', 'src', 'main.js'), 'utf8');
+  const appList = [...mainSrc.matchAll(/sku:\s*'(\w+)',\s*tokens:\s*(\d+)/g)]
+    .map(m => `${m[1]}=${m[2]}`).sort();
+
+  const at = worker.indexOf('const MINI_PRODUCTS = {');
+  const chunk = worker.slice(at, worker.indexOf('\n};', at));
+  const serverList = [...chunk.matchAll(/^ {2}(\w+):\s*\{\s*tokens:\s*(\d+)/gm)]
+    .map(m => `${m[1]}=${m[2]}`).sort();
+
+  assert.ok(serverList.length >= 2, `서버 상품을 ${serverList.length}개만 찾았다`);
+  assert.deepEqual(appList, serverList,
+    `앱: ${appList.join(', ')}\n서버: ${serverList.join(', ')}`);
+});
+
+test('무료 지급은 행 id 로 중복을 막는다', () => {
+  // 첫 지급은 영구 1회, 공유 보너스는 하루 1회다. 조회하고 나서 쓰는 방식이면
+  // 두 번 눌렀을 때 둘 다 통과해 토큰이 두 배로 나간다. id 충돌로 막아야 한다.
+  assert.match(worker, /VALUES \(\?, \?, 'signup'[\s\S]{0,200}?ON CONFLICT\(id\) DO NOTHING/,
+    '첫 지급이 ON CONFLICT 로 막히지 않는다');
+  assert.match(worker, /VALUES \(\?, \?, 'share'[\s\S]{0,200}?ON CONFLICT\(id\) DO NOTHING/,
+    '공유 보너스가 ON CONFLICT 로 막히지 않는다');
+  // 공유 보너스 id 에 날짜가 들어가야 "하루 한 번"이 된다.
+  assert.match(worker, /`share:\$\{userKey\}:\$\{today\}`/, '공유 보너스 id 에 날짜가 없다');
+});
+
 test('로또번호는 미니앱에 넣지 않는다', () => {
   // 사행성 요소로 심사에서 지적될 수 있어 첫 버전에서 뺐다. 무심코 되돌아오는 걸 막는다.
   // 넣기로 결정하면 이 테스트를 지우면서 의식적으로 판단하게 된다.

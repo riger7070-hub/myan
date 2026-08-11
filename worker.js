@@ -1596,6 +1596,7 @@ export default {
     if (path === '/mini/api/tokens'     && method === 'GET')  { await ensureDBExt(env); return handleMiniTokens(request, env); }
     if (path === '/mini/api/payment/grant' && method === 'POST') { await ensureDBExt(env); return handleMiniPaymentGrant(request, env); }
     if (path === '/mini/api/today'         && method === 'POST') { await ensureDBExt(env); return handleMiniDailyFortune(request, env); }
+    if (path === '/mini/api/share-bonus'   && method === 'POST') { await ensureDBExt(env); return handleMiniShareBonus(request, env); }
     // 연결 끊기 콜백 — 토스 서버가 부른다. 콘솔에서 GET/POST 중 무엇을 고를지 모르니 둘 다 받는다.
     if (path === '/mini/api/auth/unlink' && (method === 'GET' || method === 'POST')) {
       await ensureDBExt(env); return handleMiniUnlink(request, env);
@@ -1953,6 +1954,10 @@ async function handleMiniAuthLogin(request, env) {
     return miniCors(request, JSON.stringify({ error: { message: '로그인 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
   }
 
+  // 처음 온 사람에게 체험용 토큰을 준다. 한 번도 못 써보고 결제 화면부터 만나면
+  // 대부분 그냥 나간다. 두 번째 로그인부터는 id 충돌로 조용히 무시된다.
+  await _miniGrantSignup(env, userKey);
+
   const session = await createSessionToken(`mini:${userKey}`, env);
   const row = await env.DB.prepare(
     `SELECT name, birth_year, birth_month, birth_day, birth_hour, gender FROM mini_users WHERE user_key = ?`
@@ -2153,10 +2158,12 @@ async function handleMiniUnlink(request, env) {
 // ⚠️ SKU 문자열은 앱인토스 콘솔에 등록한 상품 ID 와 **정확히** 같아야 한다.
 //    콘솔에서 상품을 만든 뒤 이 표를 맞춰야 결제가 지급으로 이어진다.
 //    amount 는 기록용(공급가·VAT 제외)이고 실제 청구는 콘솔 설정을 따른다.
+// 10개 3,900원(개당 390원)을 진입 가격으로 두고, 위로 갈수록 개당 단가를 낮춘다.
+// 많이 살수록 이득이라는 게 눈에 보여야 한 칸 위를 고르게 된다.
 const MINI_PRODUCTS = {
-  token_30:  { tokens: 30,  amount: 4900,  label: '토큰 30개' },
-  token_100: { tokens: 100, amount: 12900, label: '토큰 100개' },
-  token_300: { tokens: 300, amount: 29900, label: '토큰 300개' },
+  token_10:  { tokens: 10,  amount: 3900,  label: '토큰 10개' },   // 390원/개
+  token_30:  { tokens: 30,  amount: 9900,  label: '토큰 30개' },   // 330원/개
+  token_100: { tokens: 100, amount: 27900, label: '토큰 100개' },  // 279원/개
 };
 
 // 결제가 끝난 상태. PURCHASED 는 지급까지 끝난 상태, PAYMENT_COMPLETED 는 결제만 끝나고
@@ -2287,6 +2294,55 @@ async function _miniRefundSpend(env, spendId, userKey, cost) {
     ).bind(`${spendId}:refund`, userKey, cost).run();
   } catch (e) {
     console.error('[MINI REFUND]', spendId, e?.message);
+  }
+}
+
+// ── 미니앱 무료 지급 ──
+// 둘 다 원장에 행을 하나 넣는 것이고, **행 id 자체가 중복 방지 장치**다.
+// 별도 플래그 테이블이나 조회-후-쓰기가 없으므로 동시에 두 번 눌러도 한 번만 들어간다.
+const MINI_SIGNUP_TOKENS = 3;   // 첫 로그인 1회
+const MINI_SHARE_TOKENS  = 3;   // 공유 시, 하루 1회
+
+/** 첫 로그인 지급. id 가 'signup:<userKey>' 라 두 번째부터는 조용히 무시된다. */
+async function _miniGrantSignup(env, userKey) {
+  try {
+    const r = await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'signup', 0, ?, 'approved', unixepoch())
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`signup:${userKey}`, userKey, MINI_SIGNUP_TOKENS).run();
+    if ((r?.meta?.changes ?? 0) > 0) console.log('[MINI SIGNUP] 첫 지급:', MINI_SIGNUP_TOKENS);
+  } catch (e) {
+    // 지급 실패가 로그인을 막지는 않는다. 다음 로그인 때 다시 시도된다.
+    console.error('[MINI SIGNUP]', e?.message);
+  }
+}
+
+// 공유 보너스. 하루 한 번만 받을 수 있게 id 에 날짜를 넣는다(KST 기준).
+async function handleMiniShareBonus(request, env) {
+  if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  try {
+    const r = await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+       VALUES (?, ?, 'share', 0, ?, 'approved', unixepoch())
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`share:${userKey}:${today}`, userKey, MINI_SHARE_TOKENS).run();
+
+    const granted = (r?.meta?.changes ?? 0) > 0;
+    return miniCors(request, JSON.stringify({
+      ok: true,
+      granted,                                   // false = 오늘 이미 받음
+      tokens: granted ? MINI_SHARE_TOKENS : 0,
+      balance: await _miniBalance(env, userKey),
+      message: granted ? `토큰 ${MINI_SHARE_TOKENS}개를 드렸어요.` : '오늘은 이미 받으셨어요. 내일 다시 받을 수 있습니다.',
+    }), 200);
+  } catch (e) {
+    console.error('[MINI SHARE]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
   }
 }
 

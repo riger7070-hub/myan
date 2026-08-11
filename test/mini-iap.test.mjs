@@ -88,7 +88,8 @@ test('클라이언트가 보낸 토큰·금액은 무시하고 sku 로만 정한
   assert.equal(balance(db), 30);
   const row = db.prepare(`SELECT pkg, amount FROM mini_payment_requests`).get();
   assert.equal(row.pkg, 'token_30');
-  assert.equal(row.amount, 4900);
+  // 금액도 서버 표에서 온다. 가격을 바꾸면 여기도 함께 고칠 것(그래야 조용히 어긋나지 않는다).
+  assert.equal(row.amount, 9900);
 });
 
 test('결제가 안 끝난 상태면 지급하지 않는다', async () => {

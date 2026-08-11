@@ -9,7 +9,7 @@
 //
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
-import { appLogin, IAP, saveBase64Data } from '@apps-in-toss/web-framework';
+import { appLogin, IAP, saveBase64Data, getTossShareLink, share } from '@apps-in-toss/web-framework';
 import { SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS } from './contents.js';
 
 const API = 'https://myan.riger7070.workers.dev';
@@ -18,10 +18,12 @@ const SESSION_KEY = 'myan_mini_session';
 // ⚠️ 콘솔에 등록한 상품 ID 와 정확히 같아야 한다. 서버의 MINI_PRODUCTS 와도 맞춰야
 // 결제가 지급으로 이어진다(worker.js 의 MINI_PRODUCTS 주석 참고).
 const PRODUCTS = [
-  { sku: 'token_30',  tokens: 30,  label: '토큰 30개' },
-  { sku: 'token_100', tokens: 100, label: '토큰 100개' },
-  { sku: 'token_300', tokens: 300, label: '토큰 300개' },
+  { sku: 'token_10',  tokens: 10,  label: '토큰 10개',  price: '3,900원' },
+  { sku: 'token_30',  tokens: 30,  label: '토큰 30개',  price: '9,900원' },
+  { sku: 'token_100', tokens: 100, label: '토큰 100개', price: '27,900원' },
 ];
+
+const SHARE_TOKENS = 3;
 
 const state = {
   screen: 'boot',
@@ -336,6 +338,29 @@ function buyTokens(product) {
   });
 }
 
+// ── 친구에게 공유하고 토큰 받기 ─────────────────────────────
+//
+// 보너스는 공유창을 띄운 것만으로 준다. 실제로 보냈는지는 앱이 알 수 없고,
+// 확인하겠다고 붙잡아 두면 정작 공유한 사람도 못 받는다. 대신 서버에서 하루 한 번으로
+// 묶어 두어(행 id 에 날짜가 들어간다) 반복해서 받아 갈 수는 없다.
+async function shareApp() {
+  await withBusy(async () => {
+    let link = '';
+    try {
+      link = await getTossShareLink('/');
+    } catch { /* 링크를 못 만들어도 공유 자체는 시도한다 */ }
+
+    const msg = link
+      ? `오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요.\n${link}`
+      : '오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요. 토스에서 "오늘운빨"을 찾아보세요.';
+    await share({ message: msg });
+
+    const r = await api('/mini/api/share-bonus', { method: 'POST', body: {} });
+    state.tokens = r.balance ?? state.tokens;
+    state.toast = r.message || '';
+  });
+}
+
 // ── 공유 카드 ──────────────────────────────────────────────
 
 function shareCard() {
@@ -580,6 +605,10 @@ function render() {
                 </button>`).join('')}
             </div>
           </section>`).join('')}
+        <button class="btn" id="btn-shareapp" ${state.busy ? 'disabled' : ''}>
+          친구에게 알리고 토큰 ${SHARE_TOKENS}개 받기
+        </button>
+        <p class="muted small" style="text-align:center;margin:8px 0 16px">하루 한 번 받을 수 있어요</p>
         <div class="row2">
           <button class="btn ghost" id="btn-history">지난 기록</button>
           <button class="btn ghost" id="btn-editprofile">내 정보</button>
@@ -637,7 +666,10 @@ function render() {
         ${r.extras?.length ? `<div class="card extras">${r.extras.map(e =>
           `<div class="row"><span class="muted">${esc(e.label)}</span><b>${esc(e.value)}</b></div>`).join('')}</div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>
-        <div class="row2">
+        <button class="btn" id="btn-shareapp" ${state.busy ? 'disabled' : ''}>
+          친구에게 알리고 토큰 ${SHARE_TOKENS}개 받기
+        </button>
+        <div class="row2" style="margin-top:10px">
           <button class="btn ghost" id="btn-share">이미지로 저장</button>
           <button class="btn ghost" id="btn-home2">홈으로</button>
         </div>
@@ -787,6 +819,7 @@ function bind() {
     go('login');
   });
   on('btn-share', shareCard);
+  on('btn-shareapp', shareApp);
   on('btn-reveal', (e) => {
     // 뒤집는 애니메이션이 끝난 뒤에 결과를 보여준다.
     const el = e.currentTarget;
