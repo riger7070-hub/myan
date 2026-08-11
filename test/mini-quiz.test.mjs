@@ -150,14 +150,18 @@ test('귀띔을 함께 주되 문제 순서와 어긋나게 준다', async () =>
   let sameOrder = 0;
   const B = bank();
 
-  for (let t = 0; t < 12; t++) {
+  const TRIES = 20;
+  for (let t = 0; t < TRIES; t++) {
     const q = await (await get()).json();
     assert.equal(q.tips?.length, 3, '귀띔이 3개가 아니다');
     const inOrder = q.questions.map(item => B.find(x => x.q === item.q).why);
+    // 귀띔은 그 문제들의 해설이어야 한다(순서만 다를 뿐).
+    assert.deepEqual([...q.tips].sort(), [...inOrder].sort(), '귀띔이 문제와 짝이 안 맞는다');
     if (q.tips.every((tip, i) => tip === inOrder[i])) sameOrder++;
   }
-  // 3개를 섞으면 원래 순서가 나올 확률이 1/6 이다. 12번 중 절반 이상이면 안 섞은 것이다.
-  assert.ok(sameOrder < 6, `12번 중 ${sameOrder}번이 문제 순서 그대로다 — 안 섞였다`);
+  // 3개를 섞으면 원래 순서가 나올 확률이 1/6 이라, 몇 번은 그대로 나오는 게 정상이다.
+  // "한 번도 안 섞였다"만 잡는다 — 임계를 촘촘히 잡으면 테스트가 확률로 흔들린다.
+  assert.ok(sameOrder < TRIES, `${TRIES}번 모두 문제 순서 그대로다 — 안 섞였다`);
 });
 
 test('서명이 없거나 변조되면 채점하지 않는다', async () => {

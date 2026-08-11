@@ -460,12 +460,28 @@ async function startQuiz() {
 function answerQuiz(choice) {
   const q = state.quiz;
   if (!q || q.done) return;
+  const first = q.picked[q.step] == null;
   q.picked[q.step] = choice;
 
-  if (q.step >= q.questions.length - 1) { submitQuiz(); return; }
+  // 마지막 문제에서 처음 고르면 바로 채점한다. 다만 이미 고른 걸 바꾸는 중이라면
+  // 멋대로 제출하지 않는다 — 되돌아와서 고친 사람의 뜻은 "다시 보겠다"에 가깝다.
+  if (q.step >= q.questions.length - 1) {
+    if (first) { submitQuiz(); return; }
+    render();
+    return;
+  }
   // 고른 게 잠깐 보이도록 한 박자 쉬고 넘어간다. 곧바로 바뀌면 눌렀는지도 모른다.
   render();
   setTimeout(() => { q.step++; state.showTips = false; render(); }, 260);
+}
+
+function stepQuiz(delta) {
+  const q = state.quiz;
+  if (!q || q.done) return;
+  q.step = Math.min(Math.max(q.step + delta, 0), q.questions.length - 1);
+  state.showTips = false;
+  state.error = '';
+  render();
 }
 
 async function submitQuiz() {
@@ -1083,7 +1099,20 @@ function render() {
             </div>
           </div>
           ${err}
-          <p class="muted small" style="text-align:center">고르면 다음 문제로 넘어가요</p>`;
+          <div class="row2" style="margin-top:12px">
+            ${i > 0
+              ? '<button class="btn ghost" id="btn-quiz-prev">이전 문제</button>'
+              : '<span></span>'}
+            ${q.picked[i] == null ? '<span></span>'
+              : i < total - 1
+                ? '<button class="btn ghost" id="btn-quiz-next">다음 문제</button>'
+                // 마지막 문제로 되돌아와 답을 바꾼 경우. 자동 제출하지 않으므로
+                // 직접 낼 수 있는 버튼이 있어야 한다.
+                : `<button class="btn" id="btn-quiz-submit" ${state.busy ? 'disabled' : ''}>제출하기</button>`}
+          </div>
+          <p class="muted small" style="text-align:center">
+            ${i > 0 ? '이전 문제로 돌아가 답을 바꿀 수 있어요' : '고르면 다음 문제로 넘어가요'}
+          </p>`;
         })()}
         ${FOOTER}`;
       break;
@@ -1277,6 +1306,8 @@ function bind() {
   on('btn-quiz', startQuiz);
   on('btn-stick', drawStick);
   on('btn-quiz-submit', submitQuiz);
+  on('btn-quiz-prev', () => stepQuiz(-1));
+  on('btn-quiz-next', () => stepQuiz(1));
   on('btn-tips', () => { state.showTips = !state.showTips; render(); });
   on('btn-pop', startPop);
   on('btn-hist-back', () => go('history'));

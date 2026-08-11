@@ -781,6 +781,11 @@ const _fortuneInflight = new Map();
 // ⚠️ 마지막 항목(JSON 요청 시 JSON 만)이 중요하다. 럭키 아이템처럼
 // responseMimeType 으로 JSON 을 받는 콘텐츠가 있는데, 인격 지시가 세면 거기에도
 // 산문을 붙여 파싱이 깨진다.
+// Gemini 응답이 멈추면 워커는 기본적으로 무한정 기다린다. 그러면 사용자는 로딩 화면에
+// 갇히고, cachedFortune 의 inflight 에 묶인 다른 요청까지 함께 멈춘다(같은 bucket 이면
+// 뒤에 온 요청이 앞선 요청의 약속을 그대로 기다린다). 끊고 환불하는 편이 낫다.
+const GEMINI_TIMEOUT_MS = 45000;
+
 const ANDORYEONG = `너는 "안도령(安道令)"이다. 산중에서 오래 기운을 읽어 온 젊은 도인이고,
 찾아온 사람의 사주와 그날의 기운을 함께 살펴 이야기를 들려준다.
 
@@ -806,11 +811,15 @@ const ANDORYEONG = `너는 "안도령(安道令)"이다. 산중에서 오래 기
 
 const _ANDORYEONG_SI = { parts: [{ text: ANDORYEONG }] };
 
-async function geminiText(env, prompt, generationConfig = { temperature: 0.9 }) {
+async function geminiText(env, prompt, generationConfig = {}) {
+  // 추론 토큰을 끄지 않으면 답을 내기 전에 생각에만 시간을 쓴다. 느려지고, 출력 예산까지
+  // 갉아먹어 본문이 잘린다(토정비결에서 겪었고, 라이프패스가 한참 안 뜨던 원인도 이것이다).
+  // 사주 풀이는 긴 추론이 필요한 작업이 아니다 — 프롬프트에 이미 계산된 사주를 준다.
+  const cfg = { temperature: 0.9, thinkingConfig: { thinkingBudget: 0 }, ...generationConfig };
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-    { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }], generationConfig }) }
+    { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }], generationConfig: cfg }) }
   );
   let data = null;
   try { data = await resp.json(); } catch { data = null; }
@@ -1873,6 +1882,7 @@ async function _tossField(env, value) {
 // 인가코드(10분·1회용) → accessToken(1시간) 교환 후, login-me 로 사용자 정보를 받는다.
 async function _tossExchangeAndFetchUser(env, authorizationCode, referrer) {
   const tokenRes = await _tossFetch(env, `${TOSS_API}/user/oauth2/generate-token`, {
+    signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ authorizationCode, referrer: referrer === 'SANDBOX' ? 'SANDBOX' : 'DEFAULT' }),
@@ -2179,6 +2189,7 @@ const TOSS_ORDER_PENDING = new Set(['ORDER_IN_PROGRESS']);
 
 async function _tossOrderStatus(env, orderId) {
   const res = await _tossFetch(env, `${TOSS_API}/order/get-order-status`, {
+    signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orderId }),
@@ -3152,6 +3163,7 @@ async function handleAdminGrantTokens(request, env) {
 
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
     await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3190,6 +3202,7 @@ async function handleTelegramApprove(request, env) {
 
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
     await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4014,9 +4027,9 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8 } }) }
+          generationConfig:{ temperature:0.8, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4321,9 +4334,9 @@ ${transitLines}
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9 } }) }
+          generationConfig:{ temperature:0.9, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4571,9 +4584,9 @@ ${dayLines}
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8 } }) }
+          generationConfig:{ temperature:0.8, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4741,9 +4754,9 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85 } }) }
+          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -4901,9 +4914,9 @@ ${sajuLine}
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85 } }) }
+          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5058,9 +5071,9 @@ ${timing.best.map(line).join('\n')}
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85 } }) }
+          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5262,9 +5275,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85 } }) }
+          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5343,9 +5356,9 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8 } }) }
+          generationConfig:{ temperature:0.8, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5492,7 +5505,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
           generationConfig:{ temperature:0.8, maxOutputTokens: 4096, thinkingConfig:{ thinkingBudget: 0 } } }) }
     );
@@ -5578,14 +5591,14 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           systemInstruction: _ANDORYEONG_SI,
           contents:[{ parts:[
             { text: prompt },
             { inlineData: { mimeType: 'image/jpeg', data: b64 } }
           ]}],
-          generationConfig:{ temperature:0.7 },
+          generationConfig:{ temperature:0.7, thinkingConfig:{ thinkingBudget:0 } },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
             { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
@@ -5730,9 +5743,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85 } }) }
+          generationConfig:{ temperature:0.85, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -5795,9 +5808,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
+      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9 } }) }
+          generationConfig:{ temperature:0.9, thinkingConfig:{ thinkingBudget:0 } } }) }
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
@@ -7052,6 +7065,7 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
       const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
         {
+          signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -7062,7 +7076,8 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
             generationConfig: {
               responseMimeType: 'application/json',
               temperature: 0.8,
-              maxOutputTokens: 2048
+              maxOutputTokens: 2048,
+              thinkingConfig: { thinkingBudget: 0 }
             }
           })
         }
