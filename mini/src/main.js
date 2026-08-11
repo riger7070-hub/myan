@@ -807,6 +807,13 @@ function _histDate(h) {
   return new Date(ms + 9 * 3600000).toISOString().slice(0, 10);   // KST
 }
 
+// 목록에 보일 앞머리. 잘라낸 게 있을 때만 말줄임을 붙인다 — 짧은 풀이에까지 붙으면
+// 뒤에 더 있는 줄 알고 눌러 보게 된다.
+function _preview(h, max = 100) {
+  const text = String(h.content || h.reading || '').replace(/\s+/g, ' ').trim();
+  return text.length > max ? text.slice(0, max) + '…' : text;
+}
+
 const FOOTER = `<footer><p class="muted">
   사업자 마이안 · 대표 안태현 · 사업자등록번호 501-33-63980<br>
   <a href="${API}/terms">이용약관</a> · <a href="${API}/privacy-policy">개인정보처리방침</a>
@@ -1008,7 +1015,7 @@ function render() {
             </button>
             <button class="tile" id="btn-pop">
               <span class="t-icon">${icon("pop")}</span><span class="t-label">안도령 부풀리기</span>
-              <span class="t-cost">1토큰 · 하루 3번</span>
+              <span class="t-cost">1토큰 · 하루 1번</span>
             </button>
             ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
               <span class="t-icon">${icon("ad")}</span><span class="t-label">광고 보기</span>
@@ -1073,21 +1080,26 @@ function render() {
       const paras = String(r.body || '').split(/\n{2,}|\n/).filter(Boolean)
         .map(t => `<p>${esc(t)}</p>`).join('');
       html = `${header()}
-        <div class="brand sm"><h1><span class="ic-title">${icon(r.item.icon)}</span> ${esc(r.item.label)}</h1></div>
+        <section class="hero result">
+          <div class="hero-sky"></div>
+          <div class="hero-text">
+            <p class="hero-date">안도령의 풀이</p>
+            <h2 class="hero-hi"><span class="ic-title">${icon(r.item.icon)}</span>${esc(r.item.label)}</h2>
+            ${r.extras?.length ? `<div class="mp-facts">${r.extras.map(e =>
+              `<span><i>${esc(e.label)}</i>${esc(e.value)}</span>`).join('')}</div>` : ''}
+          </div>
+        </section>
         ${r.card ? `<div class="card-stage"><div class="tarot flipped">
             <span class="tarot-face">${esc(r.card.icon || '🔮')}<b>${esc(r.card.name || '')}</b>
             ${r.upright === false ? '<i>역방향</i>' : '<i>정방향</i>'}</span>
           </div></div>` : ''}
-        ${r.extras?.length ? `<div class="card extras">${r.extras.map(e =>
-          `<div class="row"><span class="muted">${esc(e.label)}</span><b>${esc(e.value)}</b></div>`).join('')}</div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>
-        <button class="btn" id="btn-shareapp" ${state.busy ? 'disabled' : ''}>
-          친구에게 알리고 토큰 ${SHARE_TOKENS}개 받기
-        </button>
-        <div class="row2" style="margin-top:10px">
+        <div class="row2">
           <button class="btn ghost" id="btn-share">이미지로 저장</button>
           <button class="btn ghost" id="btn-home2">홈으로</button>
         </div>
+        <button class="btn ghost" id="btn-shareapp" style="margin-top:10px"
+          ${state.busy ? 'disabled' : ''}>친구에게 알리기</button>
         <div class="ai-notice">${AI_NOTICE}</div>
         ${FOOTER}`;
       break;
@@ -1095,13 +1107,17 @@ function render() {
 
     case 'history':
       html = `${header()}
-        <div class="brand sm"><h1>지난 기록</h1>
-          ${state.history.length ? '<p>눌러서 전체를 볼 수 있어요</p>' : ''}</div>
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('saju')}</span>지난 기록<i class="rule"></i></h3>
+          ${state.history.length
+            ? '<p class="muted small" style="margin:-6px 0 12px">눌러서 전체를 볼 수 있어요</p>' : ''}
+        </section>
         ${state.history.length ? state.history.map((h, i) => `
           <button class="card hist" data-hist="${i}">
             <div class="row"><b>${esc(h.title || h.feature || '')}</b>
-              <span class="muted">${esc(_histDate(h))}</span></div>
-            <p class="muted">${esc(String(h.content || h.reading || '').replace(/\s+/g, ' ').slice(0, 100))}…</p>
+              <span class="muted small">${esc(_histDate(h))}</span></div>
+            <p class="muted">${esc(_preview(h))}</p>
+            <span class="hist-more">전체 보기 ›</span>
           </button>`).join('')
         : '<div class="card"><p class="muted">아직 기록이 없어요.</p></div>'}
         <button class="btn ghost" id="btn-home2">홈으로</button>
@@ -1114,8 +1130,13 @@ function render() {
       const paras = String(h.content || h.reading || '').split(/\n{2,}|\n/).filter(Boolean)
         .map(t => `<p>${esc(t)}</p>`).join('');
       html = `${header()}
-        <div class="brand sm"><h1>${esc(h.title || h.feature || '')}</h1>
-          <p>${esc(_histDate(h))}</p></div>
+        <section class="hero result">
+          <div class="hero-sky"></div>
+          <div class="hero-text">
+            <p class="hero-date">${esc(_histDate(h))}</p>
+            <h2 class="hero-hi">${esc(h.title || h.feature || '')}</h2>
+          </div>
+        </section>
         <div class="card reading">${paras || '<p class="muted">내용이 없어요.</p>'}</div>
         <div class="row2">
           <button class="btn ghost" id="btn-hist-back">목록으로</button>

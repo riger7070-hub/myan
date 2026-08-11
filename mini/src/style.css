@@ -242,6 +242,16 @@ a { color: var(--gold-dim); }
 }
 .mp-token span { font-size: 0.74rem; color: var(--text-dim); }
 
+/* 결과·기록 상세의 머리. 마이페이지와 같은 히어로지만 잔액 자리가 없어 여백을 줄인다. */
+.hero.result { padding: 22px 22px 20px; margin-bottom: 18px; }
+.hero.result .hero-hi { max-width: 100%; font-size: 1.28rem; display: flex; align-items: center; gap: 8px; }
+/* 부가 정보 알약 안의 이름표 */
+.mp-facts span i { font-style: normal; color: var(--text-dim); margin-right: 5px; }
+
+.hist-more {
+  display: block; margin-top: 8px; font-size: 0.78rem; color: var(--gold); opacity: 0.8;
+}
+
 .hero-text { position: relative; }
 .hero-date {
   font-size: 0.78rem; letter-spacing: 0.06em; color: var(--gold);

@@ -2658,7 +2658,7 @@ async function handleMiniQuizSubmit(request, env) {
 // 제출할 때 (1) 서명이 맞는지 (2) 사람이 두드릴 만한 시간이 걸렸는지를 본다.
 const MINI_POP_TOKENS    = 1;
 const MINI_POP_TAPS      = 30;     // 터뜨리는 데 필요한 두드림 수
-const MINI_POP_DAILY_MAX = 3;
+const MINI_POP_DAILY_MAX = 1;   // 하루 1번. 광고를 보면 그만큼 늘어난다
 
 /**
  * 광고를 본 만큼 그날 한도를 늘려 준다.
