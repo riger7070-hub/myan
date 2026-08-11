@@ -1152,7 +1152,7 @@ function render() {
       if (!q) { html = ''; break; }
       const done = q.done;
       html = `${header()}
-        <div class="brand sm"><h1>🧠 안도령의 오행 퀴즈</h1>
+        <div class="brand sm"><h1><span class="ic-title">${icon('quiz')}</span>안도령의 오행 퀴즈</h1>
           <p>${done ? '' : '안도령이 내는 문제예요. 두 개 이상 맞히면 토큰 1개'}</p></div>
         ${done || !q.tips?.length ? '' : `
           <div class="card hint">
@@ -1169,8 +1169,10 @@ function render() {
           ${q.questions.map((item, i) => `
             <div class="card">
               <p><b>${esc(item.q)}</b></p>
-              <p class="muted" style="margin-top:8px">
-                ${done.results[i]?.correct ? '✅ 정답' : `❌ 정답은 "${esc(item.c[done.results[i]?.answer] || '')}"`}
+              <p class="mark ${done.results[i]?.correct ? 'ok' : 'no'}">
+                ${done.results[i]?.correct
+                  ? '<i>○</i>맞히셨어요'
+                  : `<i>✕</i>정답은 &ldquo;${esc(item.c[done.results[i]?.answer] || '')}&rdquo;`}
               </p>
               <p class="muted small">${esc(done.results[i]?.why || '')}</p>
             </div>`).join('')}
@@ -1216,11 +1218,11 @@ function render() {
       const p = state.pop;
       if (!p) { html = ''; break; }
       html = `${header()}
-        <div class="brand sm"><h1>🎈 안도령 부풀리기</h1>
+        <div class="brand sm"><h1><span class="ic-title">${icon('pop')}</span>안도령 부풀리기</h1>
           <p>${p.done ? '' : `${p.taps}번 두드리면 펑!`}</p></div>
         ${p.done ? `
           <div class="card" style="text-align:center;padding:30px 22px">
-            <div style="font-size:3rem;margin-bottom:10px">✨</div>
+            <div class="burst"><span>✦</span><span>✧</span><span>✦</span></div>
             <p>${esc(p.done.message)}</p>
             ${p.done.remainToday === 0 && AD_UNIT_ID
               ? '<p class="muted small" style="margin-top:10px">광고를 보면 한 번 더 할 수 있어요</p>' : ''}
@@ -1248,7 +1250,7 @@ function render() {
     case 'stick': {
       const s = state.stick || {};
       html = `${header()}
-        <div class="brand sm"><h1>🎋 산가지</h1></div>
+        <div class="brand sm"><h1><span class="ic-title">${icon('stick')}</span>산가지</h1></div>
         <div class="card" style="text-align:center;padding:34px 22px">
           <div style="font-size:3.4rem;color:var(--gold-light);font-family:'Batang',serif">${esc(s.n || '')}</div>
           <div style="color:var(--gold);margin:10px 0 16px;font-size:1.1rem">${esc(s.t || '')}</div>

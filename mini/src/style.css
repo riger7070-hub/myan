@@ -573,3 +573,26 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .sec-icon .ic { width: 15px; height: 15px; }
 .ic-title { display: inline-flex; vertical-align: -4px; margin-right: 6px; }
 .ic-title .ic { width: 22px; height: 22px; }
+
+/* 퀴즈 채점 표시. 컬러 이모지(✅❌)는 한지·먹 화면에서 혼자 튄다. */
+.mark { margin-top: 8px; display: flex; align-items: center; gap: 7px; font-size: 0.92rem; }
+.mark i {
+  font-style: normal; width: 21px; height: 21px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; font-size: 0.78rem; line-height: 1;
+  border: 1px solid currentColor;
+}
+.mark.ok { color: var(--gold-light); }
+.mark.no { color: var(--text-dim); }
+
+/* 부풀리기가 터졌을 때. 별이 크기를 달리해 퍼지듯 뜬다. */
+.burst { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; color: var(--gold); }
+.burst span { animation: burst-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) backwards; }
+.burst span:nth-child(1) { font-size: 1.5rem; animation-delay: 0.05s; opacity: 0.8; }
+.burst span:nth-child(2) { font-size: 2.6rem; }
+.burst span:nth-child(3) { font-size: 1.2rem; animation-delay: 0.12s; opacity: 0.65; }
+@keyframes burst-in {
+  from { transform: scale(0.2) rotate(-30deg); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .burst span { animation: none; } }
