@@ -1600,6 +1600,8 @@ export default {
     if (path === '/mini/api/checkin'       && method === 'POST') { await ensureDBExt(env); return handleMiniCheckin(request, env); }
     if (path === '/mini/api/quiz'          && method === 'GET')  { await ensureDBExt(env); return handleMiniQuiz(request, env); }
     if (path === '/mini/api/quiz'          && method === 'POST') { await ensureDBExt(env); return handleMiniQuizSubmit(request, env); }
+    if (path === '/mini/api/pop'           && method === 'GET')  { await ensureDBExt(env); return handleMiniPopStart(request, env); }
+    if (path === '/mini/api/pop'           && method === 'POST') { await ensureDBExt(env); return handleMiniPopClaim(request, env); }
     // 연결 끊기 콜백 — 토스 서버가 부른다. 콘솔에서 GET/POST 중 무엇을 고를지 모르니 둘 다 받는다.
     if (path === '/mini/api/auth/unlink' && (method === 'GET' || method === 'POST')) {
       await ensureDBExt(env); return handleMiniUnlink(request, env);
@@ -2626,6 +2628,77 @@ async function handleMiniQuizSubmit(request, env) {
       : granted ? `${correctCount}문제 맞히셨어요! 토큰 ${MINI_QUIZ_TOKENS}개를 드렸어요.`
       : '잘 푸셨어요. 오늘 보상은 이미 받으셨습니다.',
   }), 200);
+}
+
+// ── 안도령 부풀리기 ──
+// 두드려서 부풀리고 터뜨리면 토큰을 준다. 보상이 운이 아니라 두드린 횟수에 붙으므로
+// 사행성 소지가 없다.
+//
+// ⚠️ 클라이언트 말을 그대로 믿으면 안 된다. 앱을 고치지 않아도 보상 엔드포인트만
+// 직접 부르면 토큰이 나온다. 그래서 서버가 목표 횟수와 발급 시각을 서명해 내려주고,
+// 제출할 때 (1) 서명이 맞는지 (2) 사람이 두드릴 만한 시간이 걸렸는지를 본다.
+const MINI_POP_TOKENS    = 1;
+const MINI_POP_TAPS      = 30;     // 터뜨리는 데 필요한 두드림 수
+const MINI_POP_DAILY_MAX = 3;
+const MINI_POP_MIN_MS    = 3000;   // 30번을 3초 안에 = 사람 손이 아니다
+const MINI_POP_MAX_MS    = 300000; // 5분이 넘으면 낡은 발급으로 본다
+
+async function handleMiniPopStart(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const issuedAt = Date.now();
+  const sig = await hmacSign(_sessionSecret(env), `pop:${userKey}:${MINI_POP_TAPS}:${issuedAt}`);
+  return miniCors(request, JSON.stringify({ ok: true, taps: MINI_POP_TAPS, issuedAt, sig }), 200);
+}
+
+async function handleMiniPopClaim(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const { issuedAt, sig, taps } = await request.json().catch(() => ({}));
+  const valid = issuedAt && sig && await hmacVerify(
+    _sessionSecret(env), `pop:${userKey}:${MINI_POP_TAPS}:${issuedAt}`, sig
+  ).catch(() => false);
+  if (!valid) return miniCors(request, JSON.stringify({ error: { message: '잘못된 요청입니다.' } }), 400);
+
+  if (!(taps >= MINI_POP_TAPS)) {
+    return miniCors(request, JSON.stringify({ error: { message: '아직 다 부풀지 않았어요.' } }), 400);
+  }
+  const elapsed = Date.now() - Number(issuedAt);
+  if (elapsed < MINI_POP_MIN_MS || elapsed > MINI_POP_MAX_MS) {
+    // 너무 빠르면 자동화, 너무 느리면 오래된 발급을 다시 쓰는 것이다.
+    console.warn('[MINI POP] 시간이 이상하다:', elapsed);
+    return miniCors(request, JSON.stringify({ error: { message: '다시 시도해 주세요.' } }), 400);
+  }
+
+  const today = _kstToday();
+  try {
+    for (let n = 1; n <= MINI_POP_DAILY_MAX; n++) {
+      const r = await env.DB.prepare(
+        `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+         VALUES (?, ?, 'pop', 0, ?, 'approved', unixepoch())
+         ON CONFLICT(id) DO NOTHING`
+      ).bind(`pop:${userKey}:${today}:${n}`, userKey, MINI_POP_TOKENS).run();
+
+      if ((r?.meta?.changes ?? 0) > 0) {
+        return miniCors(request, JSON.stringify({
+          ok: true, granted: true, tokens: MINI_POP_TOKENS,
+          remainToday: MINI_POP_DAILY_MAX - n,
+          balance: await _miniBalance(env, userKey),
+          message: `펑! 토큰 ${MINI_POP_TOKENS}개를 드렸어요. 오늘 ${MINI_POP_DAILY_MAX - n}번 더 할 수 있어요.`,
+        }), 200);
+      }
+    }
+    return miniCors(request, JSON.stringify({
+      ok: true, granted: false, tokens: 0, remainToday: 0,
+      balance: await _miniBalance(env, userKey),
+      message: '오늘은 다 하셨어요. 내일 다시 만나요.',
+    }), 200);
+  } catch (e) {
+    console.error('[MINI POP]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '처리에 실패했습니다.' } }), 500);
+  }
 }
 
 // ── 미니앱 오늘의 운세 (유료 1토큰) ──

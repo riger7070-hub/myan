@@ -172,6 +172,33 @@ input[type=file] { padding: 11px; font-size: 0.88rem; }
   border-color: var(--gold); font-weight: 600;
 }
 
+/* ── 안도령 부풀리기 ── */
+.pop-stage {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 300px; margin: 10px 0 18px;
+}
+.pop-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  /* 연타할 때 글자·이미지가 선택되면 파란 하이라이트가 번쩍인다. */
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+.pop-btn img { width: 120px; height: 120px; display: block; transition: transform 0.09s ease-out; }
+.pop-btn img.bump { animation: bump 0.12s ease-out; }
+@keyframes bump {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(1.5); }
+  100% { filter: brightness(1); }
+}
+.pop-track {
+  height: 10px; border-radius: 999px; overflow: hidden;
+  background: rgba(201, 169, 110, 0.12); border: 1px solid var(--line);
+}
+.pop-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #a5854e, #f0dcb0);
+  transition: width 0.09s ease-out;
+}
+
 /* ── 퀴즈 귀띔 ── */
 .card.hint { padding: 14px 16px; }
 .hint-toggle {

@@ -399,6 +399,53 @@ async function submitQuiz() {
   });
 }
 
+// ── 안도령 부풀리기 ──
+// 서버가 목표 횟수와 발급 시각을 서명해 준다. 다 두드리면 그걸 그대로 돌려주고,
+// 서버가 서명과 걸린 시간을 확인한 뒤 토큰을 준다.
+async function startPop() {
+  await withBusy(async () => {
+    const r = await api('/mini/api/pop');
+    state.pop = { ...r, count: 0, popped: false, done: null };
+    go('pop');
+  });
+}
+
+function tapPop() {
+  const p = state.pop;
+  if (!p || p.popped) return;
+  p.count++;
+  if (p.count >= p.taps) {
+    p.popped = true;
+    render();
+    claimPop();
+    return;
+  }
+  // 두드릴 때마다 다시 그리면 무겁다. 크기만 직접 만진다.
+  const el = document.getElementById('pop-oracle');
+  const wrap = document.getElementById('pop-bar');
+  if (el) {
+    el.style.transform = `scale(${1 + (p.count / p.taps) * 0.9})`;
+    el.classList.remove('bump');
+    void el.offsetWidth;          // 애니메이션 재시작
+    el.classList.add('bump');
+  }
+  if (wrap) wrap.style.width = `${Math.round((p.count / p.taps) * 100)}%`;
+}
+
+async function claimPop() {
+  const p = state.pop;
+  try {
+    const r = await api('/mini/api/pop', {
+      method: 'POST', body: { issuedAt: p.issuedAt, sig: p.sig, taps: p.count },
+    });
+    state.tokens = r.balance ?? state.tokens;
+    state.pop = { ...p, done: r };
+  } catch (e) {
+    state.pop = { ...p, done: { message: e?.message || '보상을 받지 못했어요.' } };
+  }
+  render();
+}
+
 /** 산가지 뽑기. 서버를 부르지 않는 무료 재미다 — 결과에 토큰이 걸리면 사행성이 된다. */
 function drawStick() {
   const s = SANGAJI[Math.floor(Math.random() * SANGAJI.length)];
@@ -707,6 +754,10 @@ function render() {
               <span class="t-icon">🧠</span><span class="t-label">오행 퀴즈</span>
               <span class="t-cost">다 맞히면 1토큰</span>
             </button>
+            <button class="tile" id="btn-pop">
+              <span class="t-icon">🫧</span><span class="t-label">안도령 부풀리기</span>
+              <span class="t-cost">1토큰 · 하루 3번</span>
+            </button>
             <button class="tile" id="btn-stick">
               <span class="t-icon">🎋</span><span class="t-label">산가지 뽑기</span>
               <span class="t-cost">무료</span>
@@ -840,6 +891,35 @@ function render() {
             </div>`).join('')}
           ${err}
           <button class="btn" id="btn-quiz-submit" ${state.busy ? 'disabled' : ''}>제출하기</button>
+        `}
+        ${FOOTER}`;
+      break;
+    }
+
+    case 'pop': {
+      const p = state.pop;
+      if (!p) { html = ''; break; }
+      html = `${header()}
+        <div class="brand sm"><h1>🫧 안도령 부풀리기</h1>
+          <p>${p.done ? '' : `${p.taps}번 두드리면 펑!`}</p></div>
+        ${p.done ? `
+          <div class="card" style="text-align:center;padding:30px 22px">
+            <div style="font-size:3rem;margin-bottom:10px">✨</div>
+            <p>${esc(p.done.message)}</p>
+          </div>
+          <div class="row2">
+            ${p.done.remainToday > 0 ? '<button class="btn ghost" id="btn-pop">한 번 더</button>' : '<span></span>'}
+            <button class="btn ghost" id="btn-home2">홈으로</button>
+          </div>
+        ` : `
+          <div class="pop-stage">
+            <button class="pop-btn" id="pop-tap" aria-label="두드리기">
+              <img id="pop-oracle" src="${API}/andoryeong.svg" alt=""
+                   onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'🧙',style:'font-size:5rem'}))">
+            </button>
+          </div>
+          <div class="pop-track"><div class="pop-fill" id="pop-bar"></div></div>
+          <p class="muted small" style="text-align:center;margin-top:10px">화면을 두드려 주세요</p>
         `}
         ${FOOTER}`;
       break;
@@ -996,6 +1076,12 @@ function bind() {
   on('btn-stick', drawStick);
   on('btn-quiz-submit', submitQuiz);
   on('btn-tips', () => { state.showTips = !state.showTips; render(); });
+  on('btn-pop', startPop);
+  const tap = document.getElementById('pop-tap');
+  if (tap) {
+    // click 은 모바일에서 300ms 가까이 늦는다. 연타에는 pointerdown 이 맞다.
+    tap.onpointerdown = (e) => { e.preventDefault(); tapPop(); };
+  }
 
   // 퀴즈 보기 선택
   for (const el of document.querySelectorAll('[data-q]')) {
