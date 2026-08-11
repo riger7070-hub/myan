@@ -48,8 +48,8 @@
 [data-theme="light"] .signup-notice    { color: #4a3c30; }
 [data-theme="light"] .signup-sub       { color: #3a2e24; }
 [data-theme="light"] .free-token-banner { color: #3a2e24; border-color: rgba(140,100,32,0.3); }
-[data-theme="light"] .beta-banner      { color: #4a6840; border-color: rgba(60,140,80,0.35); }
-[data-theme="light"] .beta-banner strong { color: #2e5a30; }
+[data-theme="light"] .beta-banner      { color: #4a3c30; border-color: rgba(140,100,32,0.35); }
+[data-theme="light"] .beta-banner strong { color: #6a4a14; }
 [data-theme="light"] .token-chip       { color: #4a3c30; border-color: rgba(140,100,32,0.35); }
 [data-theme="light"] .token-balance-unit { color: #4a3c30; }
 [data-theme="light"] label             { color: #3a2e24; }
@@ -1661,7 +1661,15 @@ body::-webkit-scrollbar {
   border-color: rgba(201,169,110,0.45);
   background: rgba(201,169,110,0.07);
 }
-.cs-ico { font-size: 1.55rem; line-height: 1; }
+/* ── 선화 아이콘 ──
+   이모지를 쓰다가 바꿨다. 기기마다 모양이 다르고(🀄 는 아예 네모로 깨졌다) 색도
+   제각각이라 금빛 화면 위에서 겉돌았다. 원본은 mini/src/icons.js 하나다. */
+.ic { width: 26px; height: 26px; display: block; color: var(--gold); }
+.cs-ico { display: inline-flex; line-height: 1; }
+.cs-title > span { display: inline-flex; }
+.cs-title .ic { width: 16px; height: 16px; }
+.ic-title { display: inline-flex; vertical-align: -4px; margin-right: 7px; }
+.ic-title .ic { width: 22px; height: 22px; }
 .cs-label {
   font-size: 0.73rem;
   line-height: 1.35;
@@ -2075,15 +2083,16 @@ body::-webkit-scrollbar {
   justify-content: center;
   gap: 8px;
   padding: 9px 16px;
-  background: linear-gradient(90deg, rgba(74,196,120,0.10), rgba(74,196,120,0.05), rgba(74,196,120,0.10));
-  border: 1px solid rgba(74,196,120,0.28);
+  /* 초록이었다. 금·검정 화면에서 이 띠 하나만 혼자 튀었다 — 팔레트 안으로 들인다. */
+  background: linear-gradient(90deg, rgba(201,169,110,0.10), rgba(201,169,110,0.04), rgba(201,169,110,0.10));
+  border: 1px solid var(--gold-dim);
   border-radius: 10px;
   font-size: 0.78rem;
-  color: #7de8a8;
+  color: var(--text-dim);
   letter-spacing: 0.4px;
   animation: fadeIn .4s ease;
 }
-.beta-banner strong { color: #a8f0c4; font-weight: 600; }
+.beta-banner strong { color: var(--gold-light); font-weight: 600; }
 
 /* ── Change 3: BEST 카드 강조 ── */
 .pkg-card.best-card {
@@ -3304,7 +3313,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   background: rgba(201,169,110,0.08);
   transform: translateY(-2px);
 }
-.fortune-topic-icon { font-size: 1.6rem; }
+.fortune-topic-icon { display: inline-flex; line-height: 1; }
 .fortune-topic-label { font-size: 0.78rem; text-align: center; line-height: 1.3; }
 
 /* 알림 버튼 */
@@ -4438,9 +4447,16 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 }
 
 .onboarding-icon {
-  font-size: 4rem;
+  display: flex;
+  justify-content: center;
   margin-bottom: 20px;
   animation: iconBounce 2s ease-in-out infinite;
+}
+/* 선화라 크게 그려도 뭉개지지 않는다. 은은한 후광으로 첫 화면의 무게를 준다. */
+.onboarding-icon .ic {
+  width: 68px; height: 68px;
+  stroke-width: 1.1;
+  filter: drop-shadow(0 0 18px rgba(201, 169, 110, 0.35));
 }
 
 .onboarding-title {
@@ -4835,4 +4851,32 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 
 .achievement-card.unlocked .achievement-card-name {
   color: var(--text);
+}
+
+/* ── 사업자 푸터 ──
+   색이 인라인으로 박혀 있어 밝은 화면에서 글씨가 배경에 묻혔다. 여기로 옮겨
+   두 화면 모두 읽히게 한다. 법으로 표시해야 하는 정보라 더 그렇다. */
+.biz-footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 24px 44px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  line-height: 2.1;
+  letter-spacing: 0.3px;
+  font-family: -apple-system, 'Pretendard', sans-serif;
+}
+.biz-footer .biz-note { margin-top: 10px; opacity: 0.8; }
+[data-theme="light"] .biz-footer { color: #4a3c30; }
+
+/* 무료 배지가 초록이었다 — 금·먹 팔레트 밖이라 이 글자만 튀었다. */
+.cs-cost.cs-free { color: var(--gold); opacity: 0.9; }
+
+/* ── 온보딩: 밝은 화면 ──
+   가림막이 검정 고정이라 밝은 화면에서도 카드가 어둡게 남았다. --card 가 반투명이라
+   그 위에 얹히면 글씨가 배경에 묻힌다. 첫 화면이라 여기서 인상이 갈린다. */
+[data-theme="light"] .onboarding-overlay { background: rgba(70, 52, 22, 0.42); }
+[data-theme="light"] .onboarding-content { background: #fffdf8; }
+[data-theme="light"] .onboarding-icon .ic {
+  filter: drop-shadow(0 0 14px rgba(140, 100, 32, 0.22));
 }

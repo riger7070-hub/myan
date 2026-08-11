@@ -1023,29 +1023,32 @@ function setLang(l) {
 }
 
 // ── 다크 / 라이트 모드 ──
+const currentTheme = () => document.documentElement.getAttribute('data-theme') || 'dark';
+
 function toggleTheme() {
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  const next = isLight ? 'dark' : 'light';
-  applyTheme(next);
-  localStorage.setItem('myan_theme', next);
+  applyTheme(currentTheme() === 'light' ? 'dark' : 'light');
 }
 
+/**
+ * 밝기를 정한다.
+ * 인자를 주면 사용자가 직접 고른 것으로 보고 기억한다. 인자가 없으면
+ * 저장된 뜻 → 기기 설정 순으로 따른다. 예전에는 저장값이 없을 때 무조건 'dark' 였다 —
+ * 밝은 화면을 쓰는 사람에게도 어두운 화면이 나갔다.
+ */
 function applyTheme(theme) {
-  if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-  }
+  const wanted = theme || localStorage.getItem('myan_theme')
+    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  // 다크일 때도 속성을 남긴다. 지우면 head 의 선반영과 어긋나 첫 그림이 번쩍인다.
+  document.documentElement.setAttribute('data-theme', wanted);
+  if (theme) { try { localStorage.setItem('myan_theme', theme); } catch (e) {} }
   // 테마 관련 UI 동기화
   if (typeof syncThemeColorMeta === 'function') syncThemeColorMeta();
   if (typeof _syncDrawerTheme === 'function') _syncDrawerTheme();
 }
 
-// 저장된 테마 적용
-(function initTheme() {
-  const saved = localStorage.getItem('myan_theme') || 'dark';
-  applyTheme(saved);
-})();
+// 인자 없이 부르면 저장된 뜻 → 기기 설정 순으로 정해진다.
+// head 에서 이미 같은 값을 얹어 뒀으므로 여기서는 딸린 UI만 맞춰지는 셈이다.
+applyTheme();
 
 /* 모드 시작 — 미가입 시 회원가입 화면으로 */
 let pendingMode = null; // 가입 후 진입할 모드 저장

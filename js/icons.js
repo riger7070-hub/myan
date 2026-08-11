@@ -1,18 +1,17 @@
-// 콘텐츠 아이콘.
+// 콘텐츠 아이콘 — 자동 생성 파일. 직접 고치지 말 것.
 //
-// 이모지를 쓰다가 선화(線畵)로 바꿨다. 이모지는 기기마다 모양이 달라 통일감이 없고
-// (🫧 는 아예 네모로 깨졌다), 색도 제각각이라 금색 화면 위에서 겉돌았다.
-// 여기 글자들은 currentColor 로 그려지므로 라이트·다크 어디서든 글자색을 따라간다.
+// 원본은 mini/src/icons.js 다. 고쳤으면 아래를 돌려 다시 만들고 함께 커밋한다.
+//   node tools/build-web-icons.mjs
 //
-// 모두 24×24 좌표계, 선 굵기 1.5, 끝을 둥글게. 획 수를 적게 두어 작게 줄여도
-// 뭉개지지 않게 했다.
+// 웹은 <script src> 로 읽는 고전 스크립트라 import/export 를 쓸 수 없다.
+// 그래서 같은 내용을 전역으로 노출한다.
 
 const S = (body) =>
   `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"
      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
      aria-hidden="true">${body}</svg>`;
 
-export const ICONS = {
+const ICONS = {
   // ── 사주로 보는 나 ──
   // 대운: 열 해마다 굽이치는 물결
   daeun: S(`<path d="M2 9c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0"/>
@@ -146,4 +145,22 @@ export const ICONS = {
 };
 
 /** 없는 이름을 불러도 화면이 비지 않게 빈 자리를 돌려준다. */
-export const icon = (name) => ICONS[name] || S('<circle cx="12" cy="12" r="8.5" opacity=".4"/>');
+const icon = (name) => ICONS[name] || S('<circle cx="12" cy="12" r="8.5" opacity=".4"/>');
+
+// 전역으로 내보낸다(app.js 가 icon() 을 그대로 부른다).
+window.ICONS = ICONS;
+window.icon = icon;
+
+// HTML 에 직접 박아 둔 자리도 채운다: <span data-icon="secGift"></span>
+// JS 로 그리는 목록과 달리 index.html 에 고정된 아이콘들이 여기 해당한다.
+window.paintIcons = function (root) {
+  (root || document).querySelectorAll('[data-icon]').forEach(function (el) {
+    if (el.firstElementChild) return;               // 이미 채웠으면 그대로 둔다
+    el.innerHTML = icon(el.getAttribute('data-icon'));
+  });
+};
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { window.paintIcons(); });
+} else {
+  window.paintIcons();
+}

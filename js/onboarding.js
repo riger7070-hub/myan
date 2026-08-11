@@ -54,7 +54,7 @@ function startOnboarding() {
     const progress = ((currentStep + 1) / steps.length) * 100;
 
     overlay.querySelector('.onboarding-progress-bar').style.width = `${progress}%`;
-    overlay.querySelector('.onboarding-icon').textContent = step.icon;
+    overlay.querySelector('.onboarding-icon').innerHTML = icon(step.icon);
     overlay.querySelector('.onboarding-title').textContent = step.title;
     overlay.querySelector('.onboarding-desc').textContent = step.desc;
 
@@ -99,88 +99,88 @@ function getOnboardingSteps(lang) {
   const steps = {
     ko: [
       {
-        icon: '☯️',
+        icon: 'saju',
         title: 'M;Y 安에 오신 걸 환영합니다',
         desc: '매일 당신의 사주와 오행 기운을 분석하여 오늘 하면 좋은 것을 알려드립니다.'
       },
       {
-        icon: '🔮',
+        icon: 'compat',
         title: '두 가지 모드',
         desc: '혼자 보는 Solo 모드와 커플/친구와 함께 보는 Duo 모드가 있어요.'
       },
       {
-        icon: '🎁',
+        icon: 'secGift',
         title: '토큰 시스템',
         desc: '운세 확인에는 토큰이 필요해요. 가입하면 3토큰을 무료로 드립니다!'
       },
       {
-        icon: '🔥',
+        icon: 'checkin',
         title: '연속 방문 보너스',
         desc: '매일 방문하면 스트릭이 쌓이고, 7일마다 토큰을 드려요!'
       }
     ],
     en: [
       {
-        icon: '☯️',
+        icon: 'saju',
         title: 'Welcome to M;Y 安',
         desc: 'We analyze your Saju and Five Elements daily to guide your best actions.'
       },
       {
-        icon: '🔮',
+        icon: 'compat',
         title: 'Two Modes',
         desc: 'Solo mode for yourself, or Duo mode with your partner/friend.'
       },
       {
-        icon: '🎁',
+        icon: 'secGift',
         title: 'Token System',
         desc: 'Readings require tokens. Sign up to get 3 free tokens!'
       },
       {
-        icon: '🔥',
+        icon: 'checkin',
         title: 'Streak Bonus',
         desc: 'Visit daily to build your streak and earn tokens every 7 days!'
       }
     ],
     zh: [
       {
-        icon: '☯️',
+        icon: 'saju',
         title: '欢迎来到 M;Y 安',
         desc: '每天分析您的四柱和五行气运，告诉您今天适合做什么。'
       },
       {
-        icon: '🔮',
+        icon: 'compat',
         title: '两种模式',
         desc: '单人Solo模式和情侣/朋友Duo模式。'
       },
       {
-        icon: '🎁',
+        icon: 'secGift',
         title: '代币系统',
         desc: '查看运势需要代币。注册即送3个代币！'
       },
       {
-        icon: '🔥',
+        icon: 'checkin',
         title: '连续访问奖励',
         desc: '每天访问积累连续天数，每7天获得代币奖励！'
       }
     ],
     ja: [
       {
-        icon: '☯️',
+        icon: 'saju',
         title: 'M;Y 安へようこそ',
         desc: '毎日あなたの四柱と五行を分析し、今日すべきことをお伝えします。'
       },
       {
-        icon: '🔮',
+        icon: 'compat',
         title: '2つのモード',
         desc: '一人で見るSoloモードとカップル/友達と見るDuoモードがあります。'
       },
       {
-        icon: '🎁',
+        icon: 'secGift',
         title: 'トークンシステム',
         desc: '運勢確認にはトークンが必要です。登録すると3トークン無料！'
       },
       {
-        icon: '🔥',
+        icon: 'checkin',
         title: '連続訪問ボーナス',
         desc: '毎日訪問するとストリークが貯まり、7日毎にトークンがもらえます！'
       }
