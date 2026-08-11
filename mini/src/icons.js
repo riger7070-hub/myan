@@ -126,6 +126,14 @@ export const ICONS = {
                  <path d="M12 7a5 5 0 0 0 0 10Z" fill="currentColor" stroke="none" opacity=".55"/>`),
   secAccount: S(`<path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14"/>
                  <path d="M17.5 8.5 21 12l-3.5 3.5M21 12h-9"/>`),
+
+  // ── 머리말 ──
+  // 메뉴: 세 획. 길이를 달리해 두루마리를 편 듯 보이게 했다.
+  menu: S(`<path d="M4 7h16M4 12h16M4 17h11"/>`),
+  // 알리기: 한 점에서 두 갈래로 퍼지는 선
+  share: S(`<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/>
+            <circle cx="18" cy="18.5" r="2.5"/>
+            <path d="M8.2 10.8 15.8 6.7M8.2 13.2l7.6 4.1"/>`),
 };
 
 /** 없는 이름을 불러도 화면이 비지 않게 빈 자리를 돌려준다. */

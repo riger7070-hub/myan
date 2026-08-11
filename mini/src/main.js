@@ -63,6 +63,7 @@ const state = {
   history: [],
   error: '',
   busy: false,
+  menu: false,      // 오른쪽 위 메뉴가 열려 있는가
 };
 
 const app = document.getElementById('app');
@@ -764,6 +765,7 @@ async function withBusy(fn) {
 const _stack = [];
 
 function go(screen, { fromBack = false } = {}) {
+  state.menu = false;                       // 어디로 가든 메뉴는 닫고 간다
   if (!fromBack && state.screen && state.screen !== screen) {
     // 로딩은 쌓지 않는다. 기다리다 뒤로가면 로딩이 아니라 그 앞 화면으로 돌아가야 한다.
     if (state.screen !== 'loading' && state.screen !== 'boot') _stack.push(state.screen);
@@ -773,6 +775,9 @@ function go(screen, { fromBack = false } = {}) {
 }
 
 function goBack() {
+  // 메뉴가 열려 있으면 그것부터 닫는다. 화면을 넘기기 전에 덮인 것을 걷어내는 게
+  // 사용자가 기대하는 순서다.
+  if (state.menu) { state.menu = false; render(); return; }
   const prev = _stack.pop();
   if (prev) { go(prev, { fromBack: true }); return; }
   // 스택이 비었으면 더 돌아갈 곳이 없다 — 그때는 앱을 닫는 게 기대되는 동작이다.
@@ -857,15 +862,41 @@ function stopLoadingTicker() {
   if (_loadingTimer) { clearInterval(_loadingTimer); _loadingTimer = null; }
 }
 
+// 메뉴에 담기는 것들. 홈 아래쪽에 흩어져 있던 것을 한자리에 모았다.
+const MENU_ITEMS = [
+  { id: 'btn-earn',        icon: 'secGift',  label: '무료 토큰 받기', sub: '출석 · 퀴즈 · 부풀리기' },
+  { id: 'btn-history',     icon: 'saju',     label: '지난 기록',      sub: '풀이를 다시 볼 수 있어요' },
+  { id: 'btn-editprofile', icon: 'secProfile', label: '내 정보',      sub: '이름 · 생년월일 · 화면 밝기' },
+  { id: 'btn-shareapp',    icon: 'share',    label: '친구에게 알리기', sub: '' },
+];
+
 function header() {
-  // 홈에서는 돌아갈 곳이 없다. 빈 자리를 남겨 제목이 가운데에 그대로 있게 한다.
+  // 좌우 칸의 폭을 같게 두어야 제목이 진짜 가운데에 온다. 예전에는 오른쪽에 토큰
+  // 알약이 있어서 그 폭만큼 제목이 왼쪽으로 밀렸다.
   const back = state.screen === 'home'
-    ? '<span class="tb-spacer"></span>'
-    : '<button class="tb-back" id="btn-home" aria-label="뒤로">‹</button>';
-  return `<div class="topbar">
-    ${back}
-    <span class="tb-title">MY;安</span>
-    <button class="tb-token" id="btn-charge">${state.tokens} 토큰</button>
+    ? '<span class="tb-slot"></span>'
+    : '<button class="tb-slot tb-back" id="btn-home" aria-label="뒤로">‹</button>';
+  // headbar 로 감싸는 이유: 메뉴 시트가 이 상자를 기준으로 자리를 잡아야
+  // 메뉴 단추 바로 아래 오른쪽 끝에 맞아떨어진다.
+  return `<div class="headbar">
+    <div class="topbar">
+      ${back}
+      <span class="tb-title">MY;安</span>
+      <button class="tb-slot tb-menu" id="btn-menu" aria-label="메뉴"
+        aria-expanded="${state.menu ? 'true' : 'false'}">${icon('menu')}</button>
+    </div>
+    <div class="tokenbar">
+      <button class="tb-token" id="btn-charge">${state.tokens} 토큰</button>
+    </div>
+    ${state.menu ? `
+      <div class="menu-scrim" id="btn-menu-close"></div>
+      <nav class="menu-sheet" aria-label="메뉴">
+        ${MENU_ITEMS.map(m => `
+          <button class="menu-item" id="${m.id}" ${m.id === 'btn-shareapp' && state.busy ? 'disabled' : ''}>
+            <span class="menu-ic">${icon(m.icon)}</span>
+            <span class="menu-text"><b>${m.label}</b>${m.sub ? `<i>${m.sub}</i>` : ''}</span>
+          </button>`).join('')}
+      </nav>` : ''}
   </div>`;
 }
 
@@ -1002,38 +1033,39 @@ function render() {
                 </button>`).join('')}
             </div>
           </section>`).join('')}
-        <section class="sec">
-          <h3><span class="sec-icon">${icon("secGift")}</span>토큰 받기<i class="rule"></i></h3>
-          <div class="tiles">
-            <button class="tile" id="btn-checkin">
-              <span class="t-icon">${icon("checkin")}</span><span class="t-label">출석 도장</span>
-              <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 3토큰'}</span>
-            </button>
-            <button class="tile" id="btn-quiz">
-              <span class="t-icon">${icon("quiz")}</span><span class="t-label">안도령의 오행 퀴즈</span>
-              <span class="t-cost">2개 맞히면 1토큰</span>
-            </button>
-            <button class="tile" id="btn-pop">
-              <span class="t-icon">${icon("pop")}</span><span class="t-label">안도령 부풀리기</span>
-              <span class="t-cost">1토큰 · 하루 1번</span>
-            </button>
-            ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
-              <span class="t-icon">${icon("ad")}</span><span class="t-label">광고 보기</span>
-              <span class="t-cost">${AD_TOKENS}토큰 + 퀴즈·부풀리기 기회 1회</span>
-            </button>` : ''}
-          </div>
-        </section>
-        <div class="row2">
-          <button class="btn ghost" id="btn-history">지난 기록</button>
-          <button class="btn ghost" id="btn-editprofile">내 정보</button>
-        </div>
-        <button class="btn ghost" id="btn-shareapp" style="margin-bottom:14px" ${state.busy ? 'disabled' : ''}>
-          친구에게 알리기
-        </button>
         <div class="ai-notice">${AI_NOTICE}</div>
         ${FOOTER}`;
       break;
     }
+
+    case 'earn':
+      html = `${header()}
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('secGift')}</span>무료 토큰 받기<i class="rule"></i></h3>
+          <p class="muted small" style="margin:-4px 0 12px">모두 하루에 한 번씩 하실 수 있어요</p>
+        </section>
+        ${err}
+        <div class="tiles">
+          <button class="tile" id="btn-checkin">
+            <span class="t-icon">${icon('checkin')}</span><span class="t-label">출석 도장</span>
+            <span class="t-cost">${state.checkin ? `${state.checkin.streak}일째` : '7일 개근 3토큰'}</span>
+          </button>
+          <button class="tile" id="btn-quiz">
+            <span class="t-icon">${icon('quiz')}</span><span class="t-label">안도령의 오행 퀴즈</span>
+            <span class="t-cost">2개 맞히면 1토큰</span>
+          </button>
+          <button class="tile" id="btn-pop">
+            <span class="t-icon">${icon('pop')}</span><span class="t-label">안도령 부풀리기</span>
+            <span class="t-cost">1토큰 · 하루 1번</span>
+          </button>
+          ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
+            <span class="t-icon">${icon('ad')}</span><span class="t-label">광고 보기</span>
+            <span class="t-cost">${AD_TOKENS}토큰 + 퀴즈·부풀리기 기회 1회</span>
+          </button>` : ''}
+        </div>
+        <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
+        ${FOOTER}`;
+      break;
 
     case 'need': {
       const it = state.item;
@@ -1396,8 +1428,11 @@ function bind() {
     Object.assign(state, { session: '', profile: null, tokens: 0, history: [], result: null, error: '' });
     go('login');
   });
+  on('btn-menu', () => { state.menu = !state.menu; render(); });
+  on('btn-menu-close', () => { state.menu = false; render(); });
+  on('btn-earn', () => go('earn'));
   on('btn-share', shareCard);
-  on('btn-shareapp', shareApp);
+  on('btn-shareapp', () => { state.menu = false; render(); shareApp(); });
   on('btn-checkin', doCheckin);
   on('btn-quiz', startQuiz);
   on('btn-stick', drawStick);

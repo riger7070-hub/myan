@@ -168,22 +168,64 @@ a { color: var(--gold-dim); }
 /* ── 상단바 ── */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin: 4px 0 18px;
+  gap: 10px; margin: 4px 0 0;
 }
-.tb-back {
-  background: none; border: none; color: var(--gold); font-size: 1.7rem;
-  line-height: 1; padding: 4px 10px 8px; cursor: pointer;
+/* 좌우 칸은 폭이 같아야 한다. 예전엔 오른쪽에 토큰 알약이 있어 제목이 그 폭만큼
+   왼쪽으로 밀려 있었다. 토큰은 아래 제 줄로 내렸다. */
+.tb-slot {
+  flex: none; width: 40px; height: 40px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--gold); cursor: pointer;
 }
+.tb-back { font-size: 1.7rem; line-height: 1; padding-bottom: 4px; }
+.tb-menu .ic { width: 22px; height: 22px; }
+.tb-menu[aria-expanded='true'] { color: var(--gold-light); }
 .tb-title {
   font-family: 'Batang', serif; font-size: 1.15rem; color: var(--gold-light);
   letter-spacing: 0.03em;
 }
-/* 홈에는 뒤로가기가 없다. 같은 폭을 비워 둬야 제목이 가운데에 그대로 있는다. */
-.tb-spacer { display: inline-block; width: 38px; }
+
+.tokenbar { display: flex; justify-content: flex-end; margin: 2px 0 16px; }
 .tb-token {
   background: rgba(201, 169, 110, 0.1); border: 1px solid var(--gold-dim);
   color: var(--gold-light); border-radius: 999px; padding: 7px 14px;
   font-size: 0.84rem; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+
+/* ── 오른쪽 위 메뉴 ── */
+.menu-scrim {
+  position: fixed; inset: 0; z-index: 40; border: none; padding: 0;
+  background: rgba(0, 0, 0, 0.45); animation: fade-in 0.16s ease;
+}
+:root[data-theme='light'] .menu-scrim { background: rgba(60, 45, 20, 0.28); }
+.headbar { position: relative; }
+.menu-sheet {
+  position: absolute; z-index: 41; top: 46px; right: 0; width: min(268px, 78vw);
+  background: var(--card); border: 1px solid var(--gold-dim); border-radius: 16px;
+  padding: 6px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  transform-origin: top right; animation: menu-in 0.18s cubic-bezier(0.2, 1.1, 0.4, 1);
+}
+:root[data-theme='light'] .menu-sheet { box-shadow: 0 16px 40px rgba(90, 70, 30, 0.18); }
+.menu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px 12px; background: none; border: none; border-radius: 11px;
+  font-family: inherit; color: var(--text); text-align: left; cursor: pointer;
+}
+.menu-item + .menu-item { border-top: 1px solid var(--line); }
+.menu-item:disabled { opacity: 0.45; }
+.menu-item:active { background: rgba(201, 169, 110, 0.1); }
+.menu-ic { flex: none; display: inline-flex; color: var(--gold); }
+.menu-ic .ic { width: 20px; height: 20px; }
+.menu-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.menu-text b { font-weight: 600; font-size: 0.94rem; }
+.menu-text i { font-style: normal; font-size: 0.76rem; color: var(--text-dim); }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes menu-in {
+  from { opacity: 0; transform: scale(0.9) translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-sheet, .menu-scrim { animation: none; }
 }
 
 /* ── 브랜드 ── */
