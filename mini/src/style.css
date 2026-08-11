@@ -367,6 +367,19 @@ button.card.hist:active { border-color: var(--gold-dim); }
 .tips li { color: var(--text-dim); font-size: 0.86rem; line-height: 1.8; margin-bottom: 6px; }
 .tips li:last-child { margin-bottom: 0; }
 
+/* ── 퀴즈 진행 표시 ── */
+.quiz-progress {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin-bottom: 14px;
+}
+.quiz-progress .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(201, 169, 110, 0.22); transition: all 0.25s ease;
+}
+.quiz-progress .dot.done { background: var(--gold-dim); }
+.quiz-progress .dot.now  { background: var(--gold); transform: scale(1.35); }
+.quiz-progress .muted { margin-left: 6px; }
+
 /* ── 퀴즈 보기 ── */
 .choices { display: grid; gap: 8px; margin-top: 12px; }
 .choices .seg-btn { text-align: left; }

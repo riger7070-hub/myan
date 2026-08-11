@@ -448,9 +448,24 @@ async function doCheckin() {
 async function startQuiz() {
   await withBusy(async () => {
     const r = await api('/mini/api/quiz');
-    state.quiz = { ...r, picked: [], done: null };
+    // step: 지금 보여줄 문제 번호. 문제는 3개를 한 번에 받아 두되(서명이 셋을 묶고
+    // 있어서 나눠 받을 수 없다) 화면에는 하나씩 낸다.
+    state.quiz = { ...r, picked: [], step: 0, done: null };
+    state.showTips = false;
     go('quiz');
   });
+}
+
+/** 한 문제를 고르고 다음으로. 마지막이면 채점한다. */
+function answerQuiz(choice) {
+  const q = state.quiz;
+  if (!q || q.done) return;
+  q.picked[q.step] = choice;
+
+  if (q.step >= q.questions.length - 1) { submitQuiz(); return; }
+  // 고른 게 잠깐 보이도록 한 박자 쉬고 넘어간다. 곧바로 바뀌면 눌렀는지도 모른다.
+  render();
+  setTimeout(() => { q.step++; state.showTips = false; render(); }, 260);
 }
 
 async function submitQuiz() {
@@ -1050,19 +1065,26 @@ function render() {
               <p class="muted small">${esc(done.results[i]?.why || '')}</p>
             </div>`).join('')}
           <button class="btn ghost" id="btn-home2">홈으로</button>
-        ` : `
-          ${q.questions.map((item, i) => `
-            <div class="card">
-              <p><b>${i + 1}. ${esc(item.q)}</b></p>
-              <div class="choices">
-                ${item.c.map((c, j) => `
-                  <button class="seg-btn${q.picked[i] === j ? ' on' : ''}"
-                          data-q="${i}" data-a="${j}">${esc(c)}</button>`).join('')}
-              </div>
-            </div>`).join('')}
+        ` : (() => {
+          const i = q.step;
+          const item = q.questions[i];
+          const total = q.questions.length;
+          return `
+          <div class="quiz-progress">
+            ${q.questions.map((_, k) => `<span class="dot${k < i ? ' done' : k === i ? ' now' : ''}"></span>`).join('')}
+            <span class="muted small">${i + 1} / ${total}</span>
+          </div>
+          <div class="card">
+            <p><b>${esc(item.q)}</b></p>
+            <div class="choices">
+              ${item.c.map((c, j) => `
+                <button class="seg-btn${q.picked[i] === j ? ' on' : ''}"
+                        data-a="${j}" ${state.busy ? 'disabled' : ''}>${esc(c)}</button>`).join('')}
+            </div>
+          </div>
           ${err}
-          <button class="btn" id="btn-quiz-submit" ${state.busy ? 'disabled' : ''}>제출하기</button>
-        `}
+          <p class="muted small" style="text-align:center">고르면 다음 문제로 넘어가요</p>`;
+        })()}
         ${FOOTER}`;
       break;
     }
@@ -1267,13 +1289,9 @@ function bind() {
     tap.onpointerdown = (e) => { e.preventDefault(); tapPop(); };
   }
 
-  // 퀴즈 보기 선택
-  for (const el of document.querySelectorAll('[data-q]')) {
-    el.onclick = () => {
-      state.quiz.picked[+el.dataset.q] = +el.dataset.a;
-      state.error = '';
-      render();
-    };
+  // 퀴즈 보기 선택 — 고르면 바로 다음 문제로
+  for (const el of document.querySelectorAll('[data-a]')) {
+    el.onclick = () => { state.error = ''; answerQuiz(+el.dataset.a); };
   }
   on('btn-ad', watchAd);
   on('btn-reveal', (e) => {
