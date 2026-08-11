@@ -12,11 +12,17 @@ import assert from 'node:assert/strict';
 import { loadWorker } from './load-worker.mjs';
 import { createD1, balanceOf } from './d1-sqlite.mjs';
 
-const { handleTarotDraw, handleDetailReading, handleIching, createSessionToken } =
-  await loadWorker(['handleTarotDraw', 'handleDetailReading', 'handleIching', 'createSessionToken']);
+const {
+  handleTarotDraw, handleDetailReading, handleIching, createSessionToken,
+  handleAuspiciousDays, handleDaeun, handleNameReading, handleCompatTiming,
+} = await loadWorker([
+  'handleTarotDraw', 'handleDetailReading', 'handleIching', 'createSessionToken',
+  'handleAuspiciousDays', 'handleDaeun', 'handleNameReading', 'handleCompatTiming',
+]);
 
 const SECRET = 'test-secret';
 const EMAIL  = 'paid@example.com';
+const BIRTH  = { year: 1990, month: 5, day: 15, hour: '자시' };
 const realFetch = globalThis.fetch;
 
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -54,6 +60,20 @@ const cases = [
     run: (env, t) => handleDetailReading(
       post('/chat-detail', t, { category: 'love', date: '2026-08-08', ohaeng: '木' }), env),
   },
+  // 아래 넷은 인라인 fetch 를 geminiText 로 바꾼 핸들러다. geminiText 는 !resp.ok 를 ''로
+  // 흡수하므로 실패 분기가 `!resp.ok || !reading` 에서 `!reading` 하나로 줄었다 —
+  // 그 과정에서 환불이 빠지지 않았는지 구조 검사가 아니라 실제 잔액으로 확인한다.
+  { name: '택일', cost: 2, run: (env, t) => handleAuspiciousDays(
+      post('/api/auspicious-days', t, { purpose: 'wedding' }), env) },
+  { name: '대운', cost: 3, run: (env, t) => handleDaeun(
+      post('/api/daeun', t, { birth: BIRTH, gender: 'M' }), env) },
+  { name: '이름 풀이', cost: 2, run: (env, t) => handleNameReading(
+      post('/api/name-reading', t, { name: '김보람', birth: BIRTH }), env) },
+  { name: '궁합 시기', cost: 3, run: (env, t) => handleCompatTiming(
+      post('/api/compat-timing', t, {
+        p1: { ...BIRTH, gender: 'M' },
+        p2: { year: 1992, month: 3, day: 3, hour: '오시', gender: 'F' },
+      }), env) },
 ];
 
 for (const c of cases) {
@@ -79,6 +99,35 @@ test('Gemini 가 200 이 아닐 때도 잔액이 그대로다 (기존 환불 경
 
   assert.equal(res.status, 422);
   assert.equal(balanceOf(db, EMAIL), 10);
+});
+
+test('geminiText 로 바꾼 핸들러도 500 응답에 환불한다', async () => {
+  // 인라인 fetch 때는 `!resp.ok` 가 이 경우를 잡았다. 이제 그 자리에 resp 가 없고
+  // geminiText 가 ''를 돌려주는 것에 기대므로, 실제로 환불되는지 확인해 둔다.
+  const { db, env } = setup();
+  const token = await createSessionToken(EMAIL, env);
+  globalThis.fetch = async () => new Response('{}', { status: 500 });
+
+  const res = await handleNameReading(
+    post('/api/name-reading', token, { name: '김보람', birth: BIRTH }), env);
+
+  assert.equal(res.status, 422);
+  assert.equal(balanceOf(db, EMAIL), 10, '2토큰이 차감된 채 환불되지 않았다');
+});
+
+test('geminiText 가 200 에 빈 본문을 받아도 환불한다', async () => {
+  // 안전필터에 걸리면 200 인데 candidates 가 비어서 온다(finishReason=SAFETY 등).
+  const { db, env } = setup();
+  const token = await createSessionToken(EMAIL, env);
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ candidates: [{ finishReason: 'SAFETY', content: { parts: [] } }] }),
+    { status: 200 });
+
+  const res = await handleDaeun(
+    post('/api/daeun', token, { birth: BIRTH, gender: 'M' }), env);
+
+  assert.equal(res.status, 422);
+  assert.equal(balanceOf(db, EMAIL), 10, '3토큰이 차감된 채 환불되지 않았다');
 });
 
 test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있다', async () => {

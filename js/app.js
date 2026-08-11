@@ -5033,10 +5033,13 @@ async function openAuspiciousDays() {
   const _u = (typeof getUser === 'function') ? getUser() : null;
   const birth = _u?.birthYear ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay } : null;
 
-  // 서버는 UTC 기준 오늘부터 2년까지만 받는다 — 입력 칸도 같은 범위로 맞춘다.
-  const iso = dt => dt.toISOString().slice(0, 10);
-  const now = new Date();
-  const maxDate = new Date(Date.UTC(now.getUTCFullYear() + 2, now.getUTCMonth(), now.getUTCDate()));
+  // 서버는 KST 기준 오늘부터 2년까지만 받는다(worker.js handleAuspiciousDays) — 입력 칸도
+  // 같은 KST 로 맞춘다. 브라우저 로컬 시간으로 잡으면 한국 밖에서, 또는 UTC 로 잡으면
+  // 00:00~09:00 KST 에 서버가 400 을 내는 날짜를 달력이 고르게 해 준다.
+  const _kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const todayStr = _kstToday();
+  const [_ty, _tm, _td] = todayStr.split('-').map(n => parseInt(n, 10));
+  const maxStr = new Date(Date.UTC(_ty + 2, _tm - 1, _td)).toISOString().slice(0, 10);
   const purposes = Object.keys(TAKIL_PURPOSE_ICONS);
 
   const overlay = document.createElement('div');
@@ -5056,7 +5059,7 @@ async function openAuspiciousDays() {
         </div>
         <div style="display:flex;gap:8px;margin-top:14px;text-align:left">
           <label style="flex:1;font-size:0.73rem;color:var(--text-dim)">${_escHtml(t.takilFromLabel)}
-            <input type="date" id="takilFrom" class="takil-field" value="${iso(now)}" min="${iso(now)}" max="${iso(maxDate)}">
+            <input type="date" id="takilFrom" class="takil-field" value="${todayStr}" min="${todayStr}" max="${maxStr}">
           </label>
           <label style="width:36%;font-size:0.73rem;color:var(--text-dim)">${_escHtml(t.takilRangeLabel)}
             <select id="takilDays" class="takil-field">
@@ -5097,6 +5100,10 @@ async function openAuspiciousDays() {
 
       if (!data.success) {
         if (statusEl) statusEl.innerHTML = _resultErrorHtml(res, data);
+        // 404 는 "그 기간엔 마땅한 날이 없다 — 기간을 넓혀 보라"는 뜻이고 400 은 입력 문제다.
+        // 둘 다 토큰을 쓰지 않았으니, 안내대로 다시 시도할 수 있게 입력칸을 되살린다.
+        // (되살리지 않으면 기간을 넓히라는 말만 남고 넓힐 방법이 없다.)
+        if ((res.status === 404 || res.status === 400) && formEl) formEl.style.display = '';
         return;
       }
       if (statusEl) statusEl.style.display = 'none';

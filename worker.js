@@ -885,9 +885,31 @@ async function storeFortune(env, bucket, reading) {
   ).bind(id, bucket, reading).run();
 }
 
-/** 오늘 날짜(KST, YYYY-MM-DD) — 날짜가 프롬프트에 들어가는 콘텐츠의 bucket 용. */
+/** 오늘 날짜(KST, YYYY-MM-DD) — 사용자가 달력에서 고르는 "오늘"(택일의 기준일). */
 function _kstYmd() {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+/** 올해(KST) — 대운·궁합 시기의 '지금'. */
+function _kstYear() {
+  return parseInt(_kstYmd().slice(0, 4), 10);
+}
+
+// 날짜가 프롬프트에 들어가는 캐시(띠·별자리, 럭키, 라이프패스)의 bucket 용 날짜.
+//
+// ⚠️ 이 값은 반드시 ilchin() 이 날을 넘기는 경계와 같아야 한다. 그 셋의 프롬프트에는
+// ilchin() 이 낸 "오늘의 오행"이 들어가는데, ilchin() 은 new Date().setHours(0,0,0,0) —
+// 즉 워커의 로컬(UTC) 자정에 넘어간다. bucket 만 KST 자정(_kstYmd)으로 끊었더니 한 bucket
+// 이 서로 다른 일간 두 개에 걸쳤다: 00:00~09:00 KST 에 처음 들어온 요청이 *어제* 오행으로
+// 글을 만들어 캐시에 박고, 그날 남은 15시간 동안 모두가 그 글을 받았다(간지는 매일,
+// 오행 이름은 이틀에 한 번꼴로 어긋난다). 캐시 이전에는 매 요청이 새로 만들어 이런 일이
+// 없었다. 그래서 여기는 KST 가 아니라 ilchin() 과 같은 UTC 경계를 쓴다.
+// (택일·대운이 _kstYmd 를 쓰는 것과 다른데, 그쪽 기준일은 ilchin() 과 무관한 달력 날짜다.
+//  둘을 같은 함수로 합치지 말 것 — 합치면 한쪽이 반드시 어긋난다.)
+// test/fortune-bucket-date.test.mjs 가 "한 bucket 안에서 ilchin() 이 변하지 않는다"를 지킨다.
+function _ilchinYmd() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ── 날짜를 타지 않는 콘텐츠의 bucket·프롬프트 ──
@@ -4211,8 +4233,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     // 프롬프트에 들어가는 값은 띠·별자리·오늘의 오행·달 위상·역행뿐 — 전부 이 사람과 무관하거나
     // 오늘이면 모두에게 같다. 뒤의 넷은 날짜가 정하므로 bucket 에 날짜만 넣으면 된다.
     // (띠 12 × 별자리 12 × 4개국어 = 하루 576개, 그마저도 실제로 들어온 조합만 만든다.)
+    // 날짜는 _ilchinYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 경계여야 한다(그 함수 주석 참고).
     const reading = await cachedFortune(
-      env, `zodiac|${lang}|${animalIndex}|${zodiacIndex}|${_kstYmd()}`,
+      env, `zodiac|${lang}|${animalIndex}|${zodiacIndex}|${_ilchinYmd()}`,
       () => geminiText(env, prompt, { maxOutputTokens: 1000 }),
     );
 
@@ -4511,12 +4534,15 @@ async function handleAuspiciousDays(request, env) {
 
     // 언제부터 볼지. "내년 봄쯤 결혼" 처럼 먼 날을 잡는 경우가 있어 시작일을 받는다.
     // 과거로는 보내지 않고(지난 날을 권할 수는 없다), 너무 먼 미래도 막는다.
-    const now = new Date();
-    const todayYmd = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+    //
+    // 기준일은 KST 다. UTC 로 잡았더니 00:00~09:00 KST 사이에는 "오늘"이 한국의 어제가 되어,
+    // 그 어제가 점수 1위면 결혼 날짜로 이미 지나간 날을 추천했다. 프론트의 date 입력
+    // min/value 도 같은 KST 로 맞춰야 서버의 400 과 어긋나지 않는다(js/app.js 의 _kstToday).
+    const todayYmd = _kstYmd();
     let startYmd = todayYmd;
     if (typeof from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
-      const maxYmd = new Date(Date.UTC(now.getUTCFullYear() + 2, now.getUTCMonth(), now.getUTCDate()))
-        .toISOString().slice(0, 10);
+      const [ty, tm, td] = todayYmd.split('-').map(n => parseInt(n, 10));
+      const maxYmd = new Date(Date.UTC(ty + 2, tm - 1, td)).toISOString().slice(0, 10);
       if (from < todayYmd || from > maxYmd) {
         return cors(JSON.stringify({ error: { message: '오늘부터 2년 안의 날짜로 골라 주세요.' } }), 400);
       }
@@ -4589,17 +4615,12 @@ ${dayLines}
 - 400~500자 분량, 문단 2~3개.
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, maxOutputTokens:1400, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    // geminiText 로 부른다 — 실패하면 ''를 주고 상태·finishReason 을 로그에 남긴다.
+    // 인라인 fetch 로 두면 실패가 서버 어디에도 안 남아 "가끔 안 된다"를 추적할 수 없다.
+    // (systemInstruction·타임아웃·thinkingBudget 은 geminiText 안에 들어 있다 — 여기서 다시 주지 않는다.)
+    const reading = await geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '택일 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -4887,7 +4908,8 @@ async function handleDaeun(request, env) {
     }
 
     const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
-    const refYear = new Date().getUTCFullYear();
+    // '올해'는 KST 로 센다 — UTC 로 세면 1월 1일 00:00~09:00 KST 에 작년이 나온다.
+    const refYear = _kstYear();
     const daeun = computeDaeun(birth, gender, refYear);
     if (!saju || !daeun) {
       return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
@@ -4934,17 +4956,10 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
 - 500~600자 분량, 문단 3개.
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, maxOutputTokens:2400, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '대운 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -5094,17 +5109,10 @@ ${sajuLine}
 - 400~500자 분량, 문단 2~3개.
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, maxOutputTokens:1400, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1400 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '이름 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -5208,7 +5216,8 @@ async function handleCompatTiming(request, env) {
     const nameA = sanitizeName(p1.name || '') || 'A';
     const nameB = sanitizeName(p2.name || '') || 'B';
 
-    const fromYear = new Date().getUTCFullYear();
+    // 훑기 시작할 해도 KST 기준 — 대운과 같은 이유(1월 1일 새벽에 작년부터 훑지 않도록).
+    const fromYear = _kstYear();
     const YEARS = 10;
     const timing = computeCompatTiming(
       { birth: p1, gender: p1.gender === 'M' || p1.gender === 'F' ? p1.gender : null },
@@ -5251,17 +5260,10 @@ ${timing.best.map(line).join('\n')}
 - 450~550자 분량, 문단 2~3개.
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, maxOutputTokens:2400, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '궁합 시기 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -5319,8 +5321,9 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
 
     // 오늘의 오행 하나로만 정해진다 — 4개국어 합쳐 하루 4개면 전부다.
     // 여기만 응답이 JSON 이라 캐시에는 그 문자열을 그대로 넣고 꺼낼 때 파싱한다.
+    // 날짜는 _ilchinYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 경계여야 한다(그 함수 주석 참고).
     const raw = await cachedFortune(
-      env, `lucky|${lang}|${_kstYmd()}`,
+      env, `lucky|${lang}|${_ilchinYmd()}`,
       async () => {
         const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9, maxOutputTokens: 1000 });
         // 캐시에 넣기 전에 걸러야 깨진 JSON 이 하루 종일 재사용되지 않는다.
@@ -5619,8 +5622,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     // 생년월일은 라이프패스 넘버 하나로 압축돼서 들어간다(1~9, 11, 22, 33 — 12가지).
     // 오늘의 기운을 함께 엮으므로 날짜까지 넣어 하루 48개.
+    // 날짜는 _ilchinYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 경계여야 한다(그 함수 주석 참고).
     const reading = await cachedFortune(
-      env, `numerology|${lang}|${lifePath}|${_kstYmd()}`,
+      env, `numerology|${lang}|${lifePath}|${_ilchinYmd()}`,
       () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1200 }),
     );
 
