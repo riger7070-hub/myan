@@ -4880,3 +4880,22 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 [data-theme="light"] .onboarding-icon .ic {
   filter: drop-shadow(0 0 14px rgba(140, 100, 32, 0.22));
 }
+
+/* ── 서랍·마이페이지 아이콘 자리 ──
+   이모지를 선화로 바꾸면서 글자 크기로 잡던 크기를 SVG 크기로 옮긴다. */
+.drawer-item-icon { display: inline-flex; align-items: center; justify-content: center; }
+.drawer-item-icon .ic { width: 20px; height: 20px; }
+.card-icon { display: inline-flex; align-items: center; justify-content: center; }
+.card-icon .ic { width: 28px; height: 28px; }
+.cta-icon { display: flex; justify-content: center; }
+.cta-icon .ic { width: 30px; height: 30px; }
+.mp-bc-icon { display: inline-flex; }
+.mp-bc-icon .ic { width: 22px; height: 22px; }
+.drawer-teaser-item .ic,
+.drawer-teaser-badge .ic { width: 15px; height: 15px; vertical-align: -3px; }
+.pw-toggle { display: inline-flex; align-items: center; justify-content: center; }
+.pw-toggle .ic { width: 19px; height: 19px; }
+.oracle-audio-toggle .ic { width: 19px; height: 19px; }
+/* 단추 안에 글씨와 나란히 서는 아이콘 */
+button > [data-icon] { display: inline-flex; vertical-align: -4px; }
+button > [data-icon] .ic { width: 18px; height: 18px; }

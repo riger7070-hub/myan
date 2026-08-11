@@ -795,7 +795,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   wrap.className = contained ? 'oracle-stage' : 'oracle-overlay active';
   wrap.innerHTML = `
     <div class="oracle-inner">
-      <button class="oracle-audio-toggle" title="${audioEnabled ? '🔊 음소거' : '🔇 소리켜기'}">${audioEnabled ? '🔊' : '🔇'}</button>
+      <button class="oracle-audio-toggle" title="${audioEnabled ? '🔊 음소거' : '🔇 소리켜기'}">${icon(audioEnabled ? 'sound' : 'mute')}</button>
       <div class="oracle-beat show">
         <div class="oracle-door opening">
           <div class="oracle-door-frame">
@@ -912,7 +912,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   if (audioBtn) {
     audioBtn.addEventListener('click', () => {
       const enabled = toggleAudio();
-      audioBtn.textContent = enabled ? '🔊' : '🔇';
+      audioBtn.innerHTML = icon(enabled ? 'sound' : 'mute');
       audioBtn.title = enabled ? '🔊 음소거' : '🔇 소리켜기';
       if (enabled) playBellSound();
       hapticLight();
@@ -3082,8 +3082,8 @@ function getUser() {
 
 function togglePwVis(inputId, btn) {
   const inp = document.getElementById(inputId);
-  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
-  else                         { inp.type = 'password'; btn.textContent = '👁'; }
+  if (inp.type === 'password') { inp.type = 'text';     btn.innerHTML = icon('eyeOff'); }
+  else                         { inp.type = 'password'; btn.innerHTML = icon('eye'); }
 }
 
 function renderLogin() {
@@ -3503,7 +3503,7 @@ function _syncDrawerTheme() {
   document.getElementById('drawerThemeLight')?.classList.toggle('on', isLight);
   // 기존 테마 버튼 아이콘 동기화
   const themeBtn = document.getElementById('themeToggleBtn');
-  if (themeBtn) themeBtn.textContent = isLight ? '☀️' : '🌙';
+  if (themeBtn) themeBtn.innerHTML = icon('secScreen');
 }
 
 // 홈으로 이동 (채팅/마이페이지에서도 동작)
@@ -4753,7 +4753,7 @@ function showDetailReadingHistory() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">📖 상세 풀이 기록</div>
+      <div class="modal-title"><span class="ic-title">${icon('saju')}</span>상세 풀이 기록</div>
       <div style="max-height:400px;overflow-y:auto;margin:16px 0">
         ${saved.map((item, i) => {
           const catMeta = DETAIL_CATS.find(c => c.key === item.category);
@@ -4790,7 +4790,7 @@ function openTarotDraw() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🔮 ${t.tarotTitle || '오늘의 타로'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('tarot')}</span>${t.tarotTitle || '오늘의 타로'}</div>
       <div style="font-size:0.8rem;color:var(--text-dim);margin:8px 0 22px">${t.tarotPickCard || '마음에 드는 카드를 한 장 골라보세요'}</div>
       <div id="tarotSpread" style="display:flex;justify-content:center;align-items:flex-end;gap:10px">
         <div class="tarot-card-back tarot-spread-card" style="transform:rotate(-8deg)" onclick="_tarotPick(0)">🂠</div>
@@ -4927,7 +4927,7 @@ async function openAstroTransit() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🪐 ${_escHtml(t.astroTitle)}</div>
+      <div class="modal-title"><span class="ic-title">${icon('astro')}</span>${_escHtml(t.astroTitle)}</div>
       <div id="astroStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${_escHtml(t.astroLoading)}</div>
       <div id="astroResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
@@ -5044,7 +5044,7 @@ async function openAuspiciousDays() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:440px;padding:28px 22px;text-align:center">
-      <div class="modal-title">📅 ${_escHtml(t.takilTitle)}</div>
+      <div class="modal-title"><span class="ic-title">${icon('takil')}</span>${_escHtml(t.takilTitle)}</div>
       <div id="takilForm" style="margin-top:16px">
         <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.takilPurposeAsk)}</div>
         <div class="takil-grid" id="takilPurposes">
@@ -5187,7 +5187,7 @@ async function openDaeun() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:440px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🌊 ${_escHtml(t.daeunTitle)}</div>
+      <div class="modal-title"><span class="ic-title">${icon('daeun')}</span>${_escHtml(t.daeunTitle)}</div>
       <div id="daeunStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${_escHtml(t.daeunLoading)}</div>
       <div id="daeunResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
@@ -5312,7 +5312,7 @@ async function openNameReading() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:430px;padding:30px 24px;text-align:center">
-      <div class="modal-title">✍️ ${_escHtml(t.nameTitle)}</div>
+      <div class="modal-title"><span class="ic-title">${icon('name')}</span>${_escHtml(t.nameTitle)}</div>
       <div id="nameForm" style="margin-top:16px">
         <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.nameAsk)}</div>
         <input type="text" id="nameInput" class="takil-field" maxlength="6" autocomplete="off"
@@ -5440,7 +5440,7 @@ async function openCompatTiming() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:440px;padding:30px 22px;text-align:center">
-      <div class="modal-title">💞 ${_escHtml(t.ctTitle)}</div>
+      <div class="modal-title"><span class="ic-title">${icon('compat')}</span>${_escHtml(t.ctTitle)}</div>
       <div id="ctForm" style="margin-top:16px">
         <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.ctAsk)}</div>
         <input type="text" id="ctName" class="takil-field" maxlength="12" autocomplete="off"
@@ -5576,7 +5576,7 @@ async function openZodiacFortune() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🐉 ${t.zodiacTitle || '띠·별자리 운세'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('zodiac')}</span>${t.zodiacTitle || '띠·별자리 운세'}</div>
       <div id="zodiacStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.zodiacLoading || '운세를 계산하는 중...'}</div>
       <div id="zodiacResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
@@ -5640,7 +5640,7 @@ async function openLuckyPicks() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🍀 ${t.luckyTitle || '오늘의 럭키 아이템'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('lucky')}</span>${t.luckyTitle || '오늘의 럭키 아이템'}</div>
       <div id="luckyStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.luckyLoading || '오늘의 행운을 찾는 중...'}</div>
       <div id="luckyResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
@@ -5828,7 +5828,7 @@ function openFortuneTopics() {
     </div>`;
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">🔮 ${t.fortuneModalTitle || '오늘의 운세 모음'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('topic')}</span>${t.fortuneModalTitle || '오늘의 운세 모음'}</div>
       <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.fortuneModalSub || '궁금한 주제를 골라보세요'}</div>
       ${birthHint}
       <div id="fortuneTopicGrid" class="fortune-topic-grid">${topicBtnsHtml}</div>
@@ -5913,7 +5913,7 @@ function openIching() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:400px;padding:28px 22px;text-align:center">
-      <div class="modal-title">🀄 ${t.ichingTitle || '주역 괘 풀이'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('iching')}</span>${t.ichingTitle || '주역 괘 풀이'}</div>
       <textarea id="ichingQuestion" placeholder="${t.ichingAskPlaceholder || '궁금한 것을 적어보세요 (선택)'}" maxlength="200" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text);font-size:0.9rem;box-sizing:border-box;min-height:64px;resize:vertical"></textarea>
       <button class="fif-submit" style="width:100%;margin-top:14px;padding:12px" id="ichingCastBtn" onclick="_ichingCast()">${t.ichingCastBtn || '괘 뽑기'}</button>
       <div id="ichingResult" style="display:none;text-align:left;margin-top:18px"></div>
@@ -6000,7 +6000,7 @@ async function openNumerology() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🔢 ${t.numerologyTitle || '라이프패스 넘버'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('numerology')}</span>${t.numerologyTitle || '라이프패스 넘버'}</div>
       <div id="numerologyStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.numerologyLoading || '숫자를 계산하는 중...'}</div>
       <div id="numerologyResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
@@ -6068,7 +6068,7 @@ async function openTojeong() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px;text-align:center;max-height:80vh;overflow-y:auto">
-      <div class="modal-title">🧧 ${t.tojeongTitle || '토정비결풍 신년운세'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('tojeong')}</span>${t.tojeongTitle || '토정비결풍 신년운세'}</div>
       <div style="font-size:0.72rem;color:var(--text-dim);margin-top:8px;opacity:0.85">${t.tojeongNotice || ''}</div>
       <div id="tojeongStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.tojeongLoading || '한 해의 신수를 살펴보는 중...'}</div>
       <div id="tojeongResult" style="display:none;text-align:left;margin-top:18px"></div>
@@ -6132,7 +6132,7 @@ function openPhotoReading() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:400px;padding:28px 22px;text-align:center">
-      <div class="modal-title">🖐️ ${t.photoModalTitle || '관상·손금 보기'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('photo')}</span>${t.photoModalTitle || '관상·손금 보기'}</div>
       <div style="font-size:0.85rem;color:var(--text-dim);margin:14px 0">${t.photoPickType || '어떤 것을 볼까요?'}</div>
       <div style="display:flex;gap:10px">
         <button class="fortune-topic-btn" style="flex:1" onclick="_photoReadingPickType('face')">
@@ -6332,7 +6332,7 @@ function openDreamInterpretation() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:400px;padding:28px 22px;text-align:center">
-      <div class="modal-title">🌙 ${t.dreamTitle || '꿈해몽'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('dream')}</span>${t.dreamTitle || '꿈해몽'}</div>
       <textarea id="dreamInput" placeholder="${t.dreamPlaceholder || '어떤 꿈을 꾸셨나요?'}" maxlength="500" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text);font-size:0.9rem;box-sizing:border-box;min-height:90px;resize:vertical"></textarea>
       <button class="fif-submit" style="width:100%;margin-top:14px;padding:12px" id="dreamSubmitBtn" onclick="_dreamSubmit()">${t.dreamSubmitBtn || '해몽 보기'}</button>
       <div id="dreamResult" style="display:none;text-align:left;margin-top:18px"></div>
@@ -6404,7 +6404,7 @@ async function openLottoNumbers() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:400px;padding:32px 24px;text-align:center">
-      <div class="modal-title">🍀 ${t.lottoTitle || '오늘의 로또번호'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('lotto')}</span>${t.lottoTitle || '오늘의 로또번호'}</div>
       <div id="lottoStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.lottoLoading || '번호를 뽑는 중...'}</div>
       <div id="lottoResult" style="display:none;text-align:center;margin-top:18px"></div>
     </div>`;

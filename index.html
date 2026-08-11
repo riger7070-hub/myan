@@ -146,7 +146,7 @@
 
     <div class="mode-right">
       <div class="card" onclick="startMode('solo')">
-        <div class="card-icon">☯</div>
+        <div class="card-icon" data-icon="saju"></div>
         <div class="card-body">
           <div class="card-name" id="soloName"></div>
           <div class="card-desc" id="soloDesc"></div>
@@ -154,7 +154,7 @@
         <div class="card-arrow">›</div>
       </div>
       <div class="card" onclick="startMode('duo')">
-        <div class="card-icon">∞</div>
+        <div class="card-icon" data-icon="compat"></div>
         <div class="card-body">
           <div class="card-name" id="coupleName"></div>
           <div class="card-desc" id="coupleDesc"></div>
@@ -162,7 +162,7 @@
         <div class="card-arrow">›</div>
       </div>
       <div class="card card-guest" onclick="startGuestMode()">
-        <div class="card-icon">🔓</div>
+        <div class="card-icon" data-icon="lock"></div>
         <div class="card-body">
           <div class="card-name" id="guestName">체험해보기</div>
           <div class="card-desc" id="guestDesc">로그인 없이 1회 무료 체험</div>
@@ -299,7 +299,7 @@
       <div class="field full pw-wrap" style="display:none">
         <label id="lblLoginPw"></label>
         <input type="password" id="loginPwInp" autocomplete="current-password">
-        <button class="pw-toggle" onclick="togglePwVis('loginPwInp',this)" type="button">👁</button>
+        <button class="pw-toggle" onclick="togglePwVis('loginPwInp',this)" type="button" data-icon="eye"></button>
       </div>
       <button class="submit-btn" id="loginSubmitBtn" onclick="doLogin()" style="display:none"></button>
       <div class="login-err" id="loginErr"></div>
@@ -308,7 +308,7 @@
 
   <div id="screen-guest" style="display:none">
     <div class="guest-wrap">
-      <div class="guest-title" id="guestTitleText">🔓 체험해보기</div>
+      <div class="guest-title" id="guestTitleText"><span data-icon="lock"></span> 체험해보기</div>
       <div class="guest-subtitle" id="guestSubtitleText">로그인 없이 AI 사주 풀이를 무료로 1회 체험해보세요</div>
       <div class="guest-subtitle" id="guestSubtitleUngi" style="display:none">🍮 운기 푸딩과 함께하는 오행 에너지 체험</div>
 
@@ -341,7 +341,7 @@
       <div id="guestReadingContent" class="bubble bubble-ai"></div>
 
       <div class="guest-signup-cta">
-        <div class="cta-icon">🎁</div>
+        <div class="cta-icon" data-icon="secGift"></div>
         <div class="cta-body">
           <div class="cta-title">더 많은 풀이를 받고 싶으신가요?</div>
           <div class="cta-desc">회원가입하면 <strong>토큰 3개 무료</strong> + 상세 풀이까지!</div>
@@ -458,16 +458,16 @@
       <div class="mypage-actions">
         <button class="notif-toggle-btn" id="notifToggleBtn" onclick="togglePushNotif(this)" style="width: 100%; cursor: pointer;"><span class="notif-icon">🔔</span><span>알림 켜기</span></button>
         <button class="mypage-action-btn" onclick="showWeeklyReport()" style="background: rgba(90,168,224,0.15); border: 1px solid rgba(90,168,224,0.3);">
-          📊 <span id="weeklyReportBtnText">주간 리포트</span>
+          <span data-icon="chart"></span> <span id="weeklyReportBtnText">주간 리포트</span>
         </button>
         <button class="mypage-action-btn" onclick="showAchievementsModal()" style="background: rgba(212,160,64,0.15); border: 1px solid rgba(212,160,64,0.3);">
-          🏆 <span id="achievementsBtnText">업적</span>
+          <span data-icon="trophy"></span> <span id="achievementsBtnText">업적</span>
         </button>
         <button class="mypage-action-btn" onclick="showSajuHistory()" style="background: rgba(201,169,110,0.15); border: 1px solid rgba(201,169,110,0.3);">
-          ☯️ <span id="sajuHistoryBtnText">내 기록</span>
+          <span data-icon="saju"></span> <span id="sajuHistoryBtnText">내 기록</span>
         </button>
         <button class="mypage-action-btn" onclick="showPhotoGallery()" style="background: rgba(201,169,110,0.15); border: 1px solid rgba(201,169,110,0.3);">
-          🖐️ <span id="photoGalleryBtnText">관상·손금 기록</span>
+          <span data-icon="photo"></span> <span id="photoGalleryBtnText">관상·손금 기록</span>
         </button>
         <button class="mypage-action-btn" id="mypageLogoutBtn" onclick="logout()"></button>
         <button class="mypage-action-btn danger" id="mypageWithdrawBtn" onclick="withdraw()"></button>
@@ -497,7 +497,7 @@
 
       <!-- 토큰 내역 버튼 -->
       <button id="token-history-btn" class="referral-generate-btn" style="display:none; margin-top: 20px;" onclick="openTokenHistoryModal()">
-        💰 토큰 내역 보기
+        <span data-icon="coin"></span> 토큰 내역 보기
       </button>
 
       <!-- 프로필 이미지 저장 버튼 -->
@@ -514,7 +514,7 @@
           <div class="mp-bc-arrow">›</div>
         </div>
         <div class="mp-bottom-card" onclick="openSupport()">
-          <div class="mp-bc-icon">💬</div>
+          <div class="mp-bc-icon" data-icon="chat"></div>
           <div class="mp-bc-body">
             <div class="mp-bc-title" id="mpBotSupportTitle">1:1 카카오 상담</div>
             <div class="mp-bc-desc" id="mpBotSupportDesc">궁금한 점을 바로 물어보세요</div>
@@ -572,12 +572,12 @@
     <div class="drawer-token-badge">✦ <span id="drawerTokens">0</span></div>
   </div>
   <div id="drawerLoginPrompt" class="drawer-login-prompt" style="display:none">
-    <div class="drawer-teaser-badge">🎁 지금 가입하면 무료 대화권 3개 지급!</div>
+    <div class="drawer-teaser-badge"><span data-icon="secGift"></span> 지금 가입하면 무료 대화권 3개 지급!</div>
     <button class="drawer-login-btn" onclick="closeDrawer();goSignup()">✦ 시작하기 · 무료로 가입</button>
     <div class="drawer-teaser-preview">
-      <div class="drawer-teaser-item">🔒 <span>나만의 리딩</span></div>
-      <div class="drawer-teaser-item">🔒 <span>우리의 조화</span></div>
-      <div class="drawer-teaser-item">🔒 <span>마이페이지 · 토큰 관리</span></div>
+      <div class="drawer-teaser-item"><span data-icon="lock"></span> <span>나만의 리딩</span></div>
+      <div class="drawer-teaser-item"><span data-icon="lock"></span> <span>우리의 조화</span></div>
+      <div class="drawer-teaser-item"><span data-icon="lock"></span> <span>마이페이지 · 토큰 관리</span></div>
     </div>
   </div>
 
@@ -585,14 +585,14 @@
   <div class="drawer-section">
     <div class="drawer-section-label" id="drLblNav">바로가기</div>
     <button class="drawer-item" onclick="closeDrawer();_goHome()">
-      <div class="drawer-item-icon">🏠</div>
+      <div class="drawer-item-icon" data-icon="home"></div>
       <div class="drawer-item-text">
         <div id="drTxtHome">처음으로</div>
         <div class="drawer-item-sub" id="drSubHome">메인 화면으로 돌아가기</div>
       </div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();startMode('solo')">
-      <div class="drawer-item-icon">☯</div>
+      <div class="drawer-item-icon" data-icon="saju"></div>
       <div class="drawer-item-text">
         <div id="drTxtSolo">나만의 리딩</div>
         <div class="drawer-item-sub" id="drSubSolo">오늘 나의 오행 기운 풀이</div>
@@ -600,7 +600,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();startMode('duo')">
-      <div class="drawer-item-icon">∞</div>
+      <div class="drawer-item-icon" data-icon="compat"></div>
       <div class="drawer-item-text">
         <div id="drTxtCouple">우리의 조화</div>
         <div class="drawer-item-sub" id="drSubCouple">두 사람의 오행 궁합 풀이</div>
@@ -608,7 +608,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" id="drawerMypageBtn" onclick="closeDrawer();openMyPage()" style="display:none">
-      <div class="drawer-item-icon">👤</div>
+      <div class="drawer-item-icon" data-icon="secProfile"></div>
       <div class="drawer-item-text">
         <div id="drTxtMypage">마이페이지</div>
         <div class="drawer-item-sub" id="drSubMypage">토큰 · 생년월일 · 설정</div>
@@ -616,7 +616,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" id="drawerCalBtn" onclick="closeDrawer();openCalModal()" style="display:none">
-      <div class="drawer-item-icon">📅</div>
+      <div class="drawer-item-icon" data-icon="takil"></div>
       <div class="drawer-item-text">
         <div id="drTxtCal">나의 기운 캘린더</div>
         <div class="drawer-item-sub" id="drSubCal">리딩 기록 · 오행 색 달력</div>
@@ -624,7 +624,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openTarotDraw()">
-      <div class="drawer-item-icon">🔮</div>
+      <div class="drawer-item-icon" data-icon="tarot"></div>
       <div class="drawer-item-text">
         <div id="drTxtTarot">오늘의 타로</div>
         <div class="drawer-item-sub" id="drSubTarot">재미로 보는 카드 한 장 (토큰 1)</div>
@@ -632,7 +632,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openZodiacFortune()">
-      <div class="drawer-item-icon">🐉</div>
+      <div class="drawer-item-icon" data-icon="zodiac"></div>
       <div class="drawer-item-text">
         <div id="drTxtZodiac">띠·별자리 운세</div>
         <div class="drawer-item-sub" id="drSubZodiac">오늘의 띠·별자리 운세 (토큰 1)</div>
@@ -640,7 +640,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openLuckyPicks()">
-      <div class="drawer-item-icon">🍀</div>
+      <div class="drawer-item-icon" data-icon="lucky"></div>
       <div class="drawer-item-text">
         <div id="drTxtLucky">오늘의 럭키 아이템</div>
         <div class="drawer-item-sub" id="drSubLucky">럭키 컬러·음식·노래 추천 (토큰 1)</div>
@@ -648,7 +648,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openTypeTest()">
-      <div class="drawer-item-icon">🔯</div>
+      <div class="drawer-item-icon" data-icon="typecompat"></div>
       <div class="drawer-item-text">
         <div id="drTxtType">오행 유형·궁합 테스트</div>
         <div class="drawer-item-sub" id="drSubType">나의 유형 찾고 궁합 보기 (토큰 1)</div>
@@ -656,7 +656,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openFortuneTopics()">
-      <div class="drawer-item-icon">🔮</div>
+      <div class="drawer-item-icon" data-icon="topic"></div>
       <div class="drawer-item-text">
         <div id="drTxtFortune">오늘의 운세 모음</div>
         <div class="drawer-item-sub" id="drSubFortune">짝사랑·가족·미래 등 궁금한 운세를 골라보세요 (토큰 1)</div>
@@ -664,7 +664,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openIching()">
-      <div class="drawer-item-icon">🀄</div>
+      <div class="drawer-item-icon" data-icon="iching"></div>
       <div class="drawer-item-text">
         <div id="drTxtIching">주역 괘 풀이</div>
         <div class="drawer-item-sub" id="drSubIching">동전을 던져 괘를 뽑아보세요 (토큰 1)</div>
@@ -672,7 +672,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openNumerology()">
-      <div class="drawer-item-icon">🔢</div>
+      <div class="drawer-item-icon" data-icon="numerology"></div>
       <div class="drawer-item-text">
         <div id="drTxtNumerology">수비학 라이프패스 넘버</div>
         <div class="drawer-item-sub" id="drSubNumerology">생년월일로 보는 숫자점 (토큰 1)</div>
@@ -680,7 +680,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openTojeong()">
-      <div class="drawer-item-icon">🧧</div>
+      <div class="drawer-item-icon" data-icon="tojeong"></div>
       <div class="drawer-item-text">
         <div id="drTxtTojeong">토정비결풍 신년운세</div>
         <div class="drawer-item-sub" id="drSubTojeong">올 한 해 신수를 짚어보세요 (토큰 2)</div>
@@ -688,7 +688,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openPhotoReading()">
-      <div class="drawer-item-icon">🖐️</div>
+      <div class="drawer-item-icon" data-icon="photo"></div>
       <div class="drawer-item-text">
         <div id="drTxtPhoto">관상·손금 보기</div>
         <div class="drawer-item-sub" id="drSubPhoto">사진으로 보는 얼굴·손금 풀이 (토큰 2)</div>
@@ -696,7 +696,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openDreamInterpretation()">
-      <div class="drawer-item-icon">🌙</div>
+      <div class="drawer-item-icon" data-icon="dream"></div>
       <div class="drawer-item-text">
         <div id="drTxtDream">꿈해몽</div>
         <div class="drawer-item-sub" id="drSubDream">꿈 내용을 입력하면 AI가 해몽해드려요 (토큰 1)</div>
@@ -704,7 +704,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openLottoNumbers()">
-      <div class="drawer-item-icon">🎱</div>
+      <div class="drawer-item-icon" data-icon="lotto"></div>
       <div class="drawer-item-text">
         <div id="drTxtLotto">오늘의 로또번호</div>
         <div class="drawer-item-sub" id="drSubLotto">AI가 뽑아주는 오늘의 행운번호 (토큰 1)</div>
@@ -712,7 +712,7 @@
       <div class="drawer-item-arrow">›</div>
     </button>
     <button class="drawer-item" onclick="closeDrawer();openRuneReading()">
-      <div class="drawer-item-icon">ᚱ</div>
+      <div class="drawer-item-icon" data-icon="rune"></div>
       <div class="drawer-item-text">
         <div id="drTxtRune">룬 문자 점</div>
         <div class="drawer-item-sub" id="drSubRune">북유럽 룬 문자로 보는 오늘의 기운 (토큰 1)</div>
@@ -748,11 +748,11 @@
   <div class="drawer-section" id="drawerAccountSection" style="display:none">
     <div class="drawer-section-label" id="drLblAccount">계정</div>
     <button class="drawer-item" onclick="openSupport();closeDrawer()">
-      <div class="drawer-item-icon">💬</div>
+      <div class="drawer-item-icon" data-icon="chat"></div>
       <div class="drawer-item-text" id="drTxtSupport">1:1 카카오 상담</div>
     </button>
     <button class="drawer-item" onclick="drawerLogout()" style="color:var(--text-dim)">
-      <div class="drawer-item-icon">🚪</div>
+      <div class="drawer-item-icon" data-icon="secAccount"></div>
       <div class="drawer-item-text" id="drTxtLogout">로그아웃</div>
     </button>
   </div>
