@@ -809,7 +809,14 @@ function render() {
       const done = q.done;
       html = `${header()}
         <div class="brand sm"><h1>🧠 오행 퀴즈</h1>
-          <p>${done ? '' : '세 문제를 다 맞히면 토큰 1개'}</p></div>
+          <p>${done ? '' : '두 문제 이상 맞히면 토큰 1개'}</p></div>
+        ${done || !q.tips?.length ? '' : `
+          <div class="card hint">
+            <button class="hint-toggle" id="btn-tips">
+              ${state.showTips ? '▾' : '▸'} 안도령의 귀띔 ${state.showTips ? '' : '(모르겠으면 열어보세요)'}
+            </button>
+            ${state.showTips ? `<ul class="tips">${q.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+          </div>`}
         ${done ? `
           <div class="card"><p>${esc(done.message)}</p></div>
           ${q.questions.map((item, i) => `
@@ -988,6 +995,7 @@ function bind() {
   on('btn-quiz', startQuiz);
   on('btn-stick', drawStick);
   on('btn-quiz-submit', submitQuiz);
+  on('btn-tips', () => { state.showTips = !state.showTips; render(); });
 
   // 퀴즈 보기 선택
   for (const el of document.querySelectorAll('[data-q]')) {

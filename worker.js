@@ -2546,6 +2546,7 @@ const MINI_QUIZ_BANK = [
     why: '양자리부터 물고기자리까지 열둘입니다.' },
 ];
 const MINI_QUIZ_COUNT = 3;
+const MINI_QUIZ_PASS  = 2;   // 3문제 중 2개만 맞히면 지급
 
 async function handleMiniQuiz(request, env) {
   const userKey = await getMiniUserKeyFromRequest(request, env);
@@ -2569,6 +2570,9 @@ async function handleMiniQuiz(request, env) {
       q: MINI_QUIZ_BANK[i].q,
       c: perm.map(k => MINI_QUIZ_BANK[i].c[k]),
     })),
+    // 귀띔은 순서를 섞어 함께 내려준다. 사주를 모르는 사람도 읽고 풀 수 있어야 하고,
+    // 순서가 그대로면 1번 귀띔이 1번 문제 답이 되어 읽을 필요조차 없어진다.
+    tips: picked.map(({ i }) => MINI_QUIZ_BANK[i].why).sort(() => Math.random() - 0.5),
     payload, sig,
   }), 200);
 }
@@ -2597,7 +2601,10 @@ async function handleMiniQuizSubmit(request, env) {
     answer: perm.indexOf(MINI_QUIZ_BANK[n].a),              // 정답이 화면에 보인 자리
     why: MINI_QUIZ_BANK[n].why,
   }));
-  const allRight = results.length > 0 && results.every(r => r.correct);
+  // 3문제 만점을 요구하면 찍어서 통과할 확률이 1/64 다. 사주를 모르는 사람에게는
+  // 사실상 못 받는 보상이라 재미가 아니라 짜증이 된다. 2문제로 낮춘다.
+  const correctCount = results.filter(r => r.correct).length;
+  const allRight = results.length > 0 && correctCount >= MINI_QUIZ_PASS;
 
   let granted = false;
   if (allRight) {
@@ -2615,9 +2622,9 @@ async function handleMiniQuizSubmit(request, env) {
     ok: true, results, allRight, granted,
     tokens: granted ? MINI_QUIZ_TOKENS : 0,
     balance: await _miniBalance(env, userKey),
-    message: !allRight ? '아쉬워요. 내일 다시 도전해 보세요.'
-      : granted ? `모두 맞히셨어요! 토큰 ${MINI_QUIZ_TOKENS}개를 드렸어요.`
-      : '모두 맞히셨어요. 오늘 보상은 이미 받으셨습니다.',
+    message: !allRight ? `${correctCount}문제 맞히셨어요. ${MINI_QUIZ_PASS}문제부터 토큰을 드려요.`
+      : granted ? `${correctCount}문제 맞히셨어요! 토큰 ${MINI_QUIZ_TOKENS}개를 드렸어요.`
+      : '잘 푸셨어요. 오늘 보상은 이미 받으셨습니다.',
   }), 200);
 }
 

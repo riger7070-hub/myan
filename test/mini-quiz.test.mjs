@@ -109,6 +109,57 @@ test('오답을 고르면 보상이 없고, 정답 위치를 알려준다', asyn
   });
 });
 
+test('세 문제 중 두 개만 맞혀도 토큰을 받는다', async () => {
+  // 만점을 요구하면 찍어서 통과할 확률이 1/64 다. 사주를 모르는 사람에게는
+  // 사실상 못 받는 보상이 되어 재미가 아니라 짜증이 된다.
+  const B = bank();
+  const { get, post } = await setup();
+  const q = await (await get()).json();
+
+  const answers = q.questions.map((item, i) => {
+    const src = B.find(x => x.q === item.q);
+    const right = item.c.indexOf(src.c[src.a]);
+    return i === 0 ? (right + 1) % 4 : right;   // 첫 문제만 일부러 틀린다
+  });
+
+  const r = await (await post({ payload: q.payload, sig: q.sig, answers })).json();
+  assert.equal(r.granted, true, '2문제를 맞혔는데 토큰이 안 나갔다');
+  assert.equal(r.results.filter(x => x.correct).length, 2);
+});
+
+test('한 문제만 맞히면 토큰이 나가지 않는다', async () => {
+  const B = bank();
+  const { get, post } = await setup();
+  const q = await (await get()).json();
+
+  const answers = q.questions.map((item, i) => {
+    const src = B.find(x => x.q === item.q);
+    const right = item.c.indexOf(src.c[src.a]);
+    return i === 0 ? right : (right + 1) % 4;   // 첫 문제만 맞힌다
+  });
+
+  const r = await (await post({ payload: q.payload, sig: q.sig, answers })).json();
+  assert.equal(r.granted, false);
+  assert.match(r.message, /2문제/, '몇 문제부터 받는지 알려주지 않는다');
+});
+
+test('귀띔을 함께 주되 문제 순서와 어긋나게 준다', async () => {
+  // 사주를 모르는 사람도 읽고 풀 수 있어야 한다. 다만 순서가 그대로면
+  // 1번 귀띔이 1번 문제 답이라 읽을 필요조차 없어진다.
+  const { get } = await setup();
+  let sameOrder = 0;
+  const B = bank();
+
+  for (let t = 0; t < 12; t++) {
+    const q = await (await get()).json();
+    assert.equal(q.tips?.length, 3, '귀띔이 3개가 아니다');
+    const inOrder = q.questions.map(item => B.find(x => x.q === item.q).why);
+    if (q.tips.every((tip, i) => tip === inOrder[i])) sameOrder++;
+  }
+  // 3개를 섞으면 원래 순서가 나올 확률이 1/6 이다. 12번 중 절반 이상이면 안 섞은 것이다.
+  assert.ok(sameOrder < 6, `12번 중 ${sameOrder}번이 문제 순서 그대로다 — 안 섞였다`);
+});
+
 test('서명이 없거나 변조되면 채점하지 않는다', async () => {
   const { get, post } = await setup();
   const q = await (await get()).json();

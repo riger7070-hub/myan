@@ -172,6 +172,16 @@ input[type=file] { padding: 11px; font-size: 0.88rem; }
   border-color: var(--gold); font-weight: 600;
 }
 
+/* ── 퀴즈 귀띔 ── */
+.card.hint { padding: 14px 16px; }
+.hint-toggle {
+  background: none; border: none; color: var(--gold); font-family: inherit;
+  font-size: 0.9rem; padding: 0; cursor: pointer; text-align: left; width: 100%;
+}
+.tips { margin: 12px 0 0; padding-left: 18px; }
+.tips li { color: var(--text-dim); font-size: 0.86rem; line-height: 1.8; margin-bottom: 6px; }
+.tips li:last-child { margin-bottom: 0; }
+
 /* ── 퀴즈 보기 ── */
 .choices { display: grid; gap: 8px; margin-top: 12px; }
 .choices .seg-btn { text-align: left; }
