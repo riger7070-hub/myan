@@ -210,23 +210,56 @@ textarea { resize: vertical; }
 input[type=file] { padding: 11px; font-size: 0.88rem; }
 .grid3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
 
-/* ── 로딩 ── */
-.loading { text-align: center; padding: 60px 0 80px; }
+/* ── 로딩: 안도령 둘레를 오행이 돈다 ── */
+.loading { text-align: center; padding: 46px 0 70px; }
+.orbit-stage {
+  position: relative; width: 220px; height: 220px; margin: 0 auto 26px;
+  display: flex; align-items: center; justify-content: center;
+}
+/* 뒤에서 은은하게 숨쉬는 빛 — 멈춘 화면이 아니라는 신호. */
+.orbit-halo {
+  position: absolute; inset: 26px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,169,110,0.18) 0%, rgba(201,169,110,0) 70%);
+  animation: breathe 3.2s ease-in-out infinite;
+}
+@keyframes breathe { 0%,100% { transform: scale(0.9); opacity: 0.6; } 50% { transform: scale(1.1); opacity: 1; } }
+
 .oracle {
-  width: 128px; height: 128px; margin-bottom: 22px;
-  /* 웹의 안도령과 같은 춤이되 폭을 줄여 차분하게. */
+  position: relative; width: 116px; height: 116px;
   animation: oracleDance 2.6s ease-in-out infinite;
 }
 @keyframes oracleDance {
   0%, 100% { transform: translateY(0) rotate(-1.5deg); }
   50%      { transform: translateY(-3px) rotate(1.5deg); }
 }
+
+/* 오행 다섯 글자가 궤도를 돈다. --a 로 출발 각을 나눠 고르게 퍼뜨린다. */
+.orb {
+  position: absolute; left: 50%; top: 50%;
+  font-family: 'Batang', serif; font-size: 1.15rem;
+  animation: orbit 7s linear infinite;
+  transform-origin: 0 0;
+}
+@keyframes orbit {
+  from { transform: rotate(var(--a)) translateX(94px) rotate(calc(-1 * var(--a))); }
+  to   { transform: rotate(calc(var(--a) + 360deg)) translateX(94px) rotate(calc(-1 * var(--a) - 360deg)); }
+}
+
+.load-line { transition: opacity 0.26s ease; min-height: 1.6em; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
 .spinner {
   width: 30px; height: 30px; margin: 0 auto 16px; border-radius: 50%;
   border: 2px solid var(--gold-dim); border-top-color: var(--gold);
   animation: spin 0.9s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 기록 목록은 누를 수 있는 카드다. */
+button.card.hist {
+  display: block; width: 100%; text-align: left; font-family: inherit;
+  color: var(--text); cursor: pointer;
+}
+button.card.hist:active { border-color: var(--gold-dim); }
 
 /* ── 풀이 본문 ── */
 /* 위아래로 숨 쉴 여백을 준다. 빽빽하면 읽기가 힘들다(웹에서 같은 지적을 받았다). */

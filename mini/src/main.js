@@ -724,17 +724,57 @@ const AI_NOTICE =
   '이 콘텐츠는 생성형 AI(Google Gemini)가 만든 것으로, 재미로 보는 참고용입니다. '
   + '의학, 법률, 재무 등 중요한 결정의 근거로 삼지 마세요.';
 
+/** 기록의 날짜. 서버는 유닉스 초로 주는데 그대로 찍으면 숫자만 보인다. */
+function _histDate(h) {
+  const v = h.createdAt ?? h.created_at;
+  if (!v) return '';
+  const ms = typeof v === 'number' ? v * 1000 : Date.parse(v);
+  if (!Number.isFinite(ms)) return String(v).slice(0, 10);
+  return new Date(ms + 9 * 3600000).toISOString().slice(0, 10);   // KST
+}
+
 const FOOTER = `<footer><p class="muted">
   사업자 마이안 · 대표 안태현 · 사업자등록번호 501-33-63980<br>
   <a href="${API}/terms">이용약관</a> · <a href="${API}/privacy-policy">개인정보처리방침</a>
 </p></footer>`;
 
+// 기다리는 동안 문구가 차례로 바뀐다. 한 문장을 붙잡고 있으면 멈춘 것처럼 보이는데,
+// 순서대로 넘어가면 "지금 이 단계를 하고 있구나"로 읽힌다.
 const LOADING_LINES = [
-  '기운의 결을 살피는 중입니다',
-  '오늘의 일진을 맞춰 보는 중입니다',
-  '사주의 흐름을 따라가는 중입니다',
   '안도령이 붓을 고르는 중입니다',
+  '오늘의 일진을 펼쳐 보는 중입니다',
+  '사주의 오행을 헤아리는 중입니다',
+  '기운의 결을 따라가는 중입니다',
+  '풀이를 글로 옮기는 중입니다',
+  '마지막으로 다듬는 중입니다',
 ];
+
+// 안도령 둘레를 도는 오행. 상생 순서(木火土金水)로 놓아 도는 방향에 뜻이 있게 했다.
+const ORBIT = [
+  { ch: '木', color: '#5d9e6f' }, { ch: '火', color: '#c0563f' },
+  { ch: '土', color: '#c9a96e' }, { ch: '金', color: '#e6e2d8' },
+  { ch: '水', color: '#4a7bb0' },
+];
+
+let _loadingTimer = null;
+
+function startLoadingTicker() {
+  stopLoadingTicker();
+  let i = 0;
+  _loadingTimer = setInterval(() => {
+    // 마지막 문구에 닿으면 거기서 멈춘다. 계속 돌면 끝나지 않는 것처럼 보인다.
+    if (i >= LOADING_LINES.length - 1) { stopLoadingTicker(); return; }
+    i++;
+    const el = document.getElementById('load-line');
+    if (!el) { stopLoadingTicker(); return; }
+    el.style.opacity = '0';
+    setTimeout(() => { el.textContent = LOADING_LINES[i]; el.style.opacity = '1'; }, 260);
+  }, 2600);
+}
+
+function stopLoadingTicker() {
+  if (_loadingTimer) { clearInterval(_loadingTimer); _loadingTimer = null; }
+}
 
 function header() {
   // 홈에서는 돌아갈 곳이 없다. 빈 자리를 남겨 제목이 가운데에 그대로 있게 한다.
@@ -879,9 +919,14 @@ function render() {
     case 'loading':
       html = `${header()}
         <div class="loading">
-          <img src="${API}/andoryeong.svg" alt="" class="oracle" onerror="this.style.display='none'">
-          <div class="spinner"></div>
-          <p class="muted">${esc(state.loadingLine || LOADING_LINES[0])}</p>
+          <div class="orbit-stage">
+            <div class="orbit-halo"></div>
+            <img src="${API}/andoryeong.svg" alt="" class="oracle" onerror="this.style.display='none'">
+            ${ORBIT.map((o, i) => `<span class="orb" style="
+                --a:${(360 / ORBIT.length) * i}deg; color:${o.color};
+                animation-delay:${-i * 1.4}s">${o.ch}</span>`).join('')}
+          </div>
+          <p class="muted load-line" id="load-line">${esc(LOADING_LINES[0])}</p>
           <p class="muted small">${esc(state.item?.label || '')}</p>
           <p class="muted small" style="margin-top:14px">풀이는 지난 기록에도 저장돼요</p>
         </div>`;
@@ -926,17 +971,36 @@ function render() {
 
     case 'history':
       html = `${header()}
-        <div class="brand sm"><h1>지난 기록</h1></div>
-        ${state.history.length ? state.history.map(h => `
-          <div class="card hist">
+        <div class="brand sm"><h1>지난 기록</h1>
+          ${state.history.length ? '<p>눌러서 전체를 볼 수 있어요</p>' : ''}</div>
+        ${state.history.length ? state.history.map((h, i) => `
+          <button class="card hist" data-hist="${i}">
             <div class="row"><b>${esc(h.title || h.feature || '')}</b>
-              <span class="muted">${esc((h.createdAt || '').toString().slice(0, 10))}</span></div>
-            <p class="muted">${esc(String(h.content || h.reading || '').slice(0, 120))}…</p>
-          </div>`).join('')
+              <span class="muted">${esc(_histDate(h))}</span></div>
+            <p class="muted">${esc(String(h.content || h.reading || '').replace(/\s+/g, ' ').slice(0, 100))}…</p>
+          </button>`).join('')
         : '<div class="card"><p class="muted">아직 기록이 없어요.</p></div>'}
         <button class="btn ghost" id="btn-home2">홈으로</button>
         ${FOOTER}`;
       break;
+
+    case 'histview': {
+      const h = state.history[state.histIndex] || {};
+      // 잘라서 보여주면 정작 다시 보려고 들어온 사람이 못 본다. 전부 그린다.
+      const paras = String(h.content || h.reading || '').split(/\n{2,}|\n/).filter(Boolean)
+        .map(t => `<p>${esc(t)}</p>`).join('');
+      html = `${header()}
+        <div class="brand sm"><h1>${esc(h.title || h.feature || '')}</h1>
+          <p>${esc(_histDate(h))}</p></div>
+        <div class="card reading">${paras || '<p class="muted">내용이 없어요.</p>'}</div>
+        <div class="row2">
+          <button class="btn ghost" id="btn-hist-back">목록으로</button>
+          <button class="btn ghost" id="btn-home2">홈으로</button>
+        </div>
+        <div class="ai-notice">${AI_NOTICE}</div>
+        ${FOOTER}`;
+      break;
+    }
 
     case 'quiz': {
       const q = state.quiz;
@@ -1060,6 +1124,9 @@ function render() {
   }
 
   app.innerHTML = toast + html;
+  // 로딩 화면에서만 문구를 돌린다. 다른 화면으로 넘어가면 타이머를 반드시 끈다 —
+  // 안 그러면 없어진 요소를 계속 찾으며 돈다.
+  if (state.screen === 'loading') startLoadingTicker(); else stopLoadingTicker();
   bind();
 }
 
@@ -1168,6 +1235,10 @@ function bind() {
   on('btn-quiz-submit', submitQuiz);
   on('btn-tips', () => { state.showTips = !state.showTips; render(); });
   on('btn-pop', startPop);
+  on('btn-hist-back', () => go('history'));
+  for (const el of document.querySelectorAll('[data-hist]')) {
+    el.onclick = () => { state.histIndex = +el.dataset.hist; go('histview'); };
+  }
   const tap = document.getElementById('pop-tap');
   if (tap) {
     // click 은 모바일에서 300ms 가까이 늦는다. 연타에는 pointerdown 이 맞다.
