@@ -37,10 +37,16 @@ applyTheme();
 const API = 'https://myan.riger7070.workers.dev';
 const SESSION_KEY = 'myan_mini_session';
 
-// ⚠️ 콘솔에 등록한 상품 ID 와 정확히 같아야 한다. 서버의 MINI_PRODUCTS 와도 맞춰야
-// 결제가 지급으로 이어진다(worker.js 의 MINI_PRODUCTS 주석 참고).
+// 값을 보여주기 위한 목록일 뿐, **결제에는 쓰이지 않는다.**
+//
+// 실제로 무엇을 파는지는 콘솔이 정하고(SKU 는 콘솔이 자동 생성한다), 그중 지급할 수 있는
+// 것이 무엇인지는 서버가 정한다(worker.js 의 MINI_SKU_ALIAS). 앱은 두 곳에서 받아 그리기만
+// 한다 — 여기 sku 는 콘솔 목록을 아직 못 받았을 때 값을 비워 두지 않으려는 자리표시다.
+// 그러니 여기에 콘솔 번호를 적어 넣으려 하지 말 것. 맞춰야 할 곳은 시크릿이다.
+//
 // price 는 사용자가 실제로 내는 값(판매가)이다. 콘솔은 공급가를 받아
 // 판매가 = 공급가 × 1.1 로 계산하므로 11 의 배수만 나온다.
+// tokens 는 test/mini-price-parity.test.mjs 가 서버 MINI_PRODUCTS 와 대조한다.
 const PRODUCTS = [
   { sku: 'token_10',  tokens: 10,  label: '엽전 10개',  price: '3,850원' },
   { sku: 'token_30',  tokens: 30,  label: '엽전 30개',  price: '9,900원' },
@@ -385,11 +391,25 @@ async function loadHistory() {
 // ── 결제 ──────────────────────────────────────────────────
 
 /**
- * 콘솔에 실제로 등록된 상품 목록을 가져온다.
- * 코드에 적어 둔 SKU 와 콘솔이 어긋나면 결제가 통째로 실패하는데, 화면에는
- * "에러"라고만 떠서 원인을 알 수 없다. 실제 목록을 받아 대조해 보여준다.
+ * 콘솔에 등록된 상품 목록을 가져와, 서버가 지급할 수 있는 것만 열어 준다.
+ *
+ * 상품 번호(SKU)는 콘솔이 자동으로 만들어 주는 값이라 이 파일이 미리 알 수가 없다.
+ * 예전엔 여기에 SKU 목록을 따로 들고 대조했는데, 같은 번호가 콘솔·앱·서버 세 곳에
+ * 살면서 어긋났고 화면엔 '서버 미등록'만 떴다. 지급 가능 여부를 아는 것은 서버뿐이니
+ * 서버에 묻는다 — 앱은 번호를 하나도 외우지 않는다.
  */
 async function loadProducts() {
+  // 서버가 지급할 수 있는 SKU. 이걸 못 받으면 무엇을 열어도 결제 뒤 지급이 안 되므로
+  // 빈 목록으로 두고(=전부 잠김) 이유를 화면에 남긴다.
+  let sellable = new Map();
+  let serverErr = '';
+  try {
+    const r = await api('/mini/api/products', { auth: false });
+    for (const p of r?.products || []) sellable.set(p.sku, p);
+  } catch (e) {
+    serverErr = `판매 상품을 서버에서 확인하지 못했어요. (${e?.message || e})`;
+  }
+
   try {
     // ⚠️ 배열이 아니라 { products: [...] } 로 온다. 배열로 착각해 .map 을 부르면
     //    "map is not a function" 으로 죽는다(실제로 그랬다).
@@ -397,11 +417,12 @@ async function loadProducts() {
     const products = res?.products || [];
     state.catalog = products.map(p => ({
       sku: p.sku,
-      label: p.displayName || p.sku,
+      label: p.displayName || sellable.get(p.sku)?.label || p.sku,
       price: p.displayAmount || '',
-      known: PRODUCTS.some(k => k.sku === p.sku),
+      known: sellable.has(p.sku),
     }));
-    state.catalogError = state.catalog.length ? '' : '콘솔에 등록된 상품이 없습니다.';
+    state.catalogError = serverErr
+      || (state.catalog.length ? '' : '콘솔에 등록된 상품이 없습니다.');
   } catch (e) {
     state.catalog = null;
     state.catalogError = `상품 목록을 불러오지 못했어요. (${e?.message || e})`;
@@ -1311,11 +1332,10 @@ function render() {
       // 콘솔에 등록된 상품을 우선 보여준다. 아직 못 받았으면 코드에 적어 둔 목록으로
       // 그린다(콘솔 등록 전에는 눌러도 실패하므로 그 사실을 함께 알린다).
       const list = state.catalog ?? PRODUCTS.map(p => ({ ...p, known: true }));
-      // 콘솔이 준 상품인데 앱이 모르는 것들. 상품 번호(SKU)가 양쪽에서 어긋났다는 뜻이다.
-      // 예전에는 '서버 미등록'이라고만 적었는데, 그건 사실과 반대로 읽힌다 — 그 상품은
-      // 콘솔에 **있고**(거기서 받아왔다), 모르는 쪽은 앱이다. 게다가 어느 번호가 어긋났는지
-      // 안 보여줘서, 화면만 봐서는 콘솔에서 무엇을 고쳐야 할지 알 수 없었다. 그래서 실제
-      // 번호를 양쪽 다 적어 준다 — 이 화면 하나로 원인이 끝나야 한다.
+      // 콘솔에는 있는데 서버가 아직 지급하지 못하는 상품들. 시크릿(MINI_SKU_ALIAS)에 그
+      // 번호가 안 들어갔다는 뜻이다. 토스 웹뷰에는 개발자 도구가 없어서, 어느 번호를
+      // 넣어야 하는지를 화면이 직접 말해 주지 않으면 알아낼 방법이 없다 —
+      // 그래서 그대로 눌러 복사할 수 있게 번호를 적어 둔다.
       const unknown = (state.catalog || []).filter(p => p.known === false);
       html = `${header()}
         <div class="brand sm"><h1>${COIN}엽전 충전</h1><p>현재 ${COIN}${state.tokens} 엽전</p></div>
@@ -1323,16 +1343,16 @@ function render() {
         ${state.catalogError ? `<div class="card"><p class="err">${esc(state.catalogError)}</p>
           <p class="muted small">앱인토스 콘솔에서 인앱 상품을 먼저 등록해야 결제가 열립니다.</p></div>` : ''}
         ${unknown.length ? `<div class="card">
-          <p class="err">콘솔의 상품 번호와 앱이 아는 번호가 다릅니다.</p>
-          <p class="muted small">콘솔에 등록된 번호: ${unknown.map(p => esc(p.sku)).join(', ')}</p>
-          <p class="muted small">앱이 아는 번호: ${PRODUCTS.map(p => esc(p.sku)).join(', ')}</p>
-          <p class="muted small">둘 중 한쪽을 다른 쪽에 맞춰야 결제가 열립니다.
-            콘솔 상품의 번호를 바꿀 수 없다면 앱 쪽 번호를 고쳐야 합니다.</p></div>` : ''}
+          <p class="err">아직 지급 설정이 안 된 상품이 있습니다.</p>
+          <p class="muted small">콘솔에는 있지만 서버가 몇 엽전짜리인지 모릅니다.
+            아래 번호를 서버의 상품 설정에 넣으면 바로 열립니다.</p>
+          ${unknown.map(p => `<p class="muted small">${esc(p.label)} · ${esc(p.sku)}</p>`).join('')}
+          </div>` : ''}
         ${list.map(p => `
           <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
             <span class="t-label">${esc(p.label)}</span>
             <span class="t-cost">${p.known === false
-              ? `앱이 모르는 상품 · ${esc(p.sku)}`
+              ? '준비 중'
               : esc(p.price || '토스로 결제')}</span>
           </button>`).join('')}
         ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
@@ -1531,7 +1551,11 @@ function bind() {
     el.onclick = () => { const it = itemById(el.dataset.item); if (it) openItem(it); };
   }
   for (const el of document.querySelectorAll('[data-sku]')) {
-    el.onclick = () => { const p = PRODUCTS.find(x => x.sku === el.dataset.sku); if (p) buyTokens(p); };
+    // 타일에 박힌 SKU 를 그대로 쓴다. 예전엔 이걸 PRODUCTS 에서 다시 찾았는데, 콘솔 SKU 는
+    // 자동 생성값이라 그 목록에 있을 리가 없어서 find 가 늘 undefined 였다 — 타일이 열려
+    // 있어도 눌리지 않았다. 무엇을 파는지는 이미 서버가 정했고(loadProducts), 여기서 할
+    // 일은 그 번호를 토스에 넘기는 것뿐이다.
+    el.onclick = () => { if (el.dataset.sku) buyTokens({ sku: el.dataset.sku }); };
   }
 }
 

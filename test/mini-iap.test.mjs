@@ -39,10 +39,10 @@ function tossStub(order) {
   };
 }
 
-async function setup(order) {
+async function setup(order, extraEnv = {}) {
   const { db, DB } = createD1();
   const toss = tossStub(order);
-  const env = { DB, SESSION_SECRET: SECRET, TOSS_MTLS: toss.binding };
+  const env = { DB, SESSION_SECRET: SECRET, TOSS_MTLS: toss.binding, ...extraEnv };
   const session = await createSessionToken(`mini:${USER}`, env);
   const grant = (body = { orderId: 'ORD-1' }) => handleMiniPaymentGrant(
     new Request('https://x/mini/api/payment/grant', {
@@ -175,4 +175,70 @@ test('주문 조회는 orderId 만 담아 POST 한다', async () => {
   assert.equal(toss.calls.length, 1);
   assert.match(toss.calls[0].url, /\/order\/get-order-status$/);
   assert.deepEqual(toss.calls[0].body, { orderId: 'ORD-7' });
+});
+
+// ── 콘솔 SKU 별칭 ──────────────────────────────────────────
+//
+// 앱인토스 콘솔은 SKU 를 자동 생성한다('ait.0000062547.…'). 코드에 박아 두면 상품을
+// 추가할 때마다 배포가 따라붙으므로 MINI_SKU_ALIAS 시크릿으로 뺐다. 돈이 오가는 경로라
+// 별칭이 틀렸을 때 조용히 지급되거나 조용히 안 되는 일이 없어야 한다.
+
+const AIT = 'ait.0000062547.fc566614.108bcc23c8.6434661588';
+
+test('콘솔 SKU 를 별칭으로 풀어 지급한다', async () => {
+  const { db, grant } = await setup(
+    { orderId: 'ORD-A', sku: AIT, status: 'PURCHASED' },
+    { MINI_SKU_ALIAS: JSON.stringify({ [AIT]: 'token_10' }) },
+  );
+  const res = await grant({ orderId: 'ORD-A' });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).balance, 10);
+  assert.equal(balance(db), 10);
+});
+
+test('별칭이 없으면 지급하지 않는다 (돈만 받고 넘어가지 않게)', async () => {
+  const { db, grant } = await setup({ orderId: 'ORD-B', sku: AIT, status: 'PURCHASED' });
+  const res = await grant({ orderId: 'ORD-B' });
+  assert.equal(res.status, 500);
+  assert.equal(balance(db), 0);
+});
+
+test('별칭이 가리키는 상품이 없으면 지급하지 않는다', async () => {
+  // 시크릿에 오타가 났을 때. 없는 상품 키로 이어지면 조용히 0 을 주지 말고 막아야 한다.
+  const { db, grant } = await setup(
+    { orderId: 'ORD-C', sku: AIT, status: 'PURCHASED' },
+    { MINI_SKU_ALIAS: JSON.stringify({ [AIT]: 'token_11' }) },
+  );
+  assert.equal((await grant({ orderId: 'ORD-C' })).status, 500);
+  assert.equal(balance(db), 0);
+});
+
+test('시크릿 JSON 이 깨져도 지급이 열리지 않는다', async () => {
+  const { db, grant } = await setup(
+    { orderId: 'ORD-D', sku: AIT, status: 'PURCHASED' },
+    { MINI_SKU_ALIAS: '{이건 JSON 이 아니다' },
+  );
+  assert.equal((await grant({ orderId: 'ORD-D' })).status, 500);
+  assert.equal(balance(db), 0);
+});
+
+test('별칭이 있어도 상품 키를 직접 준 주문은 그대로 처리된다', async () => {
+  // 별칭은 덧붙이는 길이지 대체가 아니다. 이게 깨지면 기존 주문 복구가 막힌다.
+  const { db, grant } = await setup(
+    { orderId: 'ORD-E', sku: 'token_30', status: 'PURCHASED' },
+    { MINI_SKU_ALIAS: JSON.stringify({ [AIT]: 'token_10' }) },
+  );
+  assert.equal((await grant({ orderId: 'ORD-E' })).status, 200);
+  assert.equal(balance(db), 30);
+});
+
+test('별칭이 붙어도 같은 주문은 한 번만 지급한다', async () => {
+  const { db, grant } = await setup(
+    { orderId: 'ORD-F', sku: AIT, status: 'PURCHASED' },
+    { MINI_SKU_ALIAS: JSON.stringify({ [AIT]: 'token_100' }) },
+  );
+  await grant({ orderId: 'ORD-F' });
+  const again = await grant({ orderId: 'ORD-F' });
+  assert.equal((await again.json()).granted, false);
+  assert.equal(balance(db), 100);
 });

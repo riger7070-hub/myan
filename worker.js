@@ -1632,6 +1632,7 @@ export default {
     if (path === '/mini/api/me'         && method === 'GET')  { await ensureDBExt(env); return handleMiniMe(request, env); }
     if (path === '/mini/api/profile'    && method === 'POST') { await ensureDBExt(env); return handleMiniSaveProfile(request, env); }
     if (path === '/mini/api/tokens'     && method === 'GET')  { await ensureDBExt(env); return handleMiniTokens(request, env); }
+    if (path === '/mini/api/products'   && method === 'GET')  { return handleMiniProducts(request, env); }
     if (path === '/mini/api/payment/grant' && method === 'POST') { await ensureDBExt(env); return handleMiniPaymentGrant(request, env); }
     if (path === '/mini/api/today'         && method === 'POST') { await ensureDBExt(env); return handleMiniDailyFortune(request, env); }
     if (path === '/mini/api/ad-reward'     && method === 'POST') { await ensureDBExt(env); return handleMiniAdReward(request, env); }
@@ -2124,6 +2125,18 @@ async function handleMiniTokens(request, env) {
   return miniCors(request, JSON.stringify({ tokens: await _miniBalance(env, userKey) }), 200);
 }
 
+/**
+ * 지금 지급할 수 있는 콘솔 SKU 목록. 화면이 어떤 타일을 열지 여기에 맞춘다.
+ *
+ * 예전엔 클라이언트가 SKU 목록을 따로 들고 콘솔 목록과 대조했는데, 그러면 같은 번호가
+ * 세 곳(콘솔·클라이언트·서버)에 살면서 반드시 어긋난다 — 실제로 어긋나서 화면에
+ * '서버 미등록'만 뜨고 원인을 알 수 없었다. 지급할 수 있는지를 아는 것은 서버뿐이므로
+ * 서버가 답한다. 로그인은 필요 없다(가격표는 비밀이 아니고, 로그인 전에도 그려야 한다).
+ */
+function handleMiniProducts(request, env) {
+  return miniCors(request, JSON.stringify({ products: _miniSellableSkus(env) }), 200);
+}
+
 // ── 연결 끊기(탈퇴) 콜백 ──
 // 사용자가 토스에서 연동을 해제하거나 토스를 탈퇴하면 토스 서버가 이 URL 을 부른다.
 // 콘솔에 등록: https://myan.riger7070.workers.dev/mini/api/auth/unlink
@@ -2216,6 +2229,53 @@ const MINI_PRODUCTS = {
   token_100: { tokens: 100, amount: 27500, label: '엽전 100개' },  // 275원/개
 };
 
+// ── 콘솔 SKU ↔ 위 상품 키 ──
+//
+// 앱인토스 콘솔은 상품 번호(SKU)를 **자기가 만들어 준다**. 우리가 고르는 값이 아니라
+// 'ait.0000062547.fc566614.108bcc23c8.6434661588' 같은 자동 생성값이고, 상품을 새로
+// 만들면 새 번호가 붙는다. 그래서 token_10 같은 이름으로 맞출 방법이 없다.
+//
+// 이걸 코드에 박아 두면 상품을 하나 추가할 때마다 코드 수정 → 워커 배포 → 미니앱 배포가
+// 따라붙는다. 상품 추가는 콘솔에서 하는 일이지 배포할 일이 아니므로, 매핑을 시크릿으로 뺐다.
+//
+//   wrangler secret put MINI_SKU_ALIAS
+//   {"ait.0000062547.…":"token_10","ait.…":"token_30","ait.…":"token_100"}
+//
+// 시크릿은 즉시 반영되므로 상품을 추가할 때 이 한 줄이면 끝난다.
+// 값이 없거나 JSON 이 깨졌으면 빈 매핑으로 두고 크게 남긴다 — 조용히 넘어가면 결제는
+// 되는데 지급이 안 되는, 가장 나쁜 상태가 된다.
+function _miniSkuAlias(env) {
+  const raw = env.MINI_SKU_ALIAS;
+  if (!raw) return {};
+  try {
+    const map = JSON.parse(raw);
+    if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('객체가 아님');
+    return map;
+  } catch (e) {
+    console.error('[MINI IAP] MINI_SKU_ALIAS 를 읽지 못했습니다 — 지급이 막힙니다:', e?.message);
+    return {};
+  }
+}
+
+/**
+ * 토스가 준 SKU 로 상품을 찾는다.
+ * 콘솔 SKU(별칭)를 먼저 보고, 없으면 상품 키를 그대로 쓴다 —
+ * 후자는 테스트와, 혹시 콘솔에서 SKU 를 직접 정할 수 있게 되는 경우를 위한 길이다.
+ */
+function _miniProductForSku(env, sku) {
+  if (typeof sku !== 'string' || !sku) return null;
+  const key = _miniSkuAlias(env)[sku] || sku;
+  return MINI_PRODUCTS[key] || null;
+}
+
+/** 지금 실제로 팔 수 있는 것들 — 콘솔 SKU 가 매핑된 상품만. 클라이언트가 이걸 보고 타일을 연다. */
+function _miniSellableSkus(env) {
+  const alias = _miniSkuAlias(env);
+  return Object.entries(alias)
+    .filter(([, key]) => MINI_PRODUCTS[key])
+    .map(([sku, key]) => ({ sku, ...MINI_PRODUCTS[key] }));
+}
+
 // 결제가 끝난 상태. PURCHASED 는 지급까지 끝난 상태, PAYMENT_COMPLETED 는 결제만 끝나고
 // 지급 대기인 상태다. 우리 입장에선 둘 다 "돈은 들어왔다"라서 지급 대상으로 본다.
 const TOSS_ORDER_PAID = new Set(['PURCHASED', 'PAYMENT_COMPLETED']);
@@ -2270,10 +2330,11 @@ async function handleMiniPaymentGrant(request, env) {
     return miniCors(request, JSON.stringify({ error: { message: '완료되지 않은 결제입니다.' } }), 400);
   }
 
-  const product = typeof sku === 'string' ? MINI_PRODUCTS[sku] : null;
+  const product = _miniProductForSku(env, typeof sku === 'string' ? sku : null);
   if (!product) {
-    // 콘솔에만 상품을 추가하고 MINI_PRODUCTS 를 안 고치면 여기로 온다.
-    // 돈은 이미 받았으므로 조용히 넘기지 말고 반드시 로그를 남긴다.
+    // 콘솔에 상품을 추가하고 MINI_SKU_ALIAS 에 그 번호를 안 넣으면 여기로 온다.
+    // 돈은 이미 받았으므로 조용히 넘기지 말고 반드시 로그를 남긴다 —
+    // 이 줄의 SKU 를 그대로 시크릿에 넣으면 복구된다.
     console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, JSON.stringify(sku));
     return miniCors(request, JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
   }
