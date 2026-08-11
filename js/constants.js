@@ -14,10 +14,17 @@ const JJO  = ['水','土','木','木','土','火','火','土','金','金','土',
 const OC   = {木:'#4bc87a',火:'#e05a4a',土:'#d4a040',金:'#a0aab4',水:'#5aa8e0'};
 const OBG  = {木:'rgba(75,200,122,.08)',火:'rgba(224,90,74,.08)',土:'rgba(212,160,64,.08)',金:'rgba(160,170,180,.08)',水:'rgba(90,168,224,.08)'};
 
+// 오늘의 일진(日辰) — 날이 넘어가는 기준은 **KST 자정**이다.
+//
+// 예전엔 new Date().setHours(0,0,0,0) 으로 브라우저의 로컬 자정을 썼다. 그러면 사용자가
+// 어디 있느냐에 따라 "오늘"이 달라져서, 서버(로컬이 UTC 라 09:00 KST 에 날을 넘긴다)가
+// 만든 AI 본문과 이 화면의 오행 게이지가 다른 기운을 말했다. 이제 양쪽이 KST 한 축만 본다.
+//
+// ⚠️ worker.js 에 같은 함수가 한 번 더 있다 — 한쪽만 고치면 화면과 본문이 다시 어긋난다.
 function ilchin() {
-  const ref = new Date(2023,0,1); ref.setHours(0,0,0,0);
-  const now = new Date(); now.setHours(0,0,0,0);
-  const idx = ((44 + Math.round((now-ref)/864e5)) % 60 + 60) % 60;
+  const day    = Math.floor((Date.now() + 9 * 3600000) / 864e5);  // KST 기준 epoch 일수
+  const refDay = Date.UTC(2023, 0, 1) / 864e5;                    // 2023-01-01(KST) 을 같은 축에서
+  const idx = ((44 + day - refDay) % 60 + 60) % 60;
   return { ci: idx%10, ji: idx%12, o: CGO[idx%10], jo: JJO[idx%12] };
 }
 

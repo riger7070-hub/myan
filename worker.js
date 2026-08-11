@@ -28,10 +28,22 @@ const ON = {
   ja:{木:'木(もく)',火:'火(か)',土:'土(ど)',金:'金(きん)',水:'水(すい)'},
 };
 
+// 오늘의 일진(日辰) — 날이 넘어가는 기준은 **KST 자정**이다.
+//
+// 예전엔 new Date().setHours(0,0,0,0) 으로 런타임의 로컬 자정을 썼다. 그러면 "오늘"이
+// 코드가 도는 곳마다 달라진다 — 워커는 로컬이 UTC 라 09:00 KST 에 날을 넘기고, 브라우저는
+// 사용자가 있는 지역의 자정에 넘긴다. 그래서 한국 사용자는 00:00~09:00 KST 사이에 화면의
+// 오행 게이지(js/constants.js 의 사본이 계산)와 유료로 받은 AI 본문(서버가 계산)이 서로
+// 다른 기운을 말했고, 해외 사용자는 그 둘과 또 달랐다. 이제 양쪽이 KST 한 축만 본다.
+//
+// 2023-01-01(KST) = 44 라는 기준점은 그대로다. 한국 브라우저가 보던 값은 바뀌지 않고,
+// 서버가 그 값에 맞춰 온다(test/ilchin-kst.test.mjs 가 날짜별 기준값으로 고정한다).
+//
+// ⚠️ 이 함수는 js/constants.js 에 같은 내용으로 한 번 더 있다 — 한쪽만 고치면 다시 어긋난다.
 function ilchin() {
-  const ref = new Date(2023,0,1); ref.setHours(0,0,0,0);
-  const now = new Date(); now.setHours(0,0,0,0);
-  const idx = ((44 + Math.round((now-ref)/864e5)) % 60 + 60) % 60;
+  const day    = Math.floor((Date.now() + 9 * 3600000) / 864e5);  // KST 기준 epoch 일수
+  const refDay = Date.UTC(2023, 0, 1) / 864e5;                    // 2023-01-01(KST) 을 같은 축에서
+  const idx = ((44 + day - refDay) % 60 + 60) % 60;
   return { ci: idx%10, ji: idx%12, o: CGO[idx%10], jo: JJO[idx%12] };
 }
 
@@ -885,31 +897,25 @@ async function storeFortune(env, bucket, reading) {
   ).bind(id, bucket, reading).run();
 }
 
-/** 오늘 날짜(KST, YYYY-MM-DD) — 사용자가 달력에서 고르는 "오늘"(택일의 기준일). */
+// 오늘 날짜(KST, YYYY-MM-DD). 이 앱에서 "오늘"은 언제나 KST 자정에 넘어간다 —
+// 사용자가 달력에서 고르는 날(택일의 기준일)이든, ilchin() 이 내는 일진이든 같은 축이다.
+//
+// 한동안 축이 둘이었다. ilchin() 이 런타임 로컬 자정(워커=UTC=09:00 KST)을 쓰는 동안
+// 날짜가 붙는 캐시 bucket 만 KST 자정으로 끊려서, 한 bucket 이 서로 다른 일간 두 개에
+// 걸쳤다 — 00:00~09:00 KST 에 처음 들어온 요청이 어제 오행으로 글을 만들어 캐시에 박고
+// 그날 남은 15시간 동안 모두가 그 글을 받았다. 그때는 bucket 을 ilchin() 쪽 경계에
+// 맞추는 것으로 막았고(_ilchinYmd), 지금은 ilchin() 자체가 KST 라 축이 하나로 합쳐졌다.
+// 그래서 bucket 도 이 함수를 그대로 쓴다.
+//
+// ⚠️ 새로 "오늘"을 만들 때 런타임 로컬 시간(new Date().setHours/getFullYear 등)으로
+// 재지 말 것. 워커에서는 UTC 가 되어 09:00 KST 까지 어제가 된다.
+// test/fortune-bucket-date.test.mjs 가 bucket 날짜와 ilchin() 이 함께 넘어가는지 지킨다.
 function _kstYmd() {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 /** 올해(KST) — 대운·궁합 시기의 '지금'. */
 function _kstYear() {
   return parseInt(_kstYmd().slice(0, 4), 10);
-}
-
-// 날짜가 프롬프트에 들어가는 캐시(띠·별자리, 럭키, 라이프패스)의 bucket 용 날짜.
-//
-// ⚠️ 이 값은 반드시 ilchin() 이 날을 넘기는 경계와 같아야 한다. 그 셋의 프롬프트에는
-// ilchin() 이 낸 "오늘의 오행"이 들어가는데, ilchin() 은 new Date().setHours(0,0,0,0) —
-// 즉 워커의 로컬(UTC) 자정에 넘어간다. bucket 만 KST 자정(_kstYmd)으로 끊었더니 한 bucket
-// 이 서로 다른 일간 두 개에 걸쳤다: 00:00~09:00 KST 에 처음 들어온 요청이 *어제* 오행으로
-// 글을 만들어 캐시에 박고, 그날 남은 15시간 동안 모두가 그 글을 받았다(간지는 매일,
-// 오행 이름은 이틀에 한 번꼴로 어긋난다). 캐시 이전에는 매 요청이 새로 만들어 이런 일이
-// 없었다. 그래서 여기는 KST 가 아니라 ilchin() 과 같은 UTC 경계를 쓴다.
-// (택일·대운이 _kstYmd 를 쓰는 것과 다른데, 그쪽 기준일은 ilchin() 과 무관한 달력 날짜다.
-//  둘을 같은 함수로 합치지 말 것 — 합치면 한쪽이 반드시 어긋난다.)
-// test/fortune-bucket-date.test.mjs 가 "한 bucket 안에서 ilchin() 이 변하지 않는다"를 지킨다.
-function _ilchinYmd() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ── 날짜를 타지 않는 콘텐츠의 bucket·프롬프트 ──
@@ -4233,9 +4239,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     // 프롬프트에 들어가는 값은 띠·별자리·오늘의 오행·달 위상·역행뿐 — 전부 이 사람과 무관하거나
     // 오늘이면 모두에게 같다. 뒤의 넷은 날짜가 정하므로 bucket 에 날짜만 넣으면 된다.
     // (띠 12 × 별자리 12 × 4개국어 = 하루 576개, 그마저도 실제로 들어온 조합만 만든다.)
-    // 날짜는 _ilchinYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 경계여야 한다(그 함수 주석 참고).
+    // 날짜는 _kstYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 KST 경계다(그 함수 주석 참고).
     const reading = await cachedFortune(
-      env, `zodiac|${lang}|${animalIndex}|${zodiacIndex}|${_ilchinYmd()}`,
+      env, `zodiac|${lang}|${animalIndex}|${zodiacIndex}|${_kstYmd()}`,
       () => geminiText(env, prompt, { maxOutputTokens: 1000 }),
     );
 
@@ -5321,9 +5327,9 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
 
     // 오늘의 오행 하나로만 정해진다 — 4개국어 합쳐 하루 4개면 전부다.
     // 여기만 응답이 JSON 이라 캐시에는 그 문자열을 그대로 넣고 꺼낼 때 파싱한다.
-    // 날짜는 _ilchinYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 경계여야 한다(그 함수 주석 참고).
+    // 날짜는 _kstYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 KST 경계다(그 함수 주석 참고).
     const raw = await cachedFortune(
-      env, `lucky|${lang}|${_ilchinYmd()}`,
+      env, `lucky|${lang}|${_kstYmd()}`,
       async () => {
         const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9, maxOutputTokens: 1000 });
         // 캐시에 넣기 전에 걸러야 깨진 JSON 이 하루 종일 재사용되지 않는다.
@@ -5622,9 +5628,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
 
     // 생년월일은 라이프패스 넘버 하나로 압축돼서 들어간다(1~9, 11, 22, 33 — 12가지).
     // 오늘의 기운을 함께 엮으므로 날짜까지 넣어 하루 48개.
-    // 날짜는 _ilchinYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 경계여야 한다(그 함수 주석 참고).
+    // 날짜는 _kstYmd() — 위 프롬프트의 il 을 낸 ilchin() 과 같은 KST 경계다(그 함수 주석 참고).
     const reading = await cachedFortune(
-      env, `numerology|${lang}|${lifePath}|${_ilchinYmd()}`,
+      env, `numerology|${lang}|${lifePath}|${_kstYmd()}`,
       () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1200 }),
     );
 

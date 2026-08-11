@@ -1,32 +1,30 @@
 // 날짜가 붙는 운세 캐시의 bucket 이 프롬프트 내용과 같은 날을 가리키는지.
 //
 // 띠·별자리 / 럭키 / 라이프패스는 프롬프트에 ilchin() 이 낸 "오늘의 오행"이 들어간다.
-// ilchin() 은 new Date().setHours(0,0,0,0) — 워커 로컬(UTC) 자정에 날을 넘긴다.
-// bucket 을 KST 자정(_kstYmd)으로 끊으면 두 경계가 9시간 어긋나서, 한 bucket 이 서로 다른
-// 일간 두 개에 걸친다. 그러면 00:00~09:00 KST 에 처음 들어온 요청이 *어제* 오행으로 글을
-// 만들어 캐시에 박고, 그날 남은 15시간 동안 모두가 그 글을 받는다. 화면의 오행 게이지와
-// 유료로 받은 본문이 서로 다른 기운을 말하게 된다.
+// 그러니 bucket 의 날짜와 ilchin() 은 반드시 같은 순간에 넘어가야 한다. 어긋나면 한 bucket
+// 이 서로 다른 일간 두 개에 걸치고, 그 bucket 에 처음 들어온 요청이 만든 글이 — 다른 날
+// 오행으로 쓰인 글이 — 그날 내내 재사용된다. 실제로 그랬다: ilchin() 이 런타임 로컬(UTC)
+// 자정을 쓰는 동안 bucket 만 KST 자정으로 끊겨서, 00:00~09:00 KST 에 들어온 첫 요청이
+// 어제 오행으로 글을 만들어 박고 남은 15시간을 그것으로 채웠다.
 //
-// 여기서 지키는 계약은 한 문장이다: **한 bucket 안에서 ilchin() 은 변하지 않는다.**
-// (_kstYmd 로 되돌리면 아래 첫 테스트가 실패한다 — 확인하고 넣은 가드다.)
+// 지금은 ilchin() 도 KST 자정을 쓰므로(test/ilchin-kst.test.mjs) 축이 하나이고, bucket 은
+// _kstYmd() 를 그대로 쓴다. 여기서 지키는 계약은 그대로다:
+// **한 bucket 안에서 ilchin() 은 변하지 않는다.**
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker } from './load-worker.mjs';
 
-const { ilchin, _ilchinYmd, _kstYmd, _kstYear } =
-  await loadWorker(['ilchin', '_ilchinYmd', '_kstYmd', '_kstYear']);
+const { ilchin, _kstYmd, _kstYear } =
+  await loadWorker(['ilchin', '_kstYmd', '_kstYear']);
 
 const HOUR = 3600 * 1000;
 
 // 시계를 ms 에 고정하고, **로컬 존이 UTC 인 런타임**(= Cloudflare Workers)을 흉내 내서 f() 를 부른다.
 //
-// 로컬 존을 흉내 내는 것이 이 셤의 핵심이다. 이 저장소는 KST 로컬에서 개발하는데, KST 에서는
-// ilchin() 의 로컬 자정과 _kstYmd() 의 KST 자정이 같은 순간이라 버그가 재현되지 않는다.
-// 즉 이 파일을 그냥 돌리면 아래 두 테스트는 개발 기계에서 영원히 통과한다 — 그건 가드가 아니다.
-// 그래서 로컬 시간 접근자를 UTC 접근자로 갈아 배포 환경을 고정한다.
-// (ilchin() 의 기준일 new Date(2023,0,1) 은 호스트 존에 따라 하루 밀릴 수 있어 간지의 *절댓값*은
-//  흉내 안에서 어긋날 수 있다. 여기서 보는 것은 "언제 넘어가는지"뿐이라 문제되지 않는다.)
+// 두 함수 다 이제 Date.now()/Date.UTC 만 쓰므로 이 셤은 값을 바꾸지 못한다 — 그게 확인하려는
+// 바다. 어느 한쪽이 다시 로컬 시간을 읽기 시작하면(옛 ilchin() 이 그랬다) KST 개발 기계에서는
+// 그냥 돌려선 알 수 없고, 이 셤 아래에서만 어긋남이 드러난다.
 function at(ms, f) {
   const RealDate = Date;
   class UtcDate extends RealDate {
@@ -46,15 +44,14 @@ function at(ms, f) {
 }
 
 test('한 bucket 날짜 안에서 오늘의 오행이 바뀌지 않는다', () => {
-  // 이 저장소는 KST 로컬에서 개발하지만 배포는 UTC 로 돈다. ilchin() 의 경계가 어디든
-  // _ilchinYmd() 가 같은 경계를 따라가는지를 보는 것이므로, 로컬 존이 무엇이든 성립해야 한다.
+  // 로컬 존이 무엇이든 성립해야 한다 — 배포는 UTC, 개발은 KST 로 돈다.
   const start = Date.UTC(2026, 7, 12, 0, 0, 0);
   const byBucket = new Map();
 
   // 5일치를 1시간 간격으로 훑는다 — 어떤 경계든 여러 번 넘어간다.
   for (let h = 0; h < 24 * 5; h++) {
     const ms = start + h * HOUR;
-    const { ymd, ci } = at(ms, () => ({ ymd: _ilchinYmd(), ci: ilchin().ci }));
+    const { ymd, ci } = at(ms, () => ({ ymd: _kstYmd(), ci: ilchin().ci }));
     if (!byBucket.has(ymd)) byBucket.set(ymd, new Set());
     byBucket.get(ymd).add(ci);
   }
@@ -71,11 +68,11 @@ test('bucket 날짜는 ilchin 이 넘어가는 순간에 같이 넘어간다', (
   // 위 테스트는 "한 bucket 에 두 오행"을 잡는다. 반대 방향 — ilchin 이 넘어갔는데
   // bucket 은 그대로인 경우 — 도 같은 버그의 다른 얼굴이므로 여기서 잡는다.
   const start = Date.UTC(2026, 7, 12, 0, 0, 0);
-  let prev = at(start, () => ({ ymd: _ilchinYmd(), ci: ilchin().ci }));
+  let prev = at(start, () => ({ ymd: _kstYmd(), ci: ilchin().ci }));
   let flips = 0;
 
   for (let h = 1; h < 24 * 5; h++) {
-    const cur = at(start + h * HOUR, () => ({ ymd: _ilchinYmd(), ci: ilchin().ci }));
+    const cur = at(start + h * HOUR, () => ({ ymd: _kstYmd(), ci: ilchin().ci }));
     const ymdFlipped = cur.ymd !== prev.ymd;
     const ciFlipped  = cur.ci !== prev.ci;
     assert.equal(ymdFlipped, ciFlipped,
@@ -86,9 +83,9 @@ test('bucket 날짜는 ilchin 이 넘어가는 순간에 같이 넘어간다', (
   assert.ok(flips >= 4, `5일을 훑었는데 날짜가 ${flips}번만 넘어갔다`);
 });
 
-test('세 핸들러의 bucket 이 _ilchinYmd 를 쓴다 (_kstYmd 를 쓰면 9시간 어긋난다)', async () => {
+test('세 핸들러의 bucket 이 KST 날짜 헬퍼를 쓴다', async () => {
   // 위 두 테스트는 헬퍼끼리의 계약만 본다. 핸들러가 어느 헬퍼를 부르는지는 소스로 확인한다 —
-  // 새 날짜 캐시를 붙일 때 습관적으로 _kstYmd 를 집어넣는 것이 이 버그의 원래 경로였다.
+  // 여기에 로컬 시간으로 만든 날짜를 끼워 넣으면 다시 축이 둘로 갈린다.
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
@@ -100,9 +97,8 @@ test('세 핸들러의 bucket 이 _ilchinYmd 를 쓴다 (_kstYmd 를 쓰면 9시
   assert.equal(dated.length, 3, `날짜가 붙은 캐시가 ${dated.length}개 — 기대 3개(띠·별자리/럭키/라이프패스)`);
 
   for (const b of dated) {
-    assert.match(b, /\$\{_ilchinYmd\(\)\}/, `bucket "${b}" 가 _ilchinYmd() 를 쓰지 않는다`);
-    assert.doesNotMatch(b, /_kstYmd\(\)/,
-      `bucket "${b}" 가 _kstYmd() 를 쓴다 — 프롬프트의 ilchin() 과 경계가 9시간 어긋난다`);
+    assert.match(b, /\$\{_kstYmd\(\)\}/,
+      `bucket "${b}" 가 _kstYmd() 를 쓰지 않는다 — ilchin() 과 같은 KST 축이어야 한다`);
   }
 });
 
