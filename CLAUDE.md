@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-M;Y 安 (마이안) — an AI-powered Saju (四柱, Korean/Chinese fortune-telling) reading web service, single-operator (1인 운영). Cloudflare Workers backend, vanilla JS frontend, plus a separate Expo/React Native mobile client. Production: https://myan.riger7070.workers.dev
+M;Y 安 (마이안) — an AI-powered Saju (四柱, Korean/Chinese fortune-telling) reading service, single-operator (1인 운영). Cloudflare Workers backend, vanilla JS frontend. Production: https://myan.riger7070.workers.dev
+
+There are **three clients over one Worker**: the web app (repo root), an Expo WebView shell (`myan-native/`), and an Apps-in-Toss mini app (`mini/`, shipped as 오늘운빨 1.0.0 on 2026-08-11). Only the first two are the same service — the mini app is a **separate service with its own accounts and its own currency ledger**, and its in-app currency is called 엽전, not 토큰. See "The Apps-in-Toss mini app" below before touching anything under `mini/` or any `/mini/api/*` handler.
 
 ## Git workflow: push directly to `main`, with one carve-out
 
@@ -59,18 +61,60 @@ npm install
 npx expo start
 ```
 
+### The Apps-in-Toss mini app (`mini/`) — a second client, and a separate service
+Unlike `myan-native/`, this is **not** a WebView shell: it is a real second client (`mini/src/main.js`, ~1500 lines of vanilla JS + Vite) talking to the same Worker through `/mini/api/*`. Shipped as 오늘운빨 1.0.0 on 2026-08-11; `mini/RELEASE-NOTES.md` is the running changelog and the source of the console's "업데이트 내용" text.
+
+```bash
+cd mini
+npm install
+npm run dev              # vite dev
+npm run build            # vite build && ait build
+npm run deploy           # ait deploy
+```
+
+**It is a separate service, not a second face of the web app.** Accounts and currency are deliberately unshared: a web user and a mini user are different people even if they're the same human, and 엽전 bought in the mini app do not exist on the web. The code states this as a contract rather than an accident (`_LEDGERS`, `test/mini-isolation.test.mjs`), so treat "the same person's balances don't add up across the two" as intended behaviour and don't "fix" it by joining them — if the separation ever should end, that's a product and payments decision, not a refactor.
+
+- **The currency is 엽전 in the mini app.** User-facing strings there say 엽전; the web still says 토큰. Same ledger mechanics, different name — check which client a string belongs to before translating it.
+- **Two clients, two deploys, one Worker.** Pushing to `main` deploys the Worker — which is the mini app's backend — but *not* `mini/`, which only ships via `ait deploy`. So a Worker change can go live while the mini client is still the old bundle. When you change a `/mini/api/*` contract, either keep it backward compatible or deploy the client in the same sitting. `mini/dist/` and `mini/*.ait` are build output and gitignored.
+
+#### The account layer is how one handler serves both services
+`resolveAccount(request, env)` returns `{ kind: 'web' | 'mini', key }` and is the only thing a paid handler needs to know about who is asking. `accountBalance` / `accountSpend` / `accountRefund` then pick the ledger from the fixed `_LEDGERS` table — `payment_requests(user_email)` for web, `mini_payment_requests(user_key)` for mini. The table and column names come only from that table, never from request data.
+
+- **Order matters in `resolveAccount`.** It checks the mini session *first*, then falls back to `getEmailFromToken`. Reversed, a loosening of the web verifier would silently put mini users on the web ledger.
+- **Mini sessions are the same HS256 JWTs, with a `mini:` subject prefix.** `getMiniUserKeyFromRequest` accepts a token only if the verified subject starts with `mini:`, and `getEmailFromToken` rejects those subjects — so neither side's token works on the other's routes. `test/mini-isolation.test.mjs` (16 tests) pins both directions, including that an email merely *shaped* like `mini:…` isn't accepted.
+- **History is namespaced, not split.** `accountHistoryKey` prefixes mini users with `mini:` and both services share `feature_history`. That's intentional — history isn't money, so nothing can be mis-accounted, and one query serves both. The ledgers stay physically separate because they *are* money.
+- **`userKey` must be stringified.** Toss sends it as a JSON *number*. Binding it raw makes SQLite store `'307515147.0'` in a TEXT column while the session subject holds `'307515147'`, so login writes one row and every later request reads another — one human, two accounts. That actually happened: Toss-supplied name/birthday landed only on the login row and never appeared in the app.
+
+#### Toss integration facts that are easy to get wrong
+- **The partner API requires mTLS**, so it is unreachable from plain `fetch`. Only `env.TOSS_MTLS.fetch` presents the client certificate (`[[mtls_certificates]]` in `wrangler.toml`). If the binding is missing, the helper throws rather than falling through to an unauthenticated call. **The certificate expires 2027-09-04** — when it does, mini-app login and payment both stop. The private key is never in this repo; the committed `certificate_id` is only a reference to what Cloudflare holds.
+- **Name, birthday and gender arrive AES-256-GCM encrypted**, needing `TOSS_DECRYPT_KEY` / `TOSS_DECRYPT_AAD` from the console. Without them decryption yields `null` and the user simply types their birth date — login still works, so a missing secret degrades quietly instead of breaking. Gender comes as `MALE`/`FEMALE` and must be normalized to `M`/`F`: 대운 direction is decided by gender, so a mismatch silently reverses the reading. Unknown values become `null` rather than a guess.
+- **The unlink callback is fail-closed.** `/mini/api/auth/unlink` compares the whole `Authorization` header against `TOSS_UNLINK_AUTH` with `_timingSafeEqual`; with the secret unset it rejects everything, deliberately — knowing a `userKey` would otherwise be enough to unlink someone else's account. It accepts both GET query and POST JSON because the console decides which. It **clears personal fields but keeps the row**: deleting it would make a re-linking user look new while the purchase ledger still keyed off their `userKey`.
+- **CORS is per-origin.** Mini responses go through `miniCors`, which replaces the default single allowed origin with the request's own when it matches `MINI_ORIGIN_RE` (any `*.tossmini.com` subdomain over https) and sets `Vary: Origin`. Unrecognized origins are logged, because on the client this failure looks like nothing but `Failed to fetch`.
+
+#### Daily play stores its state in the ledger, on purpose
+There are only two `mini_*` tables (`mini_users`, `mini_payment_requests`). 출석 도장 / 퀴즈 / 부풀리기 / 광고 보상 don't get tables of their own — a check-in is a `tokens = 0` row whose id *is* the fact (`checkin:<userKey>:<KST date>`), inserted with `ON CONFLICT DO NOTHING`, and the streak is counted by reading recent ids back. This is the same rule as the web grants: **once-per-day is enforced by the PRIMARY KEY, never by a prior `SELECT`.** The mini signup grant follows it too, as `signup:<userKey>` (the web equivalent is `signup_${email}` — same idea, different id shape, so don't expect one pattern to match both). Reward amounts and the ad-reward daily cap live in `MINI_*` constants; `test/mini-checkin.test.mjs`, `mini-quiz.test.mjs`, and `mini-pop.test.mjs` cover them.
+
+Rewards attach to *actions*, not luck — 산가지 뽑기 is free entertainment that pays nothing, because paying out on a random draw invites a 사행성 (gambling) objection in review. Everything that does pay (출석, 퀴즈, 부풀리기, 광고) pays for something the user did.
+
+부풀리기 is the one reward a client could otherwise just claim by POSTing, so it isn't taken on trust: `/mini/api/pop` issues an HMAC-signed challenge (`pop:<userKey>:<taps>:<issuedAt>`) that the claim must return, and the claim is rejected if the elapsed time is below `MINI_POP_MIN_MS` (automation) or above `MINI_POP_MAX_MS` (replaying an old issue). Likewise the ad bonus that raises a day's cap is counted from **rows actually granted that day**, never from what the client claims it watched.
+
+#### IAP
+`MINI_PRODUCTS` maps SKU → `{ tokens, amount }` (`token_10` 3,850원 / `token_30` 9,900원 / `token_100` 27,500원). **`orderId` is the primary key of the grant**, so a client retry or a `getPendingOrders` recovery grants once. `PURCHASED` and `PAYMENT_COMPLETED` both count as paid; `ORDER_IN_PROGRESS` means ask again later, not failure. An SKU present in the Toss console but missing from `MINI_PRODUCTS` reaches a branch that **logs loudly and returns 500** — the money already arrived, so that case must never pass silently. `test/mini-price-parity.test.mjs` checks the app's displayed prices against what the server records, and that the amounts are values the console actually permits.
+
 ## Architecture
 
 ### Backend: one Worker, one file
-`worker.js` is a single Cloudflare Worker with a manual `fetch(request, env)` route table (no framework) covering auth, chat/AI, payments, admin, push, and several side-quest features (promo QR, referrals, streaks, pudding fortune QR). Static assets (the entire repo root except `worker.js`) are served through the `SITE_ASSETS` binding (`[assets]` in `wrangler.toml`, `run_worker_first = true` — the Worker runs *before* asset serving so it can inject security headers and `window.ENV` into `index.html`). Because assets are Worker-first, don't assume any static file bypasses `worker.js`.
+`worker.js` is a single Cloudflare Worker with a manual `fetch(request, env)` route table (no framework) covering auth, chat/AI, payments, admin, push, several side-quest features (promo QR, referrals, streaks, pudding fortune QR), and the mini app's own `/mini/api/*` surface (login, profile, currency, daily play, IAP grant, unlink — see the mini-app section above). Static assets (the entire repo root except `worker.js`) are served through the `SITE_ASSETS` binding (`[assets]` in `wrangler.toml`, `run_worker_first = true` — the Worker runs *before* asset serving so it can inject security headers and `window.ENV` into `index.html`). Because assets are Worker-first, don't assume any static file bypasses `worker.js`.
 
 ### Data model: `payment_requests` is an append-only token ledger, not a balance column
+Everything in this section applies identically to the mini app's `mini_payment_requests` (keyed by `user_key` instead of `user_email`) — same append-only rules, separate table. Go through `accountSpend`/`accountRefund` rather than naming a table directly, and see the mini-app section for why the two ledgers must never be joined.
+
 There is no `tokens` balance field anywhere. Balance = `SUM(tokens) WHERE status='approved'` over `payment_requests`, where a purchase/grant is a positive row and a spend is a negative row. **Always grant or deduct by inserting a new row — never `UPDATE ... SET tokens = tokens + N`.** An `UPDATE` matches *every* row for that `user_email`, so it multiplies the grant by however many payment rows the user already has. Conditional/atomic spends use a single `INSERT ... SELECT ... WHERE (SELECT SUM(tokens) ...) >= cost` so concurrent requests can't double-spend (see the `/chat` and `/chat-detail` handlers for the pattern). `handleStreakCheckin`, `handleReferralClaim`, and `handleUngiGiveTokens` used to violate this (`UPDATE payment_requests SET tokens = tokens + N WHERE user_email = ?`, reproducing a token-inflation bug) — this was fixed to the INSERT-row pattern; if you ever see that `UPDATE` shape reappear anywhere in the file, it's a regression.
 
 **A `SELECT`-then-`INSERT` guard is not a guard.** Spends are atomic, but *grants* were all written as "SELECT whether they already got it → `await` → INSERT". D1 is a network round trip, so two requests that arrive together both pass the check and both get paid (double-tap, retry on a slow connection, two tabs, an offline queue replaying). This was live in five places at once — signup grant, local-token migration, the 7-day streak bonus, promo claim, and the one-time dynamic promo code (where *two different accounts* could each redeem the same code). The rule now: **a once-per-account or once-per-day grant must derive its `payment_requests.id` from what makes it unique** (`signup_${email}`, `streak_${email}${'_'}${today}`, `promo_${email}_${CODE}`) **and insert with `INSERT OR IGNORE`**, so the PRIMARY KEY — not a prior read — is what enforces "once". Consuming a single-use code uses a conditional `UPDATE ... WHERE used_at IS NULL` and checks `meta.changes`, the same shape `handleReferralClaim` uses. `test/grant-idempotency.test.mjs` and `test/streak-bonus.test.mjs` fire each handler twice concurrently and will fail if this regresses.
 
 ### The Gemini rate limit is the binding constraint — cache anything that isn't per-user
-Measured against production (2026-08-09): 12 sequential readings all succeeded, but **5 concurrent requests all failed** (~6.4s each, 422 with the token correctly refunded), and rapid retries were rejected in 0.7s. All 19 AI features share one `gemini-2.5-flash` key at roughly 10 RPM, so the app fails under exactly the traffic an app-store listing would bring. This is not a per-feature bug — it looks like "some features don't work" because it depends on timing.
+Measured against production (2026-08-09): 12 sequential readings all succeeded, but **5 concurrent requests all failed** (~6.4s each, 422 with the token correctly refunded), and rapid retries were rejected in 0.7s. All 19 AI features share one `gemini-2.5-flash` key at roughly 10 RPM, so the app fails under exactly the traffic an app-store listing would bring. This is not a per-feature bug — it looks like "some features don't work" because it depends on timing. **The mini app now shares that same key and quota** — web and mini traffic compete for one 10 RPM budget, so the Toss listing makes this constraint tighter rather than adding headroom.
 
 Some prompts contain **no user data at all**. Those go through `cachedFortune(env, bucket, generate)` (D1 table `fortune_cache`, `id = bucket#variant`):
 
@@ -112,11 +156,13 @@ That trial's "once per day" is a **KST** day, like everything else here (`_kstYm
 ### Token economy quick reference
 Solo reading = 1 token, Duo (compatibility) = 2 tokens, detail/상세 풀이 = 2 tokens, 택일 = 2 tokens, 대운 = 3 tokens, 이름 풀이 = 2 tokens, 궁합 시기 = 3 tokens; most of the side features are 1. Token cost variables are read once and reused for both the deduction and any refund path (Gemini call failure ⇒ automatic refund insert) — when adding a new paid feature, keep the same variable for both sides so a refund never mismatches the original charge.
 
+**The mini app prices the same features differently and calls the currency 엽전.** The rule there is that a reading you look at once costs more, while one you come back to daily stays cheap — 대운 6, 궁합 시기 6, 이름 풀이 4, 관상 4, 토정비결 4, 배우자궁 3, but 택일 still 2 and 타로/주역/룬/꿈해몽/오늘의 운세 still 1, against a 3-엽전 signup grant plus daily earning. So it is *not* a flat multiple of the web prices; look the number up rather than deriving it. Costs live in `mini/src/contents.js` on the client and in the handlers on the server, i.e. every price exists in two places — `test/mini-price-parity.test.mjs` and `test/mini-contents.test.mjs` are what stop those from drifting. Never copy a web cost into the mini client or vice versa.
+
 ### i18n
 Four languages (ko/en/zh/ja) driven by `js/locales.js` (frontend, ~59KB of key→string maps) and inline per-language string tables inside `worker.js` for AI system prompts / server-rendered legal pages. There's no i18n framework — adding a language means updating both places.
 
 ### D1 schema
-Tables are created idempotently via `CREATE TABLE IF NOT EXISTS` in `ensureDB`/`ensureDBExt` (run once per Worker isolate) rather than migration files, plus ad-hoc `ALTER TABLE ... ADD COLUMN` `.catch(() => {})` calls for schema evolution on already-deployed tables. `schema_saju_history.sql` documents the `saju_history` table shape but is not itself executed anywhere — it's reference/backup only; the live schema lives in the `ensureDB*` functions in `worker.js`.
+Tables are created idempotently via `CREATE TABLE IF NOT EXISTS` in `ensureDB`/`ensureDBExt` (run once per Worker isolate) rather than migration files, plus ad-hoc `ALTER TABLE ... ADD COLUMN` `.catch(() => {})` calls for schema evolution on already-deployed tables. The mini app adds exactly two tables (`mini_users`, `mini_payment_requests`) in the same style — daily play deliberately has none of its own, storing its state as ledger rows. `schema_saju_history.sql` documents the `saju_history` table shape but is not itself executed anywhere — it's reference/backup only; the live schema lives in the `ensureDB*` functions in `worker.js`.
 
 ### Response/error conventions
-All HTTP responses go through the `cors()` helper (sets CORS + security headers) — don't construct `new Response(...)` directly in a route handler. Error messages returned to clients are user-facing Korean strings; don't leak stack traces or raw D1 error text into responses.
+All HTTP responses go through the `cors()` helper (sets CORS + security headers) — don't construct `new Response(...)` directly in a route handler. **`/mini/api/*` handlers use `miniCors(request, …)` instead**, which wraps `cors()` and relaxes the allowed origin to the calling `*.tossmini.com` — a mini handler that returns plain `cors()` will fail in the app as an opaque `Failed to fetch`. Error messages returned to clients are user-facing Korean strings; don't leak stack traces or raw D1 error text into responses.
