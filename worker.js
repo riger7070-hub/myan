@@ -1079,11 +1079,20 @@ function permanentFortuneSpecs() {
 }
 
 // 한 번의 크론에서 만들 개수와 간격.
-// 이 값은 무료 등급의 분당 한도(약 10건)에 맞춰 잡은 것이다 — 예열이 사용자 요청을
-// 밀어내지 않도록 일부러 그보다 느리게 갔고, 916자리를 채우는 데 한 달이 걸렸다.
-// 유료 키로 바꾼 지금은 그 이유가 없어졌으므로 다시 잡아야 한다(아래 커밋에서 조정).
-const WARM_BUDGET = 30;
-const WARM_GAP_MS = 7000;
+//
+// 예전 값(30개 × 7초)은 무료 등급의 분당 한도에 맞춘 것이라 916자리를 채우는 데 한 달이
+// 걸렸다. 유료 키로 바꾸면서 그 이유는 사라졌고, 지금 속도를 정하는 것은 두 가지다.
+//
+//  1) 워커 한 번 실행의 서브리퀘스트 상한. 한 자리를 채우는 데 Gemini 1 + D1 2(개수 조회,
+//     INSERT) = 3건이 든다. 120개면 약 362건이라 상한(유료 플랜 1000)에 한참 못 미친다.
+//  2) 크론 한 번의 실제 소요 시간. Gemini 호출 자체가 건당 수 초라 이게 더 빡빡한 쪽이다.
+//     정확한 상한을 확인하지 않았으므로 여유를 크게 뒀다 — 중간에 잘려도 손해가 없다.
+//     예열은 "빈 자리부터 채우고 이미 찬 자리는 건너뛴다"라서 다음 밤에 이어서 채운다.
+//
+// 급할 이유도 없다. 사용자가 실제로 여는 자리는 그 요청이 알아서 채우고, 예열은 아직
+// 아무도 안 연 자리를 미리 사 두는 것뿐이다.
+const WARM_BUDGET = 120;
+const WARM_GAP_MS = 250;
 const CACHE_TTL_DAYS = 3;
 // wrangler.toml 의 crons 두 번째 항목과 반드시 같아야 한다. 어긋나면 예열이 아예
 // 안 돌거나(아무 크론에도 안 걸림) 아침 푸시 시각에 같이 돌아 사용자를 밀어낸다.
@@ -1104,6 +1113,22 @@ async function purgeStaleFortunes(env, nowSec = Math.floor(Date.now() / 1000)) {
 }
 
 /** 변형이 가장 적은 자리부터 budget 개. 아직 하나도 없는 자리가 먼저 온다. */
+// 같은 처지의 자리끼리는 이 순서로 먼저 채운다.
+//
+// 916자리 중 한국어는 229개뿐이고 나머지 687개는 en/zh/ja 다. 한국 스토어의 한국어
+// 서비스라 그쪽은 대부분 아무도 열지 않는데, 무료 등급일 때는 어차피 남는 한도를 쓰는
+// 것이라 상관없었다. 유료로 바뀐 지금은 안 열릴 자리를 미리 사 두는 것이 그대로 비용이다.
+//
+// 다만 언어를 1순위로 두면 한국어가 변형을 계속 쌓는 동안 영어는 첫 자리도 못 채운다.
+// 그래서 **채워진 개수가 먼저이고 언어는 그다음**이다 — 모든 자리의 첫 변형을 채운 뒤에야
+// 두 번째 변형으로 넘어가고, 같은 단계 안에서만 한국어가 앞선다.
+const WARM_LANG_ORDER = ['ko', 'en', 'ja', 'zh'];
+const _warmLangRank = (bucket) => {
+  const lang = String(bucket).split('|')[1];
+  const i = WARM_LANG_ORDER.indexOf(lang);
+  return i < 0 ? WARM_LANG_ORDER.length : i;
+};
+
 async function selectWarmTargets(env, budget = WARM_BUDGET) {
   const { results } = await env.DB.prepare(
     'SELECT bucket, COUNT(*) AS n FROM fortune_cache GROUP BY bucket'
@@ -1111,7 +1136,7 @@ async function selectWarmTargets(env, budget = WARM_BUDGET) {
   const have = new Map((results || []).map(r => [r.bucket, r.n]));
   return permanentFortuneSpecs()
     .map(s => ({ ...s, n: have.get(s.bucket) || 0 }))
-    .sort((a, b) => a.n - b.n)
+    .sort((a, b) => a.n - b.n || _warmLangRank(a.bucket) - _warmLangRank(b.bucket))
     .slice(0, budget);
 }
 

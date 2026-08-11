@@ -15,11 +15,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const {
-  permanentFortuneSpecs, selectWarmTargets, purgeStaleFortunes,
+  permanentFortuneSpecs, selectWarmTargets, purgeStaleFortunes, _warmLangRank,
   storeFortune, tarotSpec, runeSpec, typeCompatSpec,
   TAROT_CARDS, RUNE_NAMES, TYPE_ELEMENTS, WARM_CRON, WARM_BUDGET, WARM_GAP_MS,
 } = await loadWorker([
-  'permanentFortuneSpecs', 'selectWarmTargets', 'purgeStaleFortunes',
+  'permanentFortuneSpecs', 'selectWarmTargets', 'purgeStaleFortunes', '_warmLangRank',
   'storeFortune', 'tarotSpec', 'runeSpec', 'typeCompatSpec',
   'TAROT_CARDS', 'RUNE_NAMES', 'TYPE_ELEMENTS', 'WARM_CRON', 'WARM_BUDGET', 'WARM_GAP_MS',
 ]);
@@ -115,14 +115,14 @@ test('예열 크론은 아침 푸시와 다른 시각이다', () => {
   assert.ok(!others.includes(WARM_CRON), '예열이 다른 작업과 같은 시각에 돈다');
 });
 
-test('예열 속도가 분당 한도보다 느리다', () => {
-  // 무료 등급이 분당 10건 근처다. 예열이 그보다 빠르면 자기가 자기를 막고,
-  // 새벽이라도 그 시간에 들어온 사람까지 밀어낸다.
-  const perMinute = 60000 / WARM_GAP_MS;
-  assert.ok(perMinute <= 9,
-    `예열이 분당 ${perMinute.toFixed(1)}건 — 한도(약 10)에 너무 가깝다`);
-  assert.ok(WARM_BUDGET * WARM_GAP_MS <= 10 * 60 * 1000,
-    `한 번에 ${(WARM_BUDGET * WARM_GAP_MS / 60000).toFixed(1)}분 — 크론 한 번이 너무 길다`);
+test('예열 한 번이 워커 서브리퀘스트 상한에 못 미친다', () => {
+  // 유료 키로 바꾸면서 분당 한도는 사라졌고, 이제 속도를 막는 것은 워커 한 번 실행의
+  // 서브리퀘스트 상한이다. 한 자리에 Gemini 1 + D1 2(개수 조회, INSERT) = 3건,
+  // 거기에 예열 시작의 정리·조회 2건이 붙는다. 넘기면 크론이 중간에 통째로 끊긴다.
+  const perEntry = 3;
+  const subrequests = WARM_BUDGET * perEntry + 2;
+  assert.ok(subrequests <= 700,
+    `예열 한 번에 서브리퀘스트 ${subrequests}건 — 상한(유료 1000)에 여유가 없다`);
 });
 
 test('오래된 날짜 자리만 지우고 영구 자리는 남긴다', async () => {
@@ -146,4 +146,59 @@ test('오래된 날짜 자리만 지우고 영구 자리는 남긴다', async ()
   const left = db.prepare('SELECT id FROM fortune_cache ORDER BY id').all().map(r => r.id);
   assert.deepEqual(left, ['d', 'e', 'f', 'g'],
     '영구 자리를 지웠거나 오래된 날짜 자리를 남겼다');
+});
+
+test('언어 우선순위가 한국어를 앞에 둔다', () => {
+  // 916자리 중 687개가 en/zh/ja 다. 무료 등급일 땐 남는 한도를 쓰는 것이라 상관없었지만,
+  // 유료로 바뀐 뒤에는 아무도 안 열 자리를 미리 사 두는 것이 그대로 비용이다.
+  //
+  // 순서를 selectWarmTargets 의 결과로만 확인하면 안 된다 — permanentFortuneSpecs 가
+  // 마침 ko 부터 만들고 Array.sort 가 안정 정렬이라, 언어 비교를 통째로 빼도 통과한다.
+  // (실제로 빼 보고 확인했다.) 그러니 비교 함수 자체를 본다.
+  assert.ok(_warmLangRank('tarot|ko|0|u') < _warmLangRank('tarot|en|0|u'), 'ko 가 en 보다 뒤다');
+  assert.ok(_warmLangRank('tarot|en|0|u') < _warmLangRank('tarot|zh|0|u'), 'en 이 zh 보다 뒤다');
+  assert.equal(_warmLangRank('tarot|ko|0|u'), 0, 'ko 가 1순위가 아니다');
+  // 모르는 언어가 한국어를 제치면 안 된다.
+  assert.ok(_warmLangRank('tarot|ko|0|u') < _warmLangRank('tarot|xx|0|u'));
+  assert.ok(_warmLangRank('망가진bucket') >= _warmLangRank('tarot|zh|0|u'), '깨진 bucket 이 앞선다');
+});
+
+test('선택 순서가 언어를 실제로 참고한다', async () => {
+  // 위 테스트는 비교 함수만 본다. 그 함수를 정렬에서 빼먹으면 여전히 통과하므로,
+  // selectWarmTargets 가 그것을 쓰고 있는지는 소스로 못 박는다.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const src = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.js'), 'utf8');
+  const from = src.indexOf('async function selectWarmTargets');
+  assert.ok(from >= 0, 'selectWarmTargets 를 찾지 못했다');
+  // 함수 끝은 줄 맨 앞의 '}' 다 — 안쪽 화살표 함수의 '}' 에 걸리지 않게.
+  const body = src.slice(from, from + src.slice(from).indexOf('\n}'));
+  const sortLine = body.split('\n').find(l => l.includes('.sort(')) || '';
+  assert.match(sortLine, /_warmLangRank/,
+    'selectWarmTargets 의 정렬이 언어를 안 본다 — 안 열릴 자리를 먼저 사게 된다');
+  assert.match(sortLine, /a\.n - b\.n \|\|/,
+    '채워진 개수가 1순위가 아니다 — 한국어가 변형을 쌓는 동안 다른 언어가 굶는다');
+});
+
+test('한국어를 먼저 채우되 다른 언어를 굶기지는 않는다', async () => {
+  // 언어를 1순위로 두면 한국어가 변형을 쌓는 동안 영어는 첫 자리도 못 채운다.
+  // 채워진 개수가 먼저이고 언어는 그 안에서의 순서일 뿐이어야 한다.
+  const { db, DB } = createD1();
+  const env = { DB };
+
+  // 한국어 자리를 전부 한 번씩 채운다.
+  const koSpecs = permanentFortuneSpecs().filter(s => s.bucket.split('|')[1] === 'ko');
+  for (const s of koSpecs) {
+    db.prepare(`INSERT INTO fortune_cache (id, bucket, reading) VALUES (?, ?, 'x')`)
+      .run(`${s.bucket}#0`, s.bucket);
+  }
+
+  const targets = await selectWarmTargets(env, 20);
+  for (const t of targets) {
+    assert.notEqual(t.bucket.split('|')[1], 'ko',
+      '한국어가 이미 한 바퀴 찼는데 또 한국어만 고른다 — 다른 언어가 영영 안 찬다');
+    assert.equal(t.n, 0, '아직 빈 자리가 남았는데 이미 찬 자리를 고른다');
+  }
 });
