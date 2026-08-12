@@ -89,6 +89,9 @@ export const SECTIONS = [
   {
     icon: 'secMe', title: '사주로 보는 나',
     items: [
+      { id: 'sinsal',     icon: 'sinsal',     label: '신살 풀이',          cost: 3, path: '/api/sinsal',         need: null },
+      { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
+      { id: 'vocation',   icon: 'vocation',   label: '천직 · 적성',        cost: 4, path: '/api/vocation',       need: null },
       { id: 'daeun',      icon: 'daeun',      label: '대운 · 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
       { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
       { id: 'photo',      icon: 'photo',      label: '관상·손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
@@ -119,6 +122,7 @@ export const SECTIONS = [
   {
     icon: 'secDaily', title: '오늘의 운세',
     items: [
+      { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',     cost: 1, path: '/api/tti-ranking',    need: null },
       { id: 'today',  icon: 'today',  label: '오늘의 운세',        cost: 1, path: '/mini/api/today',     need: null },
       { id: 'astro',  icon: 'astro',  label: '천궁도 트랜싯',      cost: 1, path: '/api/astro-transit',  need: null },
       { id: 'zodiac', icon: 'zodiac', label: '띠·별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },

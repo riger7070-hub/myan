@@ -268,6 +268,12 @@ function bodyFor(item, profile, form) {
     case 'lucky':      return base;
     case 'daeun':      return { ...base, birth, gender: profile.gender || '' };
     case 'spouse':     return { ...base, birth, gender: profile.gender || '' };
+    // 신살·전생·천직은 네 기둥을 다 쓰므로 생시까지 함께 보낸다.
+    case 'sinsal':     return { ...base, birth, gender: profile.gender || '' };
+    case 'pastlife':   return { ...base, birth, gender: profile.gender || '' };
+    case 'vocation':   return { ...base, birth, gender: profile.gender || '' };
+    // 띠 순위는 생년만 있으면 내 띠를 짚어 준다. 없어도 순위는 볼 수 있다.
+    case 'ttirank':    return { ...base, birth };
     case 'numerology': return { ...base, birth };
     case 'tojeong':    return { ...base, birth };
     case 'astro':      return { ...base, birth };
@@ -332,7 +338,13 @@ async function runItem(item) {
       console.error('[extract]', e);
       parsed = { body: data.reading || '', extras: [] };
     }
-    state.result = { item, ...parsed, card: data.card, upright: data.upright };
+    // rows 는 띠 순위표다. 글만 보여주면 정작 순위를 못 본다 — 그게 이 콘텐츠의 전부다.
+    state.result = {
+      item, ...parsed,
+      card: data.card, upright: data.upright,
+      rows: Array.isArray(data.rows) ? data.rows : null,
+      mine: data.mine || null,
+    };
     // 카드를 뽑는 콘텐츠는 결과를 곧장 들이밀지 않는다. 뒤집는 순간이 재미의 절반이다.
     state.reveal = !!data.card;
     go('result');
@@ -366,6 +378,19 @@ function extractResult(d) {
   add('사주', d.saju1 || d.saju);
   add('오늘의 기운', d.dayElem);
   if (d.branch && d.sipsin) add('배우자궁', `${d.branch}(${d.elem || ''}) · ${d.sipsin}`);
+  // 신살 — 선 것들을 한 줄로. 없으면 없다고 적는 편이 낫다(빈 화면보다 낫다).
+  if (Array.isArray(d.hits)) {
+    add('신살', d.hits.length ? d.hits.map(h => h.name).join(' · ') : '뚜렷한 신살 없음');
+    if (d.samjae?.years?.length) {
+      add(d.samjae.inSamjae ? '삼재 (지금)' : '다음 삼재',
+        d.samjae.years.map(y => `${y.year}년`).join(' · '));
+    }
+  }
+  // 천직 — 가장 두터운 십신 셋
+  if (Array.isArray(d.top) && d.top.length) add('두드러진 십신', d.top.join(' · '));
+  // 띠 순위 — 내 띠가 몇 위인지가 제일 궁금한 값이다.
+  if (d.mine?.name) add('내 띠', `${d.mine.name}띠 · ${d.mine.rank}위`);
+  if (d.dayBranch && Array.isArray(d.rows)) add('오늘 1위', `${d.rows[0].name}띠`);
   if (Array.isArray(d.timeline) && d.timeline.length) {
     // 흔들리는 해만 짚는다. 합(合)은 본문에서 다루므로 목록까지 늘리지 않는다.
     const shake = d.timeline.filter(t => t.kinds?.some(k => k !== '합'));
@@ -1397,6 +1422,15 @@ function render() {
             <span class="tarot-face">${esc(r.card.icon || '🔮')}<b>${esc(r.card.name || '')}</b>
             ${r.upright === false ? '<i>역방향</i>' : '<i>정방향</i>'}</span>
           </div></div>` : ''}
+        ${/* 띠 순위표. 이 콘텐츠는 표가 본문이다 — 글보다 먼저 보여준다. */''}
+        ${r.rows?.length ? `<div class="card tti-board">
+          ${r.rows.map(row => `
+            <div class="tti-row${r.mine?.branch === row.branch ? ' mine' : ''}">
+              <span class="tti-rank${row.rank <= 3 ? ' top' : ''}${row.rank >= 10 ? ' low' : ''}">${row.rank}</span>
+              <span class="tti-name">${esc(row.name)}띠</span>
+              <span class="tti-why">${esc((row.why || []).join('·'))}</span>
+            </div>`).join('')}
+        </div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>
         <div class="row2">
           <button class="btn" id="btn-share" ${state.busy ? 'disabled' : ''}>공유하기</button>

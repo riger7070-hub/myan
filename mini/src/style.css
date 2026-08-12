@@ -748,3 +748,27 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 /* 상품을 불러오는 동안의 자리 */
 .skel-tile { pointer-events: none; display: block; }
 .skel-tile .skel-line { margin: 4px 0; }
+
+/* ── 오늘의 띠 순위표 ──
+   이 콘텐츠는 표가 본문이다. 내 띠는 눈에 바로 들어와야 한다. */
+.tti-board { padding: 6px 4px; }
+.tti-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 10px; font-size: 0.9rem;
+}
+.tti-row + .tti-row { border-top: 1px solid var(--line); }
+.tti-row.mine {
+  background: rgba(201, 169, 110, 0.1);
+  border: 1px solid var(--gold-dim); border-radius: 10px;
+}
+.tti-rank {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; color: var(--text-dim);
+  border: 1px solid var(--line);
+}
+.tti-rank.top { color: var(--gold-light); border-color: var(--gold-dim); }
+.tti-rank.low { opacity: 0.6; }
+.tti-name { flex: 1; }
+.tti-row.mine .tti-name { color: var(--gold-light); font-weight: 600; }
+.tti-why { font-size: 0.76rem; color: var(--text-dim); }

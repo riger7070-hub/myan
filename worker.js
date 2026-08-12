@@ -1560,6 +1560,10 @@ export default {
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAstroTransit(request, env)); }
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAuspiciousDays(request, env)); }
     if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
+    if (path === '/api/sinsal' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSinsal(request, env)); }
+    if (path === '/api/tti-ranking' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiRanking(request, env)); }
+    if (path === '/api/past-life' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handlePastLife(request, env)); }
+    if (path === '/api/vocation' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleVocation(request, env)); }
     if (path === '/api/daeun'          && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDaeun(request, env)); }
     if (path === '/api/name-reading'   && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNameReading(request, env)); }
     if (path === '/api/compat-timing'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleCompatTiming(request, env)); }
@@ -4867,6 +4871,189 @@ const _SIPSIN_MEANING = {
   편인: '깊고 사려 깊은 자리. 속을 잘 헤아리되 거리를 두려는 면도 있습니다.',
 };
 
+
+// ════════════════════════════════════════════════════════════
+//  신살(神煞) · 삼재 · 띠 순위 · 십신 분포
+//
+//  전부 지지(地支) 표로 정해지는 것이라 계산으로 끝난다. AI 에게 "도화살이 있나요"
+//  하고 묻지 않는다 — 물으면 매번 다른 답이 나오고, 그건 사주가 아니라 소설이다.
+//  계산은 여기서 하고, AI 에게는 **계산 결과를 읽어 주는 일**만 맡긴다.
+// ════════════════════════════════════════════════════════════
+
+// 삼합국(三合局). 신살 대부분이 이 표에서 나온다.
+//   [삼합 세 글자, 왕지(도화), 역마, 화개]
+const SAMHAP_GROUPS = [
+  { set: ['寅', '午', '戌'], dohwa: '卯', yeokma: '申', hwagae: '戌' },
+  { set: ['巳', '酉', '丑'], dohwa: '午', yeokma: '亥', hwagae: '丑' },
+  { set: ['申', '子', '辰'], dohwa: '酉', yeokma: '寅', hwagae: '辰' },
+  { set: ['亥', '卯', '未'], dohwa: '子', yeokma: '巳', hwagae: '未' },
+];
+const _groupOf = (branch) => SAMHAP_GROUPS.find(g => g.set.includes(branch)) || null;
+
+// 백호대살(白虎大殺) — 간지 한 쌍으로 정해진다.
+const BAEKHO = new Set(['甲辰', '乙未', '丙戌', '丁丑', '戊辰', '壬戌', '癸丑']);
+// 괴강살(魁罡殺) — 일주로 본다.
+const GWAEGANG = new Set(['庚辰', '庚戌', '壬辰', '戊戌']);
+// 양인살(羊刃殺) — 일간의 겁재가 앉는 왕지. 음간에는 세우지 않는 것이 통설이다.
+const YANGIN = { 甲: '卯', 丙: '午', 戊: '午', 庚: '酉', 壬: '子' };
+// 천을귀인(天乙貴人) — 살이 아니라 길신. 흉살만 늘어놓으면 겁만 주게 된다.
+const CHEONEUL = {
+  甲: ['丑', '未'], 戊: ['丑', '未'], 庚: ['丑', '未'],
+  乙: ['子', '申'], 己: ['子', '申'],
+  丙: ['亥', '酉'], 丁: ['亥', '酉'],
+  辛: ['午', '寅'],
+  壬: ['巳', '卯'], 癸: ['巳', '卯'],
+};
+
+const SINSAL_MEANING = {
+  도화살: { good: true, text: '사람을 끌어당기는 기운입니다. 눈에 띄고 인기를 얻지만, 그만큼 구설도 함께 옵니다.' },
+  역마살: { good: true, text: '한곳에 머물지 못하는 결입니다. 이동·여행·해외와 인연이 깊고, 변화가 잦습니다.' },
+  화개살: { good: true, text: '홀로 깊어지는 자리입니다. 예술·학문·종교에 재주가 있고, 고독을 벗 삼습니다.' },
+  백호살: { good: false, text: '기운이 급하고 강합니다. 피를 보는 일(수술·사고)과 인연이 있다 하여 조심을 이릅니다.' },
+  괴강살: { good: false, text: '극과 극의 자리입니다. 크게 이루거나 크게 꺾이며, 우두머리 기질이 강합니다.' },
+  양인살: { good: false, text: '날이 선 칼과 같습니다. 결단이 빠르고 추진력이 세지만, 스스로를 베기도 합니다.' },
+  천을귀인: { good: true, text: '가장 귀한 길신입니다. 어려울 때 손 내미는 사람이 나타나고, 흉한 일이 눅어집니다.' },
+};
+
+/**
+ * 사주 네 기둥에서 신살을 찾는다.
+ * @param {{yp,mp,dp,hp,dayGan}} saju computeSaju 의 결과
+ */
+function computeSinsal(saju) {
+  if (!saju) return null;
+  const pillars = [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean);
+  const branches = pillars.map(p => p[1]);
+  const yearBranch = saju.yp?.[1];
+  const dayBranch = saju.dp?.[1];
+  const dayGan = saju.dayGan;
+
+  // 기준은 년지와 일지 둘 다 본다(어느 쪽을 쓰느냐는 유파가 갈린다).
+  const bases = [...new Set([yearBranch, dayBranch].filter(Boolean))];
+  const hits = [];
+  const add = (name, where) => {
+    const found = hits.find(h => h.name === name);
+    if (found) { if (!found.where.includes(where)) found.where.push(where); return; }
+    hits.push({ name, where: [where], ...SINSAL_MEANING[name] });
+  };
+  const POS = ['년', '월', '일', '시'];
+
+  for (const base of bases) {
+    const g = _groupOf(base);
+    if (!g) continue;
+    branches.forEach((b, i) => {
+      if (b === g.dohwa)  add('도화살', POS[i]);
+      if (b === g.yeokma) add('역마살', POS[i]);
+      if (b === g.hwagae) add('화개살', POS[i]);
+    });
+  }
+  pillars.forEach((p, i) => { if (BAEKHO.has(p)) add('백호살', POS[i]); });
+  if (saju.dp && GWAEGANG.has(saju.dp)) add('괴강살', '일');
+  if (YANGIN[dayGan]) branches.forEach((b, i) => { if (b === YANGIN[dayGan]) add('양인살', POS[i]); });
+  (CHEONEUL[dayGan] || []).forEach(t => branches.forEach((b, i) => { if (b === t) add('천을귀인', POS[i]); }));
+
+  return { hits, samjae: computeSamjae(yearBranch) };
+}
+
+/**
+ * 삼재(三災). 태어난 해의 띠가 속한 삼합국마다 드는 3년이 정해져 있다.
+ * 들삼재·눌삼재(누울삼재)·날삼재 순으로 지나간다.
+ */
+const SAMJAE_YEARS = {
+  '申子辰': ['寅', '卯', '辰'],
+  '巳酉丑': ['亥', '子', '丑'],
+  '寅午戌': ['申', '酉', '戌'],
+  '亥卯未': ['巳', '午', '未'],
+};
+function computeSamjae(yearBranch, fromYear) {
+  const g = _groupOf(yearBranch);
+  if (!g) return null;
+  const years = SAMJAE_YEARS[g.set.join('')];
+  if (!years) return null;
+  const now = fromYear || Number(new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 4));
+  const LABEL = ['들삼재', '눌삼재', '날삼재'];
+
+  // ⚠️ 삼재는 **연속한 세 해**다. 해당 지지를 아무 데서나 주워 담으면
+  // 卯·辰·寅(2023·2024·2034) 처럼 흩어진 해가 나온다 — 12년 건너뛴 남의 주기다.
+  // 들삼재가 드는 해를 먼저 찾고, 거기서 세 해를 이어 붙인다.
+  const branchOf = (y) => JJ[(y - 4) % 12];           // 서기 4년이 甲子년
+  let start = now;
+  while (branchOf(start) !== years[0]) start--;
+  if (now > start + 2) start += 12;                   // 이미 지난 주기면 다음 주기로
+
+  const out = [0, 1, 2].map(i => ({ year: start + i, kind: LABEL[i] }));
+  const inSamjae = now >= start && now <= start + 2;
+  return { years: out, now, inSamjae };
+}
+
+// ── 오늘의 띠 순위 ──
+//
+// 그날 일진의 지지와 열두 띠가 맺는 관계로 점수를 낸다. 무작위가 아니라 계산이라
+// 같은 날에는 누가 보든 같은 순위가 나온다 — 운세는 그래야 믿긴다.
+const TTI_NAME = { 子: '쥐', 丑: '소', 寅: '호랑이', 卯: '토끼', 辰: '용', 巳: '뱀',
+                   午: '말', 未: '양', 申: '원숭이', 酉: '닭', 戌: '개', 亥: '돼지' };
+
+function computeTtiRanking(ymd) {
+  const [y, m, d] = String(ymd).split('-').map(n => parseInt(n, 10));
+  if (!y || !m || !d) return null;
+  let dayBranch;
+  try {
+    dayBranch = Solar.fromYmd(y, m, d).getLunar().getEightChar().getDay()[1];
+  } catch { return null; }
+  const g = _groupOf(dayBranch);
+
+  const rows = JJ.map(b => {
+    let score = 0;
+    const why = [];
+    if (g && g.set.includes(b) && b !== dayBranch) { score += 3; why.push('삼합'); }
+    if (JJ_HAP[dayBranch] === b) { score += 3; why.push('육합'); }
+    if (b === dayBranch) { score += 2; why.push('일진과 같은 자리'); }
+    if (JJ_CHUNG[dayBranch] === b) { score -= 3; why.push('충'); }
+    if ((JJ_HYUNG[dayBranch] || []).includes(b)) { score -= 2; why.push('형'); }
+    return { branch: b, name: TTI_NAME[b], score, why };
+  });
+
+  // 점수가 같을 때의 순서도 날마다 달라야 한다. 날짜에서 뽑은 값으로 흔든다
+  // (무작위가 아니라 날짜의 함수라, 같은 날 다시 봐도 순위가 그대로다).
+  const seed = (y * 10000 + m * 100 + d) % 12;
+  rows.forEach((r, i) => { r.tie = (i + seed) % 12; });
+  rows.sort((a, b) => b.score - a.score || a.tie - b.tie);
+  return { dayBranch, rows: rows.map((r, i) => ({ rank: i + 1, ...r })) };
+}
+
+// ── 십신 분포 ──
+//
+// 천직·적성은 어떤 십신이 두터운가로 읽는다. 천간 넷과 지지의 본기(本氣)를 함께 센다.
+const JJ_BONGI = { 子: '癸', 丑: '己', 寅: '甲', 卯: '乙', 辰: '戊', 巳: '丙',
+                   午: '丁', 未: '己', 申: '庚', 酉: '辛', 戌: '戊', 亥: '壬' };
+
+function computeSipsinSpread(saju) {
+  if (!saju?.dayGan) return null;
+  const count = {};
+  const bump = (gan, weight) => {
+    const gi = CG.indexOf(gan);
+    if (gi < 0) return;
+    const name = _sipsin(saju.dayGan, CGO[gi], gi % 2 === 0);
+    if (name) count[name] = (count[name] || 0) + weight;
+  };
+  for (const p of [saju.yp, saju.mp, saju.dp, saju.hp]) {
+    if (!p) continue;
+    bump(p[0], 1);                       // 천간
+    bump(JJ_BONGI[p[1]], 1);             // 지지 본기
+  }
+  // 일간 자신은 세지 않는다(늘 비견이 되어 분포를 흐린다).
+  const gi = CG.indexOf(saju.dayGan);
+  if (gi >= 0) {
+    const self = _sipsin(saju.dayGan, CGO[gi], gi % 2 === 0);
+    if (self && count[self]) count[self] -= 1;
+  }
+  const total = Object.values(count).reduce((a, b) => a + b, 0) || 1;
+  const sorted = Object.entries(count)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, n]) => ({ name, count: n, pct: Math.round((n / total) * 100) }));
+  return { total, spread: sorted, top: sorted.slice(0, 3).map(x => x.name) };
+}
+
 /**
  * 배우자궁을 읽는다.
  * @param {{year,month,day,hour}} birth
@@ -4908,6 +5095,298 @@ function computeSpousePalace(birth, gender, fromYear, years = 10) {
     saju: saju.text,
     dayGan: saju.dayGan,
   };
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  신살 풀이 (3엽전)
+//
+//  도화살·역마살 같은 말은 검색이 많은 만큼 겁을 주기도 쉽다. 계산은 표대로 하되
+//  글은 "이런 기운이니 이렇게 쓰시라" 로 간다 — 흉살만 늘어놓고 끝내지 않는다.
+// ════════════════════════════════════════════════════════════
+async function handleSinsal(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const sin = computeSinsal(saju);
+    if (!sin) return cors(JSON.stringify({ error: { message: '신살을 계산하지 못했습니다.' } }), 400);
+
+    const COST = 3;
+    const paid = await accountSpend(env, acct, 'sinsal', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '신살 풀이는 엽전 ' + COST + '개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'sinsal', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const list = sin.hits.map(h => h.name + '(' + h.where.join('·') + '주) — ' + h.text).join(NL);
+    const sj = sin.samjae;
+    const prompt = [
+      '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + ' 입니다.',
+      g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      sin.hits.length ? '이 사주에 선 신살:' + NL + list
+        : '뚜렷하게 선 신살이 없습니다. 그것도 하나의 결이니 그렇게 읽어 주세요.',
+      '',
+      sj ? (sj.inSamjae
+        ? '지금 삼재 중입니다(' + sj.years.map(y => y.year + '년 ' + y.kind).join(', ') + ').'
+        : '다음 삼재는 ' + sj.years.map(y => y.year + '년 ' + y.kind).join(', ') + ' 입니다.') : '',
+      '',
+      '이 사람의 신살을 풀어 주세요. 다음 순서로 이어지는 글로 씁니다.',
+      '1) 가장 도드라진 기운 하나를 먼저 짚고, 그 기운이 삶에서 어떻게 드러나는지',
+      '2) 나머지 신살들이 서로 어떻게 얽히는지',
+      '3) 이 기운을 잘 쓰는 법 — 억누르는 것이 아니라 쓰는 법으로',
+      '4) 삼재에 대해 담담하게 한 문단',
+      '',
+      '⚠️ 반드시 지킬 것: 살(殺)이라는 글자에 겁먹지 않도록 하세요. 사고·수술·이별 같은',
+      '일을 예언하지 마세요. 신살은 타고난 기운의 결이지 정해진 불행이 아니며, 어떻게',
+      '쓰느냐에 따라 재능이 된다고 분명히 말해 주세요. 삼재도 "조심할 때"이지',
+      '"나쁜 일이 반드시 생기는 해"가 아닙니다.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(NL);
+
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    const title = sin.hits.length ? sin.hits.map(h => h.name).join('·') : '신살 없음';
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'sinsal', '신살 ' + title, reading,
+      { hits: sin.hits.map(h => h.name) }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, hits: sin.hits, samjae: sin.samjae,
+      saju: [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[SINSAL]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  오늘의 띠 순위 (1엽전)
+//
+//  순위 자체는 계산이라 AI 없이도 나온다. AI 에게는 1위와 꼴찌, 그리고 내 띠에
+//  대한 짧은 말만 맡긴다 — 열두 줄을 다 쓰게 하면 느리고 비싸다.
+// ════════════════════════════════════════════════════════════
+async function handleTtiRanking(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth } = await request.json().catch(() => ({}));
+    const today = _kstYmd();
+    const rank = computeTtiRanking(today);
+    if (!rank) return cors(JSON.stringify({ error: { message: '오늘의 순위를 계산하지 못했습니다.' } }), 500);
+
+    // 내 띠. 생년이 없어도 순위는 볼 수 있게 한다.
+    let mine = null;
+    if (birth && birth.year) {
+      const saju = computeSaju(birth.year, birth.month || 1, birth.day || 1, birth.hour || '');
+      if (saju) mine = rank.rows.find(r => r.branch === saju.yp[1]) || null;
+    }
+
+    const COST = 1;
+    const paid = await accountSpend(env, acct, 'ttirank', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '오늘의 띠 순위는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'ttirank', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const top = rank.rows[0], bottom = rank.rows[11];
+    const prompt = [
+      '오늘은 일진의 지지가 ' + rank.dayBranch + ' 인 날입니다.',
+      '오늘 기운이 가장 좋은 띠는 ' + top.name + '띠(' + top.why.join('·') + ')이고,',
+      '가장 조심할 띠는 ' + bottom.name + '띠(' + bottom.why.join('·') + ')입니다.',
+      mine ? '이 사람은 ' + mine.name + '띠이고 오늘 ' + mine.rank + '위입니다' +
+        (mine.why.length ? '(' + mine.why.join('·') + ')' : '') + '.' : '',
+      '',
+      '다음 세 토막을 써 주세요. 각 토막은 두세 문장입니다.',
+      '1) 오늘 1위인 ' + top.name + '띠에게 — 이 기운을 어디에 쓰면 좋은지',
+      '2) 오늘 12위인 ' + bottom.name + '띠에게 — 겁주지 말고, 무엇을 늦추면 좋은지',
+      mine ? '3) ' + mine.name + '띠인 상담자에게 — 오늘 하루를 어떻게 보내면 좋은지' : '3) 오늘 하루 모두에게 건네는 한마디',
+      '',
+      '⚠️ 순위가 낮다고 불행을 예고하지 마세요. 오늘 기운과 어긋난다는 뜻일 뿐입니다.',
+      '토막마다 앞에 "1)" 같은 번호는 쓰지 말고, 빈 줄로 나눠 주세요.',
+      '전체 400자 내외.',
+    ].filter(Boolean).join(NL);
+
+    const reading = await geminiText(env, prompt, { temperature: 0.9, maxOutputTokens: 1200 });
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'ttirank',
+      today + ' 띠 순위', reading, { top: top.name, mine: mine?.name || null }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, date: today, dayBranch: rank.dayBranch,
+      rows: rank.rows, mine, remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[TTIRANK]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  전생 이야기 (4엽전)
+//
+//  한 번 보고 끝나는 콘텐츠라 값을 조금 높였다. 대신 읽는 맛으로 승부한다.
+// ════════════════════════════════════════════════════════════
+async function handlePastLife(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'pastlife', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '전생 이야기는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'pastlife', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const sin = computeSinsal(saju);
+    const spread = computeSipsinSpread(saju);
+    const g = _normalizeGender(gender);
+    const prompt = [
+      '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + '(' + saju.dayElem + ') 이고, 두드러진 십신은 ' +
+        (spread?.top?.join('·') || '고르게 퍼져 있습니다') + ' 입니다.',
+      sin?.hits?.length ? '선 신살: ' + sin.hits.map(h => h.name).join('·') : '',
+      g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      '이 사주를 바탕으로 **전생 이야기**를 지어 주세요. 다음 순서로 씁니다.',
+      '1) 어느 시대 어느 땅에서 무엇을 하던 사람이었는지 (구체적인 장면 하나로 시작)',
+      '2) 그 삶에서 무엇을 잘했고 무엇에 걸려 넘어졌는지',
+      '3) 그 결이 이번 생에 어떻게 남아 있는지 — 사주의 어느 글자와 이어지는지 짚어서',
+      '4) 그래서 이번 생에 풀어야 할 숙제 한 가지',
+      '',
+      '⚠️ 지킬 것: 전생은 재미로 보는 이야기입니다. 실제 역사 인물의 이름을 대지 말고,',
+      '전생 때문에 지금 불행하다는 식으로 쓰지 마세요. 읽고 나서 자기 자신을 조금 더',
+      '이해하게 되는 글이어야 합니다. 장면이 눈에 보이도록 써 주세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(NL);
+
+    const reading = await geminiText(env, prompt, { temperature: 0.95, maxOutputTokens: 2048 });
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'pastlife', '전생 이야기', reading,
+      { dayGan: saju.dayGan }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading,
+      saju: [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[PASTLIFE]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  천직 · 적성 (4엽전)
+//
+//  십신 분포로 읽는다. 재미보다 실용이라 취업·이직을 앞둔 사람이 다시 찾는다.
+// ════════════════════════════════════════════════════════════
+async function handleVocation(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const spread = computeSipsinSpread(saju);
+    if (!spread?.spread?.length) {
+      return cors(JSON.stringify({ error: { message: '십신을 계산하지 못했습니다.' } }), 400);
+    }
+
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'vocation', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '천직 풀이는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'vocation', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const table = spread.spread.map(x => x.name + ' ' + x.pct + '%').join(', ');
+    const prompt = [
+      '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + '(' + saju.dayElem + ') 입니다.',
+      '십신 분포: ' + table,
+      '가장 두터운 것은 ' + spread.top.join(', ') + ' 입니다.',
+      g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      '이 사람에게 맞는 일과 일하는 방식을 풀어 주세요. 다음 순서로 씁니다.',
+      '1) 이 분포가 말하는 타고난 일머리 — 무엇을 할 때 힘이 덜 드는지',
+      '2) 어울리는 일의 결 세 가지 (직업 이름을 못 박기보다 결로 — 다만 예시는 들어서)',
+      '3) 조심할 자리 — 어떤 환경에서 지치기 쉬운지',
+      '4) 지금 자리에서 바로 해볼 수 있는 한 가지',
+      '',
+      '⚠️ 지킬 것: "너는 이 직업을 해야 한다"고 못 박지 마세요. 적성은 가능성이지',
+      '정해진 길이 아닙니다. 이미 다른 일을 하고 있는 사람이 읽어도 상처받지 않게,',
+      '지금 하는 일에서 이 결을 살리는 법도 함께 짚어 주세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(NL);
+
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'vocation',
+      '천직 ' + spread.top.join('·'), reading, { top: spread.top }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, spread: spread.spread, top: spread.top,
+      remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[VOCATION]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
 }
 
 async function handleSpousePalace(request, env) {
