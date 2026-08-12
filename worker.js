@@ -5709,7 +5709,7 @@ async function handleDirection(request, env) {
     // 본명궁은 입춘을 넘겨야 그해다. computeSaju 가 절기로 세운 년주에서 해를 되짚는다.
     const solarYear = _yearFromPillar(saju.yp, Number(birth.year));
     const dir = computeDirection(solarYear, g);
-    if (!dir) return cos400(request);
+    if (!dir) return cors(JSON.stringify({ error: { message: '방위를 계산하지 못했습니다.' } }), 400);
 
     const COST = 3;
     const paid = await accountSpend(env, acct, 'direction', COST);
@@ -5774,8 +5774,6 @@ function _yearFromPillar(yp, hintYear) {
   return hintYear;
 }
 
-const cos400 = (request) =>
-  cors(JSON.stringify({ error: { message: '방위를 계산하지 못했습니다.' } }), 400);
 
 // ════════════════════════════════════════════════════════════
 //  재물운 (4엽전)
