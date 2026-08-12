@@ -1,0 +1,318 @@
+[
+  {
+    "path": "/api/wealth",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/sinsal",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/past-life",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/vocation",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/daeun",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/naming",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M",
+      "surname": "김"
+    }
+  },
+  {
+    "path": "/api/name-reading",
+    "body": {
+      "lang": "ko",
+      "name": "안태현",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/api/type-compat",
+    "body": {
+      "lang": "ko",
+      "myType": "木",
+      "partnerType": "木"
+    }
+  },
+  {
+    "path": "/api/numerology",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/api/direction",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M",
+      "purpose": "move"
+    }
+  },
+  {
+    "path": "/api/auspicious-days",
+    "body": {
+      "lang": "ko",
+      "purpose": "wedding",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "from": "2026-09-15",
+      "days": 30
+    }
+  },
+  {
+    "path": "/api/compat-timing",
+    "body": {
+      "lang": "ko",
+      "p1": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시",
+        "name": "안태현"
+      },
+      "p2": {
+        "year": 1997,
+        "month": 4,
+        "day": 9,
+        "hour": "오전 9시"
+      }
+    }
+  },
+  {
+    "path": "/api/year-luck",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/intimacy",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "partner": {
+        "year": 1997,
+        "month": 4,
+        "day": 9,
+        "hour": "오전 9시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/spouse-palace",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
+    "path": "/api/tojeong",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/api/tarot-draw",
+    "body": {
+      "lang": "ko"
+    }
+  },
+  {
+    "path": "/api/iching",
+    "body": {
+      "lang": "ko",
+      "question": "맑은 물에서 잉어를 봤어요"
+    }
+  },
+  {
+    "path": "/api/rune-reading",
+    "body": {
+      "lang": "ko"
+    }
+  },
+  {
+    "path": "/api/dream-interpretation",
+    "body": {
+      "lang": "ko",
+      "dream": "맑은 물에서 잉어를 봤어요"
+    }
+  },
+  {
+    "path": "/api/tti-ranking",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/mini/api/today",
+    "body": {}
+  },
+  {
+    "path": "/api/astro-transit",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/api/zodiac-fortune",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/api/fortune-topic",
+    "body": {
+      "lang": "ko",
+      "topic": "crush",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      }
+    }
+  },
+  {
+    "path": "/api/lucky-picks",
+    "body": {
+      "lang": "ko"
+    }
+  },
+  {
+    "path": "/saju-reading",
+    "body": {
+      "mode": "solo",
+      "lang": "ko",
+      "p1": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시",
+        "name": "안태현"
+      }
+    }
+  }
+]
