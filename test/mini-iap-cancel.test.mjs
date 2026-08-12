@@ -70,6 +70,26 @@ test('취소면 오류 문구를 세우지 않는다', () => {
     '취소일 때 state.error 를 비우고 돌아가지 않는다');
 });
 
+test('충전 화면이 SDK 내부 사정을 사용자에게 보여주지 않는다', () => {
+  // "상품 목록을 불러오지 못했어요. (Cannot read properties of undefined (reading
+  // 'operationalEnvironment'))" 같은 글이 붉게 떠 있었다. 읽어도 할 수 있는 일이 없고,
+  // 살 수 있는데도 못 사는 줄 알게 만든다.
+  const f = SRC.match(/async function loadProducts\(\)[\s\S]*?\n\}/)[0];
+  assert.doesNotMatch(f, /state\.catalogError\s*=\s*`[^`]*\$\{e/,
+    '예외 메시지를 그대로 화면에 담는다');
+  assert.match(f, /console\.warn\('\[products:iap\]'/, '원인을 콘솔에도 안 남긴다');
+  assert.match(f, /state\.catalogLoading = true/, '불러오는 중임을 표시하지 않는다');
+
+  const i = SRC.indexOf("case 'charge': {");
+  const charge = SRC.slice(i, i + 3000);
+  assert.match(charge, /skel-tile/, '불러오는 동안 자리를 잡아 두지 않는다');
+  assert.match(charge, /btn-retry-products/, '다시 시도할 길이 없다');
+  assert.doesNotMatch(charge, /class="err"/, '충전 화면에 붉은 글씨가 남아 있다');
+  // 콘솔 SKU 로만 살 수 있다. 코드에 적어 둔 목록을 대신 그리면 눌러도 결제가 안 된다.
+  assert.match(charge, /const list = state\.catalog \|\| \[\]/,
+    '못 불러왔을 때 코드의 목록으로 대신 그린다 — 눌러도 결제가 안 된다');
+});
+
 test('화면을 떠날 때 오류 문구를 놓는다', () => {
   // 결제 화면에서 난 말이 홈까지 따라오면 안 된다.
   assert.match(SRC, /on\('btn-home2', \(\) => \{ state\.error = ''; go\('home'\); \}\)/,

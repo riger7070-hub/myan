@@ -48,8 +48,11 @@ for (const file of FILES) {
     ]);
     const globals = new Set(['JSON', 'URL', 'API', 'IAP', 'NaN']);
 
-    const used = new Set(interpolations(src).flatMap(code =>
-      [...code.matchAll(/(?<![.\w$])([A-Z][A-Z0-9_]{2,})\b(?!\s*:)/g)].map(m => m[1])));
+    // `${/* … */''}` 처럼 주석만 담은 자리가 있다. 주석 속 낱말은 코드가 아니다.
+    const used = new Set(interpolations(src)
+      .map(code => code.replace(/\/\*[\s\S]*?\*\//g, ' '))
+      .flatMap(code =>
+        [...code.matchAll(/(?<![.\w$])([A-Z][A-Z0-9_]{2,})\b(?!\s*:)/g)].map(m => m[1])));
 
     const missing = [...used].filter(n => !declared.has(n) && !globals.has(n));
     assert.deepEqual(missing, [],

@@ -745,3 +745,6 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
   to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .exit-ask { animation: none; } }
+/* 상품을 불러오는 동안의 자리 */
+.skel-tile { pointer-events: none; display: block; }
+.skel-tile .skel-line { margin: 4px 0; }

@@ -429,15 +429,17 @@ async function retry(fn, times = 3, gapMs = 500) {
 }
 
 async function loadProducts() {
-  // 서버가 지급할 수 있는 SKU. 이걸 못 받으면 무엇을 열어도 결제 뒤 지급이 안 되므로
-  // 빈 목록으로 두고(=전부 잠김) 이유를 화면에 남긴다.
+  state.catalogLoading = true;
+  state.catalogError = '';
+  render();
+
+  // 서버가 지급할 수 있는 SKU. 이걸 못 받으면 무엇을 열어도 결제 뒤 지급이 안 된다.
   let sellable = new Map();
-  let serverErr = '';
   try {
-    const r = await api('/mini/api/products', { auth: false });
+    const r = await retry(() => api('/mini/api/products', { auth: false }), 2, 600);
     for (const p of r?.products || []) sellable.set(p.sku, p);
   } catch (e) {
-    serverErr = `판매 상품을 서버에서 확인하지 못했어요. (${e?.message || e})`;
+    console.warn('[products:server]', e?.message);
   }
 
   try {
@@ -455,12 +457,13 @@ async function loadProducts() {
       price: p.displayAmount || '',
       known: sellable.has(p.sku),
     }));
-    state.catalogError = serverErr
-      || (state.catalog.length ? '' : '콘솔에 등록된 상품이 없습니다.');
   } catch (e) {
+    // 화면에는 "잠시 뒤 다시" 만 보여준다. SDK 내부 사정을 사용자가 읽을 이유가 없고,
+    // 붉은 글씨는 살 수 있는데도 못 사는 줄 알게 만든다. 원인은 콘솔에 남긴다.
+    console.warn('[products:iap]', e?.message);
     state.catalog = null;
-    state.catalogError = `상품 목록을 불러오지 못했어요. (${e?.message || e})`;
   }
+  state.catalogLoading = false;
   render();
 }
 
@@ -1546,7 +1549,9 @@ function render() {
     case 'charge': {
       // 콘솔에 등록된 상품을 우선 보여준다. 아직 못 받았으면 코드에 적어 둔 목록으로
       // 그린다(콘솔 등록 전에는 눌러도 실패하므로 그 사실을 함께 알린다).
-      const list = state.catalog ?? PRODUCTS.map(p => ({ ...p, known: true }));
+      // 콘솔이 준 목록만 실제로 살 수 있다. SKU 를 콘솔이 만들어 주기 때문에
+      // 코드에 적어 둔 PRODUCTS 로는 결제가 안 된다 — 그래서 못 받았으면 아예 안 그린다.
+      const list = state.catalog || [];
       // 콘솔에는 있는데 서버가 아직 지급하지 못하는 상품들. 시크릿(MINI_SKU_ALIAS)에 그
       // 번호가 안 들어갔다는 뜻이다. 토스 웹뷰에는 개발자 도구가 없어서, 어느 번호를
       // 넣어야 하는지를 화면이 직접 말해 주지 않으면 알아낼 방법이 없다 —
@@ -1555,21 +1560,28 @@ function render() {
       html = `${header()}
         <div class="brand sm"><h1>${COIN}엽전 충전</h1><p>현재 ${COIN}${state.tokens} 엽전</p></div>
         ${err}
-        ${state.catalogError ? `<div class="card"><p class="err">${esc(state.catalogError)}</p>
-          <p class="muted small">앱인토스 콘솔에서 인앱 상품을 먼저 등록해야 결제가 열립니다.</p></div>` : ''}
-        ${unknown.length ? `<div class="card">
-          <p class="err">아직 지급 설정이 안 된 상품이 있습니다.</p>
-          <p class="muted small">콘솔에는 있지만 서버가 몇 엽전짜리인지 모릅니다.
-            아래 번호를 서버의 상품 설정에 넣으면 바로 열립니다.</p>
-          ${unknown.map(p => `<p class="muted small">${esc(p.label)} · ${esc(p.sku)}</p>`).join('')}
+        ${/* 불러오는 중에는 자리만 잡아 둔다. 붉은 글씨를 먼저 보여주면
+              살 수 있는데도 못 사는 줄 안다. */''}
+        ${state.catalogLoading && !list.length
+          ? PRODUCTS.map(() => `<div class="tile wide skel-tile">
+              <div class="skel-line w40"></div></div>`).join('')
+          : list.map(p => `
+            <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
+              <span class="t-label">${esc(p.label)}</span>
+              <span class="t-cost">${p.known === false
+                ? '준비 중'
+                : esc(p.price || '토스로 결제')}</span>
+            </button>`).join('')}
+        ${/* 못 불러왔을 때. 사용자는 SDK 사정을 알 필요가 없다 —
+              무엇을 하면 되는지만 담담히 적고, 자세한 원인은 콘솔에만 남긴다. */''}
+        ${!state.catalogLoading && !list.length ? `<div class="card">
+          <p class="muted">상품을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.</p>
+          <button class="btn ghost" id="btn-retry-products" style="margin-top:12px">다시 시도</button>
           </div>` : ''}
-        ${list.map(p => `
-          <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
-            <span class="t-label">${esc(p.label)}</span>
-            <span class="t-cost">${p.known === false
-              ? '준비 중'
-              : esc(p.price || '토스로 결제')}</span>
-          </button>`).join('')}
+        ${unknown.length ? `<div class="card">
+          <p class="muted small">일부 상품이 아직 준비 중이에요.</p>
+          ${unknown.map(p => `<p class="muted small" style="opacity:.6">${esc(p.label)} · ${esc(p.sku)}</p>`).join('')}
+          </div>` : ''}
         ${/* 글은 한 덩어리(span)로 묶는다. 안 그러면 <b> 가 별도 칸이 되어
               "한 번만 결제하시면 / 자동으로 뜨는 광고가" 처럼 갈라진다. */''}
         ${state.noAds
@@ -1579,8 +1591,6 @@ function render() {
           : `<div class="perk"><span class="perk-ic">${icon('ad')}</span>
                <span>한 번만 결제하시면 <b>광고가 사라집니다.</b><br>
                <i>퀴즈·부풀리기에서 나오는 특별 무료 ${COIN}엽전 광고는 유지됩니다.</i></span></div>`}
-        ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
-          콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
         <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
         ${FOOTER}`;
       break;
@@ -1709,6 +1719,7 @@ function bind() {
     go('login');
   });
   on('btn-menu', () => { state.menu = !state.menu; render(); });
+  on('btn-retry-products', loadProducts);
   on('btn-exit-yes', closeApp);
   const stayIn = () => { state.confirmExit = false; render(); };
   on('btn-exit-no', stayIn);
