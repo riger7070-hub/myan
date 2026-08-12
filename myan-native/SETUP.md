@@ -127,6 +127,37 @@ eas submit --platform ios
 
 ## 7. 주의 사항
 
+### ⚠️ Dependabot 취약점 3건 — 고치지 않는다 (2026-08-12 확인)
+
+GitHub 가 저장소에 취약점 3건(high 2 · moderate 1)을 띄운다. **전부 이 폴더 것이고 전부 빌드
+도구다.** 루트와 `mini/` 는 0건이라, 실제로 배포되는 워커와 미니앱 클라이언트에는 해당 사항이 없다.
+
+| 심각도 | 패키지 | 내용 | 어디서 오나 |
+|---|---|---|---|
+| HIGH ×2 | `image-size` 1.2.1 | ICNS · JXL/HEIF 파서가 무한루프에 빠진다(DoS) | `metro` |
+| MODERATE | `uuid` 7.0.3 | v3/v5/v6 에 `buf` 를 넘길 때 경계 검사 누락 | `@expo/config-plugins` → `xcode` |
+
+`npm audit` 는 22건이라고 하지만 고유 권고는 위 3개고 나머지는 그것이 의존성 트리로 퍼진 것이다.
+
+**`npm audit fix --force` 를 실행하지 말 것.** npm 이 내놓는 "수정"은 이렇다:
+
+```
+expo          57.0.10 → 53.0.27
+react-native   0.86.2 → 0.72.17
+```
+
+업그레이드가 아니라 대규모 다운그레이드다. 취약 권고에 안 걸리는 옛 버전을 찾아낸 것뿐이라,
+돌리면 2026-08-05 에 EAS 빌드와 실기기까지 확인한 Expo 51→57 작업이 통째로 되돌아간다.
+
+고치지 않는 이유: 둘 다 **내 빌드 머신에서 내 자산 파일을 읽을 때만** 도는 코드다. 성립하려면
+악성 이미지를 이 저장소에 심을 수 있어야 하고, 앱은 웹뷰 셸이라 실행 중 공격면은 웹사이트지 이
+패키지들이 아니다. `overrides` 로 `image-size@2` · `uuid@14` 를 억지로 끼우는 것도 답이 아니다 —
+둘 다 메이저 API 변경이라 빌드가 깨질 쪽이 크다.
+
+진짜 해결은 Expo 가 자기 `metro` / `config-plugins` 를 올릴 때 따라온다. 그때까지 알림이
+거슬리면 GitHub 에서 **Dismiss → "Vulnerable code is not actually used"** 로 닫아 둔다.
+다시 확인하려면 `npm audit --prefix myan-native`.
+
 ### ⚠️ 인앱결제 정책
 Play Store와 App Store는 앱 내 디지털 재화 판매 시 Google Play Billing / Apple IAP 필수.
 현재 토큰 충전은 외부 웹사이트(myan.riger7070.workers.dev)로 연결하는 방식으로 구현.

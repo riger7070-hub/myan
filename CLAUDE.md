@@ -55,6 +55,8 @@ Expo/Expo Router app that is **a WebView shell around the deployed site**, not a
 The whole app is `app/_layout.jsx` + `app/index.jsx`. There is no second copy of the reading logic to keep in sync — `myan-native/src/*.js` (an unused `api.js`/`locales.js`/`saju.js` set left over from the first commit, imported by nothing) was deleted for that reason. If you find yourself editing a Saju or i18n file under `myan-native/`, you are in the wrong place. `dist/` and `.expo/` there are local build output and are gitignored, not part of the repo.
 
 Not part of the web deploy pipeline — the app only changes when you rebuild it with EAS.
+
+**All of GitHub's Dependabot alerts on this repo are here, and the decision is to leave them.** They are three advisories (`image-size` via `metro`, `uuid` via `xcode`), all build-time toolchain, all reached only when your own assets are processed on your own build machine; the root and `mini/` audit clean. Do **not** run `npm audit fix --force` — npm's "fix" is a downgrade to `expo@53` / `react-native@0.72` that would undo the verified Expo 57 upgrade. The reasoning is written out in `myan-native/SETUP.md` §7 so it doesn't get re-investigated each time the banner appears.
 ```bash
 cd myan-native
 npm install
