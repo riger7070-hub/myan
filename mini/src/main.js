@@ -10,7 +10,7 @@
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
 import {
-  appLogin, IAP, saveBase64Data, getTossShareLink, share, GoogleAdMob,
+  appLogin, IAP, getTossShareLink, share, GoogleAdMob,
   graniteEvent, closeView,
 } from '@apps-in-toss/web-framework';
 import {
@@ -430,6 +430,18 @@ async function loadProducts() {
   render();
 }
 
+// 결제창을 스스로 닫았을 때 토스가 주는 말들. 기기·SDK 판마다 문구가 갈려서
+// 코드 하나로 못 짚는다.
+const IAP_CANCEL_RE = /취소|닫|cancel|abort|dismiss|user_?deny|사용자가/i;
+
+// 사람에게 보여줄 만큼만 남긴다. orderId 는 빼고, 길면 자른다.
+const _iapReason = (s) => String(s)
+  .replace(/\(?\s*orderId\s*:\s*[\w-]+\s*\)?/gi, '')
+  .replace(/[()]\s*$/g, '')
+  .replace(/\s{2,}/g, ' ')
+  .trim()
+  .slice(0, 90) || '알 수 없는 오류';
+
 function buyTokens(product) {
   state.error = '';
   state.busy = true;
@@ -455,13 +467,17 @@ function buyTokens(product) {
     onEvent: () => { state.busy = false; state.error = ''; go('home'); },
     onError: (err) => {
       state.busy = false;
-      // 사용자가 결제창을 닫은 것도 여기로 온다. 실패라고 겁주지 않되,
-      // 원인을 통째로 감추면 상품 미등록 같은 설정 문제를 영영 못 찾는다.
-      const detail = err?.message || err?.code || (typeof err === 'string' ? err : '');
-      state.error = detail
-        ? `결제가 완료되지 않았어요.\n(${String(detail).slice(0, 160)})`
-        : '결제가 완료되지 않았어요.';
-      console.warn('[iap]', err);
+      const detail = String(err?.message || err?.code || (typeof err === 'string' ? err : ''));
+      console.warn('[iap]', err);          // 원인은 콘솔에 그대로 남긴다
+
+      // 사용자가 결제창을 닫은 것도 여기로 온다. 그건 실패가 아니다 —
+      // 스스로 그만둔 사람에게 붉은 글씨로 겁줄 일이 아니라, 아무 일도 없었던 것처럼
+      // 상품 목록으로 돌아가면 된다.
+      if (!detail || IAP_CANCEL_RE.test(detail)) { state.error = ''; render(); return; }
+
+      // 진짜 실패. 다시 해보라고 알려 주되 orderId 같은 내부 값은 빼고 보여준다 —
+      // 사용자가 읽어서 할 수 있는 일이 없고, 붉은 글씨만 길어진다.
+      state.error = `결제가 완료되지 않았어요. 잠시 후 다시 시도해 주세요.\n(${_iapReason(detail)})`;
       render();
     },
   });
@@ -669,74 +685,36 @@ async function watchAd() {
   }
 }
 
-// ── 공유 카드 ──────────────────────────────────────────────
+// ── 공유 ──────────────────────────────────────────────────
+//
+// 예전에는 '이미지로 저장'과 '친구에게 알리기'가 따로 있었다. 저장은 앨범에 넣을 뿐
+// 남에게 보내는 동작이 아니었고, 알리기는 앱 링크만 보내서 정작 방금 읽은 풀이가
+// 빠졌다. 둘을 하나로 합쳐, 읽은 것을 그대로 보낸다.
 
-function shareCard() {
+async function shareResult() {
   const r = state.result;
   if (!r) return;
-  const W = 1080, H = 1350;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const x = c.getContext('2d');
+  await withBusy(async () => {
+    let link = '';
+    try { link = await getTossShareLink('/'); } catch { /* 링크가 없어도 글은 보낸다 */ }
+    await share({ message: _resultShareText(r, link) });
+  });
+}
 
-  const g = x.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#141009'); g.addColorStop(1, '#060608');
-  x.fillStyle = g; x.fillRect(0, 0, W, H);
-
-  x.strokeStyle = 'rgba(201,169,110,0.25)'; x.lineWidth = 2;
-  x.strokeRect(48, 48, W - 96, H - 96);
-
-  x.textAlign = 'center';
-  x.fillStyle = '#c9a96e';
-  x.font = '64px serif';
-  x.fillText(r.item.icon, W / 2, 210);
-  x.font = '600 60px sans-serif';
-  x.fillStyle = '#e8d4a8';
-  x.fillText(r.item.label, W / 2, 300);
-
-  // 본문은 넉넉히 줄바꿈해서 넣는다. 다 안 들어가면 잘라내고 말줄임표를 붙인다.
-  x.font = '38px sans-serif';
-  x.fillStyle = '#e9e4da';
-  x.textAlign = 'left';
-  const maxW = W - 200;
-  let y = 420;
-  const words = String(r.body).replace(/\s+/g, ' ').split(' ');
-  let line = '';
-  for (const w of words) {
-    const test = line ? `${line} ${w}` : w;
-    if (x.measureText(test).width > maxW) {
-      x.fillText(line, 100, y); y += 58; line = w;
-      if (y > H - 260) { x.fillText('…', 100, y); line = ''; break; }
-    } else line = test;
-  }
-  if (line) x.fillText(line, 100, y);
-
-  x.textAlign = 'center';
-  x.fillStyle = 'rgba(201,169,110,0.75)';
-  x.font = '600 44px serif';
-  x.fillText('MY;安', W / 2, H - 130);
-  x.fillStyle = 'rgba(233,228,218,0.4)';
-  x.font = '28px sans-serif';
-  x.fillText('AI가 만든 참고용 콘텐츠입니다', W / 2, H - 80);
-
-  // 토스 웹뷰에서는 <a download> 가 아무 일도 하지 않는다(다운로드가 막혀 있다).
-  // SDK 의 saveBase64Data 로 앨범에 저장해야 한다. 지원하지 않는 구버전 앱에서만
-  // 링크 방식으로 물러선다.
-  const base64 = c.toDataURL('image/png').split(',')[1];
-  const fileName = `myan-${r.item.id}.png`;
-  saveBase64Data({ data: base64, fileName, mimeType: 'image/png' })
-    .then(() => { state.toast = '앨범에 저장했어요.'; render(); })
-    .catch((e) => {
-      console.warn('[save]', e);
-      try {
-        const a = document.createElement('a');
-        a.href = c.toDataURL('image/png');
-        a.download = fileName;
-        a.click();
-      } catch { /* 여기까지 실패하면 알려주는 수밖에 없다 */ }
-      state.toast = '저장하지 못했어요. 화면을 캡처해 주세요.';
-      render();
-    });
+/**
+ * 공유할 글을 짓는다.
+ * 메신저 미리보기에서 잘리므로 앞부분만 싣는다 — 전문은 앱에서 보게 한다.
+ */
+function _resultShareText(r, link) {
+  const body = String(r.body || '').replace(/\s*\n\s*/g, '\n').trim();
+  const excerpt = body.length > 260 ? body.slice(0, 260).trimEnd() + '…' : body;
+  const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join(' · ');
+  return [
+    `[${r.item.label}] 안도령의 풀이`,
+    facts,
+    excerpt,
+    link || '토스에서 "오늘운빨"을 찾아보세요.',
+  ].filter(Boolean).join('\n');
 }
 
 /**
@@ -806,6 +784,7 @@ function goBack() {
   // 메뉴가 열려 있으면 그것부터 닫는다. 화면을 넘기기 전에 덮인 것을 걷어내는 게
   // 사용자가 기대하는 순서다.
   if (state.menu) { state.menu = false; render(); return; }
+  state.error = '';                 // 떠나는 화면의 말은 두고 간다
   const prev = _stack.pop();
   if (prev) { go(prev, { fromBack: true }); return; }
   // 스택이 비었으면 더 돌아갈 곳이 없다 — 그때는 앱을 닫는 게 기대되는 동작이다.
@@ -1158,11 +1137,9 @@ function render() {
           </div></div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>
         <div class="row2">
-          <button class="btn ghost" id="btn-share">이미지로 저장</button>
+          <button class="btn" id="btn-share" ${state.busy ? 'disabled' : ''}>공유하기</button>
           <button class="btn ghost" id="btn-home2">홈으로</button>
         </div>
-        <button class="btn ghost" id="btn-shareapp" style="margin-top:10px"
-          ${state.busy ? 'disabled' : ''}>친구에게 알리기</button>
         <div class="ai-notice">${AI_NOTICE}</div>
         ${FOOTER}`;
       break;
@@ -1466,9 +1443,15 @@ function bind() {
   const all = (sel) => app.querySelectorAll(sel);
 
   on('btn-login', doLogin);
-  on('btn-charge', () => { state.catalog = undefined; state.catalogError = ''; go('charge'); loadProducts(); });
-  on('btn-home', () => go(state.profile?.birthYear ? 'home' : 'profile'));
-  on('btn-home2', () => go('home'));
+  // 지난 결제에서 남은 문구를 끌고 들어오지 않는다.
+  on('btn-charge', () => {
+    state.catalog = undefined; state.catalogError = ''; state.error = '';
+    go('charge'); loadProducts();
+  });
+  // 화면을 스스로 떠나는 동작이다. 붙잡고 있던 오류 문구도 여기서 놓는다 —
+  // 안 그러면 결제 화면에서 난 말이 홈까지 따라와 붉게 남는다.
+  on('btn-home', () => { state.error = ''; go(state.profile?.birthYear ? 'home' : 'profile'); });
+  on('btn-home2', () => { state.error = ''; go('home'); });
   on('btn-editprofile', () => go('profile'));
   on('btn-history', loadHistory);
   on('btn-logout', () => {
@@ -1482,7 +1465,7 @@ function bind() {
   on('btn-menu-close', () => { state.menu = false; render(); });
   on('btn-earn', () => go('earn'));
   on('btn-earn2', () => go('earn'));      // 홈 엽전 줄의 작은 길잡이
-  on('btn-share', shareCard);
+  on('btn-share', shareResult);
   on('btn-shareapp', () => { state.menu = false; render(); shareApp(); });
   on('btn-checkin', doCheckin);
   on('btn-quiz', startQuiz);
