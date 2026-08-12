@@ -712,3 +712,36 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .perk-ic { display: inline-flex; flex: none; color: var(--gold); }
 .perk-ic .ic { width: 18px; height: 18px; }
 .perk i { font-style: normal; font-size: 0.78rem; opacity: 0.75; }
+
+/* ── 불러오는 동안의 자리 ──
+   빈 화면을 보여주면 기록이 없는 줄 안다. 모양만 먼저 잡아 둔다. */
+.hist-skel { pointer-events: none; }
+.skel-line {
+  height: 12px; margin: 9px 0; border-radius: 6px;
+  background: linear-gradient(90deg, var(--line) 25%, var(--sheen) 50%, var(--line) 75%);
+  background-size: 200% 100%;
+  animation: skel 1.3s ease-in-out infinite;
+}
+.skel-line.w40 { width: 40%; }
+.skel-line.w70 { width: 70%; }
+@keyframes skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel-line { animation: none; } }
+
+/* ── 나가시겠어요 ──
+   예전에는 홈에서 뒤로가기를 한 번 잘못 누르면 아무 확인 없이 앱이 사라졌다. */
+.exit-ask {
+  position: fixed; z-index: 61; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, 84vw); padding: 22px 20px 18px;
+  background: var(--card); border: 1px solid var(--gold-dim); border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); text-align: center;
+  animation: ask-in 0.18s cubic-bezier(0.2, 1.1, 0.4, 1);
+}
+:root[data-theme='light'] .exit-ask { box-shadow: 0 20px 50px rgba(90, 70, 30, 0.2); }
+.exit-ask p { margin: 0; }
+.exit-ask p + p { margin-top: 6px; }
+@keyframes ask-in {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .exit-ask { animation: none; } }

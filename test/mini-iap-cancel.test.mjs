@@ -74,6 +74,6 @@ test('화면을 떠날 때 오류 문구를 놓는다', () => {
   // 결제 화면에서 난 말이 홈까지 따라오면 안 된다.
   assert.match(SRC, /on\('btn-home2', \(\) => \{ state\.error = ''; go\('home'\); \}\)/,
     "btn-home2 가 state.error 를 비우지 않는다");
-  assert.match(SRC, /function goBack\(\)[\s\S]{0,240}state\.error = '';/,
+  assert.match(SRC, /function goBack\(\)[\s\S]{0,420}state\.error = '';/,
     '뒤로가기가 state.error 를 비우지 않는다');
 });

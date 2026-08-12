@@ -386,12 +386,21 @@ async function refreshTokens() {
   try { state.tokens = (await api('/mini/api/tokens')).tokens ?? state.tokens; } catch { /* 표시용이라 실패해도 넘어간다 */ }
 }
 
+// 누르면 **먼저** 화면을 바꾸고, 목록은 그 뒤에 채운다.
+// 예전에는 응답을 다 받고서야 화면이 넘어가서, 누르고 한참 아무 일도 없는 것처럼 보였다.
 async function loadHistory() {
-  await withBusy(async () => {
+  go('history');
+  state.historyLoading = true;
+  state.error = '';
+  render();
+  try {
     const r = await api('/api/feature-history?limit=30');
     state.history = r.history || [];
-    go('history');
-  });
+  } catch (e) {
+    state.error = e?.message || '기록을 불러오지 못했어요.';
+  }
+  state.historyLoading = false;
+  render();
 }
 
 // ── 결제 ──────────────────────────────────────────────────
@@ -404,6 +413,21 @@ async function loadHistory() {
  * 살면서 어긋났고 화면엔 '서버 미등록'만 떴다. 지급 가능 여부를 아는 것은 서버뿐이니
  * 서버에 묻는다 — 앱은 번호를 하나도 외우지 않는다.
  */
+/**
+ * 실패하면 잠시 뒤 다시 해 본다.
+ * 네이티브 다리가 준비되기 전에 부른 경우처럼, 기다리면 되는 실패가 있다.
+ */
+async function retry(fn, times = 3, gapMs = 500) {
+  let last;
+  for (let i = 0; i < times; i++) {
+    try { return await fn(); } catch (e) {
+      last = e;
+      if (i < times - 1) await new Promise(r => setTimeout(r, gapMs * (i + 1)));
+    }
+  }
+  throw last;
+}
+
 async function loadProducts() {
   // 서버가 지급할 수 있는 SKU. 이걸 못 받으면 무엇을 열어도 결제 뒤 지급이 안 되므로
   // 빈 목록으로 두고(=전부 잠김) 이유를 화면에 남긴다.
@@ -419,7 +443,11 @@ async function loadProducts() {
   try {
     // ⚠️ 배열이 아니라 { products: [...] } 로 온다. 배열로 착각해 .map 을 부르면
     //    "map is not a function" 으로 죽는다(실제로 그랬다).
-    const res = await IAP.getProductItemList();
+    //
+    // 앱을 켜고 **처음** 충전 화면을 열면 여기서 자주 실패한다. 네이티브 다리가
+    // 아직 준비되기 전이라 그렇다 — 두어 번 더 물어보면 대개 온다. 사용자에게
+    // 붉은 글씨를 보여주고 다시 누르게 하느니 앱이 알아서 기다린다.
+    const res = await retry(() => IAP.getProductItemList(), 3, 500);
     const products = res?.products || [];
     state.catalog = products.map(p => ({
       sku: p.sku,
@@ -719,9 +747,25 @@ function gainCoins(balance, { ad = true } = {}) {
  */
 function showAd(groupId) {
   return new Promise((resolve, reject) => {
+    // 토스 웹뷰에는 개발자 도구가 없다. 광고가 안 뜰 때 무엇이 오갔는지 남겨 두지
+    // 않으면 알아낼 방법이 없어서, 받은 신호를 모아 실패 메시지에 함께 싣는다.
+    const trail = [];
     let settled = false;
     const done = (v) => { if (!settled) { settled = true; resolve(v); } };
-    const fail = (e) => { if (!settled) { settled = true; reject(e); } };
+    const fail = (e) => {
+      if (settled) return;
+      settled = true;
+      e.trail = trail.join('>') || '아무 신호도 없음';
+      reject(e);
+    };
+
+    // SDK 가 이 기기·앱 버전에서 광고를 지원하는지부터 본다. 지원하지 않으면
+    // 불러도 조용히 아무 일도 일어나지 않는다.
+    try {
+      if (GoogleAdMob.loadAppsInTossAdMob.isSupported?.() === false) {
+        return fail(new Error('이 토스 앱 버전에서는 광고를 볼 수 없어요'));
+      }
+    } catch { /* isSupported 가 없으면 그냥 진행한다 */ }
 
     // 광고가 안 오면 20초 뒤 포기한다. 사용자를 무한정 기다리게 두지 않는다.
     const timer = setTimeout(() => fail(new Error('광고 응답이 없습니다')), 20000);
@@ -731,12 +775,14 @@ function showAd(groupId) {
     GoogleAdMob.loadAppsInTossAdMob({
       options: { adGroupId: groupId },
       onEvent: (e) => {
+        trail.push(`load:${e?.type ?? '?'}`);
         if (e?.type !== 'loaded' || shown) return;   // onEvent 는 여러 번 올 수 있다
         shown = true;
         let rewarded = false;
         GoogleAdMob.showAppsInTossAdMob({
           options: { adGroupId: groupId },
           onEvent: (ev) => {
+            trail.push(`show:${ev?.type ?? '?'}`);
             if (ev?.type === 'userEarnedReward') rewarded = true;
             if (ev?.type === 'dismissed' || ev?.type === 'failedToShow') stop(done)(rewarded);
           },
@@ -805,7 +851,10 @@ async function watchAd() {
   } catch (e) {
     // 못 띄웠으면 하루 몫도 깎지 않는다. 보지도 못한 광고를 세면 억울하다.
     state.busy = false;
-    state.error = `광고를 불러오지 못했어요. (${e?.message || e})`;
+    // 무슨 신호가 오갔는지 함께 보여준다. 웹뷰엔 개발자 도구가 없어서, 화면이
+    // 말해 주지 않으면 왜 안 뜨는지 알아낼 방법이 없다.
+    state.error = `광고를 불러오지 못했어요.\n(${e?.message || e}${e?.trail ? ` · ${e.trail}` : ''})`;
+    console.warn('[ad]', e?.message, e?.trail);
     render();
     return;
   }
@@ -931,10 +980,20 @@ function goBack() {
   // 메뉴가 열려 있으면 그것부터 닫는다. 화면을 넘기기 전에 덮인 것을 걷어내는 게
   // 사용자가 기대하는 순서다.
   if (state.menu) { state.menu = false; render(); return; }
+  // 나가겠냐고 물어 놓은 상태라면 그 물음부터 거둔다.
+  if (state.confirmExit) { state.confirmExit = false; render(); return; }
   state.error = '';                 // 떠나는 화면의 말은 두고 간다
   const prev = _stack.pop();
   if (prev) { go(prev, { fromBack: true }); return; }
-  // 스택이 비었으면 더 돌아갈 곳이 없다 — 그때는 앱을 닫는 게 기대되는 동작이다.
+
+  // 더 돌아갈 곳이 없다. 예전에는 여기서 곧장 닫았는데, 홈에서 뒤로가기를 한 번
+  // 잘못 누르면 아무 확인도 없이 앱이 사라졌다. 한 번 물어본다.
+  state.confirmExit = true;
+  render();
+}
+
+function closeApp() {
+  state.confirmExit = false;
   closeView().catch(() => {});
 }
 
@@ -1068,6 +1127,16 @@ function header() {
             <span class="menu-text"><b>${m.label}</b>${m.sub ? `<i>${m.sub}</i>` : ''}</span>
           </button>`).join('')}
       </nav>` : ''}
+    ${state.confirmExit ? `
+      <div class="menu-scrim" id="btn-exit-scrim"></div>
+      <div class="exit-ask" role="alertdialog" aria-label="앱을 닫을까요">
+        <p><b>오늘운빨을 닫을까요?</b></p>
+        <p class="muted small">보던 풀이는 지난 기록에 남아 있어요.</p>
+        <div class="row2" style="margin-top:14px">
+          <button class="btn ghost" id="btn-exit-no">더 볼래요</button>
+          <button class="btn" id="btn-exit-yes">닫기</button>
+        </div>
+      </div>` : ''}
   </div>`;
 }
 
@@ -1309,6 +1378,7 @@ function render() {
           ${state.history.length
             ? '<p class="muted small" style="margin:-6px 0 12px">눌러서 전체를 볼 수 있어요</p>' : ''}
         </section>
+        ${err}
         ${state.history.length ? state.history.map((h, i) => `
           <button class="card hist" data-hist="${i}">
             <div class="row"><b>${esc(h.title || h.feature || '')}</b>
@@ -1316,7 +1386,12 @@ function render() {
             <p class="muted">${esc(_preview(h))}</p>
             <span class="hist-more">전체 보기 ›</span>
           </button>`).join('')
-        : '<div class="card"><p class="muted">아직 기록이 없어요.</p></div>'}
+        : state.historyLoading
+          // 불러오는 동안 자리를 잡아 둔다. 빈 화면을 보여주면 기록이 없는 줄 안다.
+          ? Array.from({ length: 3 }, () => `<div class="card hist-skel">
+              <div class="skel-line w40"></div><div class="skel-line"></div>
+              <div class="skel-line w70"></div></div>`).join('')
+          : '<div class="card"><p class="muted">아직 기록이 없어요.</p></div>'}
         <button class="btn ghost" id="btn-home2">홈으로</button>
         ${FOOTER}`;
       break;
@@ -1490,11 +1565,11 @@ function render() {
               "한 번만 결제하시면 / 자동으로 뜨는 광고가" 처럼 갈라진다. */''}
         ${state.noAds
           ? `<div class="perk done"><span class="perk-ic">${icon('ad')}</span>
-               <span>저절로 뜨던 광고가 꺼져 있어요. 고맙습니다.<br>
-               <i>퀴즈·부풀리기에서 직접 보시는 광고는 그대로 있어요.</i></span></div>`
+               <span><b>광고가 사라졌습니다.</b> 고맙습니다.<br>
+               <i>퀴즈·부풀리기에서 나오는 특별 무료 ${COIN}엽전 광고는 유지됩니다.</i></span></div>`
           : `<div class="perk"><span class="perk-ic">${icon('ad')}</span>
-               <span>한 번만 결제하시면 <b>저절로 뜨는 광고가 사라집니다.</b><br>
-               <i>퀴즈·부풀리기에서 ${COIN}엽전을 더 받는 광고는 그대로 두었어요.</i></span></div>`}
+               <span>한 번만 결제하시면 <b>광고가 사라집니다.</b><br>
+               <i>퀴즈·부풀리기에서 나오는 특별 무료 ${COIN}엽전 광고는 유지됩니다.</i></span></div>`}
         ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
           콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
         <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
@@ -1625,6 +1700,10 @@ function bind() {
     go('login');
   });
   on('btn-menu', () => { state.menu = !state.menu; render(); });
+  on('btn-exit-yes', closeApp);
+  const stayIn = () => { state.confirmExit = false; render(); };
+  on('btn-exit-no', stayIn);
+  on('btn-exit-scrim', stayIn);        // 바깥을 눌러도 닫힌다
   on('btn-menu-close', () => { state.menu = false; render(); });
   on('btn-earn', () => go('earn'));
   on('btn-earn2', () => go('earn'));      // 홈 엽전 줄의 작은 길잡이
