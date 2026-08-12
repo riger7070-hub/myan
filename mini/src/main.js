@@ -192,7 +192,19 @@ async function boot() {
   go('login');
 }
 
+/**
+ * 결제 다리를 미리 깨워 둔다.
+ *
+ * 앱을 켜자마자 충전 화면을 열면 상품 목록이 비어서 온다 — 네이티브 쪽이 스토어
+ * 정보를 아직 못 받은 상태다. 미리 한 번 물어봐 두면 정작 사용자가 열 때는 채워져 있다.
+ * 결과는 쓰지 않는다. 실패해도 조용히 넘어간다.
+ */
+function warmUpIAP() {
+  try { IAP.getProductItemList()?.catch?.(() => {}); } catch { /* 없는 환경이면 그만 */ }
+}
+
 async function recoverPendingOrders() {
+  warmUpIAP();
   try {
     // 이것도 배열이 아니라 { orders: [...] } 로 온다.
     const pending = (await IAP.getPendingOrders())?.orders || [];
@@ -446,10 +458,15 @@ async function loadProducts() {
     // ⚠️ 배열이 아니라 { products: [...] } 로 온다. 배열로 착각해 .map 을 부르면
     //    "map is not a function" 으로 죽는다(실제로 그랬다).
     //
-    // 앱을 켜고 **처음** 충전 화면을 열면 여기서 자주 실패한다. 네이티브 다리가
-    // 아직 준비되기 전이라 그렇다 — 두어 번 더 물어보면 대개 온다. 사용자에게
-    // 붉은 글씨를 보여주고 다시 누르게 하느니 앱이 알아서 기다린다.
-    const res = await retry(() => IAP.getProductItemList(), 3, 500);
+    // 앱을 켜고 **처음** 충전 화면을 열면 목록이 비어서 온다. 네이티브 쪽이 스토어
+    // 정보를 아직 못 받은 상태인데, 예외를 던지지 않고 빈 배열을 준다 —
+    // 그래서 "실패하면 다시" 만으로는 안 걸리고 그대로 '상품 없음' 이 떠 버렸다.
+    // 비어 있는 것도 아직 준비가 안 된 것으로 보고 다시 물어본다.
+    const res = await retry(async () => {
+      const r = await IAP.getProductItemList();
+      if (!(r?.products || []).length) throw new Error('상품 목록이 아직 비어 있음');
+      return r;
+    }, 4, 600);
     const products = res?.products || [];
     state.catalog = products.map(p => ({
       sku: p.sku,
@@ -484,7 +501,13 @@ function buyTokens(product) {
   state.busy = true;
   render();
 
-  IAP.createOneTimePurchaseOrder({
+  // ⚠️ createOneTimePurchaseOrder 는 **정리 함수**를 돌려주고, SDK 문서는 결제 흐름이
+  // 끝나면 반드시 부르라고 한다. 안 부르면 구독이 남아 다음 결제가 엉킨다.
+  // 지금까지 반환값을 그냥 버리고 있었다.
+  let cleanup = null;
+  const finish = () => { try { cleanup?.(); } catch { /* 이미 정리됐으면 그만 */ } cleanup = null; };
+
+  cleanup = IAP.createOneTimePurchaseOrder({
     options: {
       productId: product.sku,   // 구버전 필드지만 타입상 필수라 함께 넣는다
       sku: product.sku,
@@ -501,8 +524,9 @@ function buyTokens(product) {
         }
       },
     },
-    onEvent: () => { state.busy = false; state.error = ''; go('home'); },
+    onEvent: () => { finish(); state.busy = false; state.error = ''; go('home'); },
     onError: (err) => {
+      finish();
       state.busy = false;
       const detail = String(err?.message || err?.code || (typeof err === 'string' ? err : ''));
       console.warn('[iap]', err);          // 원인은 콘솔에 그대로 남긴다

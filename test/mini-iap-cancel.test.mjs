@@ -79,6 +79,24 @@ test('충전 화면이 SDK 내부 사정을 사용자에게 보여주지 않는�
     '예외 메시지를 그대로 화면에 담는다');
   assert.match(f, /console\.warn\('\[products:iap\]'/, '원인을 콘솔에도 안 남긴다');
   assert.match(f, /state\.catalogLoading = true/, '불러오는 중임을 표시하지 않는다');
+  // 앱을 켜자마자 열면 목록이 **비어서** 온다(예외가 아니다). 그것도 다시 물어봐야 한다.
+  assert.match(f, /if \(!\(r\?\.products \|\| \[\]\)\.length\) throw/,
+    '빈 목록을 준비 안 된 것으로 보지 않는다 — 첫 진입에서 상품 없음이 뜬다');
+});
+
+test('결제 흐름이 끝나면 SDK 정리 함수를 부른다', () => {
+  // 타입 정의: "반환되는 cleanup 함수는 결제 흐름이 끝나면 반드시 호출해야 해요."
+  // 안 부르면 구독이 남아 다음 결제가 엉킨다. 반환값을 그냥 버리고 있었다.
+  const f = SRC.match(/function buyTokens\(product\)[\s\S]*?\n\}/)[0];
+  assert.match(f, /cleanup = IAP\.createOneTimePurchaseOrder\(/, '반환값을 받지 않는다');
+  assert.match(f, /onEvent: \(\) => \{ finish\(\)/, '성공했을 때 정리하지 않는다');
+  assert.match(f, /onError: \(err\) => \{\s*\n\s*finish\(\)/, '실패했을 때 정리하지 않는다');
+});
+
+test('결제 다리를 미리 깨워 둔다', () => {
+  assert.match(SRC, /function warmUpIAP\(\)/, '미리 깨우는 자리가 없다');
+  assert.match(SRC, /async function recoverPendingOrders\(\)\s*\{\s*\n\s*warmUpIAP\(\);/,
+    '앱을 켤 때 깨우지 않는다');
 
   const i = SRC.indexOf("case 'charge': {");
   const charge = SRC.slice(i, i + 3000);
