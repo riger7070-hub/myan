@@ -1459,6 +1459,12 @@ function collectForm(it) {
 function bind() {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
 
+  // ⚠️ 찾는 범위는 반드시 #app 안이다. document 전체로 찾으면 <html data-theme="dark">
+  // 까지 걸린다 — 그러면 <html> 에 onclick 이 붙어, 화면 어디를 눌러도 그리로
+  // 버블링돼 render() 가 돌고 #app 이 통째로 다시 그려진다. 입력칸이 새 요소로
+  // 갈리니 포커스가 날아가고, 글자를 칠 수 없다("눌러도 무반응"의 정체).
+  const all = (sel) => app.querySelectorAll(sel);
+
   on('btn-login', doLogin);
   on('btn-charge', () => { state.catalog = undefined; state.catalogError = ''; go('charge'); loadProducts(); });
   on('btn-home', () => go(state.profile?.birthYear ? 'home' : 'profile'));
@@ -1487,7 +1493,7 @@ function bind() {
   on('btn-tips', () => { state.showTips = !state.showTips; render(); });
   on('btn-pop', startPop);
   on('btn-hist-back', () => go('history'));
-  for (const el of document.querySelectorAll('[data-hist]')) {
+  for (const el of all('[data-hist]')) {
     el.onclick = () => { state.histIndex = +el.dataset.hist; go('histview'); };
   }
   const tap = document.getElementById('pop-tap');
@@ -1497,7 +1503,7 @@ function bind() {
   }
 
   // 퀴즈 보기 선택 — 고르면 바로 다음 문제로
-  for (const el of document.querySelectorAll('[data-a]')) {
+  for (const el of all('[data-a]')) {
     el.onclick = () => { state.error = ''; answerQuiz(+el.dataset.a); };
   }
   on('btn-ad', watchAd);
@@ -1509,12 +1515,12 @@ function bind() {
   });
 
   // 화면 밝기는 고르는 즉시 바꿔 보여준다 — 저장 버튼을 눌러야 바뀌면 확인이 안 된다.
-  for (const el of document.querySelectorAll('[data-theme]')) {
+  for (const el of all('[data-theme]')) {
     el.onclick = () => { applyTheme(el.dataset.theme); render(); };
   }
 
   // 성별은 선택 즉시 화면에 표시만 해 둔다(저장은 '저장하기'에서 한 번에).
-  for (const el of document.querySelectorAll('[data-gender]')) {
+  for (const el of all('[data-gender]')) {
     el.onclick = () => {
       state.profile = { ...(state.profile || {}), gender: el.dataset.gender };
       render();
@@ -1547,10 +1553,10 @@ function bind() {
     runItem(it);
   });
 
-  for (const el of document.querySelectorAll('[data-item]')) {
+  for (const el of all('[data-item]')) {
     el.onclick = () => { const it = itemById(el.dataset.item); if (it) openItem(it); };
   }
-  for (const el of document.querySelectorAll('[data-sku]')) {
+  for (const el of all('[data-sku]')) {
     // 타일에 박힌 SKU 를 그대로 쓴다. 예전엔 이걸 PRODUCTS 에서 다시 찾았는데, 콘솔 SKU 는
     // 자동 생성값이라 그 목록에 있을 리가 없어서 find 가 늘 undefined 였다 — 타일이 열려
     // 있어도 눌리지 않았다. 무엇을 파는지는 이미 서버가 정했고(loadProducts), 여기서 할
