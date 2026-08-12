@@ -269,6 +269,7 @@ function bodyFor(item, profile, form) {
     case 'daeun':      return { ...base, birth, gender: profile.gender || '' };
     case 'spouse':     return { ...base, birth, gender: profile.gender || '' };
     // 신살·전생·천직은 네 기둥을 다 쓰므로 생시까지 함께 보낸다.
+    case 'wealth':     return { ...base, birth, gender: profile.gender || '' };
     case 'sinsal':     return { ...base, birth, gender: profile.gender || '' };
     case 'pastlife':   return { ...base, birth, gender: profile.gender || '' };
     case 'vocation':   return { ...base, birth, gender: profile.gender || '' };
@@ -388,6 +389,11 @@ function extractResult(d) {
   }
   // 천직 — 가장 두터운 십신 셋
   if (Array.isArray(d.top) && d.top.length) add('두드러진 십신', d.top.join(', '));
+  // 재물운 — 어떤 그림인지와 재물이 드는 해
+  if (d.shape) add('재물의 결', d.shape);
+  if (Array.isArray(d.wealthYears) && d.wealthYears.length) {
+    add('재물이 드는 해', d.wealthYears.filter(y => !y.feeds).slice(0, 4).map(y => y.year + '년').join(', '));
+  }
   // 띠 순위 — 내 띠가 몇 위인지가 제일 궁금한 값이다.
   if (d.mine?.name) add('내 띠', `${d.mine.name}띠 ${d.mine.rank}위`);
   if (d.dayBranch && Array.isArray(d.rows)) add('오늘 1위', `${d.rows[0].name}띠`);

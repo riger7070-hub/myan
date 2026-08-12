@@ -1652,6 +1652,7 @@ export default {
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAstroTransit(request, env)); }
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAuspiciousDays(request, env)); }
     if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
+    if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
     if (path === '/api/sinsal' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSinsal(request, env)); }
     if (path === '/api/tti-ranking' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiRanking(request, env)); }
     if (path === '/api/past-life' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handlePastLife(request, env)); }
@@ -4965,6 +4966,92 @@ const _SIPSIN_MEANING = {
 };
 
 
+// ── 재물운 ──
+//
+// 사주에서 돈은 재성(財星), 곧 정재와 편재로 본다. 다만 재성이 많다고 부자가 아니다.
+//   · 재성을 낳아 주는 힘(식신·상관)이 있어야 돈이 들어오는 길이 생긴다 (식상생재)
+//   · 재성을 나눠 갖는 힘(비견·겁재)이 세면 벌어도 남지 않는다 (군겁쟁재)
+//   · 일간이 약한데 재성만 크면 감당하지 못한다 (재다신약)
+// 이 셋을 함께 봐야 말이 된다. 아래는 그 셋을 세는 계산이다.
+
+const _JAE  = ['정재', '편재'];
+const _SIK  = ['식신', '상관'];
+const _BIG  = ['비견', '겁재'];
+const _IN   = ['정인', '편인'];
+
+/**
+ * 재물의 결을 읽는다.
+ * @param {object} saju computeSaju 결과
+ * @param {number} fromYear 세운을 훑기 시작할 해
+ * @param {number} years 몇 해를 볼지
+ */
+function computeWealth(saju, fromYear, years = 10) {
+  const spread = computeSipsinSpread(saju);
+  if (!spread) return null;
+
+  const pctOf = (names) => spread.spread
+    .filter(x => names.includes(x.name))
+    .reduce((a, x) => a + x.pct, 0);
+
+  const jae = pctOf(_JAE), sik = pctOf(_SIK), big = pctOf(_BIG), inseong = pctOf(_IN);
+  // 일간을 돕는 힘(비겁+인성)이 몸의 힘이다. 이게 재성보다 두터워야 재물을 감당한다.
+  const body = big + inseong;
+
+  // 재성이 어느 기둥에 앉았는지. 자리마다 뜻이 다르다.
+  const POS = ['년', '월', '일', '시'];
+  const POS_MEAN = {
+    년: '집안과 어린 시절의 재물',
+    월: '일터에서 버는 재물. 사주에서 가장 힘이 실리는 자리다',
+    일: '내 손에 쥐는 재물, 그리고 배우자',
+    시: '말년과 자식 대의 재물',
+  };
+  const seats = [];
+  [saju.yp, saju.mp, saju.dp, saju.hp].forEach((p, i) => {
+    if (!p) return;
+    for (const gan of [p[0], JJ_BONGI[p[1]]]) {
+      const gi = CG.indexOf(gan);
+      if (gi < 0) continue;
+      const name = _sipsin(saju.dayGan, CGO[gi], gi % 2 === 0);
+      if (_JAE.includes(name) && !seats.some(x => x.pos === POS[i])) {
+        seats.push({ pos: POS[i], name, mean: POS_MEAN[POS[i]] });
+      }
+    }
+  });
+
+  // 앞으로 재성이 드는 해. 그 해 지지의 본기로 본다.
+  const now = fromYear || _kstYear();
+  const good = [];
+  for (let y = now; y < now + years; y++) {
+    const branch = JJ[(y - 4) % 12];
+    const gi = CG.indexOf(JJ_BONGI[branch]);
+    if (gi < 0) continue;
+    const name = _sipsin(saju.dayGan, CGO[gi], gi % 2 === 0);
+    if (_JAE.includes(name)) good.push({ year: y, branch, sipsin: name });
+    else if (_SIK.includes(name)) good.push({ year: y, branch, sipsin: name, feeds: true });
+  }
+
+  // 어떤 그림인지 한 줄로 정한다. 글은 이 판정을 근거로 쓴다.
+  let shape, note;
+  if (jae === 0) {
+    shape = '재성무';
+    note = '사주에 재성이 드러나 있지 않습니다. 돈이 없다는 뜻이 아니라, 돈을 좇기보다 일과 재주로 풀리는 결입니다.';
+  } else if (jae > body) {
+    shape = '재다신약';
+    note = '재성이 몸의 힘보다 큽니다. 기회는 많은데 다 쥐려다 지치기 쉬우니, 벌리기보다 하나를 붙드는 편이 낫습니다.';
+  } else if (big >= 30 && jae > 0) {
+    shape = '군겁쟁재';
+    note = '재물을 나눠 갖는 힘이 셉니다. 동업과 보증에서 새기 쉬우니 돈은 내 이름으로 지키는 편이 좋습니다.';
+  } else if (sik >= 15 && jae > 0) {
+    shape = '식상생재';
+    note = '재주가 돈을 낳는 결입니다. 남 밑에서 받는 삯보다 내가 만들어 파는 쪽에서 크게 됩니다.';
+  } else {
+    shape = '신왕재왕';
+    note = '몸과 재물이 함께 섭니다. 꾸준히 모으면 모이는 결이라, 큰 한 방보다 오래 가는 쪽이 맞습니다.';
+  }
+
+  return { spread: spread.spread, jae, sik, big, inseong, body, seats, years: good, shape, note };
+}
+
 // ════════════════════════════════════════════════════════════
 //  신살(神煞) · 삼재 · 띠 순위 · 십신 분포
 //
@@ -5190,6 +5277,88 @@ function computeSpousePalace(birth, gender, fromYear, years = 10) {
   };
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  재물운 (4엽전)
+//
+//  운세 검색에서 가장 많이 찾는 주제다. 다만 "부자가 된다/못 된다" 로 답하면
+//  점집이지 상담이 아니다. 어떤 결로 돈이 들어오고 어디서 새는지를 짚는다.
+// ════════════════════════════════════════════════════════════
+async function handleWealth(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const w = computeWealth(saju, _kstYear(), 10);
+    if (!w) return cors(JSON.stringify({ error: { message: '재물운을 계산하지 못했습니다.' } }), 400);
+
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'wealth', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '재물운 풀이는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'wealth', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const jaeYears = w.years.filter(y => !y.feeds).map(y => y.year + '년');
+    const sikYears = w.years.filter(y => y.feeds).map(y => y.year + '년');
+    const prompt = [
+      '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + '(' + saju.dayElem + ') 입니다.',
+      g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      '계산해 둔 것:',
+      '재성(돈) ' + w.jae + '%, 식상(버는 재주) ' + w.sik + '%, 비겁(나눠 갖는 힘) ' + w.big + '%, 인성 ' + w.inseong + '%.',
+      '몸의 힘(비겁+인성)은 ' + w.body + '% 입니다.',
+      '판정: ' + w.shape + '. ' + w.note,
+      w.seats.length
+        ? '재성이 앉은 자리: ' + w.seats.map(x => x.pos + '주(' + x.name + '), ' + x.mean).join(' / ')
+        : '재성이 드러난 자리가 없습니다.',
+      jaeYears.length ? '앞으로 재물이 드는 해: ' + jaeYears.join(', ') : '',
+      sikYears.length ? '재주가 트여 돈길이 열리는 해: ' + sikYears.join(', ') : '',
+      '',
+      '이 사람의 재물운을 풀어 주세요. 다음 순서로 이어지는 글로 씁니다.',
+      '1) 이 사주에서 돈이 들어오는 결. 위 판정을 근거로 삼되 용어는 그 자리에서 풀어 주기',
+      '2) 어디서 새는지, 무엇을 조심하면 되는지',
+      '3) 재물이 드는 해에 무엇을 준비하면 좋은지',
+      '4) 올해 안에 해볼 수 있는 아주 구체적인 한 가지',
+      '',
+      '⚠️ 반드시 지킬 것: 부자가 된다거나 못 된다고 단정하지 마세요. 얼마를 벌게 된다는',
+      '금액, 주식·코인·부동산 같은 투자 종목을 말하지 마세요. 돈을 다루는 태도와 습관,',
+      '그리고 시기의 결을 짚는 글이어야 합니다. 재물이 적게 나온 사주라도 기죽지 않게,',
+      '그 사람 나름의 길을 함께 보여 주세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(String.fromCharCode(10));
+
+    const reading = await cachedReading(env, 'wealth:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'wealth', '재물운 ' + w.shape, reading,
+      { shape: w.shape, jae: w.jae }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading,
+      shape: w.shape, jae: w.jae, sik: w.sik, big: w.big, body: w.body,
+      seats: w.seats, wealthYears: w.years, remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[WEALTH]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
 
 // ════════════════════════════════════════════════════════════
 //  신살 풀이 (3엽전)

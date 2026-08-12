@@ -146,7 +146,7 @@ test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있�
   const paid = spans.filter(s => /await accountSpend\(env, acct, /.test(s));
   // 개수가 바뀌면 여기서 걸린다. 새 유료 기능을 넣었다면 아래 배선 검사를 통과하는지
   // 확인한 뒤 숫자를 올릴 것 — 무심코 올리면 환불 없는 핸들러가 섞여 든다.
-  assert.equal(paid.length, 23, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
+  assert.equal(paid.length, 24, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
 
   for (const span of paid) {
     const name = (span.match(/^async function (\w+)/) || [])[1] || span.slice(0, 40);

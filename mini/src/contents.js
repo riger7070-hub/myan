@@ -89,6 +89,7 @@ export const SECTIONS = [
   {
     icon: 'secMe', title: '사주로 보는 나',
     items: [
+      { id: 'wealth',     icon: 'wealth',     label: '재물운',             cost: 4, path: '/api/wealth',        need: null },
       { id: 'sinsal',     icon: 'sinsal',     label: '신살 풀이',          cost: 3, path: '/api/sinsal',         need: null },
       { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
       { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
