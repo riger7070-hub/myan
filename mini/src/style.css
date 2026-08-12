@@ -697,3 +697,17 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
   85%  { opacity: 1; }
   100% { transform: translateY(112vh) rotateY(calc(var(--spin) * 720deg)) scale(1); opacity: 0; }
 }
+
+/* ── 결제로 얻는 것 ──
+   광고가 사라진다는 약속. 값을 말하기 전에 무엇이 좋아지는지 먼저 보이게 한다. */
+.perk {
+  display: flex; align-items: center; gap: 9px;
+  margin-top: 14px; padding: 12px 14px;
+  background: rgba(201, 169, 110, 0.06);
+  border: 1px solid var(--line); border-radius: 12px;
+  font-size: 0.84rem; color: var(--text-dim); line-height: 1.6;
+}
+.perk b { color: var(--gold-light); font-weight: 600; }
+.perk.done { color: var(--gold-light); border-style: solid; }
+.perk-ic { display: inline-flex; flex: none; color: var(--gold); }
+.perk-ic .ic { width: 18px; height: 18px; }

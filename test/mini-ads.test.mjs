@@ -37,8 +37,51 @@ test('자동 광고는 하루 한 번까지', () => {
   const f = fnOf('runAutoAdIfDue');
   assert.match(f, /localStorage\.getItem\(AUTO_AD_DAY_KEY\) === today/, '오늘 튼 적이 있는지 안 본다');
   assert.match(f, /localStorage\.setItem\(AUTO_AD_DAY_KEY, today\)/, '튼 날을 기록하지 않는다');
+  assert.match(f, /_kstDay\(\)/, '날짜 기준을 _kstDay 로 잡지 않는다');
   // 기준일은 KST. UTC 로 잡으면 09:00 에 하루가 넘어가 아침마다 한 번 더 튼다.
-  assert.match(f, /9 \* 3600000/, '날짜 기준이 KST 가 아니다');
+  assert.match(SRC, /_kstDay = \(\) =>[^\n]*9 \* 3600000/, '_kstDay 가 KST 가 아니다');
+});
+
+test('광고는 종류를 합쳐 하루 세 번까지', () => {
+  assert.match(SRC, /const AD_DAILY_MAX = 3;/, '클라이언트 상한이 3이 아니다');
+  // 보상형과 자동 광고가 같은 수를 함께 써야 한다. 따로 세면 합쳐서 대여섯 번이 된다.
+  assert.match(fnOf('runAutoAdIfDue'), /adsLeftToday\(\)/, '자동 광고가 하루 몫을 보지 않는다');
+  assert.match(fnOf('watchAd'), /adsLeftToday\(\)/, '보상형 광고가 하루 몫을 보지 않는다');
+  assert.match(fnOf('watchAd'), /markAdSeen\(\)/, '본 횟수를 세지 않는다');
+  assert.match(fnOf('runAutoAdIfDue'), /markAdSeen\(\)/, '본 횟수를 세지 않는다');
+  assert.match(fnOf('adPrompt'), /adsLeftToday\(\)/, '몫을 다 써도 안내가 계속 보인다');
+  // 실제로 막는 것은 서버다. 앱을 고쳐도 넘길 수 없어야 한다.
+  const worker = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.js'), 'utf8');
+  assert.match(worker, /const MINI_AD_DAILY_MAX\s*=\s*3;/, '서버 상한이 3이 아니다');
+});
+
+test('보상형 광고는 퀴즈·부풀리기를 끝냈을 때 나온다', () => {
+  // '무료 엽전 받기' 목록에 광고 타일을 두지 않는다 — 거기서는 광고가 콘텐츠처럼 보인다.
+  const earn = SRC.slice(SRC.indexOf("case 'earn':"), SRC.indexOf("case 'need':"));
+  assert.doesNotMatch(earn, /btn-ad/, "무료 엽전 받기 칸에 광고 타일이 남아 있다");
+  // 대신 두 놀이를 끝낸 자리에 뜬다.
+  const quiz = SRC.slice(SRC.indexOf("case 'quiz':"), SRC.indexOf("case 'pop':"));
+  const pop = SRC.slice(SRC.indexOf("case 'pop':"), SRC.indexOf("case 'stick'"));
+  assert.match(quiz, /\$\{adPrompt\(\)\}/, '퀴즈를 끝낸 자리에 안내가 없다');
+  assert.match(pop, /\$\{adPrompt\(\)\}/, '부풀리기를 끝낸 자리에 안내가 없다');
+});
+
+test('결제한 사람에게는 자동 광고를 틀지 않는다', () => {
+  assert.match(fnOf('runAutoAdIfDue'), /state\.noAds/, '결제 여부를 보지 않는다');
+  // 판단은 서버가 한다 — 앱을 다시 깔아도 유지되어야 한다.
+  const worker = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.js'), 'utf8');
+  assert.match(worker, /noAds: await _miniHasPaid\(env, userKey\)/, '/me 가 결제 여부를 안 준다');
+  assert.match(worker, /amount > 0/, '무료로 받은 엽전까지 결제로 세고 있다');
+  assert.match(SRC, /state\.noAds = !!me\.noAds/, '앱이 그 값을 받지 않는다');
+});
+
+test('충전 화면이 광고가 사라진다고 알린다', () => {
+  const i = SRC.indexOf("case 'charge': {");
+  const charge = SRC.slice(i, i + 3000);
+  assert.match(charge, /광고가 사라집니다/, '결제로 무엇이 좋아지는지 적혀 있지 않다');
+  assert.match(charge, /state\.noAds/, '이미 결제한 사람에게도 같은 말을 한다');
 });
 
 test('방금 광고를 본 사람에게는 자동 광고를 틀지 않는다', () => {

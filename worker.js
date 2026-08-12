@@ -2075,7 +2075,20 @@ async function handleMiniMe(request, env) {
       gender: row?.gender || '',
     },
     tokens: await _miniBalance(env, userKey),
+    // 한 번이라도 결제한 사람에게는 자동 광고를 틀지 않는다. 광고로 버는 것보다
+    // 돈을 낸 사람을 붙잡아 두는 편이 낫고, 그 약속을 충전 화면에 적어 두었다.
+    // 판단은 서버가 한다 — 앱을 다시 깔아도 유지되어야 하는 값이다.
+    noAds: await _miniHasPaid(env, userKey),
   }), 200);
+}
+
+/** 돈을 내고 산 적이 있는가. 무료로 받은 엽전(출석·퀴즈·광고 등)은 세지 않는다. */
+async function _miniHasPaid(env, userKey) {
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM mini_payment_requests
+      WHERE user_key = ? AND status = 'approved' AND amount > 0 LIMIT 1`
+  ).bind(userKey).first().catch(() => null);
+  return !!row;
 }
 
 // 토스가 생일을 안 줬거나 태어난 시각을 더 받아야 할 때 쓴다.
@@ -2415,7 +2428,11 @@ async function _miniRefundSpend(env, spendId, userKey, cost) {
 // 별도 플래그 테이블이나 조회-후-쓰기가 없으므로 동시에 두 번 눌러도 한 번만 들어간다.
 const MINI_SIGNUP_TOKENS = 3;   // 첫 로그인 1회
 const MINI_AD_TOKENS     = 1;   // 광고 1편당
-const MINI_AD_DAILY_MAX  = 5;   // 하루 광고 보상 횟수 상한
+// 하루 광고 상한. 자동 광고까지 합쳐 하루 3번을 넘지 않게 한다 —
+// 무료 엽전을 준다고 해서 광고를 계속 물리면 앱을 지운다.
+// 클라이언트도 같은 수를 세지만(mini/src/main.js 의 AD_DAILY_MAX),
+// 실제로 막는 것은 여기다. 앱을 고쳐도 넘길 수 없다.
+const MINI_AD_DAILY_MAX  = 3;
 
 /** KST 기준 오늘 날짜(YYYY-MM-DD). */
 function _kstToday(now = Date.now()) {

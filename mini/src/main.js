@@ -177,6 +177,7 @@ async function boot() {
     try {
       const me = await api('/mini/api/me');
       state.profile = me.profile;
+    state.noAds = !!me.noAds;
       state.tokens = me.tokens;
       // 결제는 됐는데 지급 직전에 앱이 꺼진 주문을 여기서 마저 처리한다.
       // 이게 없으면 사용자는 돈만 내고 엽전을 못 받는다.
@@ -221,6 +222,7 @@ async function doLogin() {
     const me = await api('/mini/api/me');
     state.tokens = me.tokens;
     state.profile = me.profile;
+    state.noAds = !!me.noAds;
     go(state.profile?.birthYear ? 'home' : 'profile');
   });
 }
@@ -230,6 +232,7 @@ async function saveProfile(form) {
     await api('/mini/api/profile', { method: 'POST', body: form });
     const me = await api('/mini/api/me');
     state.profile = me.profile;
+    state.noAds = !!me.noAds;
     state.tokens = me.tokens;
     go('home');
   });
@@ -718,28 +721,55 @@ function showAd(unitId) {
   });
 }
 
+// 하루에 볼 수 있는 광고는 셋까지. 보상형과 자동 광고가 이 수를 함께 쓴다 —
+// 종류별로 따로 세면 합쳐서 하루 대여섯 번이 되고, 그쯤이면 앱을 지운다.
+// 서버도 같은 수로 보상을 막는다(worker.js 의 MINI_AD_DAILY_MAX).
+const AD_DAILY_MAX = 3;
+const AD_DAY_KEY = 'myan_mini_ad_day';        // '2026-08-12:2' — 날짜와 본 횟수
 const AUTO_AD_DAY_KEY = 'myan_mini_autoad_day';
 let _lastAdAt = 0;
+
+const _kstDay = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+
+/** 오늘 몇 편이나 봤는지. 날짜가 바뀌면 0 부터 다시 센다. */
+function adsSeenToday() {
+  try {
+    const [day, n] = String(localStorage.getItem(AD_DAY_KEY) || '').split(':');
+    return day === _kstDay() ? (parseInt(n, 10) || 0) : 0;
+  } catch { return 0; }
+}
+
+function markAdSeen() {
+  _lastAdAt = Date.now();
+  try { localStorage.setItem(AD_DAY_KEY, `${_kstDay()}:${adsSeenToday() + 1}`); } catch { /* 못 세도 서버가 막는다 */ }
+}
+
+const adsLeftToday = () => Math.max(0, AD_DAILY_MAX - adsSeenToday());
 
 /** 무료 엽전을 받은 뒤, 그 화면을 떠날 때 한 번 튼다. */
 async function runAutoAdIfDue() {
   if (!state.autoAdPending) return;
   state.autoAdPending = false;
   if (!AD_AUTO_UNIT_ID) return;
+  if (state.noAds) return;                                  // 결제하신 분께는 틀지 않는다
   if (Date.now() - _lastAdAt < 3 * 60 * 1000) return;      // 방금 광고를 봤다
-  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  if (!adsLeftToday()) return;                              // 오늘 몫을 다 썼다
+  const today = _kstDay();
   try {
     if (localStorage.getItem(AUTO_AD_DAY_KEY) === today) return;
     localStorage.setItem(AUTO_AD_DAY_KEY, today);
   } catch { return; }                                       // 저장을 못 하면 아예 안 튼다
-  _lastAdAt = Date.now();
+  markAdSeen();
   try { await showAd(AD_AUTO_UNIT_ID); } catch (e) { console.warn('[autoad]', e?.message); }
 }
 
 async function watchAd() {
   if (!AD_UNIT_ID) { state.toast = '광고가 아직 준비되지 않았어요.'; render(); return; }
+  if (!adsLeftToday()) {
+    state.toast = `광고는 하루 ${AD_DAILY_MAX}번까지예요. 내일 다시 만나요.`; render(); return;
+  }
   state.busy = true; state.error = ''; render();
-  _lastAdAt = Date.now();
+  markAdSeen();
 
   let rewarded = false;
   try {
@@ -973,7 +1003,7 @@ const MENU_ITEMS = [
  * 다른 데 있었다. 안내를 읽은 자리에서 바로 누를 수 있어야 한다 — 그 글이 곧 버튼이다.
  */
 function adPrompt() {
-  if (!AD_UNIT_ID) return '';
+  if (!AD_UNIT_ID || !adsLeftToday()) return '';   // 오늘 몫을 다 썼으면 아예 안 보인다
   return `<button class="ad-prompt" id="btn-ad" ${state.busy ? 'disabled' : ''}>
     <span class="ad-ic">${icon('ad')}</span>
     광고 시청 시 무료 엽전 +${AD_TOKENS}
@@ -1171,10 +1201,6 @@ function render() {
             <span class="t-icon">${icon('pop')}</span><span class="t-label">안도령 부풀리기</span>
             <span class="t-cost">${COIN}엽전 1개 · 하루 1번</span>
           </button>
-          ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
-            <span class="t-icon">${icon('ad')}</span><span class="t-label">광고 시청</span>
-            <span class="t-cost">무료 ${COIN}엽전 +${AD_TOKENS} · 퀴즈·부풀리기 기회 1회</span>
-          </button>` : ''}
         </div>
         <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
         ${FOOTER}`;
@@ -1306,7 +1332,7 @@ function render() {
           </div>`}
         ${done ? `
           <div class="card"><p>${esc(done.message)}</p>
-            ${!done.granted && done.allRight ? adPrompt() : ''}
+            ${adPrompt()}
           </div>
           ${q.questions.map((item, i) => `
             <div class="card">
@@ -1366,7 +1392,7 @@ function render() {
           <div class="card" style="text-align:center;padding:30px 22px">
             <div class="burst"><span>✦</span><span>✧</span><span>✦</span></div>
             <p>${esc(p.done.message)}</p>
-            ${p.done.remainToday === 0 ? adPrompt() : ''}
+            ${adPrompt()}
           </div>
           <div class="row2">
             ${p.done.remainToday > 0
@@ -1432,6 +1458,13 @@ function render() {
               ? '준비 중'
               : esc(p.price || '토스로 결제')}</span>
           </button>`).join('')}
+        ${/* 글은 한 덩어리(span)로 묶는다. 안 그러면 <b> 가 별도 칸이 되어
+              "한 번만 결제하시면 / 자동으로 뜨는 광고가" 처럼 갈라진다. */''}
+        ${state.noAds
+          ? `<div class="perk done"><span class="perk-ic">${icon('ad')}</span>
+               <span>자동으로 뜨던 광고가 꺼져 있어요. 고맙습니다.</span></div>`
+          : `<div class="perk"><span class="perk-ic">${icon('ad')}</span>
+               <span>한 번만 결제하시면 <b>자동으로 뜨는 광고가 사라집니다.</b></span></div>`}
         ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
           콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
         <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
