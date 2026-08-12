@@ -28,7 +28,16 @@ export async function loadWorker(names) {
 
   // 이름을 파일명에 반영해 테스트끼리 캐시가 섞이지 않게 한다
   // (Node 는 같은 URL 을 두 번 import 하면 캐시된 모듈을 준다).
-  const tmpFile = join(tmpDir, `worker.${names.join('-')}.mjs`);
+  // ⚠️ 이름을 그대로 이어 붙이면 파일명이 길어진다. 함수를 열대여섯 개 꺼내는 테스트에서
+  // 윈도우 경로 길이(260자)를 넘겨 ENOENT 가 났다. 길면 지문으로 줄인다.
+  const joined = names.join('-');
+  let tag = joined;
+  if (joined.length > 80) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < joined.length; i++) h = Math.imul(h ^ joined.charCodeAt(i), 0x01000193) >>> 0;
+    tag = `${names.length}fn-${h.toString(36)}`;
+  }
+  const tmpFile = join(tmpDir, `worker.${tag}.mjs`);
   writeFileSync(tmpFile, `${src}\nexport { ${names.join(', ')} };\n`);
 
   return import(pathToFileURL(tmpFile).href);

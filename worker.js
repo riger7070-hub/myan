@@ -5887,14 +5887,14 @@ async function handleSinsal(request, env) {
     const remainingTokens = await accountBalance(env, acct);
 
     const g = _normalizeGender(gender);
-    const list = sin.hits.map(h => h.name + '(' + h.where.join(', ') + '주): ' + h.text).join(NL);
+    const list = sin.hits.map(h => h.name + '(' + h.where.join(', ') + '주): ' + h.text).join(String.fromCharCode(10));
     const sj = sin.samjae;
     const prompt = [
       '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
       '일간은 ' + saju.dayGan + ' 입니다.',
       g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
       '',
-      sin.hits.length ? '이 사주에 선 신살:' + NL + list
+      sin.hits.length ? '이 사주에 선 신살:' + String.fromCharCode(10) + list
         : '뚜렷하게 선 신살이 없습니다. 그것도 하나의 결이니 그렇게 읽어 주세요.',
       '',
       sj ? (sj.inSamjae
@@ -5912,7 +5912,7 @@ async function handleSinsal(request, env) {
       '쓰느냐에 따라 재능이 된다고 분명히 말해 주세요. 삼재도 "조심할 때"이지',
       '"나쁜 일이 반드시 생기는 해"가 아닙니다.',
       '전체 700자 내외.',
-    ].filter(Boolean).join(NL);
+    ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'sinsal:' + _sajuKey(saju, g), CACHE_LONG,
       () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
@@ -5987,7 +5987,7 @@ async function handleTtiRanking(request, env) {
       '⚠️ 순위가 낮다고 불행을 예고하지 마세요. 오늘 기운과 어긋난다는 뜻일 뿐입니다.',
       '토막마다 앞에 "1)" 같은 번호는 쓰지 말고, 빈 줄로 나눠 주세요.',
       '전체 400자 내외.',
-    ].filter(Boolean).join(NL);
+    ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'ttirank:' + today + ':' + (mine?.branch || '-'), CACHE_DAY,
       () => geminiText(env, prompt, { temperature: 0.9, maxOutputTokens: 1200 }));
@@ -6056,7 +6056,7 @@ async function handlePastLife(request, env) {
       '전생 때문에 지금 불행하다는 식으로 쓰지 마세요. 읽고 나서 자기 자신을 조금 더',
       '이해하게 되는 글이어야 합니다. 장면이 눈에 보이도록 써 주세요.',
       '전체 700자 내외.',
-    ].filter(Boolean).join(NL);
+    ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'pastlife:' + _sajuKey(saju, g), CACHE_LONG,
       () => geminiText(env, prompt, { temperature: 0.95, maxOutputTokens: 2048 }));
@@ -6129,7 +6129,7 @@ async function handleVocation(request, env) {
       '정해진 길이 아닙니다. 이미 다른 일을 하고 있는 사람이 읽어도 상처받지 않게,',
       '지금 하는 일에서 이 결을 살리는 법도 함께 짚어 주세요.',
       '전체 700자 내외.',
-    ].filter(Boolean).join(NL);
+    ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'vocation:' + _sajuKey(saju, g), CACHE_LONG,
       () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
