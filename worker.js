@@ -2291,7 +2291,7 @@ async function handleMiniSaveProfile(request, env) {
   const y = b.birthYear ? parseInt(b.birthYear, 10) : null;
   const m = b.birthMonth ? parseInt(b.birthMonth, 10) : null;
   const d = b.birthDay ? parseInt(b.birthDay, 10) : null;
-  if (y !== null && (!Number.isInteger(y) || y < 1900 || y > new Date().getFullYear())) {
+  if (y !== null && (!Number.isInteger(y) || y < 1900 || y > _kstYear())) {
     return miniCors(request, JSON.stringify({ error: { message: '생년을 확인해 주세요.' } }), 400);
   }
   try {
@@ -6964,9 +6964,8 @@ async function handleSpousePalace(request, env) {
 
     const { lang = 'ko', birth, gender } = await request.json().catch(() => ({}));
     const g = _normalizeGender(gender);
-    const now = new Date(Date.now() + 9 * 3600000);
     const sp = (birth && birth.year)
-      ? computeSpousePalace(birth, g, now.getFullYear(), 10) : null;
+      ? computeSpousePalace(birth, g, _kstYear(), 10) : null;
     if (!sp) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
 
     const COST = 3;
@@ -7509,12 +7508,13 @@ async function handleTypeCompat(request, env) {
       return cors(JSON.stringify({ error: { message: '올바르지 않은 유형입니다.' } }), 400);
     }
 
-    // 엽전 1개 차감 (atomic INSERT — 잔액 >= 1 일 때만 삽입)
-    const paid = await accountSpend(env, acct, 'typecompat', 2);
+    // 차감·환불·안내가 한 값을 보게 묶는다. 갈라지면 실패했을 때 뗀 만큼 못 돌려준다.
+    const COST = 2;
+    const paid = await accountSpend(env, acct, 'typecompat', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '궁합 보기는 엽전 1개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: `궁합 보기는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => accountRefund(env, acct, 'typecompat', 1);
+    refund = () => accountRefund(env, acct, 'typecompat', COST);
     const remainingTokens = await accountBalance(env, acct);
 
     const on = ON[lang] || ON.ko;
@@ -7734,12 +7734,13 @@ async function handleNumerology(request, env) {
       return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
     }
 
-    // 엽전 1개 차감 (atomic INSERT)
-    const paid = await accountSpend(env, acct, 'numerology', 2);
+    // 차감·환불·안내가 한 값을 보게 묶는다. 갈라지면 실패했을 때 뗀 만큼 못 돌려준다.
+    const COST = 2;
+    const paid = await accountSpend(env, acct, 'numerology', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '수비학 풀이는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: `수비학 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => accountRefund(env, acct, 'numerology', 1);
+    refund = () => accountRefund(env, acct, 'numerology', COST);
     const remainingTokens = await accountBalance(env, acct);
 
     const lifePath = _lifePathNumber(by, bm, bd);
@@ -7800,15 +7801,18 @@ async function handleTojeong(request, env) {
     const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
     if (!saju) return cors(JSON.stringify({ error: { message: '사주 계산에 실패했습니다.' } }), 400);
 
-    // 엽전 2개 차감 (atomic INSERT — 정식 상세풀이와 동일한 무게)
-    const paid = await accountSpend(env, acct, 'tojeong', 4);
+    // 차감·환불·안내가 한 값을 보게 묶는다. 갈라지면 실패했을 때 뗀 만큼 못 돌려준다.
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'tojeong', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: '토정비결풍 신년운세는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: `토정비결풍 신년운세는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => accountRefund(env, acct, 'tojeong', 2);
+    refund = () => accountRefund(env, acct, 'tojeong', COST);
     const remainingTokens = await accountBalance(env, acct);
 
-    const thisYear = new Date().getFullYear();
+    // 신년운세라 연도가 곧 내용이다. 런타임 로컬(워커에서는 UTC)로 읽으면 1월 1일
+    // 00~09시 KST 에 작년 운세를 써 준다 — 하필 이 기능이 가장 많이 열리는 시각이다.
+    const thisYear = _kstYear();
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };
     const langLabel = LANG_LABEL[lang] || '한국어';
     const sajuBlock = `\n\n[이 사람의 사주 원국 — 서버에서 만세력으로 계산한 확정값. 절대 재계산·추측하지 말고 이 값만 사용]\n${saju.text}`;
@@ -7884,12 +7888,13 @@ async function handlePhotoReading(request, env) {
       return cors(JSON.stringify({ error: { message: '사진 용량이 너무 큽니다. 더 작은 사진으로 다시 시도해 주세요.' } }), 413);
     }
 
-    // 엽전 2개 차감 (atomic INSERT)
-    const paid = await accountSpend(env, acct, 'photo_reading', 4);
+    // 차감·환불·안내가 한 값을 보게 묶는다. 갈라지면 실패했을 때 뗀 만큼 못 돌려준다.
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'photo_reading', COST);
     if (!paid) {
-      return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ' 풀이는 엽전 2개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+      return cors(JSON.stringify({ error: { message: (type==='face'?'관상':'손금') + ` 풀이는 엽전 ${COST}개가 필요합니다. 잔액을 확인해 주세요.` } }), 402);
     }
-    refund = () => accountRefund(env, acct, 'photo_reading', 2);
+    refund = () => accountRefund(env, acct, 'photo_reading', COST);
     const remainingTokens = await accountBalance(env, acct);
 
     const LANG_LABEL = { ko:'한국어', en:'English', zh:'中文', ja:'日本語' };

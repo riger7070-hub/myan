@@ -162,6 +162,44 @@ test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있�
   }
 });
 
+test('차감한 만큼 환불한다 — 액수가 어긋난 핸들러가 없다', async () => {
+  // 위 검사는 "환불 배선이 있는가"만 본다. 배선은 멀쩡한데 **액수만** 다른 경우는 통과한다.
+  // 실제로 그렇게 넷이 어긋나 있었다(typecompat·numerology 2→1, tojeong·photo_reading 4→2).
+  // 값을 올릴 때 accountSpend 만 고치고 환불·안내 문구를 옛 값으로 두면 생기는 일이라,
+  // 실패할 때마다 차액이 사용자에게서 사라진다. 여기서 두 숫자를 직접 맞춰 본다.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const src = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.js'), 'utf8');
+
+  const starts = [...src.matchAll(/^(?:async function|function|const)/gm)].map(m => m.index);
+  const spans = starts.map((s, i) => src.slice(s, starts[i + 1] ?? src.length));
+
+  const SPEND  = /await accountSpend\(env, acct, '([a-z_]+)', ([A-Za-z_0-9]+)\)/g;
+  const REFUND = /accountRefund\(env, acct, '([a-z_]+)', ([A-Za-z_0-9]+)\)/g;
+
+  let checked = 0;
+  for (const span of spans) {
+    const spends = [...span.matchAll(SPEND)];
+    if (!spends.length) continue;
+    const name = (span.match(/^async function (\w+)/) || [])[1] || span.slice(0, 40);
+    const refunds = [...span.matchAll(REFUND)];
+
+    for (const [, feat, amount] of spends) {
+      const mine = refunds.filter(r => r[1] === feat);
+      assert.ok(mine.length, `${name}: '${feat}' 를 차감하는데 같은 이름으로 환불하지 않는다`);
+      for (const [, , back] of mine) {
+        assert.equal(back, amount,
+          `${name}: '${feat}' 를 ${amount} 차감하고 ${back} 환불한다 — 실패하면 차액이 사라진다`);
+      }
+      checked++;
+    }
+  }
+  // 위 개수 검사와 같은 이유로 고정한다. 유료 기능을 늘렸다면 여기도 의식적으로 올릴 것.
+  assert.equal(checked, 28, `차감 지점이 ${checked}개다 — 유료 기능이 늘었다면 숫자를 함께 올릴 것`);
+});
+
 test('잔액이 모자라면 차감도 호출도 일어나지 않는다', async () => {
   const { db, env } = setup(0);
   const token = await createSessionToken(EMAIL, env);
