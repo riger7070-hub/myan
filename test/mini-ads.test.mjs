@@ -148,6 +148,17 @@ test('자동 광고가 실패해도 사용자에게 말하지 않는다', () => 
   assert.doesNotMatch(f, /state\.error/, '자동 광고 실패를 화면에 띄운다');
 });
 
+test('광고를 본 뒤 그 놀이를 바로 다시 시작한다', () => {
+  // 서버는 광고를 본 만큼 그날 놀이 기회를 늘려 준다(_miniAdBonusToday).
+  // 그런데 화면이 그 기회를 열어 주지 않으면, 한 번 더 하려고 광고를 본 사람이
+  // 결과 화면에 그대로 서 있게 된다 — 속은 셈이다.
+  const f = fnOf('watchAd');
+  assert.match(f, /state\.screen === 'quiz'[\s\S]{0,40}startQuiz\(\)/, '퀴즈를 다시 시작하지 않는다');
+  assert.match(f, /state\.screen === 'pop'[\s\S]{0,40}startPop\(\)/, '부풀리기를 다시 시작하지 않는다');
+  // 보상 지급이 실패했으면 다시 시작하지 않는다(기회가 안 늘었을 수 있다).
+  assert.match(f, /보상 지급에 실패했어요[\s\S]{0,60}return;/, '지급 실패인데도 이어서 진행한다');
+});
+
 test('보상형 광고는 끝까지 본 경우에만 준다', () => {
   const f = fnOf('watchAd');
   assert.match(f, /if \(!rewarded\)/, '보상 여부를 확인하지 않는다');
@@ -158,6 +169,7 @@ test("'광고 시청 시 무료 엽전 +N' 이 누를 수 있는 자리다", () 
   const f = fnOf('adPrompt');
   assert.match(f, /<button[^>]*id="btn-ad"/, '글만 있고 누를 곳이 없다');
   assert.match(f, /광고 시청 시 무료 .*엽전 \+\$\{AD_TOKENS\}/, '문구가 다르다');
+  assert.match(f, /한 번 더/, '무엇이 더 생기는지 말해 주지 않는다');
   assert.match(SRC, /on\('btn-ad', watchAd\)/, 'btn-ad 가 광고에 연결돼 있지 않다');
 });
 

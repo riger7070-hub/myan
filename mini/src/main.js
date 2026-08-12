@@ -869,7 +869,16 @@ async function watchAd() {
     state.toast = r.message || '';
   } catch (e) {
     state.error = e?.message || '보상 지급에 실패했어요.';
+    render();
+    return;
   }
+
+  // 광고 보상은 엽전 하나로 끝이 아니다. 서버가 그날 놀이 기회도 함께 늘려 준다
+  // (_miniAdBonusToday). 그런데 화면이 그 기회를 열어 주지 않아서, 광고를 다 보고도
+  // 결과 화면에 그대로 서 있었다 — 한 번 더 하려고 본 사람에게는 속은 셈이다.
+  // 광고를 본 그 자리에서 바로 다시 시작한다.
+  if (state.screen === 'quiz') { await startQuiz(); return; }
+  if (state.screen === 'pop') { await startPop(); return; }
   render();
 }
 
@@ -1093,7 +1102,7 @@ function adPrompt() {
   if (!AD_UNIT_ID || !adsLeftToday()) return '';   // 오늘 몫을 다 썼으면 아예 안 보인다
   return `<button class="ad-prompt" id="btn-ad" ${state.busy ? 'disabled' : ''}>
     <span class="ad-ic">${icon('ad')}</span>
-    광고 시청 시 무료 엽전 +${AD_TOKENS}
+    광고 시청 시 무료 엽전 +${AD_TOKENS} · 한 번 더
   </button>`;
 }
 
