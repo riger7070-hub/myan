@@ -663,3 +663,37 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
   to   { transform: none; opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .burst span { animation: none; } }
+
+/* ── 광고 안내 겸 버튼 ──
+   예전에는 "광고를 보면 한 번 더" 라고 글만 적어 두고 누를 곳은 딴 데 있었다.
+   읽은 자리에서 바로 누를 수 있어야 한다 — 이 글이 곧 버튼이다. */
+.ad-prompt {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 14px; padding: 12px 14px;
+  background: rgba(201, 169, 110, 0.07);
+  border: 1px dashed var(--gold-dim); border-radius: 12px;
+  font-family: inherit; font-size: 0.88rem; color: var(--gold-light);
+  cursor: pointer;
+}
+.ad-prompt:active { background: rgba(201, 169, 110, 0.14); }
+.ad-prompt:disabled { opacity: 0.5; cursor: default; }
+.ad-ic { display: inline-flex; flex: none; }
+.ad-ic .ic { width: 18px; height: 18px; }
+
+/* ── 엽전이 쏟아진다 ──
+   엽전이 늘어난 순간에만 튼다. 숫자만 슬쩍 바뀌면 받은 줄도 모르고 지나간다.
+   화면 위를 덮되 누르는 것은 막지 않는다(pointer-events: none). */
+.coin-rain { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.coin-rain i {
+  position: absolute; top: -10%; width: 30px; height: 30px;
+  color: var(--gold-light);
+  filter: drop-shadow(0 2px 8px rgba(201, 169, 110, 0.45));
+  animation: coin-fall 1.5s cubic-bezier(0.35, 0.1, 0.6, 1) forwards;
+}
+.coin-rain i svg { width: 100%; height: 100%; display: block; }
+@keyframes coin-fall {
+  0%   { transform: translateY(0) rotateY(0deg) scale(0.5); opacity: 0; }
+  12%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(112vh) rotateY(calc(var(--spin) * 720deg)) scale(1); opacity: 0; }
+}

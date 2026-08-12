@@ -58,7 +58,10 @@ const AD_TOKENS = 1;
 
 // ⚠️ 앱인토스 콘솔에서 발급받은 광고 단위 ID. 등록 전에는 광고가 열리지 않는다.
 // 값이 비어 있으면 버튼 자체를 숨긴다 — 눌러도 실패하는 버튼을 보여주지 않는다.
-const AD_UNIT_ID = '';
+const AD_UNIT_ID = 'ait.v2.live.6687c3d6badb4d70';
+// 무료 엽전을 받은 뒤 조용히 한 번 트는 광고. 사용자가 요청한 것이 아니므로
+// 축하 화면을 덮지 않고, 하루 한 번까지만 튼다(runAutoAdIfDue 참고).
+const AD_AUTO_UNIT_ID = 'ait.v2.live.14d0826ccdad4c8d';
 
 const state = {
   screen: 'boot',
@@ -197,7 +200,7 @@ async function recoverPendingOrders() {
       if (!orderId) continue;
       const r = await api('/mini/api/payment/grant', { method: 'POST', body: { orderId } });
       if (r?.ok) {
-        state.tokens = r.balance ?? state.tokens;
+        gainCoins(r.balance, { ad: false });   // 돈을 낸 사람에게 광고를 틀지 않는다
         await IAP.completeProductGrant({ orderId });
       }
     }
@@ -456,7 +459,7 @@ function buyTokens(product) {
       processProductGrant: async ({ orderId }) => {
         try {
           const r = await api('/mini/api/payment/grant', { method: 'POST', body: { orderId } });
-          state.tokens = r.balance ?? state.tokens;
+          gainCoins(r.balance, { ad: false });   // 돈을 낸 사람에게 광고를 틀지 않는다
           return true;
         } catch (e) {
           console.error('[grant]', e?.message);
@@ -507,7 +510,7 @@ async function shareApp() {
 async function doCheckin() {
   await withBusy(async () => {
     const r = await api('/mini/api/checkin', { method: 'POST', body: {} });
-    state.tokens = r.balance ?? state.tokens;
+    gainCoins(r.balance);
     state.checkin = r;
     state.toast = r.message || '';
   });
@@ -561,7 +564,7 @@ async function submitQuiz() {
     const r = await api('/mini/api/quiz', {
       method: 'POST', body: { payload: q.payload, sig: q.sig, answers: q.picked },
     });
-    state.tokens = r.balance ?? state.tokens;
+    gainCoins(r.balance);
     state.quiz = { ...q, done: r };
   });
 }
@@ -623,7 +626,7 @@ async function claimPop(delayMs = 0) {
     const r = await api('/mini/api/pop', {
       method: 'POST', body: { issuedAt: p.issuedAt, sig: p.sig, taps: p.count },
     });
-    state.tokens = r.balance ?? state.tokens;
+    gainCoins(r.balance);
     state.pop = { ...p, done: r };
   } catch (e) {
     state.pop = { ...p, done: { message: e?.message || '보상을 받지 못했어요.' } };
@@ -639,50 +642,126 @@ function drawStick() {
   go('stick');
 }
 
-// ── 광고 보고 엽전 받기 ─────────────────────────────────────
+// ── 엽전이 쏟아지는 효과 ────────────────────────────────────
 //
-// 보상은 SDK 가 'userEarnedReward' 를 보낼 때만 준다. 광고를 닫기만 한 경우
-// (dismissed)에는 주지 않는다 — 그렇게 하면 광고를 띄우고 바로 닫아도 엽전이 나온다.
-// 하루 상한은 서버가 쥐고 있어서 클라이언트를 고쳐도 넘길 수 없다.
+// 엽전이 늘어난 순간에만 튼다. 숫자만 슬쩍 바뀌면 받은 줄도 모르고 지나간다.
+function coinRain(count = 8) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const host = document.createElement('div');
+  host.className = 'coin-rain';
+  host.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < count; i++) {
+    const c = document.createElement('i');
+    c.style.left = `${6 + Math.random() * 88}%`;
+    c.style.animationDelay = `${(Math.random() * 0.45).toFixed(2)}s`;
+    c.style.animationDuration = `${(1.25 + Math.random() * 0.6).toFixed(2)}s`;
+    c.style.setProperty('--spin', `${Math.random() < 0.5 ? -1 : 1}`);
+    c.innerHTML = COIN_SVG;
+    host.appendChild(c);
+  }
+  document.body.appendChild(host);
+  setTimeout(() => host.remove(), 2400);
+}
+
+// 둥근 밖, 네모난 안 — 상품 그림과 같은 엽전이다.
+const COIN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+  <circle cx="12" cy="12" r="10"/><rect x="8.5" y="8.5" width="7" height="7" rx="1"/></svg>`;
+
+/**
+ * 엽전이 늘어난 것을 화면에 반영한다.
+ *
+ * 잔액을 여기저기서 직접 대입하면, 어디선 효과가 나고 어디선 안 나는 일이 생긴다.
+ * 늘어남을 알아채는 자리를 하나로 둔다.
+ *
+ * @param {number} balance 서버가 알려준 잔액
+ * @param {{ ad?: boolean }} opts ad=false 면 자동 광고 대상이 아니다(결제로 받은 경우).
+ */
+function gainCoins(balance, { ad = true } = {}) {
+  const before = state.tokens;
+  if (typeof balance === 'number') state.tokens = balance;
+  if (state.tokens <= before) return;
+  coinRain(Math.min(6 + (state.tokens - before), 14));
+  if (ad) state.autoAdPending = true;
+}
+
+// ── 광고 ────────────────────────────────────────────────────
+//
+// 보상형(AD_UNIT_ID): 사용자가 눌러서 본다. 보상은 SDK 가 'userEarnedReward' 를
+// 보낼 때만 준다 — 닫기만 한 경우(dismissed)에 주면 띄우고 바로 닫아도 엽전이 나온다.
+// 하루 상한은 서버가 쥐고 있어 클라이언트를 고쳐도 넘길 수 없다.
+//
+// 자동(AD_AUTO_UNIT_ID): 무료 엽전을 받은 뒤에 조용히 한 번 튼다. 아래를 지킨다.
+//   · 보상을 **받은 화면을 떠날 때** 튼다 — 축하 화면을 광고로 덮지 않는다
+//   · 하루 한 번까지. 무료 콘텐츠가 셋이라 그때마다 틀면 하루 세 번이 된다
+//   · 방금 보상형 광고를 본 사람에게는 틀지 않는다(연달아 두 번은 최악이다)
+//   · 실패하면 아무 말 없이 넘어간다. 사용자가 요청한 일이 아니다
+
+/** 광고 하나를 띄운다. 보상 여부를 돌려준다. */
+function showAd(unitId) {
+  return new Promise((resolve, reject) => {
+    GoogleAdMob.loadAppsInTossAdMob({
+      options: { adUnitId: unitId },
+      onEvent: (e) => {
+        if (e?.type !== 'loaded') return;
+        let rewarded = false;
+        GoogleAdMob.showAppsInTossAdMob({
+          options: { adUnitId: unitId },
+          onEvent: (ev) => {
+            if (ev?.type === 'userEarnedReward') rewarded = true;
+            if (ev?.type === 'dismissed' || ev?.type === 'failedToShow') resolve(rewarded);
+          },
+          onError: () => resolve(rewarded),
+        });
+      },
+      onError: reject,
+    });
+  });
+}
+
+const AUTO_AD_DAY_KEY = 'myan_mini_autoad_day';
+let _lastAdAt = 0;
+
+/** 무료 엽전을 받은 뒤, 그 화면을 떠날 때 한 번 튼다. */
+async function runAutoAdIfDue() {
+  if (!state.autoAdPending) return;
+  state.autoAdPending = false;
+  if (!AD_AUTO_UNIT_ID) return;
+  if (Date.now() - _lastAdAt < 3 * 60 * 1000) return;      // 방금 광고를 봤다
+  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  try {
+    if (localStorage.getItem(AUTO_AD_DAY_KEY) === today) return;
+    localStorage.setItem(AUTO_AD_DAY_KEY, today);
+  } catch { return; }                                       // 저장을 못 하면 아예 안 튼다
+  _lastAdAt = Date.now();
+  try { await showAd(AD_AUTO_UNIT_ID); } catch (e) { console.warn('[autoad]', e?.message); }
+}
+
 async function watchAd() {
   if (!AD_UNIT_ID) { state.toast = '광고가 아직 준비되지 않았어요.'; render(); return; }
   state.busy = true; state.error = ''; render();
+  _lastAdAt = Date.now();
 
   let rewarded = false;
-  const finish = async () => {
-    state.busy = false;
-    if (!rewarded) { render(); return; }
-    try {
-      const r = await api('/mini/api/ad-reward', { method: 'POST', body: {} });
-      state.tokens = r.balance ?? state.tokens;
-      state.toast = r.message || '';
-    } catch (e) {
-      state.error = e?.message || '보상 지급에 실패했어요.';
-    }
-    render();
-  };
-
   try {
-    await new Promise((resolve, reject) => {
-      GoogleAdMob.loadAppsInTossAdMob({
-        options: { adUnitId: AD_UNIT_ID },
-        onEvent: (e) => { if (e?.type === 'loaded') resolve(); },
-        onError: reject,
-      });
-    });
-    GoogleAdMob.showAppsInTossAdMob({
-      options: { adUnitId: AD_UNIT_ID },
-      onEvent: (e) => {
-        if (e?.type === 'userEarnedReward') rewarded = true;
-        if (e?.type === 'dismissed' || e?.type === 'failedToShow') finish();
-      },
-      onError: () => finish(),
-    });
+    rewarded = await showAd(AD_UNIT_ID);
   } catch (e) {
     state.busy = false;
     state.error = `광고를 불러오지 못했어요. (${e?.message || e})`;
     render();
+    return;
   }
+
+  state.busy = false;
+  if (!rewarded) { render(); return; }     // 끝까지 안 봤으면 보상도 없다
+  try {
+    const r = await api('/mini/api/ad-reward', { method: 'POST', body: {} });
+    // 광고를 보고 받은 것이니 그 보상으로 또 광고를 틀지 않는다.
+    gainCoins(r.balance, { ad: false });
+    state.toast = r.message || '';
+  } catch (e) {
+    state.error = e?.message || '보상 지급에 실패했어요.';
+  }
+  render();
 }
 
 // ── 공유 ──────────────────────────────────────────────────
@@ -783,6 +862,11 @@ function go(screen, { fromBack = false } = {}) {
   }
   state.screen = screen;
   render();
+
+  // 무료 엽전을 받았다면 그 화면을 **떠날 때** 광고를 튼다. 받은 자리에서 바로 틀면
+  // 축하 화면을 덮어 버려서, 무엇을 받았는지 보지도 못한 채 광고부터 보게 된다.
+  // 유료 풀이를 보러 가는 길목은 비켜 준다 — 돈을 쓰려는 사람을 막을 이유가 없다.
+  if (screen !== 'loading' && screen !== 'result') runAutoAdIfDue();
 }
 
 function goBack() {
@@ -881,6 +965,20 @@ const MENU_ITEMS = [
   { id: 'btn-editprofile', icon: 'secProfile', label: '내 정보',      sub: '이름 · 생년월일 · 화면 밝기' },
   { id: 'btn-shareapp',    icon: 'share',    label: '친구에게 알리기', sub: '' },
 ];
+
+/**
+ * 광고를 보면 엽전을 더 받는다는 자리.
+ *
+ * 예전에는 "광고를 보면 한 번 더 할 수 있어요"라고 글만 적어 두고, 정작 누를 곳은
+ * 다른 데 있었다. 안내를 읽은 자리에서 바로 누를 수 있어야 한다 — 그 글이 곧 버튼이다.
+ */
+function adPrompt() {
+  if (!AD_UNIT_ID) return '';
+  return `<button class="ad-prompt" id="btn-ad" ${state.busy ? 'disabled' : ''}>
+    <span class="ad-ic">${icon('ad')}</span>
+    광고 시청 시 무료 엽전 +${AD_TOKENS}
+  </button>`;
+}
 
 function header() {
   // 좌우 칸의 폭을 같게 두어야 제목이 진짜 가운데에 온다. 예전에는 오른쪽에 엽전 // 알약이 있어서 그 폭만큼 제목이 왼쪽으로 밀렸다.
@@ -1074,8 +1172,8 @@ function render() {
             <span class="t-cost">${COIN}엽전 1개 · 하루 1번</span>
           </button>
           ${AD_UNIT_ID ? `<button class="tile" id="btn-ad">
-            <span class="t-icon">${icon('ad')}</span><span class="t-label">광고 보기</span>
-            <span class="t-cost">${COIN}${AD_TOKENS}엽전 + 퀴즈·부풀리기 기회 1회</span>
+            <span class="t-icon">${icon('ad')}</span><span class="t-label">광고 시청</span>
+            <span class="t-cost">무료 ${COIN}엽전 +${AD_TOKENS} · 퀴즈·부풀리기 기회 1회</span>
           </button>` : ''}
         </div>
         <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
@@ -1208,8 +1306,7 @@ function render() {
           </div>`}
         ${done ? `
           <div class="card"><p>${esc(done.message)}</p>
-            ${!done.granted && done.allRight && AD_UNIT_ID
-              ? '<p class="muted small" style="margin-top:8px">광고를 보면 한 번 더 도전할 수 있어요</p>' : ''}
+            ${!done.granted && done.allRight ? adPrompt() : ''}
           </div>
           ${q.questions.map((item, i) => `
             <div class="card">
@@ -1269,13 +1366,11 @@ function render() {
           <div class="card" style="text-align:center;padding:30px 22px">
             <div class="burst"><span>✦</span><span>✧</span><span>✦</span></div>
             <p>${esc(p.done.message)}</p>
-            ${p.done.remainToday === 0 && AD_UNIT_ID
-              ? '<p class="muted small" style="margin-top:10px">광고를 보면 한 번 더 할 수 있어요</p>' : ''}
+            ${p.done.remainToday === 0 ? adPrompt() : ''}
           </div>
           <div class="row2">
             ${p.done.remainToday > 0
-              ? '<button class="btn ghost" id="btn-pop">한 번 더</button>'
-              : (AD_UNIT_ID ? '<button class="btn ghost" id="btn-ad">광고 보고 한 번 더</button>' : '<span></span>')}
+              ? '<button class="btn ghost" id="btn-pop">한 번 더</button>' : '<span></span>'}
             <button class="btn ghost" id="btn-home2">홈으로</button>
           </div>
         ` : `
