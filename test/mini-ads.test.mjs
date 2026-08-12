@@ -25,6 +25,30 @@ const fnOf = (name) => {
   return SRC.slice(i, j + 2);
 };
 
+test('SDK 에 넘기는 이름이 adGroupId 다', () => {
+  // 실제로 당했다. adUnitId 로 넘기면 SDK 는 아무 말 없이 아무것도 안 한다 —
+  // 눌러도 광고가 안 뜨는데 오류도 없어서 원인을 찾기 어렵다.
+  // 콘솔이 주는 값의 이름도 '광고 그룹 ID' 다.
+  const f = fnOf('showAd');
+  assert.doesNotMatch(f, /adUnitId\s*:/, 'adUnitId 로 넘기고 있다 — 광고가 뜨지 않는다');
+  assert.equal((f.match(/adGroupId:\s*groupId/g) || []).length, 2,
+    'load·show 두 곳 모두 adGroupId 로 넘겨야 한다');
+});
+
+test('광고가 응답하지 않아도 화면이 잠기지 않는다', () => {
+  const f = fnOf('showAd');
+  assert.match(f, /setTimeout\(/, '응답이 없을 때 포기하는 장치가 없다');
+  assert.match(f, /settled/, '두 번 끝날 수 있다 — busy 가 엉킨다');
+});
+
+test('못 띄운 광고는 하루 몫에서 세지 않는다', () => {
+  // 보지도 못한 광고를 세면 억울하다. markAdSeen 은 성공한 뒤에 와야 한다.
+  const w = fnOf('watchAd');
+  const showAt = w.indexOf('await showAd(');
+  const markAt = w.indexOf('markAdSeen()');
+  assert.ok(showAt > 0 && markAt > showAt, 'markAdSeen 이 showAd 보다 먼저 온다');
+});
+
 test('광고 단위 두 가지가 모두 꽂혀 있다', () => {
   assert.match(SRC, /const AD_UNIT_ID = 'ait\.[\w.]+'/, '보상형 광고 단위가 비어 있다');
   assert.match(SRC, /const AD_AUTO_UNIT_ID = 'ait\.[\w.]+'/, '자동 광고 단위가 비어 있다');

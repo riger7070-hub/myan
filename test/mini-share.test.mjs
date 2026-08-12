@@ -44,6 +44,30 @@ test('링크를 못 만들었으면 찾아오는 법을 알려준다', () => {
   assert.match(t, /오늘운빨/, '링크도 없고 안내도 없으면 받는 쪽이 갈 곳이 없다');
 });
 
+test('공유에는 언제나 들어올 주소가 붙는다', () => {
+  // ⚠️ getTossShareLink 의 path 는 intoss:// 로 시작하는 딥링크여야 한다.
+  // '/' 를 넘기고 있었더니 링크가 만들어지지 않아, 주소 없는 글이 나갔다.
+  const f = SRC.match(/async function appLink\(\)[\s\S]*?\n\}/);
+  assert.ok(f, 'appLink 를 못 찾았다');
+  assert.match(SRC, /const APP_DEEPLINK = 'intoss:\/\/\w+'/, '딥링크가 intoss:// 형식이 아니다');
+  assert.match(f[0], /getTossShareLink\(APP_DEEPLINK\)/, "여전히 '/' 같은 값을 넘긴다");
+  assert.match(f[0], /return WEB_URL/, '링크를 못 만들었을 때 남길 주소가 없다');
+  assert.match(SRC, /const WEB_URL = 'https:\/\//, '웹 주소가 없다');
+
+  // 딥링크는 콘솔에 등록한 앱 이름과 같아야 한다.
+  const cfg = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'mini', 'apps-in-toss.config.ts'), 'utf8');
+  const appName = cfg.match(/appName:\s*'([^']+)'/)[1];
+  const deep = SRC.match(/const APP_DEEPLINK = 'intoss:\/\/([^']+)'/)[1];
+  assert.equal(deep, appName, `딥링크(${deep})와 앱 이름(${appName})이 다르다`);
+});
+
+test('메뉴의 친구에게 알리기에도 주소가 붙는다', () => {
+  const f = SRC.match(/async function shareApp\(\)[\s\S]*?\n\}/)[0];
+  assert.match(f, /await appLink\(\)/, '주소를 붙이지 않는다');
+  assert.match(f, /\$\{link\}/, '만든 주소를 글에 넣지 않는다');
+});
+
 test('긴 풀이도 전문을 싣는다', () => {
   // 앞부분만 보내고 "나머지는 앱에서"라고 하면 보낸 사람에게나 맞는 말이다.
   // 받는 사람은 남의 계정 기록을 열 수 없으니, 잘라낸 만큼은 영영 못 본다.

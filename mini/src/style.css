@@ -711,3 +711,4 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .perk.done { color: var(--gold-light); border-style: solid; }
 .perk-ic { display: inline-flex; flex: none; color: var(--gold); }
 .perk-ic .ic { width: 18px; height: 18px; }
+.perk i { font-style: normal; font-size: 0.78rem; opacity: 0.75; }

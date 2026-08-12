@@ -493,17 +493,26 @@ function buyTokens(product) {
 // 엽전 보상은 붙이지 않는다. 공유창을 띄운 것만으로 줄 수밖에 없는데(실제로 보냈는지는
 // 앱이 알 수 없다) 그러면 눌렀다 닫기만 반복해도 엽전이 나온다. 엽전은 출석·퀴즈·광고
 // 처럼 확인 가능한 행동에만 붙인다.
+// ⚠️ getTossShareLink 의 path 는 **intoss:// 로 시작하는 딥링크**여야 한다.
+// '/' 를 넘기고 있었으니 링크가 만들어질 리 없었고, 그때마다 주소 없는 글이 나갔다.
+// 받는 사람은 "토스에서 찾아보세요"라는 말만 보고 어디로 갈지 몰랐다.
+const APP_DEEPLINK = 'intoss://myan';        // apps-in-toss.config.ts 의 appName 과 같아야 한다
+const WEB_URL = 'https://myan.riger7070.workers.dev';
+
+/** 앱으로 오는 길. 토스 링크를 못 만들면 웹 주소라도 남긴다. */
+async function appLink() {
+  try {
+    const link = await getTossShareLink(APP_DEEPLINK);
+    if (link) return link;
+  } catch (e) { console.warn('[share:link]', e?.message); }
+  return WEB_URL;
+}
+
 async function shareApp() {
   await withBusy(async () => {
-    let link = '';
-    try {
-      link = await getTossShareLink('/');
-    } catch { /* 링크를 못 만들어도 공유 자체는 시도한다 */ }
-
+    const link = await appLink();
     await share({
-      message: link
-        ? `오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요.\n${link}`
-        : '오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요. 토스에서 "오늘운빨"을 찾아보세요.',
+      message: `오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요.\n${link}`,
     });
   });
 }
@@ -699,24 +708,42 @@ function gainCoins(balance, { ad = true } = {}) {
 //   · 방금 보상형 광고를 본 사람에게는 틀지 않는다(연달아 두 번은 최악이다)
 //   · 실패하면 아무 말 없이 넘어간다. 사용자가 요청한 일이 아니다
 
-/** 광고 하나를 띄운다. 보상 여부를 돌려준다. */
-function showAd(unitId) {
+/**
+ * 광고 하나를 띄운다. 보상 여부를 돌려준다.
+ *
+ * ⚠️ SDK 가 받는 이름은 **adGroupId** 다(adUnitId 가 아니다). 콘솔이 주는 값도
+ * '광고 그룹 ID' 라 부른다. adUnitId 로 넣으면 SDK 는 아무 말 없이 아무것도 안 한다 —
+ * 눌러도 광고가 안 뜨는데 오류도 없어서 원인을 찾기 어렵다.
+ *
+ * 한 번 켜지면 끝나야 한다. 응답이 영영 안 오면 busy 가 풀리지 않아 화면이 잠긴다.
+ */
+function showAd(groupId) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const fail = (e) => { if (!settled) { settled = true; reject(e); } };
+
+    // 광고가 안 오면 20초 뒤 포기한다. 사용자를 무한정 기다리게 두지 않는다.
+    const timer = setTimeout(() => fail(new Error('광고 응답이 없습니다')), 20000);
+    const stop = (fn) => (...a) => { clearTimeout(timer); return fn(...a); };
+
+    let shown = false;
     GoogleAdMob.loadAppsInTossAdMob({
-      options: { adUnitId: unitId },
+      options: { adGroupId: groupId },
       onEvent: (e) => {
-        if (e?.type !== 'loaded') return;
+        if (e?.type !== 'loaded' || shown) return;   // onEvent 는 여러 번 올 수 있다
+        shown = true;
         let rewarded = false;
         GoogleAdMob.showAppsInTossAdMob({
-          options: { adUnitId: unitId },
+          options: { adGroupId: groupId },
           onEvent: (ev) => {
             if (ev?.type === 'userEarnedReward') rewarded = true;
-            if (ev?.type === 'dismissed' || ev?.type === 'failedToShow') resolve(rewarded);
+            if (ev?.type === 'dismissed' || ev?.type === 'failedToShow') stop(done)(rewarded);
           },
-          onError: () => resolve(rewarded),
+          onError: (err) => { console.warn('[ad:show]', err); stop(done)(rewarded); },
         });
       },
-      onError: reject,
+      onError: stop(fail),
     });
   });
 }
@@ -759,8 +786,10 @@ async function runAutoAdIfDue() {
     if (localStorage.getItem(AUTO_AD_DAY_KEY) === today) return;
     localStorage.setItem(AUTO_AD_DAY_KEY, today);
   } catch { return; }                                       // 저장을 못 하면 아예 안 튼다
-  markAdSeen();
-  try { await showAd(AD_AUTO_UNIT_ID); } catch (e) { console.warn('[autoad]', e?.message); }
+  try {
+    await showAd(AD_AUTO_UNIT_ID);
+    markAdSeen();                                           // 실제로 뜬 것만 센다
+  } catch (e) { console.warn('[autoad]', e?.message); }
 }
 
 async function watchAd() {
@@ -769,17 +798,18 @@ async function watchAd() {
     state.toast = `광고는 하루 ${AD_DAILY_MAX}번까지예요. 내일 다시 만나요.`; render(); return;
   }
   state.busy = true; state.error = ''; render();
-  markAdSeen();
 
   let rewarded = false;
   try {
     rewarded = await showAd(AD_UNIT_ID);
   } catch (e) {
+    // 못 띄웠으면 하루 몫도 깎지 않는다. 보지도 못한 광고를 세면 억울하다.
     state.busy = false;
     state.error = `광고를 불러오지 못했어요. (${e?.message || e})`;
     render();
     return;
   }
+  markAdSeen();                              // 실제로 뜬 것만 센다
 
   state.busy = false;
   if (!rewarded) { render(); return; }     // 끝까지 안 봤으면 보상도 없다
@@ -804,9 +834,7 @@ async function shareResult() {
   const r = state.result;
   if (!r) return;
   await withBusy(async () => {
-    let link = '';
-    try { link = await getTossShareLink('/'); } catch { /* 링크가 없어도 글은 보낸다 */ }
-    await share({ message: _resultShareText(r, link) });
+    await share({ message: _resultShareText(r, await appLink()) });
   });
 }
 
@@ -1462,9 +1490,11 @@ function render() {
               "한 번만 결제하시면 / 자동으로 뜨는 광고가" 처럼 갈라진다. */''}
         ${state.noAds
           ? `<div class="perk done"><span class="perk-ic">${icon('ad')}</span>
-               <span>자동으로 뜨던 광고가 꺼져 있어요. 고맙습니다.</span></div>`
+               <span>저절로 뜨던 광고가 꺼져 있어요. 고맙습니다.<br>
+               <i>퀴즈·부풀리기에서 직접 보시는 광고는 그대로 있어요.</i></span></div>`
           : `<div class="perk"><span class="perk-ic">${icon('ad')}</span>
-               <span>한 번만 결제하시면 <b>자동으로 뜨는 광고가 사라집니다.</b></span></div>`}
+               <span>한 번만 결제하시면 <b>저절로 뜨는 광고가 사라집니다.</b><br>
+               <i>퀴즈·부풀리기에서 ${COIN}엽전을 더 받는 광고는 그대로 두었어요.</i></span></div>`}
         ${state.catalog === null ? '' : `<p class="muted small" style="text-align:center;margin-top:6px">
           콘솔 등록 상품 ${state.catalog?.length ?? 0}개</p>`}
         <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
