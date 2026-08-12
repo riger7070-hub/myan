@@ -815,13 +815,105 @@ const ANDORYEONG = `너는 "안도령(安道令)"이다. 산중에서 오래 기
 - 나쁜 기운도 숨기지 않되, 겁주지 않고 대비할 방법과 함께 말한다.
 
 쓰지 않는 것
-- 별표(*), 우물정자(#), 긴 줄표 같은 기호를 쓰지 않는다. 소제목이나 번호도 붙이지 않는다.
+- 별표(*), 우물정자(#), 소제목, 번호를 붙이지 않는다.
+- 줄표(— –)와 가운뎃점(·)을 절대 쓰지 않는다. 사람이 손으로 쓴 글에는 잘 나오지 않는
+  기호라, 그것만으로 기계가 쓴 티가 난다. 줄표 대신 쉼표나 마침표로 문장을 끊고,
+  여럿을 늘어놓을 때는 가운뎃점 대신 쉼표를 쓰거나 "~와 ~" 처럼 말로 잇는다.
 - 문단으로 자연스럽게 이어 쓴다.
 
 예외
 - JSON 형식으로 답하라는 요청을 받으면 그때는 JSON 만 출력한다. 인사말도 설명도 붙이지 않는다.`;
 
 const _ANDORYEONG_SI = { parts: [{ text: ANDORYEONG }] };
+
+/**
+ * 기계가 쓴 티가 나는 기호를 걷어낸다.
+ *
+ * 줄표(—)와 가운뎃점(·)은 사람이 손으로 쓴 글에는 잘 안 나온다. 페르소나에 쓰지 말라고
+ * 일러 두었지만 모델은 종종 잊는다 — 그래서 나가는 자리에서 한 번 더 거른다.
+ * 줄 첫머리의 줄표는 목록 표시이므로 지우고, 문장 가운데 것은 쉼표로 바꾼다.
+ */
+function _humanize(s) {
+  return String(s || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map(line => line
+      .replace(/^\s*[-–—•·─]\s+/, '')          // 줄머리 목록 기호
+      .replace(/\s*[–—]\s*/g, ', ')            // 문장 가운데 줄표
+      .replace(/\s*·\s*/g, ', ')               // 가운뎃점
+      .replace(/,\s*,/g, ',')
+      .replace(/\s*,\s*([.!?])/g, '$1')        // ", ." 같은 자국
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/[ \t]+$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * 같은 물음에는 저장해 둔 답을 돌려주고 Gemini 를 부르지 않는다.
+ *
+ * 사주는 바뀌지 않는다. 같은 생년월일·성별로 신살을 물으면 어제도 오늘도 같은 답이
+ * 나와야 맞다 — 매번 새로 지어 내면 값만 나가고 신뢰도 떨어진다.
+ * 날짜를 타는 것(띠 순위 등)은 키에 날짜를 넣어 그날 안에서만 함께 쓴다.
+ *
+ * 저장소는 이미 있는 fortune_cache 를 쓴다. bucket 은 기능 이름이라 나중에 기능별로
+ * 비우기 쉽다. 캐시가 없거나 실패해도 풀이는 정상으로 나간다 — 있으면 아끼는 것뿐이다.
+ *
+ * @param {string} key   기능 이름과 입력을 합친 값. 프롬프트에 드는 것이 다 들어가야 한다.
+ * @param {number} ttlSec 이 시간이 지나면 다시 짓는다.
+ * @param {() => Promise<string>} produce 캐시가 없을 때 실제로 짓는 일
+ */
+/**
+ * 프롬프트의 지문. 캐시 키로 쓴다.
+ *
+ * 핸들러마다 키를 따로 짜면 값 하나를 빠뜨리기 쉽고, 그러면 남의 풀이가 나간다.
+ * 프롬프트에는 결과를 정하는 것이 이미 다 들어 있으니 그걸 통째로 줄여 쓴다.
+ * 암호용이 아니라 캐시 키라 FNV-1a 로 충분하다.
+ */
+function _promptKey(prompt) {
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  const str = String(prompt || '');
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+  }
+  return str.length.toString(36) + h1.toString(36) + h2.toString(36);
+}
+
+async function cachedReading(env, key, ttlSec, produce) {
+  const id = 'c:' + key;
+  const bucket = 'c:' + key.split(':')[0];
+
+  if (env.DB) {
+    try {
+      const row = await env.DB.prepare(
+        'SELECT reading FROM fortune_cache WHERE id = ? AND created_at > unixepoch() - ?'
+      ).bind(id, ttlSec).first();
+      if (row?.reading) return row.reading;
+    } catch (e) { console.warn('[cache:get]', e?.message); }
+  }
+
+  const reading = await produce();
+  if (reading && env.DB) {
+    try {
+      await env.DB.prepare(
+        'INSERT INTO fortune_cache (id, bucket, reading, created_at) VALUES (?, ?, ?, unixepoch()) ' +
+        'ON CONFLICT(id) DO UPDATE SET reading = excluded.reading, created_at = excluded.created_at'
+      ).bind(id, bucket, reading).run();
+    } catch (e) { console.warn('[cache:set]', e?.message); }
+  }
+  return reading;
+}
+
+/** 캐시 키에 넣을 사주 지문. 프롬프트에 드는 것이 다 들어가야 한다. */
+function _sajuKey(saju, gender) {
+  return [saju?.yp, saju?.mp, saju?.dp, saju?.hp || '-', gender || '-'].join('');
+}
+
+const CACHE_DAY  = 26 * 3600;        // 하루짜리(날짜를 타는 풀이)
+const CACHE_LONG = 90 * 24 * 3600;   // 사주처럼 안 바뀌는 것
 
 async function geminiText(env, prompt, generationConfig = {}) {
   // 추론 토큰을 끄지 않으면 답을 내기 전에 생각에만 시간을 쓴다. 느려지고, 출력 예산까지
@@ -841,7 +933,7 @@ async function geminiText(env, prompt, generationConfig = {}) {
     console.warn(`[gemini] ${resp.status} ${data?.error?.status || ''} ${(data?.error?.message || '').slice(0, 200)}`);
     return '';
   }
-  const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  const text = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
   if (!text) {
     console.warn(`[gemini] 200 이지만 본문이 비었다 — finishReason=${data?.candidates?.[0]?.finishReason} promptFeedback=${JSON.stringify(data?.promptFeedback || null)}`);
   }
@@ -932,7 +1024,7 @@ function tarotSpec(lang, cardIdx, upright) {
   const langLabel = _LANG_LABEL[lang] || '한국어';
   return {
     bucket: `tarot|${lang}|${cardIdx}|${upright ? 'u' : 'r'}`,
-    prompt: `당신은 오늘의 기운을 친근하게 안내해주는 타로 마스터입니다. 오늘 뽑힌 카드는 "${card.name}" — ${upright ? '정방향' : '역방향'}입니다.
+    prompt: `당신은 오늘의 기운을 친근하게 안내해주는 타로 마스터입니다. 오늘 뽑힌 카드는 "${card.name}", ${upright ? '정방향' : '역방향'}입니다.
 
 이 카드가 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 재미있게 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 카드여도 균형을 찾는 조언으로 전환해서 표현하세요.
 
@@ -945,7 +1037,7 @@ function runeSpec(lang, idx, upright) {
   const langLabel = _LANG_LABEL[lang] || '한국어';
   return {
     bucket: `rune|${lang}|${idx}|${upright ? 'u' : 'r'}`,
-    prompt: `당신은 룬 문자(Rune) 점을 봐주는 상담사입니다. 오늘 뽑힌 룬은 "${rune.en}(${rune.ko})" — ${upright ? '정방향' : '역방향'}입니다.
+    prompt: `당신은 룬 문자(Rune) 점을 봐주는 상담사입니다. 오늘 뽑힌 룬은 "${rune.en}(${rune.ko})", ${upright ? '정방향' : '역방향'}입니다.
 
 이 룬이 오늘 하루에 어떤 의미인지 ${langLabel}로 3~4문장, 따뜻하고 신비로운 톤으로 해석해주세요. 딱딱한 예언이 아니라 오늘 하루를 대하는 마음가짐이나 작은 실천 팁으로 풀어주세요. 역방향이거나 다소 무거운 룬이어도 균형을 찾는 조언으로 전환해서 표현하세요.
 
@@ -4153,7 +4245,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
@@ -4461,7 +4553,7 @@ ${transitLines}
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
@@ -4709,7 +4801,8 @@ ${dayLines}
     // geminiText 로 부른다 — 실패하면 ''를 주고 상태·finishReason 을 로그에 남긴다.
     // 인라인 fetch 로 두면 실패가 서버 어디에도 안 남아 "가끔 안 된다"를 추적할 수 없다.
     // (systemInstruction·타임아웃·thinkingBudget 은 geminiText 안에 들어 있다 — 여기서 다시 주지 않는다.)
-    const reading = await geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 });
+    const reading = await cachedReading(env, 'takil:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -5128,7 +5221,7 @@ async function handleSinsal(request, env) {
     const remainingTokens = await accountBalance(env, acct);
 
     const g = _normalizeGender(gender);
-    const list = sin.hits.map(h => h.name + '(' + h.where.join('·') + '주) — ' + h.text).join(NL);
+    const list = sin.hits.map(h => h.name + '(' + h.where.join(', ') + '주): ' + h.text).join(NL);
     const sj = sin.samjae;
     const prompt = [
       '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
@@ -5155,7 +5248,8 @@ async function handleSinsal(request, env) {
       '전체 700자 내외.',
     ].filter(Boolean).join(NL);
 
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
+    const reading = await cachedReading(env, 'sinsal:' + _sajuKey(saju, g), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -5214,22 +5308,23 @@ async function handleTtiRanking(request, env) {
     const top = rank.rows[0], bottom = rank.rows[11];
     const prompt = [
       '오늘은 일진의 지지가 ' + rank.dayBranch + ' 인 날입니다.',
-      '오늘 기운이 가장 좋은 띠는 ' + top.name + '띠(' + top.why.join('·') + ')이고,',
-      '가장 조심할 띠는 ' + bottom.name + '띠(' + bottom.why.join('·') + ')입니다.',
+      '오늘 기운이 가장 좋은 띠는 ' + top.name + '띠(' + top.why.join(', ') + ')이고,',
+      '가장 조심할 띠는 ' + bottom.name + '띠(' + bottom.why.join(', ') + ')입니다.',
       mine ? '이 사람은 ' + mine.name + '띠이고 오늘 ' + mine.rank + '위입니다' +
-        (mine.why.length ? '(' + mine.why.join('·') + ')' : '') + '.' : '',
+        (mine.why.length ? '(' + mine.why.join(', ') + ')' : '') + '.' : '',
       '',
       '다음 세 토막을 써 주세요. 각 토막은 두세 문장입니다.',
-      '1) 오늘 1위인 ' + top.name + '띠에게 — 이 기운을 어디에 쓰면 좋은지',
-      '2) 오늘 12위인 ' + bottom.name + '띠에게 — 겁주지 말고, 무엇을 늦추면 좋은지',
-      mine ? '3) ' + mine.name + '띠인 상담자에게 — 오늘 하루를 어떻게 보내면 좋은지' : '3) 오늘 하루 모두에게 건네는 한마디',
+      '1) 오늘 1위인 ' + top.name + '띠에게 이 기운을 어디에 쓰면 좋은지',
+      '2) 오늘 12위인 ' + bottom.name + '띠에게, 겁주지 말고 무엇을 늦추면 좋은지',
+      mine ? '3) ' + mine.name + '띠인 상담자에게 오늘 하루를 어떻게 보내면 좋은지' : '3) 오늘 하루 모두에게 건네는 한마디',
       '',
       '⚠️ 순위가 낮다고 불행을 예고하지 마세요. 오늘 기운과 어긋난다는 뜻일 뿐입니다.',
       '토막마다 앞에 "1)" 같은 번호는 쓰지 말고, 빈 줄로 나눠 주세요.',
       '전체 400자 내외.',
     ].filter(Boolean).join(NL);
 
-    const reading = await geminiText(env, prompt, { temperature: 0.9, maxOutputTokens: 1200 });
+    const reading = await cachedReading(env, 'ttirank:' + today + ':' + (mine?.branch || '-'), CACHE_DAY,
+      () => geminiText(env, prompt, { temperature: 0.9, maxOutputTokens: 1200 }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -5297,7 +5392,8 @@ async function handlePastLife(request, env) {
       '전체 700자 내외.',
     ].filter(Boolean).join(NL);
 
-    const reading = await geminiText(env, prompt, { temperature: 0.95, maxOutputTokens: 2048 });
+    const reading = await cachedReading(env, 'pastlife:' + _sajuKey(saju, g), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.95, maxOutputTokens: 2048 }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -5369,7 +5465,8 @@ async function handleVocation(request, env) {
       '전체 700자 내외.',
     ].filter(Boolean).join(NL);
 
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
+    const reading = await cachedReading(env, 'vocation:' + _sajuKey(saju, g), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -5436,7 +5533,8 @@ async function handleSpousePalace(request, env) {
       '전체 600자 내외.',
     ].filter(Boolean).join(String.fromCharCode(10));
 
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 });
+    const reading = await cachedReading(env, 'spouse:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -5523,7 +5621,8 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 });
+    const reading = await cachedReading(env, 'daeun:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -5676,7 +5775,8 @@ ${sajuLine}
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1400 });
+    const reading = await cachedReading(env, 'name:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1400 }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -5827,7 +5927,8 @@ ${timing.best.map(line).join('\n')}
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
     // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 });
+    const reading = await cachedReading(env, 'compat:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -6032,7 +6133,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
@@ -6113,7 +6214,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
@@ -6263,7 +6364,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
@@ -6362,7 +6463,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     // Gemini 응답 파싱 — 형식이 예상과 다르거나(JSON 아님 등) 실패해도 아래에서 안전하게 처리
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       // API 오류 또는 세이프티 필터 등으로 응답이 비면 엽전 환불
@@ -6501,7 +6602,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;
@@ -6566,7 +6667,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     );
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-    const reading = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
 
     if (!resp.ok || !reading) {
       await refund(); refund = null;

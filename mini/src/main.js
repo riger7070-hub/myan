@@ -377,19 +377,19 @@ function extractResult(d) {
   add('점수', d.score != null ? `${d.score}점` : '');
   add('사주', d.saju1 || d.saju);
   add('오늘의 기운', d.dayElem);
-  if (d.branch && d.sipsin) add('배우자궁', `${d.branch}(${d.elem || ''}) · ${d.sipsin}`);
+  if (d.branch && d.sipsin) add('배우자궁', `${d.branch}(${d.elem || ''}) ${d.sipsin}`);
   // 신살 — 선 것들을 한 줄로. 없으면 없다고 적는 편이 낫다(빈 화면보다 낫다).
   if (Array.isArray(d.hits)) {
-    add('신살', d.hits.length ? d.hits.map(h => h.name).join(' · ') : '뚜렷한 신살 없음');
+    add('신살', d.hits.length ? d.hits.map(h => h.name).join(', ') : '뚜렷한 신살 없음');
     if (d.samjae?.years?.length) {
       add(d.samjae.inSamjae ? '삼재 (지금)' : '다음 삼재',
-        d.samjae.years.map(y => `${y.year}년`).join(' · '));
+        d.samjae.years.map(y => `${y.year}년`).join(', '));
     }
   }
   // 천직 — 가장 두터운 십신 셋
-  if (Array.isArray(d.top) && d.top.length) add('두드러진 십신', d.top.join(' · '));
+  if (Array.isArray(d.top) && d.top.length) add('두드러진 십신', d.top.join(', '));
   // 띠 순위 — 내 띠가 몇 위인지가 제일 궁금한 값이다.
-  if (d.mine?.name) add('내 띠', `${d.mine.name}띠 · ${d.mine.rank}위`);
+  if (d.mine?.name) add('내 띠', `${d.mine.name}띠 ${d.mine.rank}위`);
   if (d.dayBranch && Array.isArray(d.rows)) add('오늘 1위', `${d.rows[0].name}띠`);
   if (Array.isArray(d.timeline) && d.timeline.length) {
     // 흔들리는 해만 짚는다. 합(合)은 본문에서 다루므로 목록까지 늘리지 않는다.
@@ -905,7 +905,7 @@ async function watchAd() {
     state.busy = false;
     // 무슨 신호가 오갔는지 함께 보여준다. 웹뷰엔 개발자 도구가 없어서, 화면이
     // 말해 주지 않으면 왜 안 뜨는지 알아낼 방법이 없다.
-    state.error = `광고를 불러오지 못했어요.\n(${e?.message || e}${e?.trail ? ` · ${e.trail}` : ''})`;
+    state.error = `광고를 불러오지 못했어요.\n(${e?.message || e}${e?.trail ? ` ${e.trail}` : ''})`;
     console.warn('[ad]', e?.message, e?.trail);
     render();
     return;
@@ -960,7 +960,7 @@ function _resultShareText(r, link) {
     .replace(/[ \t]+\n/g, '\n')      // 줄 끝에 남은 공백
     .replace(/\n{3,}/g, '\n\n')      // 빈 줄은 하나까지만
     .trim();
-  const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join(' · ');
+  const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join(', ');
   return [
     `[${r.item.label}] 안도령의 풀이`,
     facts,
@@ -1138,9 +1138,9 @@ function stopLoadingTicker() {
 
 // 메뉴에 담기는 것들. 홈 아래쪽에 흩어져 있던 것을 한자리에 모았다.
 const MENU_ITEMS = [
-  { id: 'btn-earn',        icon: 'secGift',  label: '무료 엽전 받기', sub: '출석 · 퀴즈 · 부풀리기' },
+  { id: 'btn-earn',        icon: 'secGift',  label: '무료 엽전 받기', sub: '출석, 퀴즈, 부풀리기' },
   { id: 'btn-history',     icon: 'saju',     label: '지난 기록',      sub: '풀이를 다시 볼 수 있어요' },
-  { id: 'btn-editprofile', icon: 'secProfile', label: '내 정보',      sub: '이름 · 생년월일 · 화면 밝기' },
+  { id: 'btn-editprofile', icon: 'secProfile', label: '내 정보',      sub: '이름, 생년월일, 화면 밝기' },
   { id: 'btn-shareapp',    icon: 'share',    label: '친구에게 알리기', sub: '' },
 ];
 
@@ -1154,7 +1154,7 @@ function adPrompt() {
   if (!AD_UNIT_ID || !adsLeftToday()) return '';   // 오늘 몫을 다 썼으면 아예 안 보인다
   return `<button class="ad-prompt" id="btn-ad" ${state.busy ? 'disabled' : ''}>
     <span class="ad-ic">${icon('ad')}</span>
-    광고 시청 시 무료 엽전 +${AD_TOKENS} · 한 번 더
+    광고 시청 시 무료 엽전 +${AD_TOKENS}, 한 번 더
   </button>`;
 }
 
@@ -1316,7 +1316,7 @@ function render() {
             <div class="hero-sky"></div>
             <div class="hero-moon">${m.icon}</div>
             <div class="hero-text">
-              <p class="hero-date">${d.getMonth() + 1}월 ${d.getDate()}일 · ${esc(m.name)}</p>
+              <p class="hero-date">${d.getMonth() + 1}월 ${d.getDate()}일 ${esc(m.name)}</p>
               <h2 class="hero-hi">${p.name ? `${esc(p.name)}님,<br>오늘은 어떤 기운일까요` : '오늘은 어떤 기운일까요'}</h2>
             </div>
           </section>`;
@@ -1357,7 +1357,7 @@ function render() {
           </button>
           <button class="tile" id="btn-pop">
             <span class="t-icon">${icon('pop')}</span><span class="t-label">안도령 부풀리기</span>
-            <span class="t-cost">${COIN}엽전 1개 · 하루 1번</span>
+            <span class="t-cost">${COIN}엽전 1개, 하루 1번</span>
           </button>
         </div>
         <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
@@ -1428,7 +1428,7 @@ function render() {
             <div class="tti-row${r.mine?.branch === row.branch ? ' mine' : ''}">
               <span class="tti-rank${row.rank <= 3 ? ' top' : ''}${row.rank >= 10 ? ' low' : ''}">${row.rank}</span>
               <span class="tti-name">${esc(row.name)}띠</span>
-              <span class="tti-why">${esc((row.why || []).join('·'))}</span>
+              <span class="tti-why">${esc((row.why || []).join(', '))}</span>
             </div>`).join('')}
         </div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>

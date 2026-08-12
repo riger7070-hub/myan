@@ -52,11 +52,11 @@ export const GENDERS = [
 ];
 
 export const OHAENG_TYPES = [
-  { v: '木', label: '목(木) · 나무' },
-  { v: '火', label: '화(火) · 불' },
-  { v: '土', label: '토(土) · 흙' },
-  { v: '金', label: '금(金) · 쇠' },
-  { v: '水', label: '수(水) · 물' },
+  { v: '木', label: '목(木) 나무' },
+  { v: '火', label: '화(火) 불' },
+  { v: '土', label: '토(土) 흙' },
+  { v: '金', label: '금(金) 쇠' },
+  { v: '水', label: '수(水) 물' },
 ];
 
 // ⚠️ v 는 서버의 FORTUNE_TOPICS 키와 **정확히** 같아야 한다. 다르면 400 으로 튕긴다.
@@ -66,23 +66,23 @@ export const TOPICS = [
   { v: 'trust',       label: '관계 신뢰 기운' },
   { v: 'family',      label: '가족운' },
   { v: 'future',      label: '미래운' },
-  { v: 'grades',      label: '학업·성적운' },
+  { v: 'grades',      label: '학업과 성적운' },
   { v: 'personality', label: '성격 분석' },
-  { v: 'appearance',  label: '인상·이미지운' },
+  { v: 'appearance',  label: '인상과 이미지운' },
   { v: 'success',     label: '성공운' },
 ];
 
 // ⚠️ v 는 서버의 TAKIL_PURPOSES 키와 정확히 같아야 한다(같은 이유).
 export const PURPOSES = [
-  { v: 'wedding',  label: '결혼·약혼' },
-  { v: 'moving',   label: '이사·입주' },
-  { v: 'opening',  label: '개업·창업' },
-  { v: 'contract', label: '계약·거래' },
-  { v: 'travel',   label: '여행·출장' },
-  { v: 'medical',  label: '치료·수술' },
-  { v: 'build',    label: '공사·수리' },
-  { v: 'meeting',  label: '만남·모임' },
-  { v: 'ritual',   label: '고사·기도' },
+  { v: 'wedding',  label: '결혼과 약혼' },
+  { v: 'moving',   label: '이사와 입주' },
+  { v: 'opening',  label: '개업과 창업' },
+  { v: 'contract', label: '계약과 거래' },
+  { v: 'travel',   label: '여행과 출장' },
+  { v: 'medical',  label: '치료와 수술' },
+  { v: 'build',    label: '공사와 수리' },
+  { v: 'meeting',  label: '만남과 모임' },
+  { v: 'ritual',   label: '고사와 기도' },
 ];
 
 export const SECTIONS = [
@@ -91,10 +91,10 @@ export const SECTIONS = [
     items: [
       { id: 'sinsal',     icon: 'sinsal',     label: '신살 풀이',          cost: 3, path: '/api/sinsal',         need: null },
       { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
-      { id: 'vocation',   icon: 'vocation',   label: '천직 · 적성',        cost: 4, path: '/api/vocation',       need: null },
-      { id: 'daeun',      icon: 'daeun',      label: '대운 · 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
+      { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
+      { id: 'daeun',      icon: 'daeun',      label: '대운, 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
       { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
-      { id: 'photo',      icon: 'photo',      label: '관상·손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
+      { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
       { id: 'typecompat', icon: 'typecompat', label: '오행 유형 테스트',    cost: 2, path: '/api/type-compat',    need: 'type' },
       { id: 'numerology', icon: 'numerology', label: '라이프패스 넘버',     cost: 2, path: '/api/numerology',     need: null },
     ],
@@ -102,7 +102,7 @@ export const SECTIONS = [
   {
     icon: 'secTiming', title: '때를 고르다',
     items: [
-      { id: 'takil',   icon: 'takil',   label: '택일 · 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
+      { id: 'takil',   icon: 'takil',   label: '택일, 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
       { id: 'compat',  icon: 'compat',  label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
       { id: 'spouse',  icon: 'spouse',  label: '배우자궁 풀이',          cost: 3, path: '/api/spouse-palace',   need: null },
       { id: 'tojeong', icon: 'tojeong', label: '토정비결풍 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
@@ -125,7 +125,7 @@ export const SECTIONS = [
       { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',     cost: 1, path: '/api/tti-ranking',    need: null },
       { id: 'today',  icon: 'today',  label: '오늘의 운세',        cost: 1, path: '/mini/api/today',     need: null },
       { id: 'astro',  icon: 'astro',  label: '천궁도 트랜싯',      cost: 1, path: '/api/astro-transit',  need: null },
-      { id: 'zodiac', icon: 'zodiac', label: '띠·별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },
+      { id: 'zodiac', icon: 'zodiac', label: '띠와 별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },
       { id: 'topic',  icon: 'topic',  label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
       { id: 'lucky',  icon: 'lucky',  label: '오늘의 럭키 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
       { id: 'saju',   icon: 'saju',   label: '내 사주 풀이',        cost: 0, path: '/saju-reading',       need: null, free: true },
