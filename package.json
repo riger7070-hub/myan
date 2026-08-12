@@ -6,6 +6,7 @@
     "convert-webp": "node convert-to-webp.js",
     "test": "node --test \"test/*.test.mjs\"",
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run",
+    "smoke": "node tools/smoke.mjs",
     "check:mini": "npm ci --prefix mini && npm run build --prefix mini"
   },
   "devDependencies": {
