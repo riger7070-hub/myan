@@ -270,6 +270,10 @@ function bodyFor(item, profile, form) {
     case 'spouse':     return { ...base, birth, gender: profile.gender || '' };
     // 신살·전생·천직은 네 기둥을 다 쓰므로 생시까지 함께 보낸다.
     case 'wealth':     return { ...base, birth, gender: profile.gender || '' };
+    case 'direction':  return { ...base, birth, gender: profile.gender || '', purpose: 'move' };
+    case 'naming':     return { ...base, birth, gender: profile.gender || '', surname: form.surname || '' };
+    case 'yearluck':   return { ...base, birth, gender: profile.gender || '' };
+    case 'intimacy':   return { ...base, birth, partner: form.partner, gender: profile.gender || '' };
     case 'sinsal':     return { ...base, birth, gender: profile.gender || '' };
     case 'pastlife':   return { ...base, birth, gender: profile.gender || '' };
     case 'vocation':   return { ...base, birth, gender: profile.gender || '' };
@@ -391,6 +395,10 @@ function extractResult(d) {
   if (Array.isArray(d.top) && d.top.length) add('두드러진 십신', d.top.join(', '));
   // 재물운 — 어떤 그림인지와 재물이 드는 해
   if (d.shape) add('재물의 결', d.shape);
+  // 이사 방위 — 본명궁과 가장 좋은 쪽
+  if (d.gungName) add('본명궁', d.gungName + ' ' + (d.group || ''));
+  if (Array.isArray(d.good) && d.good.length) add('좋은 쪽', d.good.map(x => x.dir).join(', '));
+  if (Array.isArray(d.bad) && d.bad.length) add('꺼리는 쪽', d.bad.map(x => x.dir).join(', '));
   if (Array.isArray(d.wealthYears) && d.wealthYears.length) {
     add('재물이 드는 해', d.wealthYears.filter(y => !y.feeds).slice(0, 4).map(y => y.year + '년').join(', '));
   }
@@ -1709,6 +1717,10 @@ function needForm(it) {
         <select id="f-my">${sel(OHAENG_TYPES, f.myType)}</select>
         <label>상대의 유형</label>
         <select id="f-pt">${sel(OHAENG_TYPES, f.partnerType)}</select>`;
+    case 'surname':
+      return `<label>성(姓)</label>
+        <input id="f-sn" placeholder="예: 김" maxlength="2" value="${esc(p.surname || '')}">
+        <p class="muted small" style="margin-top:8px">비워 두셔도 됩니다. 성을 적으면 소리의 어울림까지 함께 봅니다.</p>`;
     case 'partner':
       return `<label>상대방 생년월일</label>
         <div class="grid3">
@@ -1745,6 +1757,7 @@ function collectForm(it) {
     case 'topic':   return { topic: v('f-topic') };
     case 'purpose': return { purpose: v('f-purpose'), from: v('f-from'), days: +v('f-days') || 30 };
     case 'type':    return { myType: v('f-my'), partnerType: v('f-pt') };
+    case 'surname': return { surname: v('f-sn') };
     case 'partner': {
       const y = v('p-y'), m = v('p-m'), d = v('p-d');
       if (!y || !m || !d) return { error: '상대방 생년월일을 모두 입력해 주세요.' };

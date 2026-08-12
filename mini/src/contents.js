@@ -94,6 +94,7 @@ export const SECTIONS = [
       { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
       { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
       { id: 'daeun',      icon: 'daeun',      label: '대운, 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
+      { id: 'naming',     icon: 'naming',     label: '작명에 참고할 결', cost: 4, path: '/api/naming',      need: 'surname' },
       { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
       { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
       { id: 'typecompat', icon: 'typecompat', label: '오행 유형 테스트',    cost: 2, path: '/api/type-compat',    need: 'type' },
@@ -103,8 +104,11 @@ export const SECTIONS = [
   {
     icon: 'secTiming', title: '때를 고르다',
     items: [
+      { id: 'direction', icon: 'direction', label: '이사 방위',            cost: 3, path: '/api/direction',    need: null },
       { id: 'takil',   icon: 'takil',   label: '택일, 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
       { id: 'compat',  icon: 'compat',  label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'yearluck', icon: 'yearluck', label: '올해 세운',           cost: 4, path: '/api/year-luck',     need: null },
+      { id: 'intimacy', icon: 'intimacy', label: '속궁합',              cost: 5, path: '/api/intimacy',      need: 'partner' },
       { id: 'spouse',  icon: 'spouse',  label: '배우자궁 풀이',          cost: 3, path: '/api/spouse-palace',   need: null },
       { id: 'tojeong', icon: 'tojeong', label: '토정비결풍 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
     ],

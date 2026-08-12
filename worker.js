@@ -1652,6 +1652,10 @@ export default {
     if (path === '/api/astro-transit'  && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAstroTransit(request, env)); }
     if (path === '/api/auspicious-days' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleAuspiciousDays(request, env)); }
     if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
+    if (path === '/api/naming' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNaming(request, env)); }
+    if (path === '/api/intimacy' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleIntimacy(request, env)); }
+    if (path === '/api/year-luck' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleYearLuck(request, env)); }
+    if (path === '/api/direction' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDirection(request, env)); }
     if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
     if (path === '/api/sinsal' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSinsal(request, env)); }
     if (path === '/api/tti-ranking' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiRanking(request, env)); }
@@ -4966,6 +4970,187 @@ const _SIPSIN_MEANING = {
 };
 
 
+// ── 사주에 모자란 오행 (작명에 쓴다) ──
+//
+// 이름으로 사주를 보완한다는 생각은 오래됐다. 네 기둥의 오행을 세어 비어 있거나
+// 얇은 것을 찾고, 그 기운을 이름의 소리와 뜻으로 채워 준다.
+// ⚠️ 사람 이름은 되돌리기 어려운 일이라, 여기서는 "추천"이 아니라 "참고할 결"로만 낸다.
+
+function computeElementBalance(saju) {
+  if (!saju?.dayGan) return null;
+  const count = { 木: 0, 火: 0, 土: 0, 金: 0, 水: 0 };
+  const bump = (gan) => {
+    const gi = CG.indexOf(gan);
+    if (gi >= 0) count[CGO[gi]] += 1;
+  };
+  for (const p of [saju.yp, saju.mp, saju.dp, saju.hp]) {
+    if (!p) continue;
+    bump(p[0]);
+    bump(JJ_BONGI[p[1]]);
+  }
+  const total = Object.values(count).reduce((a, b) => a + b, 0) || 1;
+  const rows = Object.entries(count)
+    .map(([elem, n]) => ({ elem, count: n, pct: Math.round((n / total) * 100) }))
+    .sort((a, b) => a.count - b.count);
+  return {
+    count, total, rows,
+    lacking: rows.filter(r => r.count === 0).map(r => r.elem),
+    thin: rows.filter(r => r.count > 0 && r.count <= 1).map(r => r.elem),
+    heavy: rows.filter(r => r.pct >= 35).map(r => r.elem),
+  };
+}
+
+// ── 속궁합 (일지로 보는 몸과 마음의 결) ──
+//
+// 일지(日支)는 배우자 자리이자 잠자리의 자리로도 본다. 두 사람의 일지가 맺는
+// 관계(합·충·형·같은 자리)로 결을 읽는다.
+// ⚠️ 야한 이야기를 하는 콘텐츠가 아니다. 맞고 안 맞고를 점수로 매기지도 않는다.
+
+const _JIJI_RELATION = {
+  삼합: '서로를 끌어당기는 결입니다. 말이 없어도 통하는 편입니다.',
+  육합: '맞물려 편안해지는 결입니다. 함께 있으면 마음이 놓입니다.',
+  같음: '너무 닮아 편한 만큼, 서로의 같은 곳에서 지치기도 합니다.',
+  충: '부딪히며 끌리는 결입니다. 뜨겁지만 오래 붙어 있으면 지칩니다.',
+  형: '가까울수록 서로를 시험하는 결입니다. 말이 앞서면 상하기 쉽습니다.',
+  무관: '특별히 얽힌 것이 없습니다. 나쁜 것이 아니라, 둘이 만들어 가야 하는 사이입니다.',
+};
+
+function computeIntimacy(sajuA, sajuB) {
+  if (!sajuA?.dp || !sajuB?.dp) return null;
+  const a = sajuA.dp[1], b = sajuB.dp[1];
+  const kinds = [];
+  const group = SAMHAP_GROUPS.find(g => g.set.includes(a));
+  if (a === b) kinds.push('같음');
+  if (group && group.set.includes(b) && a !== b) kinds.push('삼합');
+  if (JJ_HAP[a] === b) kinds.push('육합');
+  if (JJ_CHUNG[a] === b) kinds.push('충');
+  if ((JJ_HYUNG[a] || []).includes(b)) kinds.push('형');
+  if (!kinds.length) kinds.push('무관');
+
+  // 일간끼리의 관계도 함께 본다. 몸의 결이 일지라면 마음의 결은 일간이다.
+  const gi = CG.indexOf(sajuB.dayGan);
+  const sipsin = gi >= 0 ? _sipsin(sajuA.dayGan, CGO[gi], gi % 2 === 0) : null;
+
+  return {
+    branchA: a, branchB: b, kinds,
+    notes: kinds.map(k => ({ kind: k, text: _JIJI_RELATION[k] })),
+    sipsin, meaning: sipsin ? _SIPSIN_MEANING[sipsin] : null,
+  };
+}
+
+// ── 올해 세운 (歲運) ──
+//
+// 그해 간지가 내 사주와 맺는 관계로 한 해를 본다. 토정비결과 달리 매년 바뀌므로
+// 해가 바뀔 때마다 다시 찾게 된다.
+
+function computeYearLuck(saju, year) {
+  if (!saju?.dayGan || !year) return null;
+  const gan = CG[(year - 4) % 10], ji = JJ[(year - 4) % 12];
+  const gi = CG.indexOf(gan);
+  const ganSipsin = gi >= 0 ? _sipsin(saju.dayGan, CGO[gi], gi % 2 === 0) : null;
+  const bi = CG.indexOf(JJ_BONGI[ji]);
+  const jiSipsin = bi >= 0 ? _sipsin(saju.dayGan, CGO[bi], bi % 2 === 0) : null;
+
+  // 그해 지지가 내 네 기둥과 부딪히거나 맞물리는지.
+  const POS = ['년', '월', '일', '시'];
+  const clash = [];
+  [saju.yp, saju.mp, saju.dp, saju.hp].forEach((p, i) => {
+    if (!p) return;
+    const b = p[1];
+    if (JJ_CHUNG[b] === ji) clash.push({ pos: POS[i], kind: '충' });
+    else if (JJ_HAP[b] === ji) clash.push({ pos: POS[i], kind: '합' });
+    else if ((JJ_HYUNG[b] || []).includes(ji)) clash.push({ pos: POS[i], kind: '형' });
+  });
+
+  const samjae = computeSamjae(saju.yp?.[1], year);
+  return {
+    year, pillar: gan + ji, ganSipsin, jiSipsin,
+    ganMeaning: ganSipsin ? _SIPSIN_MEANING[ganSipsin] : null,
+    jiMeaning: jiSipsin ? _SIPSIN_MEANING[jiSipsin] : null,
+    clash, inSamjae: !!samjae?.inSamjae,
+  };
+}
+
+// ── 이사 방위 (본명궁과 팔택) ──
+//
+// 태어난 해로 본명궁(本命宮)을 구하고, 그 궁에서 여덟 방위의 길흉을 본다.
+// 본명궁은 남녀 셈법이 다르다. 남자는 빼고 여자는 더한다.
+//
+// ⚠️ 5(중궁)는 방위가 없다. 남자는 2(곤), 여자는 8(간)으로 옮겨 보는 것이 통설이다.
+// ⚠️ 기준 해는 **입춘**이다. 1월과 2월 초에 태어난 사람은 앞 해로 셈해야 한다 —
+//    computeSaju 가 절기로 세운 년주를 쓰므로 그걸 그대로 받는다.
+
+const _GUNG_NAME = { 1: '감(坎)', 2: '곤(坤)', 3: '진(震)', 4: '손(巽)',
+                     6: '건(乾)', 7: '태(兌)', 8: '간(艮)', 9: '리(離)' };
+
+// 궁마다 정해진 여덟 방위의 길흉. 앞 넷이 길방, 뒤 넷이 흉방이다.
+//   생기(生氣) 가장 좋다 / 천의(天醫) 건강 / 연년(延年) 화합 / 복위(伏位) 안정
+//   화해(禍害) 다툼 / 오귀(五鬼) 구설 / 육살(六殺) 손재 / 절명(絶命) 가장 나쁘다
+const _PALTAEK = {
+  1: { 생기: '동남', 천의: '동',   연년: '남',   복위: '북',   화해: '서',   오귀: '동북', 육살: '서북', 절명: '서남' },
+  3: { 생기: '남',   천의: '북',   연년: '동남', 복위: '동',   화해: '서남', 오귀: '서북', 육살: '동북', 절명: '서' },
+  4: { 생기: '북',   천의: '남',   연년: '동',   복위: '동남', 화해: '서북', 오귀: '서남', 육살: '서',   절명: '동북' },
+  9: { 생기: '동',   천의: '동남', 연년: '북',   복위: '남',   화해: '동북', 오귀: '서',   육살: '서남', 절명: '서북' },
+  2: { 생기: '동북', 천의: '서',   연년: '서북', 복위: '서남', 화해: '남',   오귀: '동',   육살: '동남', 절명: '북' },
+  6: { 생기: '서',   천의: '동북', 연년: '서남', 복위: '서북', 화해: '동남', 오귀: '남',   육살: '북',   절명: '동' },
+  7: { 생기: '서북', 천의: '서남', 연년: '동북', 복위: '서',   화해: '북',   오귀: '동남', 육살: '동',   절명: '남' },
+  8: { 생기: '서남', 천의: '서북', 연년: '서',   복위: '동북', 화해: '동',   오귀: '북',   육살: '남',   절명: '동남' },
+};
+const _BANGWI_MEAN = {
+  생기: '가장 좋은 방위입니다. 새로 벌이는 일과 기운이 살아납니다.',
+  천의: '몸과 마음이 편해지는 방위입니다. 아프거나 지친 사람에게 특히 좋습니다.',
+  연년: '사람과 사람 사이가 도타워지는 방위입니다. 가정과 인연에 좋습니다.',
+  복위: '크게 트이지는 않아도 탈이 없는 방위입니다. 지키며 살기에 알맞습니다.',
+  화해: '다툼과 어긋남이 잦은 방위입니다.',
+  오귀: '구설과 뜻밖의 일이 따르는 방위입니다.',
+  육살: '재물이 새고 일이 자꾸 막히는 방위입니다.',
+  절명: '가장 꺼리는 방위입니다. 굳이 이쪽으로 옮길 일은 아닙니다.',
+};
+const _GOOD = ['생기', '천의', '연년', '복위'];
+
+/**
+ * 본명궁을 구한다.
+ * @param {number} solarYear 절기로 세운 해(입춘 기준)
+ * @param {'M'|'F'} gender
+ */
+function computeBonmyeong(solarYear, gender) {
+  if (!solarYear || (gender !== 'M' && gender !== 'F')) return null;
+  // 연도의 각 자리를 더해 한 자리로 줄인다.
+  let sum = String(solarYear).split('').reduce((a, c) => a + Number(c), 0);
+  while (sum > 9) sum = String(sum).split('').reduce((a, c) => a + Number(c), 0);
+
+  let gung = gender === 'M' ? 11 - sum : sum + 4;
+  while (gung > 9) gung -= 9;
+  if (gung === 0) gung = 9;
+  // 중궁(5)은 방위가 없다. 남자는 곤(2), 여자는 간(8)으로 본다.
+  if (gung === 5) gung = gender === 'M' ? 2 : 8;
+  return gung;
+}
+
+/**
+ * 이사 방위를 읽는다.
+ * @param {number} solarYear 절기로 세운 해
+ * @param {'M'|'F'} gender
+ */
+function computeDirection(solarYear, gender) {
+  const gung = computeBonmyeong(solarYear, gender);
+  if (!gung) return null;
+  const table = _PALTAEK[gung];
+  if (!table) return null;
+
+  const rows = Object.entries(table).map(([kind, dir]) => ({
+    kind, dir, good: _GOOD.includes(kind), mean: _BANGWI_MEAN[kind],
+  }));
+  // 동사택(東四宅)과 서사택(西四宅). 집을 고를 때 흔히 쓰는 구분이다.
+  const group = [1, 3, 4, 9].includes(gung) ? '동사택' : '서사택';
+  return {
+    gung, gungName: _GUNG_NAME[gung], group,
+    good: rows.filter(r => r.good),
+    bad: rows.filter(r => !r.good),
+    rows,
+  };
+}
+
 // ── 재물운 ──
 //
 // 사주에서 돈은 재성(財星), 곧 정재와 편재로 본다. 다만 재성이 많다고 부자가 아니다.
@@ -5277,6 +5462,320 @@ function computeSpousePalace(birth, gender, fromYear, years = 10) {
   };
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  작명에 참고할 결 (4엽전)
+//
+//  아기 이름과 개명은 실제로 값을 치르는 분야다. 다만 사람 이름은 되돌리기 어려우니
+//  "이 이름으로 하세요" 가 아니라 "이런 결의 이름이 어울립니다" 로 낸다.
+// ════════════════════════════════════════════════════════════
+async function handleNaming(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender, surname } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const bal = computeElementBalance(saju);
+    if (!bal) return cors(JSON.stringify({ error: { message: '오행을 계산하지 못했습니다.' } }), 400);
+
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'naming', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '작명 참고는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'naming', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const sn = String(surname || '').trim().slice(0, 2);
+    const prompt = [
+      '상담자(또는 아이)의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + '(' + saju.dayElem + ') 입니다.',
+      '오행 분포: ' + bal.rows.map(r => r.elem + ' ' + r.count + '개').join(', '),
+      bal.lacking.length ? '아예 없는 기운: ' + bal.lacking.join(', ') : '비어 있는 기운은 없습니다.',
+      bal.thin.length ? '얇은 기운: ' + bal.thin.join(', ') : '',
+      bal.heavy.length ? '너무 두터운 기운: ' + bal.heavy.join(', ') : '',
+      sn ? '성(姓)은 "' + sn + '" 입니다.' : '성은 알려 주지 않았습니다.',
+      g ? (g === 'M' ? '남자아이(남성)입니다.' : '여자아이(여성)입니다.') : '',
+      '',
+      '이름에 참고할 결을 풀어 주세요. 다음 순서로 씁니다.',
+      '1) 이 사주에 무엇이 모자라고 무엇이 넘치는지, 쉬운 말로',
+      '2) 그래서 이름에 어떤 기운을 담으면 좋은지 (소리와 뜻 양쪽으로)',
+      '3) 그 기운이 담긴 이름자 예시를 여섯 자 정도. 각각 무슨 뜻인지 한 줄로',
+      '4) 반대로 피하면 좋을 결 한 가지',
+      '',
+      '⚠️ 반드시 지킬 것: 이름을 하나로 못 박아 "이 이름으로 하세요" 라고 하지 마세요.',
+      '획수나 수리로 길흉을 단정하지도 마세요(유파마다 다릅니다). 이름은 부모가 정하는',
+      '것이고 여기서는 고르는 데 참고할 결을 드리는 것입니다. 개명을 부추기지 마세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(String.fromCharCode(10));
+
+    const reading = await cachedReading(env, 'naming:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'naming',
+      '작명 참고 ' + (bal.lacking.join(', ') || '균형'), reading, { lacking: bal.lacking }).catch(() => {});
+
+    return cors(JSON.stringify(Object.assign({ success: true, reading, remaining: remainingTokens }, { balance: bal.rows, lacking: bal.lacking, thin: bal.thin, heavy: bal.heavy })), 200);
+  } catch (e) {
+    console.error('[NAMING]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  속궁합 (5엽전)
+//
+//  일지(日支)는 배우자 자리이자 잠자리의 자리로도 본다. 야한 이야기를 하는 곳이 아니라
+//  두 사람의 결이 어떻게 맞물리는지를 보는 자리다. 점수를 매기지 않는다.
+// ════════════════════════════════════════════════════════════
+async function handleIntimacy(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, partner, gender } = await request.json().catch(() => ({}));
+    const a = birth && birth.year ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    const b = partner && partner.year ? computeSaju(partner.year, partner.month, partner.day, partner.hour) : null;
+    if (!a || !b) return cors(JSON.stringify({ error: { message: '두 사람의 생년월일이 모두 필요합니다.' } }), 400);
+    const im = computeIntimacy(a, b);
+    if (!im) return cors(JSON.stringify({ error: { message: '궁합을 계산하지 못했습니다.' } }), 400);
+
+    const COST = 5;
+    const paid = await accountSpend(env, acct, 'intimacy', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '속궁합는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'intimacy', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const prompt = [
+      '두 사람의 사주입니다.',
+      '나: ' + [a.yp, a.mp, a.dp, a.hp].filter(Boolean).join(' ') + ' (일간 ' + a.dayGan + ')',
+      '상대: ' + [b.yp, b.mp, b.dp, b.hp].filter(Boolean).join(' ') + ' (일간 ' + b.dayGan + ')',
+      g ? '나는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      '두 사람의 일지(배우자 자리)는 ' + im.branchA + ' 와 ' + im.branchB + ' 이고,',
+      '맺는 관계는 ' + im.kinds.join(', ') + ' 입니다.',
+      im.notes.map(n => n.kind + ': ' + n.text).join(String.fromCharCode(10)),
+      im.sipsin ? '상대의 일간은 나에게 ' + im.sipsin + ' 입니다. ' + (im.meaning || '') : '',
+      '',
+      '두 사람의 결이 어떻게 맞물리는지 풀어 주세요. 다음 순서로 씁니다.',
+      '1) 둘이 함께 있을 때 어떤 기운이 되는지',
+      '2) 서로 편한 지점과, 자꾸 어긋나는 지점',
+      '3) 어긋나는 지점을 어떻게 다루면 좋은지 구체적으로',
+      '4) 오래 가려면 무엇을 지켜야 하는지',
+      '',
+      '⚠️ 반드시 지킬 것: 성적인 묘사를 하지 마세요. 몸의 궁합이라는 말이 붙었지만',
+      '여기서 보는 것은 두 사람의 기운이 맞물리는 결입니다. 점수나 등급을 매기지 말고,',
+      '"맞지 않는다" 로 끝내지 마세요. 어떤 결이든 다루는 법이 있습니다.',
+      '헤어짐을 예언하지 마세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(String.fromCharCode(10));
+
+    const reading = await cachedReading(env, 'intimacy:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'intimacy',
+      '속궁합 ' + im.kinds.join(', '), reading, { kinds: im.kinds }).catch(() => {});
+
+    return cors(JSON.stringify(Object.assign({ success: true, reading, remaining: remainingTokens }, { kinds: im.kinds, branchA: im.branchA, branchB: im.branchB, sipsin: im.sipsin })), 200);
+  } catch (e) {
+    console.error('[INTIMACY]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  올해 세운 (4엽전)
+//
+//  해가 바뀌면 다시 찾게 되는 콘텐츠다. 토정비결과 달리 그해 간지가 내 사주와
+//  맺는 관계로 본다.
+// ════════════════════════════════════════════════════════════
+async function handleYearLuck(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender, year } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const target = Number(year) || _kstYear();
+    if (target < 1900 || target > _kstYear() + 5) {
+      return cors(JSON.stringify({ error: { message: '올해부터 5년 안의 해로 골라 주세요.' } }), 400);
+    }
+    const yl = computeYearLuck(saju, target);
+    if (!yl) return cors(JSON.stringify({ error: { message: '세운을 계산하지 못했습니다.' } }), 400);
+
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'yearluck', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '세운 풀이는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'yearluck', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const prompt = [
+      '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + ' 입니다.',
+      g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      yl.year + '년의 간지는 ' + yl.pillar + ' 입니다.',
+      yl.ganSipsin ? '그해 천간은 나에게 ' + yl.ganSipsin + '. ' + (yl.ganMeaning || '') : '',
+      yl.jiSipsin ? '그해 지지는 나에게 ' + yl.jiSipsin + '. ' + (yl.jiMeaning || '') : '',
+      yl.clash.length
+        ? '그해 지지가 내 기둥과 맺는 관계: ' + yl.clash.map(c => c.pos + '주와 ' + c.kind).join(', ')
+        : '내 네 기둥과 크게 부딪히거나 맞물리는 것은 없습니다.',
+      yl.inSamjae ? '이 해는 삼재에 듭니다.' : '',
+      '',
+      yl.year + '년 한 해를 풀어 주세요. 다음 순서로 씁니다.',
+      '1) 올해 전체의 결을 한 문단으로',
+      '2) 일과 돈, 사람 관계에서 각각 어떤 흐름인지',
+      '3) 조심할 시기가 있다면 언제쯤이고 무엇을 살피면 좋은지',
+      '4) 올해 안에 해두면 좋을 한 가지',
+      '',
+      '⚠️ 반드시 지킬 것: 사고·질병·이별 같은 일을 예언하지 마세요. 충이나 형이 든다고',
+      '나쁜 일이 반드시 생기는 것이 아니라 변화가 큰 때라는 뜻입니다. 삼재도 마찬가지입니다.',
+      '겁주는 대신 준비할 것을 짚어 주세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(String.fromCharCode(10));
+
+    const reading = await cachedReading(env, 'yearluck:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'yearluck',
+      yl.year + '년 세운 ' + yl.pillar, reading, { year: yl.year, pillar: yl.pillar }).catch(() => {});
+
+    return cors(JSON.stringify(Object.assign({ success: true, reading, remaining: remainingTokens }, { year: yl.year, pillar: yl.pillar, ganSipsin: yl.ganSipsin, jiSipsin: yl.jiSipsin, clash: yl.clash, inSamjae: yl.inSamjae })), 200);
+  } catch (e) {
+    console.error('[YEARLUCK]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  이사 방위 (3엽전)
+//
+//  이사철마다 찾는 실용 콘텐츠다. 본명궁으로 개인마다 다른 답이 나오므로
+//  가족끼리도 서로 다르다 — 그 점을 글에서 짚어 준다.
+// ════════════════════════════════════════════════════════════
+async function handleDirection(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender, purpose } = await request.json().catch(() => ({}));
+    const g = _normalizeGender(gender);
+    if (!g) {
+      return cors(JSON.stringify({ error: { message: '이사 방위는 성별에 따라 셈이 달라집니다. 내 정보에서 성별을 등록해 주세요.' } }), 400);
+    }
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+
+    // 본명궁은 입춘을 넘겨야 그해다. computeSaju 가 절기로 세운 년주에서 해를 되짚는다.
+    const solarYear = _yearFromPillar(saju.yp, Number(birth.year));
+    const dir = computeDirection(solarYear, g);
+    if (!dir) return cos400(request);
+
+    const COST = 3;
+    const paid = await accountSpend(env, acct, 'direction', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '이사 방위는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'direction', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const why = { move: '이사', open: '가게 자리', desk: '책상과 잠자리' }[purpose] || '이사';
+    const prompt = [
+      '상담자는 ' + solarYear + '년생(입춘 기준) ' + (g === 'M' ? '남성' : '여성') + ' 이고,',
+      '본명궁은 ' + dir.gung + '궁 ' + dir.gungName + ', ' + dir.group + ' 입니다.',
+      '무엇을 정하려 하는지: ' + why,
+      '',
+      '좋은 방위: ' + dir.good.map(r => r.kind + ' ' + r.dir + '쪽, ' + r.mean).join(' / '),
+      '꺼리는 방위: ' + dir.bad.map(r => r.kind + ' ' + r.dir + '쪽').join(', '),
+      '',
+      '이 사람에게 방위를 풀어 주세요. 다음 순서로 이어지는 글로 씁니다.',
+      '1) 본명궁이 무엇인지 쉬운 말로 한 문단. ' + dir.group + '이 무슨 뜻인지도 함께',
+      '2) 가장 권할 방위 하나를 골라, 왜 그쪽인지',
+      '3) 꺼리는 방위로 갈 수밖에 없을 때 어떻게 하면 되는지',
+      '4) 지금 사는 집에서도 해볼 수 있는 한 가지 (잠자리 머리 방향, 책상 위치 같은)',
+      '',
+      '⚠️ 반드시 지킬 것: 방위는 지금 있는 곳에서 본 쪽입니다. 절대적인 좌표가 아니라고',
+      '분명히 말해 주세요. 꺼리는 방위로 이사한다고 나쁜 일이 생긴다고 겁주지 마세요.',
+      '집은 값과 형편으로 정하는 것이고, 방위는 고를 수 있을 때 참고하는 것입니다.',
+      '가족끼리도 본명궁이 달라 좋은 방위가 서로 다르다는 점도 짚어 주세요.',
+      '전체 700자 내외.',
+    ].join(String.fromCharCode(10));
+
+    const reading = await cachedReading(env, 'direction:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'direction',
+      '이사 방위 ' + dir.gungName, reading, { gung: dir.gung, group: dir.group }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading,
+      gung: dir.gung, gungName: dir.gungName, group: dir.group,
+      good: dir.good, bad: dir.bad, remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[DIRECTION]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+/** 절기로 세운 년주에서 서기 연도를 되짚는다. 입춘 전에 태어나면 앞 해가 된다. */
+function _yearFromPillar(yp, hintYear) {
+  if (!yp || !hintYear) return hintYear || 0;
+  // 후보는 hintYear 와 그 앞 해뿐이다(입춘 경계).
+  for (const y of [hintYear, hintYear - 1]) {
+    const gan = CG[(y - 4) % 10], ji = JJ[(y - 4) % 12];
+    if (gan + ji === yp) return y;
+  }
+  return hintYear;
+}
+
+const cos400 = (request) =>
+  cors(JSON.stringify({ error: { message: '방위를 계산하지 못했습니다.' } }), 400);
 
 // ════════════════════════════════════════════════════════════
 //  재물운 (4엽전)
