@@ -703,18 +703,23 @@ async function shareResult() {
 
 /**
  * 공유할 글을 짓는다.
- * 메신저 미리보기에서 잘리므로 앞부분만 싣는다 — 전문은 앱에서 보게 한다.
+ *
+ * 풀이는 **전문**을 싣는다. 앞부분만 보내고 "나머지는 앱에서"라고 하면 보낸 사람에게나
+ * 맞는 말이다 — 받는 사람은 남의 계정 기록을 열 수 없으니, 잘라낸 만큼은 영영 못 본다.
+ * 앱 링크는 맨 끝에 붙여, 읽고 나서 궁금하면 따라오게 한다.
  */
 function _resultShareText(r, link) {
-  const body = String(r.body || '').replace(/\s*\n\s*/g, '\n').trim();
-  const excerpt = body.length > 260 ? body.slice(0, 260).trimEnd() + '…' : body;
+  const body = String(r.body || '')
+    .replace(/[ \t]+\n/g, '\n')      // 줄 끝에 남은 공백
+    .replace(/\n{3,}/g, '\n\n')      // 빈 줄은 하나까지만
+    .trim();
   const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join(' · ');
   return [
     `[${r.item.label}] 안도령의 풀이`,
     facts,
-    excerpt,
+    body,
     link || '토스에서 "오늘운빨"을 찾아보세요.',
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 /**

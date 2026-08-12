@@ -44,20 +44,33 @@ test('링크를 못 만들었으면 찾아오는 법을 알려준다', () => {
   assert.match(t, /오늘운빨/, '링크도 없고 안내도 없으면 받는 쪽이 갈 곳이 없다');
 });
 
-test('긴 풀이는 앞부분만 싣는다', () => {
-  // 메신저 미리보기에서 잘리면 아무것도 안 보낸 것과 같다.
+test('긴 풀이도 전문을 싣는다', () => {
+  // 앞부분만 보내고 "나머지는 앱에서"라고 하면 보낸 사람에게나 맞는 말이다.
+  // 받는 사람은 남의 계정 기록을 열 수 없으니, 잘라낸 만큼은 영영 못 본다.
   const 긴것 = { ...배우자궁, body: '가'.repeat(2000) };
   const t = _resultShareText(긴것, 'https://toss.im/x/abc');
-  assert.ok(t.length < 500, `공유 글이 너무 길다(${t.length}자)`);
-  assert.match(t, /…/, '잘렸다는 표시가 없다');
-  assert.match(t, /https:\/\/toss\.im\/x\/abc/, '잘라내면서 링크까지 날렸다');
+  assert.ok(t.includes('가'.repeat(2000)), '풀이가 잘렸다');
+  assert.doesNotMatch(t, /…/, '말줄임이 남아 있다 — 더 이상 자르지 않는다');
+});
+
+test('앱 링크는 맨 끝에 온다', () => {
+  const t = _resultShareText(배우자궁, 'https://toss.im/x/abc');
+  assert.ok(t.trimEnd().endsWith('https://toss.im/x/abc'),
+    `링크가 끝에 있지 않다:\n${t.slice(-80)}`);
+});
+
+test('문단 사이 빈 줄을 살린다', () => {
+  // 한 덩어리로 붙으면 메신저에서 읽기 어렵다.
+  const t = _resultShareText(배우자궁, '');
+  assert.match(t, /앉아 있습니다\.\n\n정재라 하는데/, '문단이 붙어 버렸다');
 });
 
 test('부가 정보가 없는 콘텐츠도 문제없다', () => {
   const t = _resultShareText({ item: { label: '오늘의 타로' }, body: '별 정방향입니다.' }, '');
   assert.match(t, /오늘의 타로/);
   assert.match(t, /별 정방향입니다/);
-  assert.doesNotMatch(t, /\n\n/, '빈 줄이 남았다 — 항목이 없을 때 줄을 지워야 한다');
+  // 부가 정보가 없다고 빈 자리가 남으면 안 된다(줄이 셋뿐이어야 한다).
+  assert.equal(t.split('\n\n').length, 3, `덩어리가 3개가 아니다:\n${t}`);
 });
 
 test('결과 화면 버튼은 공유하기와 홈으로 둘뿐이다', () => {
