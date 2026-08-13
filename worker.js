@@ -1706,6 +1706,10 @@ export default {
     if (path === '/api/intimacy' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleIntimacy(request, env)); }
     // ── 무료 계산기 · 오늘의 띠 순위 (로그인 없는 공개 페이지) ──
     // 검색해서 들어오는 사람이 앉을 자리다. AI 를 안 부르므로 몰려도 값이 안 든다.
+    if (/^\/(?:google|naver)[\w-]+\.html$/.test(path) && method === 'GET') {
+      const v = handleSearchVerify(env, path);
+      if (v) return v;
+    }
     if (path === '/robots.txt' && (method === 'GET' || method === 'HEAD')) return handleRobots();
     if (path === '/sitemap.xml' && (method === 'GET' || method === 'HEAD')) return handleSitemap();
     if (path === '/tti' && (method === 'GET' || method === 'HEAD')) return handleTtiPage();
@@ -5654,6 +5658,33 @@ function handleRobots() {
   return new Response(
     `User-agent: *\nAllow: /\nDisallow: /i/\nDisallow: /api/\nDisallow: /admin/\n\nSitemap: ${SITE}/sitemap.xml\n`,
     { headers: { 'Content-Type': 'text/plain; charset=UTF-8', 'Cache-Control': 'public, max-age=86400' } });
+}
+
+/**
+ * 검색엔진 소유 확인.
+ *
+ * 구글과 네이버는 사이트가 내 것임을 확인시켜야 사이트맵을 받아 준다. 확인 방법은
+ * 그들이 준 파일을 그 주소에 올려 두는 것인데, 그때마다 코드를 고치고 배포하는 것은
+ * 번거롭다. 그래서 값만 wrangler.toml 의 vars 에 넣으면 되게 해 둔다.
+ *
+ *   GOOGLE_VERIFY = "google1a2b3c4d.html"   (구글이 내려준 파일 이름 그대로)
+ *   NAVER_VERIFY  = "naver1a2b3c4d.html"
+ *
+ * ⚠️ 이 값은 비밀이 아니다. 확인용 주소는 원래 누구나 열어 볼 수 있게 두는 것이라
+ *    secret 이 아니라 vars 에 넣어도 된다.
+ */
+function handleSearchVerify(env, path) {
+  const name = path.slice(1);                       // '/google1a2b.html' → 'google1a2b.html'
+  const want = [env.GOOGLE_VERIFY, env.NAVER_VERIFY].filter(Boolean);
+  if (!want.includes(name)) return null;
+  // 구글은 파일 안에 "google-site-verification: <파일이름>" 한 줄을 기대한다.
+  // 네이버는 내용을 보지 않으므로 같은 형식으로 둬도 무방하다.
+  const body = name.startsWith('google')
+    ? `google-site-verification: ${name}`
+    : `naver-site-verification: ${name}`;
+  return new Response(body, {
+    headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-cache' },
+  });
 }
 
 function handleSitemap() {

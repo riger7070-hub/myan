@@ -4869,6 +4869,20 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 .biz-footer .biz-note { margin-top: 10px; opacity: 0.8; }
 [data-theme="light"] .biz-footer { color: #4a3c30; }
 
+/* ── 무료로 열려 있는 자리들 ──
+   사업자 정보 바로 위에 둔다. 여기까지 내려온 사람은 이미 훑어본 사람이라
+   "가입 없이 이것도 볼 수 있다"가 가장 잘 닿는 자리다. */
+.free-links {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px;
+  padding: 26px 24px 4px; text-align: center;
+  font-family: -apple-system, 'Pretendard', sans-serif;
+}
+.free-links a {
+  color: var(--gold); opacity: 0.72; text-decoration: none;
+  font-size: 0.82rem; letter-spacing: 0.3px; padding: 4px 0;
+}
+.free-links a:hover { opacity: 1; }
+
 /* 무료 배지가 초록이었다 — 금·먹 팔레트 밖이라 이 글자만 튀었다. */
 .cs-cost.cs-free { color: var(--gold); opacity: 0.9; }
 

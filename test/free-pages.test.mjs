@@ -12,7 +12,7 @@ import vm from 'node:vm';
 import { loadWorker } from './load-worker.mjs';
 
 const H = await loadWorker([
-  'handleCalcHub', 'handleCalcPage', 'handleCalcApi', 'handleTtiPage', 'handleRobots', 'handleSitemap',
+  'handleCalcHub', 'handleCalcPage', 'handleCalcApi', 'handleTtiPage', 'handleRobots', 'handleSitemap', 'handleSearchVerify',
   'computeTtiRanking', 'computeSaju', 'computeSamjae',
 ]);
 
@@ -101,6 +101,20 @@ test('사이트맵에 공개 페이지가 다 들어 있다', async () => {
 
 test('없는 계산기는 페이지를 만들지 않는다', () => {
   assert.equal(H.handleCalcPage('없는것'), null);
+});
+
+test('검색엔진 소유 확인은 넣어 둔 값에만 답한다', async () => {
+  const env = { GOOGLE_VERIFY: 'google1a2b3c.html', NAVER_VERIFY: 'naverabc123.html' };
+  const g = H.handleSearchVerify(env, '/google1a2b3c.html');
+  assert.ok(g, '구글 확인 파일이 안 나온다');
+  assert.match(await g.text(), /google-site-verification: google1a2b3c\.html/);
+
+  const n = H.handleSearchVerify(env, '/naverabc123.html');
+  assert.ok(n, '네이버 확인 파일이 안 나온다');
+
+  // 아무 이름이나 답하면 남이 우리 사이트를 자기 것으로 등록할 수 있다.
+  assert.equal(H.handleSearchVerify(env, '/google아무거나.html'), null, '아무 이름에나 답한다');
+  assert.equal(H.handleSearchVerify({}, '/google1a2b3c.html'), null, '값을 안 넣었는데 답한다');
 });
 
 // ── 실제로 계산이 된다 ──
