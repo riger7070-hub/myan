@@ -79,6 +79,15 @@ GOOGLE_CLIENT_ID = "806789036860-iu94f5ne93t2vh2mvfuqmi3mj95m8ick.apps.googleuse
 ADMIN_EMAIL = "riger7070@gmail.com"
 TOSS_CLIENT_KEY = "test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb"
 
+# 검색엔진 소유 확인. 구글·네이버가 내려주는 파일 이름을 그대로 넣고 배포하면
+# 그 주소로 확인 파일이 나간다. 자세한 절차는 docs/검색등록.md 참고.
+#
+# 이 값은 비밀이 아니다. 확인용 주소는 원래 누구나 열어 볼 수 있게 두는 것이라
+# secret 이 아니라 여기 vars 에 둔다.
+#
+# GOOGLE_VERIFY = "google1a2b3c4d.html"
+# NAVER_VERIFY  = "naver1a2b3c4d.html"
+
 # 비밀 값들은 wrangler secret put 명령어로 설정:
 # wrangler secret put GEMINI_API_KEY
 # wrangler secret put TOSS_SECRET_KEY
