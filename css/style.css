@@ -29,6 +29,15 @@
   --input-bg: #0d0b09;
   --bubble-ai-bg: #12100c;
   --hd-bg: rgba(6, 6, 8, 0.95);
+
+  /* ⚠️ --accent 는 18곳에서 쓰이는데 **정의된 적이 없었다.**
+     값이 없는 var() 는 그 선언을 통째로 무효로 만들어서, color 는 부모 색을
+     물려받고 background 는 투명해진다 — 강조하려던 자리가 조용히 밋밋해져 있었다.
+     쓰임새(#c8a06a 와 짝지은 그라데이션, 폴백 139,90,43)를 보면 금색이 의도다. */
+  --accent: var(--gold);
+  --accent-rgb: 201, 169, 110;
+  /* 금색 바탕 위에 얹는 글자. 흰색은 밝은 금색(#c9a96e) 위에서 1.9:1 밖에 안 된다. */
+  --on-accent: #1a1408;
 }
 
 /* ── 라이트 모드 ── */
@@ -54,6 +63,11 @@
   --input-bg: #fffdf8;
   --bubble-ai-bg: #fffdf8;
   --hd-bg: rgba(245, 240, 232, 0.97);
+
+  --accent: var(--gold);
+  --accent-rgb: 140, 100, 32;
+  /* 라이트의 금색은 짙은 갈색이라 흰 글자가 잘 얹힌다. */
+  --on-accent: #fffdf8;
 }
 /* 라이트 모드 — 추가 가시성 강화 */
 [data-theme="light"] .section-label    { color: #4a3c30; }
@@ -656,9 +670,12 @@ body::-webkit-scrollbar {
   user-select: text;
   -webkit-user-select: text;
 }
+/* 안도령의 풀이. 미니앱의 .card.reading 과 같은 결로 띄운다 —
+   평평한 판이 아니라 종이 한 장이 놓인 것처럼 보여야 오래 읽힌다. */
 .bubble-ai {
   align-self: flex-start;
-  background: var(--bubble-ai-bg);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
   border: 1px solid var(--border);
   color: var(--text);
   border-bottom-left-radius: 4px;
@@ -1251,12 +1268,31 @@ body::-webkit-scrollbar {
 @media (max-width: 400px) {
   #screen-mypage { padding: 85px 16px 56px; } /* 초소형 화면 */
 }
+/* 마이페이지 머리. 미니앱의 .hero.mypage 와 같은 결이다 —
+   맨 위에서 새어 드는 빛 한 줄기로 화면을 열어 준다. */
 .mypage-profile {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 18px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
+  padding: 22px 22px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--hero);
+  box-shadow: var(--hero-shadow);
 }
+.mypage-profile::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: -70px;
+  width: 260px; height: 200px;
+  margin-left: -130px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, var(--sheen) 0%, transparent 68%);
+}
+.mypage-profile > * { position: relative; }
 .mypage-avatar {
   width: 54px; height: 54px;
   border-radius: 50%;
@@ -1457,12 +1493,14 @@ body::-webkit-scrollbar {
 .token-chip.low { color: #e07070; }
 
 /* ── 마이페이지 토큰 섹션 ── */
+/* 엽전 잔액. 마이페이지에서 가장 먼저 눈이 가야 하는 자리라 히어로로 둔다. */
 .token-balance-display {
   text-align: center;
-  padding: 22px 16px;
+  padding: 24px 16px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--card);
+  border-radius: 20px;
+  background: var(--hero);
+  box-shadow: var(--hero-shadow);
   margin-bottom: 16px;
 }
 .token-balance-num {
@@ -1936,24 +1974,10 @@ body::-webkit-scrollbar {
   color: var(--gold-light);
   margin-bottom: 6px;
 }
-.detail-area-card {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-}
-.detail-area-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--text-dim);
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-}
+/* ⚠️ .detail-area-* 는 아래(스트릭 섹션 근처)에도 똑같이 정의돼 있었다.
+   나중 것이 이기므로 여기 있던 규칙은 한 줄도 화면에 닿지 않는 죽은 코드였다.
+   지우고 실제로 쓰이는 쪽만 남긴다 — 두 벌을 두면 고칠 때 엉뚱한 데를 고치게 된다. */
 .detail-area-body {
-  font-size: 0.88rem;
-  color: var(--text);
-  line-height: 1.75;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -3401,7 +3425,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   cursor: pointer;
   transition: all 0.2s;
 }
-.rx-detail-btn:hover { background: var(--accent); color: #fff; }
+.rx-detail-btn:hover { background: var(--accent); color: var(--on-accent); }
 .rx-detail-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* 오늘의 운세 모음 — 주제 선택 그리드 */
@@ -3451,12 +3475,15 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 .notif-toggle-btn .notif-icon { font-size: 1.1rem; }
 
 /* 상세 풀이 모달 내용 */
+/* 풀이 카드. 미니앱의 .card.reading 과 같은 결로 맞춘다
+   (그림자로 종이처럼 띄우고, 글줄 사이를 넉넉히 벌린다 — 길게 읽는 글이다). */
 .detail-area-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 24px 18px;
+  border-radius: 16px;
+  padding: 24px 22px;
   margin-bottom: 14px;
+  box-shadow: var(--card-shadow);
 }
 .detail-area-title {
   font-size: 0.9rem;
@@ -3465,9 +3492,9 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   margin-bottom: 12px;
 }
 .detail-area-body {
-  font-size: 0.83rem;
+  font-size: 0.92rem;
   color: var(--text);
-  line-height: 1.85;
+  line-height: 1.9;
 }
 
 /* ════════════════════════════════════════
@@ -3518,7 +3545,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   border-radius: 12px;
   border: none;
   background: linear-gradient(135deg, var(--accent), #c8a06a);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
@@ -3721,14 +3748,14 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   transition: all 0.2s;
   white-space: nowrap;
 }
-.referral-copy-btn:hover { background: var(--accent); color: #fff; }
+.referral-copy-btn:hover { background: var(--accent); color: var(--on-accent); }
 .referral-generate-btn {
   width: 100%;
   padding: 11px;
   border-radius: 12px;
   border: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
@@ -3851,7 +3878,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 .profile-share-actions button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
 }
 .profile-share-actions button:hover { opacity: 0.85; }
@@ -4620,14 +4647,17 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   background: var(--gold);
   border: none;
   border-radius: 10px;
-  color: #1a1b20;
+  /* 밝은 화면에서 금색은 짙은 갈색이 된다. 거기에 검정 글씨를 얹으면 3.2:1 밖에
+     안 나온다 — 테마에 따라 흰 글씨/검은 글씨로 갈리는 값을 쓴다. */
+  color: var(--on-accent);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
+/* 색을 박아 두면 밝은 화면에서 배경만 밝아져 글씨가 사라진다. 밝기만 올린다. */
 .onboarding-next:hover {
-  background: #e0c48e;
+  filter: brightness(1.12);
   transform: translateY(-1px);
 }
 
