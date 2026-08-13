@@ -69,14 +69,22 @@
 <div class="orb orb-4"></div>
 <div class="orb orb-5"></div>
 
+<!-- 첫 화면. 스크립트 18개를 받는 1.8초 동안 이 화면이 자리를 지킨다.
+     ⚠️ 오행 다섯 글자를 자바스크립트로 만들지 않는다 — 스크립트가 오기 전에
+        이미 떠 있어야 하는 화면이라, 마크업에 그대로 적어 둔다.
+     미니앱의 로딩 화면과 같은 방식이다(mini/src/style.css 의 .orbit-stage). -->
 <div id="splash">
-  <div class="sp-logo">M ; Y &nbsp;安</div>
-  <div class="sp-sub">木 火 土 金 水</div>
-  <div class="sp-dots">
-    <div class="sp-dot"></div>
-    <div class="sp-dot"></div>
-    <div class="sp-dot"></div>
+  <div class="orbit-stage">
+    <div class="orbit-halo"></div>
+    <img src="/andoryeong.svg" alt="" class="oracle" onerror="this.style.display='none'">
+    <span class="sp-orb" style="--a:0deg;   color:#5d9e6f; animation-delay:0s,      0s">木</span>
+    <span class="sp-orb" style="--a:72deg;  color:#c0563f; animation-delay:-1.4s, -0.6s">火</span>
+    <span class="sp-orb" style="--a:144deg; color:#c9a96e; animation-delay:-2.8s, -1.2s">土</span>
+    <span class="sp-orb" style="--a:216deg; color:#e6e2d8; animation-delay:-4.2s, -1.8s">金</span>
+    <span class="sp-orb" style="--a:288deg; color:#4a7bb0; animation-delay:-5.6s, -2.4s">水</span>
   </div>
+  <div class="sp-logo">M ; Y &nbsp;安</div>
+  <div class="sp-line">기운을 살피는 중</div>
 </div>
 
 <div class="app">
@@ -203,7 +211,9 @@
         <a href="#" onclick="openLegal('refund');return false;">환불정책</a>
         <a href="#" onclick="openLegal('terms');return false;">이용약관</a>
       </div>
-      <div class="biz-info" style="font-size: 0.65rem; color: rgba(201,169,110,0.3); text-align: center; line-height: 1.6; margin-top: 4px; word-break: keep-all;">
+      <!-- 사업자 정보는 법으로 밝히게 돼 있다. 흐리게 두면 밝은 화면에서 안 읽힌다
+           (크림색 위에 다크 금색 30% 라 1.2:1 까지 떨어졌다). 테마를 따르게 한다. -->
+      <div class="biz-info" style="font-size: 0.65rem; color: var(--text-dim); text-align: center; line-height: 1.6; margin-top: 4px; word-break: keep-all;">
         상호명: M;Y 安 (마이안) &nbsp;|&nbsp; 대표자: 안태현 &nbsp;|&nbsp; 사업자등록번호: 501-33-63980<br>
         통신판매업신고: 2026-부산수영-0348호 &nbsp;|&nbsp; 호스팅 제공자: Cloudflare, Inc.<br>
         주소: 부산광역시 수영구 망미동 현대한누리타운 101-1101<br>
@@ -958,7 +968,7 @@ if ('serviceWorker' in navigator) {
   <p style="margin-bottom:2px">주소: 부산광역시 수영구 망미동 현대한누리타운 101-1101</p>
   <p style="margin-bottom:2px">대표전화: 010-6466-5717 &nbsp;|&nbsp; 이메일: riger7070@naver.com</p>
   <p class="biz-note">결제 후 즉시 사용 가능 &nbsp;·&nbsp; 이용권(엽전)은 디지털 콘텐츠 상품으로 결제 완료 즉시 제공됩니다.</p>
-  <p style="margin-top:4px;color:rgba(200,180,145,0.4)">© 2026 마이안. All rights reserved.</p>
+  <p style="margin-top:4px;color:var(--text-dim);opacity:0.8">© 2026 마이안. All rights reserved.</p>
 </footer>
 
 <!-- 오늘의 행운 모달 -->

@@ -1,33 +1,59 @@
 /* M;Y 安 — style.css (auto-extracted) */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;400;700&family=Pretendard:wght@300;400;600&display=swap');
 
+/* ── 팔레트 ──
+   미니앱(mini/src/style.css)과 같은 값을 쓴다. 두 화면이 같은 서비스로 보여야 한다.
+
+   예전에는 카드가 rgba(255,255,255,0.035) 였다. 검은 바탕에 흰 막을 씌우는,
+   어느 앱에나 있는 다크모드 방식이라 금색만 우리 것이고 바탕은 남의 것이었다.
+   흰 막 대신 따뜻한 갈색을 겹치고 그림자를 넣으면 같은 금색인데도 결이 달라진다. */
 :root {
   --bg: #060608;
+  --bg-soft: #12100c;
   --gold: #c9a96e;
   --gold-light: #e8d4a8;
-  --gold-dim: rgba(201,169,110,0.35);
-  --text: #e8e8e8;
-  --text-dim: #999;
-  --border: rgba(201,169,110,0.22);
-  --card: rgba(255,255,255,0.035);
-  --input-bg: rgba(255,255,255,0.05);
-  --bubble-ai-bg: rgba(255,255,255,0.03);
-  --hd-bg: rgba(6,6,8,0.95);
+  --gold-dim: rgba(201, 169, 110, 0.35);
+  --text: #e9e4da;
+  --text-dim: rgba(233, 228, 218, 0.55);
+  --border: rgba(201, 169, 110, 0.15);
+
+  /* 카드는 그라데이션이다. 색 하나가 필요한 자리에는 --card-flat 을 쓸 것
+     (그라데이션은 다른 그라데이션의 색 자리에 못 들어간다). */
+  --card: linear-gradient(158deg, #1a150e 0%, #120e09 52%, #0c0a07 100%);
+  --card-flat: #14110b;
+  --card-shadow: 0 6px 18px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(232, 212, 168, 0.06);
+  --hero: linear-gradient(160deg, #1c160e 0%, #100c08 55%, #0a0807 100%);
+  --hero-shadow: 0 14px 34px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(232, 212, 168, 0.07);
+  --sheen: rgba(232, 212, 168, 0.09);
+
+  --input-bg: #0d0b09;
+  --bubble-ai-bg: #12100c;
+  --hd-bg: rgba(6, 6, 8, 0.95);
 }
 
 /* ── 라이트 모드 ── */
 [data-theme="light"] {
   --bg: #f5f0e8;
+  --bg-soft: #fffdf8;
   --gold: #8c6420;
   --gold-light: #6a4a14;
-  --gold-dim: rgba(140,100,32,0.4);
-  --text: #1e1a16;
-  --text-dim: #4a3c30;
-  --border: rgba(140,100,32,0.28);
-  --card: rgba(140,100,32,0.08);
-  --input-bg: rgba(140,100,32,0.07);
-  --bubble-ai-bg: rgba(140,100,32,0.07);
-  --hd-bg: rgba(245,240,232,0.97);
+  --gold-dim: rgba(140, 100, 32, 0.4);
+  --text: #2b2419;
+  /* 미니앱은 0.6 인데 여기서는 0.72 로 둔다. 웹에는 크림색 바탕에 얹히는 잔글씨가
+     훨씬 많아서, 0.6 이면 안내문과 언어 이름이 4.5:1 문턱에 못 미쳤다(3.99). */
+  --text-dim: rgba(43, 36, 25, 0.72);
+  --border: rgba(140, 100, 32, 0.18);
+
+  --card: linear-gradient(158deg, #fffdf8 0%, #fbf6ec 100%);
+  --card-flat: #fffdf8;
+  --card-shadow: 0 4px 14px rgba(120, 92, 40, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --hero: linear-gradient(160deg, #fffdf8 0%, #f7f0e2 100%);
+  --hero-shadow: 0 10px 26px rgba(120, 92, 40, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --sheen: rgba(140, 100, 32, 0.07);
+
+  --input-bg: #fffdf8;
+  --bubble-ai-bg: #fffdf8;
+  --hd-bg: rgba(245, 240, 232, 0.97);
 }
 /* 라이트 모드 — 추가 가시성 강화 */
 [data-theme="light"] .section-label    { color: #4a3c30; }
@@ -87,7 +113,7 @@ html::-webkit-scrollbar {
 }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
   font-family: 'Pretendard', sans-serif;
   color: var(--text);
   width: 100vw;
@@ -95,7 +121,14 @@ body {
   height: 100dvh;
   overflow: hidden;
   position: relative;
-  transition: background 0.3s ease, color 0.3s ease;
+  /* ⚠️ 바탕색에 transition 을 걸지 않는다.
+     이 값은 var(--bg) 에서 오는데, 테마를 바꾸면 색이 아니라 **변수**가 바뀐다.
+     그때 전환이 시작되긴 하는데 끝값을 다시 읽지 못해 시작색에 멈춰 버린다.
+     그래서 '밝게/어둡게'를 눌러도 data-theme 만 바뀌고 화면은 그대로였다 —
+     새로고침해야 반영됐다(배포본에서도 그랬다). background-color 로 바꿔 봐도
+     마찬가지였고, 전환을 없애야 정상으로 돌아온다.
+     미니앱도 전환 없이 즉시 바뀐다. 0.3초 페이드보다 실제로 바뀌는 쪽이 낫다. */
+  transition: color 0.3s ease;
   /* 노치/홈바 safe area */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
@@ -136,28 +169,69 @@ body::-webkit-scrollbar {
   color: #c9a96e;
   text-shadow: 0 0 40px rgba(201,169,110,0.6);
 }
-#splash .sp-sub {
-  font-size: 0.75rem;
-  letter-spacing: 6px;
-  color: rgba(201,169,110,0.5);
-  text-transform: uppercase;
+#splash .sp-line {
+  font-size: 0.82rem;
+  letter-spacing: 3px;
+  color: color-mix(in srgb, var(--gold) 50%, transparent);
 }
-#splash .sp-dots {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
+
+/* ── 첫 화면의 궤도 ──
+   안도령 둘레를 오행 다섯 글자가 돈다. 미니앱의 로딩 화면과 같은 그림이다
+   (mini/src/style.css 의 .orbit-stage).
+
+   ⚠️ 글자에는 .sp-orb 를 쓴다. 이 파일에는 이미 .orb 가 있는데(배경에 깔리는
+      흐릿한 빛 덩어리) position:fixed 라, 그 이름을 쓰면 궤도가 화면 밖으로 튄다. */
+#splash .orbit-stage {
+  position: relative; width: 220px; height: 220px;
+  display: flex; align-items: center; justify-content: center;
+  /* #splash 가 세로 flex 라, 이걸 안 주면 높이가 안쪽 그림 크기(116px)로 눌린다.
+     그러면 궤도가 찌그러지고 아래 로고가 딸려 올라온다. */
+  flex: none;
 }
-#splash .sp-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: rgba(201,169,110,0.4);
-  animation: sp-pulse 1.4s ease infinite;
+/* 뒤에서 은은하게 숨쉬는 빛 — 멈춘 화면이 아니라는 신호. */
+#splash .orbit-halo {
+  position: absolute; inset: 26px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,169,110,0.18) 0%, rgba(201,169,110,0) 70%);
+  animation: sp-breathe 3.2s ease-in-out infinite;
 }
-#splash .sp-dot:nth-child(2) { animation-delay: .2s; }
-#splash .sp-dot:nth-child(3) { animation-delay: .4s; }
-@keyframes sp-pulse {
-  0%,100% { opacity: .3; transform: scale(1); }
-  50%      { opacity: 1;  transform: scale(1.3); }
+@keyframes sp-breathe {
+  0%,100% { transform: scale(0.9); opacity: 0.6; }
+  50%     { transform: scale(1.1); opacity: 1; }
+}
+#splash .oracle {
+  position: relative; width: 116px; height: 116px;
+  animation: sp-dance 2.6s ease-in-out infinite;
+}
+@keyframes sp-dance {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50%      { transform: translateY(-3px) rotate(1.5deg); }
+}
+/* --a 로 출발 각을 나눠 다섯 글자를 고르게 퍼뜨린다. */
+#splash .sp-orb {
+  position: absolute; left: 50%; top: 50%;
+  font-family: 'Batang', 'Noto Serif KR', serif; font-size: 1.15rem;
+  /* 글자 자신의 색으로 번지게 한다(currentColor).
+     오행마다 색이 다르므로 한 규칙으로 다섯 가지 빛이 나온다. */
+  text-shadow: 0 0 6px currentColor, 0 0 14px currentColor,
+               0 0 26px rgba(255,255,255,0.25);
+  /* 궤도와 밝기를 따로 돌린다. 한 애니메이션에 묶으면 도는 주기에 맞춰
+     깜빡여서 기계적으로 보인다. */
+  animation: sp-orbit 7s linear infinite, sp-glow 2.8s ease-in-out infinite;
+  transform-origin: 0 0;
+}
+@keyframes sp-glow {
+  0%, 100% { opacity: 0.55; filter: brightness(0.9); }
+  50%      { opacity: 1;    filter: brightness(1.5); }
+}
+@keyframes sp-orbit {
+  from { transform: rotate(var(--a)) translateX(94px) rotate(calc(-1 * var(--a))); }
+  to   { transform: rotate(calc(var(--a) + 360deg)) translateX(94px) rotate(calc(-1 * var(--a) - 360deg)); }
+}
+
+/* 돌아가는 것을 힘들어하는 사람도 있다. 그때는 멈춘 채로 보여준다. */
+@media (prefers-reduced-motion: reduce) {
+  #splash .sp-orb { animation: sp-orbit 0s linear forwards; opacity: 0.8; }
+  #splash .orbit-halo, #splash .oracle { animation: none; }
 }
 
 /* ── 배경 오브 ── */
@@ -187,7 +261,9 @@ body::-webkit-scrollbar {
   100% { transform: translate(0,0) scale(1); }
 }
 
-/* 오행 기운 연동: 오브 색상 부드럽게 전환 */
+/* 오행 기운 연동: 오브 색상 부드럽게 전환.
+   여기는 body 와 달리 괜찮다 — 오브 색은 _setOrbTheme() 이 인라인으로 넣으므로
+   변수가 아니라 값 자체가 바뀌고, 그때는 전환이 정상으로 걸린다. */
 .orb { transition: background 2s ease; }
 
 /* 토큰 -1 팝업 애니메이션 */
@@ -259,7 +335,7 @@ body::-webkit-scrollbar {
 }
 .hd-deco-symbol {
   font-size: 0.7rem;
-  color: rgba(201,169,110,0.5);
+  color: color-mix(in srgb, var(--gold) 50%, transparent);
   letter-spacing: 2px;
 }
 
@@ -334,7 +410,7 @@ body::-webkit-scrollbar {
   display: flex;
   gap: 0;
   flex-wrap: nowrap;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -344,7 +420,7 @@ body::-webkit-scrollbar {
   letter-spacing: 0.5px;
   color: var(--text-dim);
   border: none;
-  border-right: 1px solid rgba(255,255,255,0.08);
+  border-right: 1px solid var(--border);
   padding: 5px 10px;
   cursor: pointer;
   background: none;
@@ -363,7 +439,7 @@ body::-webkit-scrollbar {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
   border-radius: 6px;
   transition: all .2s;
 }
@@ -527,7 +603,7 @@ body::-webkit-scrollbar {
 
 .card-arrow {
   font-size: 1.2rem;
-  color: rgba(201,169,110,0.4);
+  color: color-mix(in srgb, var(--gold) 40%, transparent);
   flex-shrink: 0;
   transition: all .3s;
 }
@@ -542,7 +618,7 @@ body::-webkit-scrollbar {
   text-align: center;
   line-height: 1.9;
   padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--border);
 }
 
 /* ── 채팅 화면 ── */
@@ -614,7 +690,7 @@ body::-webkit-scrollbar {
 }
 .bubble-ai:hover .bubble-copy-btn,
 .bubble-copy-btn.visible { opacity: 1; }
-.bubble-copy-btn:hover { color: var(--gold); background: rgba(255,255,255,0.05); }
+.bubble-copy-btn:hover { color: var(--gold); background: rgba(201, 169, 110, 0.08); }
 .bubble-copy-btn.copied { color: #4bc87a; opacity: 1; }
 
 /* 음료 카드 */
@@ -641,7 +717,7 @@ body::-webkit-scrollbar {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   flex-shrink: 0;
 }
 .rx-info {}
@@ -667,11 +743,11 @@ body::-webkit-scrollbar {
   padding: 12px 20px;
   font-size: 0.72rem;
   background: rgba(0,0,0,0.3);
-  border-top: 1px solid rgba(255,255,255,0.05);
+  border-top: 1px solid var(--border);
   color: var(--text-dim);
   line-height: 1.7;
 }
-.rx-share-btn:hover { background: rgba(255,255,255,0.04); color: var(--gold); }
+.rx-share-btn:hover { background: rgba(201, 169, 110, 0.05); color: var(--gold); }
 
 /* ── 기운 + 일진 듀오 카드 ── */
 .rx-duo {
@@ -768,7 +844,7 @@ body::-webkit-scrollbar {
 .saju-gauge-bar-bg {
   flex: 1;
   height: 11px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(201, 169, 110, 0.08);
   border-radius: 6px;
   overflow: visible;
   position: relative;
@@ -935,7 +1011,7 @@ body::-webkit-scrollbar {
 }
 .signup-sub {
   font-size: 0.82rem;
-  color: rgba(255,255,255,0.5);
+  color: var(--text-dim);
   line-height: 1.85;
   margin-bottom: 6px;
 }
@@ -962,7 +1038,7 @@ body::-webkit-scrollbar {
 .field { display: flex; flex-direction: column; gap: 9px; }
 .field label {
   font-size: 0.8rem;
-  color: rgba(201,169,110,0.7);
+  color: color-mix(in srgb, var(--gold) 70%, transparent);
   letter-spacing: 2px;
   text-transform: uppercase;
 }
@@ -991,7 +1067,7 @@ body::-webkit-scrollbar {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(201, 169, 110, 0.05);
   color: var(--text-dim);
   font-size: 0.88rem;
   font-family: 'Pretendard', sans-serif;
@@ -1026,7 +1102,7 @@ body::-webkit-scrollbar {
 
 .signup-notice {
   font-size: 0.78rem;
-  color: rgba(255,255,255,0.42);
+  color: var(--text-dim);
   text-align: center;
   line-height: 1.9;
   padding: 4px 8px;
@@ -1204,7 +1280,7 @@ body::-webkit-scrollbar {
 }
 .mypage-email-disp {
   font-size: 0.78rem;
-  color: rgba(255,255,255,0.45);
+  color: var(--text-dim);
   letter-spacing: 0.3px;
 }
 .mypage-divider {
@@ -1216,7 +1292,7 @@ body::-webkit-scrollbar {
   font-size: 0.72rem;
   letter-spacing: 5px;
   text-transform: uppercase;
-  color: rgba(201,169,110,0.65);
+  color: color-mix(in srgb, var(--gold) 65%, transparent);
   margin-bottom: 20px;
 }
 
@@ -1269,7 +1345,7 @@ body::-webkit-scrollbar {
   flex: 1;
   min-width: 120px;
   padding: 12px 16px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
   border-radius: 10px;
   background: none;
   color: var(--text-dim);
@@ -1279,7 +1355,7 @@ body::-webkit-scrollbar {
   transition: all .25s;
   text-align: center;
 }
-.mypage-action-btn:hover { border-color: rgba(255,255,255,0.18); color: var(--text); }
+.mypage-action-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .mypage-action-btn.danger { color: #c06060; }
 .mypage-action-btn.danger:hover { border-color: #c06060; background: rgba(192,96,96,0.06); }
 
@@ -1368,7 +1444,7 @@ body::-webkit-scrollbar {
   align-items: center;
   gap: 3px;
   font-size: 0.68rem;
-  color: rgba(201,169,110,0.7);
+  color: color-mix(in srgb, var(--gold) 70%, transparent);
   white-space: nowrap;
   flex-shrink: 0;
   padding: 0 10px 0 4px;
@@ -1597,7 +1673,7 @@ body::-webkit-scrollbar {
 }
 .quick-arrow {
   font-size: 1.3rem;
-  color: rgba(201,169,110,0.35);
+  color: color-mix(in srgb, var(--gold) 35%, transparent);
   transition: all .25s;
   flex-shrink: 0;
 }
@@ -1635,31 +1711,57 @@ body::-webkit-scrollbar {
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
+/* ── 콘텐츠 타일 ──
+   미니앱과 같은 결로 맞춘다(mini/src/style.css 의 .tiles / .tile).
+
+   예전에는 auto-fill minmax(92px) 라 화면 너비에 따라 3열, 4열, 5열로 제멋대로
+   나뉘었다. 열 수가 바뀌면 글자가 줄바꿈되는 자리도 바뀌어 목록이 들쭉날쭉해진다.
+   미니앱처럼 2열로 고정하면 어느 기기에서나 같은 모양이 된다. */
 .cs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
 }
 .cs-tile {
   position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* 가운데 정렬이면 글자 길이에 따라 축이 흔들린다. 왼쪽으로 모으면 줄이 맞는다. */
+  align-items: flex-start;
   justify-content: flex-start;
-  gap: 8px;
-  padding: 18px 8px 14px;
-  min-height: 104px;
-  border-radius: 14px;
+  gap: 4px;
+  padding: 16px 15px 14px;
+  min-height: 116px;
+  border-radius: 16px;
   border: 1px solid var(--border);
-  background: var(--card);
   color: var(--text);
+  text-align: left;
+  font-family: inherit;
   cursor: pointer;
-  transition: transform .2s ease, border-color .2s ease, background .2s ease;
+  /* 위가 밝고 아래가 어두운 결. 평평한 단색보다 눌러 볼 것처럼 보인다. */
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+/* 왼쪽 위에서 비껴드는 빛. 이것 하나로 타일이 종이처럼 보인다. */
+.cs-tile::before {
+  content: '';
+  position: absolute;
+  left: -30%; top: -60%;
+  width: 120%; height: 120%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, var(--sheen) 0%, transparent 62%);
 }
 .cs-tile:hover {
-  transform: translateY(-2px);
-  border-color: rgba(201,169,110,0.45);
-  background: rgba(201,169,110,0.07);
+  border-color: rgba(201,169,110,0.42);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.44), inset 0 1px 0 rgba(232,212,168,0.1);
+}
+/* 누를 때는 떠오르는 게 아니라 눌린다 — 손끝을 따라가는 느낌이 난다. */
+.cs-tile:active {
+  transform: scale(0.975);
+  border-color: rgba(201,169,110,0.42);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(232,212,168,0.1);
 }
 /* ── 선화 아이콘 ──
    이모지를 쓰다가 바꿨다. 기기마다 모양이 다르고(🀄 는 아예 네모로 깨졌다) 색도
@@ -1670,13 +1772,18 @@ body::-webkit-scrollbar {
 .cs-title .ic { width: 16px; height: 16px; }
 .ic-title { display: inline-flex; vertical-align: -4px; margin-right: 7px; }
 .ic-title .ic { width: 22px; height: 22px; }
+/* 2열로 넓어졌으니 글자도 제 크기를 찾는다. 5열 시절에는 0.73rem 으로 눌러
+   놓아야 겨우 들어갔다. 미니앱의 .t-label 과 같은 크기·색이다. */
 .cs-label {
-  font-size: 0.73rem;
+  font-size: 0.97rem;
+  font-weight: 500;
   line-height: 1.35;
-  text-align: center;
-  color: var(--text);
+  text-align: left;
+  color: var(--gold-light);
   word-break: keep-all;
 }
+/* 아이콘도 바탕에서 살짝 떠 보이게 한다. */
+.cs-tile .ic { filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35)); }
 /* 토큰 비용 배지 — 누르기 전에 가격을 알 수 있게 타일마다 표시 */
 .cs-cost {
   position: absolute;
@@ -1689,9 +1796,13 @@ body::-webkit-scrollbar {
 }
 .cs-cost.cs-free { color: #7dc88a; }
 
+/* 좁은 기기에서도 2열을 지킨다. 예전에는 여기서 3열로 늘렸는데, 열 수가 바뀌면
+   글자가 줄바꿈되는 자리도 바뀌어 같은 앱이 기기마다 다른 모양이 됐다.
+   미니앱은 어느 폭에서나 2열이다. 좁으면 글자만 조금 줄인다. */
 @media (max-width: 380px) {
-  .cs-grid { grid-template-columns: repeat(3, 1fr); }
-  .cs-label { font-size: 0.68rem; }
+  .cs-grid { gap: 9px; }
+  .cs-tile { padding: 14px 12px 12px; min-height: 108px; }
+  .cs-label { font-size: 0.9rem; }
 }
 
 /* 충전 화면의 "토큰으로 할 수 있는 것" — 값을 먼저, 목록은 그 오른쪽에 줄글로 */
@@ -1700,7 +1811,7 @@ body::-webkit-scrollbar {
   padding: 14px 14px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: rgba(201, 169, 110, 0.05);
 }
 .cost-guide-title {
   font-size: 0.78rem;
@@ -1775,14 +1886,16 @@ body::-webkit-scrollbar {
   gap: 16px;
   padding: 12px 0 4px;
 }
+/* 개인정보처리방침·환불정책·이용약관. 장식이 아니라 실제로 눌러야 하는 링크라
+   40% 로 흐려 두면 안 된다(크림색 위에서 2.8:1 까지 떨어졌다). */
 .legal-footer a {
   font-size: 0.72rem;
-  color: rgba(201,169,110,0.4);
+  color: var(--text-dim);
   text-decoration: none;
   letter-spacing: 0.04em;
   transition: color .2s;
 }
-.legal-footer a:hover { color: rgba(201,169,110,0.75); }
+.legal-footer a:hover { color: var(--gold); }
 
 /* ── 법적 모달 ── */
 /* ── 범용 모달 오버레이 (상세 풀이 등) ── */
@@ -1908,16 +2021,16 @@ body::-webkit-scrollbar {
   color: var(--gold); font-weight: 600;
 }
 .legal-modal-close {
-  background: none; border: none; color: rgba(255,255,255,0.4);
+  background: none; border: none; color: var(--text-dim);
   font-size: 1.2rem; cursor: pointer; padding: 0 4px;
 }
 .legal-modal-body {
   overflow-y: auto; padding: 20px;
   font-size: 0.78rem; line-height: 1.8;
-  color: rgba(255,255,255,0.55);
+  color: var(--text-dim);
 }
 .legal-modal-body h3 {
-  font-size: 0.82rem; color: rgba(201,169,110,0.8);
+  font-size: 0.82rem; color: color-mix(in srgb, var(--gold) 80%, transparent);
   margin: 18px 0 6px; font-weight: 600; letter-spacing: 0.06em;
 }
 .legal-modal-body h3:first-child { margin-top: 0; }
@@ -1931,7 +2044,7 @@ body::-webkit-scrollbar {
   padding: 6px 8px; text-align: left; vertical-align: top;
 }
 .legal-modal-body th {
-  color: rgba(201,169,110,0.7); font-weight: 600; background: rgba(201,169,110,0.04);
+  color: color-mix(in srgb, var(--gold) 70%, transparent); font-weight: 600; background: rgba(201,169,110,0.04);
 }
 
 /* ── 토큰충전 모달 ── */
@@ -1982,15 +2095,15 @@ body::-webkit-scrollbar {
 .token-modal-close {
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(201, 169, 110, 0.08);
+  border: 1px solid var(--border);
   color: var(--text-dim);
   cursor: pointer;
   font-size: 0.9rem;
   transition: all .2s;
   display: flex; align-items: center; justify-content: center;
 }
-.token-modal-close:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+.token-modal-close:hover { background: rgba(201, 169, 110, 0.13); color: var(--text); }
 .token-modal-balance {
   text-align: center;
   padding: 18px 16px 14px;
@@ -2021,9 +2134,9 @@ body::-webkit-scrollbar {
   margin-top: 16px;
   line-height: 1.7;
   padding: 12px 14px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(201, 169, 110, 0.05);
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
 }
 
 /* ── Change 1: 무료 토큰 배너 ── */
@@ -2616,12 +2729,12 @@ select.fif-input option { background: var(--bg); color: var(--text); }
   cursor: pointer;
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(201, 169, 110, 0.05);
+  border: 1px solid var(--border);
   transition: background .2s;
   margin-top: -4px;
 }
-.guide-skip-row:hover { background: rgba(255,255,255,0.06); }
+.guide-skip-row:hover { background: rgba(201, 169, 110, 0.08); }
 .guide-skip-row input[type="checkbox"] {
   width: 16px; height: 16px;
   accent-color: var(--gold);
@@ -2646,7 +2759,7 @@ select.fif-input option { background: var(--bg); color: var(--text); }
   width: 30px; height: 30px;
   border-radius: 50%;
   background: none;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 0.8rem;
   cursor: pointer;
@@ -2834,9 +2947,9 @@ select.fif-input option { background: var(--bg); color: var(--text); }
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(201, 169, 110, 0.05);
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
   font-size: 0.8rem;
   color: var(--text-dim);
   filter: blur(0.4px);
@@ -3020,7 +3133,7 @@ select.fif-input option { background: var(--bg); color: var(--text); }
 .admin-header-right { display: flex; gap: 8px; align-items: center; }
 .admin-refresh {
   background: none;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 0.68rem;
   padding: 5px 12px;
@@ -3044,7 +3157,7 @@ select.fif-input option { background: var(--bg); color: var(--text); }
 .admin-close-btn:hover { color: var(--gold); background: rgba(201,169,110,0.1); }
 .admin-tabs {
   display: flex;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 16px;
@@ -3053,7 +3166,7 @@ select.fif-input option { background: var(--bg); color: var(--text); }
   flex: 1;
   background: none;
   border: none;
-  border-right: 1px solid rgba(255,255,255,0.08);
+  border-right: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 0.7rem;
   padding: 7px 4px;
@@ -3071,14 +3184,14 @@ select.fif-input option { background: var(--bg); color: var(--text); }
   letter-spacing: 1px;
 }
 .admin-card {
-  border: 1px solid rgba(255,255,255,0.07);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px 16px;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(201, 169, 110, 0.05);
   transition: border-color .2s;
 }
 .admin-card:hover { border-color: rgba(201,169,110,0.2); }
@@ -3098,7 +3211,7 @@ select.fif-input option { background: var(--bg); color: var(--text); }
 }
 .admin-card-time {
   font-size: 0.72rem;
-  color: rgba(255,255,255,0.22);
+  color: color-mix(in srgb, var(--text-dim) 55%, transparent);
   margin-top: 2px;
 }
 .admin-approve-btn {
@@ -3178,8 +3291,8 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(201, 169, 110, 0.05);
+  border: 1px solid var(--border);
   border-radius: 14px;
   cursor: pointer;
   transition: border-color .2s, background .2s;
@@ -3219,7 +3332,9 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
    홈 프리뷰 배너
 ════════════════════════════════════════ */
 .home-preview-banner {
-  background: linear-gradient(135deg, var(--card) 0%, rgba(var(--accent-rgb,139,90,43),0.15) 100%);
+  /* --card 는 그 자체가 그라데이션이라 색 자리에 못 넣는다(그라데이션은 중첩 불가).
+     단색이 필요한 자리에는 --card-flat 을 쓴다. */
+  background: linear-gradient(135deg, var(--card-flat) 0%, rgba(var(--accent-rgb,139,90,43),0.15) 100%);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 18px 20px;
@@ -3303,7 +3418,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   padding: 16px 8px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(201, 169, 110, 0.05);
   color: var(--text);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -4145,7 +4260,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   top: 50%;
   transform: translateY(-50%);
   font-size: 1.2rem;
-  color: rgba(201,169,110,0.6);
+  color: color-mix(in srgb, var(--gold) 60%, transparent);
   text-shadow: 0 0 8px rgba(201,169,110,0.4);
 }
 .oracle-door-left::after {
@@ -4569,7 +4684,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   transition: all 0.2s;
 }
 .weekly-report-close:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(201, 169, 110, 0.08);
   color: var(--text);
 }
 
@@ -4639,7 +4754,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 
 .weekly-report-bar-bg {
   height: 24px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(201, 169, 110, 0.08);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -4773,7 +4888,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   transition: all 0.2s;
 }
 .achievements-close:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(201, 169, 110, 0.08);
   color: var(--text);
 }
 
@@ -4797,7 +4912,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 
 .achievements-progress-bar {
   height: 8px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(201, 169, 110, 0.13);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -4821,7 +4936,7 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
   justify-content: center;
   gap: 8px;
   padding: 16px 8px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(201, 169, 110, 0.05);
   border: 1px solid var(--border);
   border-radius: 12px;
   transition: all 0.2s;
