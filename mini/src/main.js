@@ -75,6 +75,8 @@ const state = {
   error: '',
   busy: false,
   menu: false,      // 오른쪽 위 메뉴가 열려 있는가
+  invite: null,     // 상대에게 보낸 궁합 초대 { id, url, answered }
+  inviteChecked: false,  // 앱을 켠 뒤 답이 왔는지 한 번 확인했는가
 };
 
 const app = document.getElementById('app');
@@ -302,7 +304,16 @@ function openItem(item) {
   state.error = '';
   // 산가지는 서버도 AI 도 부르지 않는다. 콘텐츠 목록에 있지만 처리는 앱 안에서 끝난다.
   if (item.local) { drawStick(); return; }
-  if (item.need) { go('need'); return; }
+  if (item.need) {
+    go('need');
+    // 링크를 보낸 뒤 앱을 껐다가 돌아왔을 수도 있다. 상대의 답이 이미 와 있으면
+    // 다시 물어보게 하지 않는다. 앱을 켠 뒤 한 번만 확인한다(호출을 아낀다).
+    if (item.need === 'partner' && !state.inviteChecked) {
+      state.inviteChecked = true;
+      checkInvite({ quiet: true }).then(render);
+    }
+    return;
+  }
   runItem(item);
 }
 
@@ -969,16 +980,45 @@ async function shareResult() {
  * 맞는 말이다 — 받는 사람은 남의 계정 기록을 열 수 없으니, 잘라낸 만큼은 영영 못 본다.
  * 앱 링크는 맨 끝에 붙여, 읽고 나서 궁금하면 따라오게 한다.
  */
+/**
+ * 첫 문장을 떼어 낸다. 카톡 목록에는 앞 두 줄만 보이므로, 거기에 제목이 아니라
+ * 풀이의 한 문장이 있어야 눌러 보게 된다.
+ *
+ * 너무 짧으면("그렇습니다.") 후크가 안 되고, 너무 길면 목록에서 잘린다.
+ * 그 사이일 때만 떼고, 아니면 건드리지 않는다.
+ */
+function _pullQuote(body) {
+  const m = body.match(/^(.+?(?:다|요)\.)\s*/);
+  if (!m) return { hook: '', rest: body };
+  let hook = m[1].trim();
+
+  // 안도령은 "제가 기운을 살펴보니," 처럼 운을 떼고 시작한다. 마주 앉아 들을 때는
+  // 좋은 도입이지만, 카톡 목록 첫 줄에서는 정작 할 말이 밀려나 잘린다.
+  // 뒤에 남는 말이 충분할 때만 걷어낸다.
+  const lead = hook.match(/^[^,]{0,20}(?:보니|보면|하니|살펴보니|들여다보니),\s*/);
+  if (lead && hook.length - lead[0].length >= 16) {
+    hook = hook.slice(lead[0].length).replace(/^./, c => c.toUpperCase());
+  }
+
+  if (hook.length < 12 || hook.length > 70) return { hook: '', rest: body };
+  return { hook, rest: body.slice(m[0].length).trim() };
+}
+
 function _resultShareText(r, link) {
   const body = String(r.body || '')
     .replace(/[ \t]+\n/g, '\n')      // 줄 끝에 남은 공백
     .replace(/\n{3,}/g, '\n\n')      // 빈 줄은 하나까지만
     .trim();
-  const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join(', ');
+  // 한 줄에 몰아 넣으면 "酉(金) 정재, 살펴볼 해 2027년, 2033년" 처럼 어디까지가 한
+  // 항목인지 흐려진다. 항목마다 줄을 준다.
+  const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join('\n');
+  const { hook, rest } = _pullQuote(body);
   return [
-    `[${r.item.label}] 안도령의 풀이`,
+    // 후크가 잡히면 그것이 첫 줄이고, 무엇을 본 것인지는 그 아래로 내린다.
+    hook ? `"${hook}"` : `[${r.item.label}] 안도령의 풀이`,
+    hook ? `안도령의 ${r.item.label}` : '',
     facts,
-    body,
+    hook ? rest : body,
     link || '토스에서 "오늘운빨"을 찾아보세요.',
   ].filter(Boolean).join('\n\n');
 }
@@ -1729,7 +1769,8 @@ function needForm(it) {
           <input id="p-d" type="number" inputmode="numeric" placeholder="15" value="${esc(p.day || '')}">
         </div>
         <label>태어난 시각 (선택)</label>
-        <input id="p-h" placeholder="예: 오전 9시" value="${esc(p.hour || '')}">`;
+        <input id="p-h" placeholder="예: 오전 9시" value="${esc(p.hour || '')}">
+        ${invitePanel()}`;
     case 'photo':
       return `<label>무엇을 볼까요?</label>
         <select id="f-ptype"><option value="face">관상 (얼굴)</option><option value="palm">손금</option></select>
@@ -1739,6 +1780,75 @@ function needForm(it) {
     default:
       return '';
   }
+}
+
+// ── 상대에게 물어보기 ────────────────────────────────────────
+//
+// 남의 생년월일을 대신 적는 건 늘 자신이 없다. 기억이 어긋나면 풀이도 어긋난다.
+// 링크를 보내 본인이 적게 하면 값도 맞고, 받은 사람도 이 앱을 한 번 열게 된다.
+// 실제로 답이 왔을 때만 엽전 1개를 드린다(하루 3개까지) — 링크만 뿌려서는 안 준다.
+
+function invitePanel() {
+  const iv = state.invite;
+  if (!iv) {
+    return `<div class="invite">
+      <button class="btn ghost sm" id="btn-invite">상대에게 직접 물어보기</button>
+      <p class="muted small">링크를 보내면 상대가 자기 생년월일을 적어 줘요.
+        답이 오면 ${COIN}1 엽전을 드려요.</p>
+    </div>`;
+  }
+  if (iv.answered) {
+    return `<div class="invite">
+      <p class="small">상대가 답했어요. 생년월일을 채워 두었으니 보기를 눌러 주세요.</p>
+    </div>`;
+  }
+  return `<div class="invite">
+    <p class="muted small">보낸 링크의 답을 기다리고 있어요.</p>
+    <button class="btn ghost sm" id="btn-invite-check">답이 왔는지 확인</button>
+    <button class="btn ghost sm" id="btn-invite-again">링크 다시 보내기</button>
+  </div>`;
+}
+
+/** withBusy 가 화면을 다시 그리므로, 적던 값은 미리 state 로 옮겨 둔다. */
+function _keepPartnerInput() {
+  const v = (id) => document.getElementById(id)?.value.trim() || '';
+  const p = { year: v('p-y'), month: v('p-m'), day: v('p-d'), hour: v('p-h') };
+  if (p.year || p.month || p.day || p.hour) state.form = { ...state.form, partner: p };
+}
+
+async function makeInvite() {
+  _keepPartnerInput();
+  await withBusy(async () => {
+    let iv = state.invite;
+    // 아직 답이 없는 초대가 있으면 그걸 다시 보낸다. 누를 때마다 새로 만들면
+    // 상대는 링크를 두 개 받고, 우리 쪽에는 남의 생년월일 자리만 늘어난다.
+    if (!iv || iv.answered) {
+      const r = await api('/mini/api/invite', { method: 'POST', body: {} });
+      iv = { id: r.id, url: r.url, answered: false };
+      state.invite = iv;
+    }
+    const me = state.profile?.name ? `${state.profile.name}님이` : '누군가';
+    await share({
+      message: `${me} 우리 궁합을 물어봤어요.\n생년월일만 적으면 둘의 결이 나와요.\n${iv.url}`,
+    });
+  });
+}
+
+/** 답이 왔는지 본다. 왔으면 상대 생년월일 칸을 대신 채운다. */
+async function checkInvite({ quiet = false } = {}) {
+  const run = async () => {
+    const r = await api('/mini/api/invite');
+    // 답이 온 것 중 가장 최근 것. 내가 만든 초대만 오므로 남의 답은 섞이지 않는다.
+    const done = (r.invites || []).find((x) => x.answered && x.partner);
+    if (!done) {
+      if (!quiet) state.toast = '아직 답이 오지 않았어요.';
+      return;
+    }
+    state.invite = { id: done.id, url: done.url, answered: true };
+    state.form = { ...state.form, partner: done.partner };
+  };
+  if (quiet) { await run().catch(() => {}); return; }
+  await withBusy(run);
 }
 
 function collectForm(it) {
@@ -1787,6 +1897,9 @@ function bind() {
   on('btn-home', () => { state.error = ''; go(state.profile?.birthYear ? 'home' : 'profile'); });
   on('btn-home2', () => { state.error = ''; go('home'); });
   on('btn-editprofile', () => go('profile'));
+  on('btn-invite', makeInvite);
+  on('btn-invite-again', makeInvite);
+  on('btn-invite-check', () => checkInvite());
   on('btn-history', loadHistory);
   on('btn-logout', () => {
     // 세션만 지운다. 엽전과 기록은 서버의 계정(userKey)에 남아 있어서

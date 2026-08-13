@@ -412,6 +412,16 @@ h2 { font-size: 1.12rem; font-weight: 600; color: var(--gold-light); margin-bott
 }
 .btn:disabled { opacity: 0.45; }
 .btn.ghost { background: transparent; color: var(--gold); border: 1px solid var(--gold-dim); }
+.btn.sm { padding: 11px 14px; font-size: 0.9rem; font-weight: 500; }
+
+/* ── 상대에게 물어보기 ──
+   생년월일 칸 아래에 붙는다. 본문과 섞이지 않게 선으로 한 번 끊는다. */
+.invite {
+  margin-top: 18px; padding-top: 16px;
+  border-top: 1px dashed rgba(201, 169, 110, 0.22);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.invite p { margin: 0; line-height: 1.65; }
 
 /* ── 입력 ── */
 label { display: block; font-size: 0.85rem; color: var(--text-dim); margin: 14px 0 6px; }

@@ -1626,6 +1626,26 @@ async function ensureDBExt(env) {
     );
     CREATE INDEX IF NOT EXISTS idx_mpr_user_status ON mini_payment_requests (user_key, status);
     CREATE INDEX IF NOT EXISTS idx_mpr_created ON mini_payment_requests (created_at DESC);
+
+    -- 궁합 초대. 링크를 받은 사람이 자기 생년월일만 적으면 둘의 결이 나온다.
+    --
+    -- ⚠️ 남의 개인정보를 받는 자리다. 지키는 것:
+    --   · 링크를 연 사람에게 **초대한 사람의 생년월일을 절대 보여주지 않는다**
+    --   · 받는 쪽에 로그인을 요구하지 않는다. 이름도 받지 않는다
+    --   · 한 번 답하면 끝이다(덮어쓰지 않는다). 링크를 주워도 남의 답을 못 바꾼다
+    --   · 오래된 초대는 지운다(purgeStaleInvites)
+    CREATE TABLE IF NOT EXISTS mini_invites (
+      id            TEXT PRIMARY KEY,
+      user_key      TEXT NOT NULL,
+      kind          TEXT NOT NULL DEFAULT 'intimacy',
+      inviter_name  TEXT,
+      inviter_birth TEXT NOT NULL,
+      partner_birth TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+      answered_at   INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_inv_user ON mini_invites (user_key, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_inv_created ON mini_invites (created_at);
   `, 'mini');
 
   // 아래는 이미 배포된 테이블에 컬럼을 덧붙이는 보정이라 위 배치와 분리한다.
@@ -1684,6 +1704,19 @@ export default {
     if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
     if (path === '/api/naming' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNaming(request, env)); }
     if (path === '/api/intimacy' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleIntimacy(request, env)); }
+    // ── 궁합 초대 링크 ──
+    // /i/<id> 와 /api/invite/<id> 는 로그인 없이 열린다. 링크를 받은 사람은 계정이 없다.
+    if (path === '/mini/api/invite' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleInviteCreate(request, env)); }
+    if (path === '/mini/api/invite' && method === 'GET') { await ensureDBExt(env); return withMiniOrigin(request, await handleInviteList(request, env)); }
+    if (path.startsWith('/api/invite/') && method === 'POST') {
+      // 로그인 없이 열리는 자리다. 번호는 못 맞히더라도 두드리는 것 자체를 막아 둔다.
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const { success } = await env.RL_API.limit({ key: `invite:${ip}` });
+      if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
+      await ensureDBExt(env);
+      return handleInviteAnswer(request, env, path.slice('/api/invite/'.length));
+    }
+    if (path.startsWith('/i/') && method === 'GET') { await ensureDBExt(env); return handleInvitePage(request, env, path.slice(3)); }
     if (path === '/api/year-luck' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleYearLuck(request, env)); }
     if (path === '/api/direction' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDirection(request, env)); }
     if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
@@ -1855,7 +1888,12 @@ export default {
     // 시각은 그대로 둔다. 아침 푸시와 겹치면 한 번의 크론 실행이 그만큼 길어지고,
     // 사람이 가장 안 쓰는 시간에 도는 편이 어차피 안전하다.
     if (event.cron === WARM_CRON) {
-      ctx.waitUntil((async () => { await ensureDBExt(env); await warmFortuneCache(env); })());
+      ctx.waitUntil((async () => {
+        await ensureDBExt(env);
+        // 남의 생년월일을 필요 이상 오래 들고 있지 않는다. 실패해도 예열은 계속한다.
+        await purgeStaleInvites(env).catch(() => {});
+        await warmFortuneCache(env);
+      })());
       return;
     }
     ctx.waitUntil(sendDailyPush(env));
@@ -5563,6 +5601,314 @@ async function handleNaming(request, env) {
     if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
   }
+}
+
+// ════════════════════════════════════════════════════════════
+//  궁합 초대 링크
+//
+//  궁합은 원래 둘이 보는 것인데, 지금까지는 한 사람이 상대 생년월일을 대신 적었다.
+//  그러면 앱에 들어오는 사람은 언제나 한 명뿐이다. 링크를 보내 상대가 직접 적게 하면
+//  받는 사람도 이 앱을 한 번은 열게 된다.
+//
+//  ⚠️ 남의 개인정보를 받는 자리라 아래를 지킨다.
+//    · 링크를 연 사람에게 **초대한 사람의 생년월일을 보여주지 않는다**
+//    · 받는 쪽에 로그인도 이름도 요구하지 않는다. 생년월일뿐이다
+//    · 한 번 답하면 덮어쓰지 않는다 — 링크를 주워도 남의 답을 바꿀 수 없다
+//    · 90일이 지난 초대는 지운다
+// ════════════════════════════════════════════════════════════
+
+const INVITE_TTL_DAYS = 90;
+const INVITE_REWARD = 1;          // 상대가 실제로 답했을 때만 준다
+const INVITE_DAILY_MAX = 3;       // 하루에 보상받을 수 있는 초대 수
+
+/** 추측할 수 없는 초대 번호. 링크를 아는 사람만 열 수 있어야 한다. */
+function _newInviteId() {
+  const b = new Uint8Array(12);
+  crypto.getRandomValues(b);
+  return [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+const _birthOk = (b) =>
+  !!b && Number(b.year) >= 1900 && Number(b.year) <= _kstYear() &&
+  Number(b.month) >= 1 && Number(b.month) <= 12 &&
+  Number(b.day) >= 1 && Number(b.day) <= 31;
+
+/** 초대를 만든다. 내 생년월일은 서버가 이미 갖고 있는 것을 쓴다. */
+async function handleInviteCreate(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const row = await env.DB.prepare(
+    'SELECT name, birth_year, birth_month, birth_day, birth_hour FROM mini_users WHERE user_key = ?'
+  ).bind(userKey).first().catch(() => null);
+  if (!row?.birth_year) {
+    return miniCors(request, JSON.stringify({ error: { message: '내 생년월일을 먼저 입력해 주세요.' } }), 400);
+  }
+
+  const id = _newInviteId();
+  const birth = {
+    year: row.birth_year, month: row.birth_month,
+    day: row.birth_day, hour: row.birth_hour || '',
+  };
+  try {
+    await env.DB.prepare(
+      'INSERT INTO mini_invites (id, user_key, kind, inviter_name, inviter_birth) VALUES (?, ?, ?, ?, ?)'
+    ).bind(id, userKey, 'intimacy', (row.name || '').slice(0, 10), JSON.stringify(birth)).run();
+  } catch (e) {
+    console.error('[INVITE new]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '초대를 만들지 못했습니다.' } }), 500);
+  }
+  const origin = new URL(request.url).origin;
+  return miniCors(request, JSON.stringify({ ok: true, id, url: origin + '/i/' + id }), 200);
+}
+
+/** 내가 만든 초대들. 답이 왔는지 본다. */
+async function handleInviteList(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+
+  const { results } = await env.DB.prepare(
+    'SELECT id, partner_birth, created_at, answered_at FROM mini_invites WHERE user_key = ? ORDER BY created_at DESC LIMIT 20'
+  ).bind(userKey).all().catch(() => ({ results: [] }));
+
+  const origin = new URL(request.url).origin;
+  const invites = (results || []).map(r => ({
+    id: r.id,
+    url: origin + '/i/' + r.id,
+    answered: !!r.answered_at,
+    partner: r.partner_birth ? JSON.parse(r.partner_birth) : null,
+    createdAt: r.created_at,
+  }));
+  return miniCors(request, JSON.stringify({ ok: true, invites }), 200);
+}
+
+/**
+ * 링크를 받은 사람이 자기 생년월일을 적는다. 로그인하지 않는다.
+ * 그 자리에서 둘의 결(일지 관계)만 계산해 보여준다 — AI 는 부르지 않으므로 값이 안 든다.
+ * 전문은 초대한 사람이 앱에서 본다.
+ */
+async function handleInviteAnswer(request, env, id) {
+  const inv = await env.DB.prepare('SELECT * FROM mini_invites WHERE id = ?')
+    .bind(id).first().catch(() => null);
+  if (!inv) return cors(JSON.stringify({ error: { message: '없거나 만료된 초대입니다.' } }), 404);
+  if (inv.answered_at) return cors(JSON.stringify({ error: { message: '이미 답한 초대입니다.' } }), 409);
+
+  const { birth } = await request.json().catch(() => ({}));
+  if (!_birthOk(birth)) {
+    return cors(JSON.stringify({ error: { message: '생년월일을 다시 확인해 주세요.' } }), 400);
+  }
+  const clean = {
+    year: Number(birth.year), month: Number(birth.month),
+    day: Number(birth.day), hour: String(birth.hour || '').slice(0, 12),
+  };
+
+  // 이미 답이 들어갔으면 덮어쓰지 않는다. 링크를 주워도 남의 답을 못 바꾼다.
+  const r = await env.DB.prepare(
+    'UPDATE mini_invites SET partner_birth = ?, answered_at = unixepoch() WHERE id = ? AND answered_at IS NULL'
+  ).bind(JSON.stringify(clean), id).run().catch(() => null);
+  if (!((r?.meta?.changes ?? 0) > 0)) {
+    return cors(JSON.stringify({ error: { message: '이미 답한 초대입니다.' } }), 409);
+  }
+
+  // 답이 온 초대에만 엽전을 준다. 링크만 뿌리고 받는 일은 생기지 않는다.
+  try {
+    const today = _kstToday();
+    for (let n = 1; n <= INVITE_DAILY_MAX; n++) {
+      const res = await env.DB.prepare(
+        'INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at) VALUES (?, ?, ?, 0, ?, ?, unixepoch()) ON CONFLICT(id) DO NOTHING'
+      ).bind('invite:' + inv.user_key + ':' + today + ':' + n, inv.user_key, 'invite', INVITE_REWARD, 'approved').run();
+      if ((res?.meta?.changes ?? 0) > 0) break;
+    }
+  } catch (e) { console.error('[INVITE reward]', e?.message); }
+
+  // 받는 쪽에 보여줄 것은 둘의 '결'뿐이다. 초대한 사람의 생년월일은 담지 않는다.
+  let im = null;
+  try {
+    const ib = JSON.parse(inv.inviter_birth);
+    const a = computeSaju(ib.year, ib.month, ib.day, ib.hour);
+    const b = computeSaju(clean.year, clean.month, clean.day, clean.hour);
+    if (a && b) im = computeIntimacy(a, b);
+  } catch (e) { console.warn('[INVITE calc]', e?.message); }
+
+  // 일지가 몸의 결이라면 일간은 마음의 결이다. 둘 다 보여 준다.
+  const cards = (im?.notes || []).map(n => ({ label: n.kind, text: n.text }));
+  if (im?.sipsin && im?.meaning) cards.push({ label: im.sipsin, text: im.meaning });
+
+  return cors(JSON.stringify({
+    ok: true,
+    inviterName: inv.inviter_name || '',
+    kinds: im?.kinds || [],
+    cards,
+  }), 200);
+}
+
+/**
+ * 링크를 받은 사람이 보는 화면. 로그인도 앱 설치도 없이 웹으로 연다.
+ *
+ * 여기에 초대한 사람의 생년월일이 절대 실리지 않도록 한다. 이름만 보여주고,
+ * 이름조차 없으면 그냥 "누군가"라고 한다.
+ */
+async function handleInvitePage(request, env, id) {
+  const inv = await env.DB.prepare(
+    'SELECT inviter_name, answered_at FROM mini_invites WHERE id = ?'
+  ).bind(id).first().catch(() => null);
+
+  const who = escapeHtml((inv?.inviter_name || '').trim()) || '누군가';
+  const gone = !inv;
+  const done = !!inv?.answered_at;
+  const title = gone ? '지난 초대입니다'
+    : done ? '이미 답한 초대입니다'
+    : `${who}님이 궁합을 물어왔습니다`;
+
+  const html = `<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>${title} · 오늘운빨</title>
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="생년월일만 적으면 둘의 결이 나옵니다.">
+<meta property="og:type" content="website">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#0d0d0f;color:#e8e4dc;
+       font-family:'Noto Serif KR',-apple-system,BlinkMacSystemFont,'Malgun Gothic',serif;
+       line-height:1.75;padding:40px 20px 64px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:420px}
+  .brand{text-align:center;letter-spacing:6px;color:#c9a96e;font-size:0.8rem;margin-bottom:36px}
+  h1{font-size:1.35rem;font-weight:600;line-height:1.5;margin:0 0 10px}
+  .sub{color:#8d8880;font-size:0.9rem;margin:0 0 28px}
+  label{display:block;font-size:0.8rem;color:#8d8880;margin:18px 0 6px;letter-spacing:1px}
+  .row{display:flex;gap:8px}
+  input,select{width:100%;padding:14px 12px;font-size:1rem;color:#e8e4dc;
+    background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.22);
+    border-radius:10px;font-family:inherit;appearance:none}
+  input:focus,select:focus{outline:none;border-color:#c9a96e}
+  button{width:100%;margin-top:28px;padding:16px;font-size:1rem;font-family:inherit;
+    color:#0d0d0f;background:#c9a96e;border:0;border-radius:10px;font-weight:700}
+  button:disabled{opacity:0.5}
+  .note{margin-top:22px;font-size:0.78rem;color:#6f6a63;line-height:1.7}
+  .err{margin-top:16px;color:#e08b7a;font-size:0.86rem;min-height:1.2em}
+  .kind{border:1px solid rgba(201,169,110,0.18);background:rgba(201,169,110,0.05);
+    border-radius:12px;padding:16px 18px;margin:12px 0}
+  .kind b{color:#c9a96e;display:block;margin-bottom:4px;font-size:0.95rem}
+  .kind p{margin:0;font-size:0.92rem;color:#bdb8b0}
+  .cta{display:block;text-align:center;margin-top:32px;padding:16px;
+    border:1px solid rgba(201,169,110,0.35);border-radius:10px;
+    color:#c9a96e;text-decoration:none;font-size:0.95rem}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">M ; Y 安</div>
+  <h1 id="title">${title}</h1>
+
+  ${gone || done ? `
+  <p class="sub">${gone
+    ? '링크가 만료되었거나 없는 초대입니다.'
+    : '한 번 답한 초대는 다시 열 수 없습니다.'}</p>
+  <a class="cta" href="/">오늘운빨에서 내 궁합 보기</a>
+  ` : `
+  <p class="sub">생년월일만 적으면 둘의 결이 나옵니다.<br>가입도 이름도 필요하지 않습니다.</p>
+
+  <form id="f">
+    <label>생년월일</label>
+    <div class="row">
+      <input id="y" type="number" inputmode="numeric" placeholder="1999" min="1900" max="${_kstYear()}" required>
+      <input id="m" type="number" inputmode="numeric" placeholder="7" min="1" max="12" required>
+      <input id="d" type="number" inputmode="numeric" placeholder="18" min="1" max="31" required>
+    </div>
+    <label>태어난 시 (모르면 비워 두세요)</label>
+    <select id="h">
+      <option value="">모름</option>
+      <option>자시</option><option>축시</option><option>인시</option><option>묘시</option>
+      <option>진시</option><option>사시</option><option>오시</option><option>미시</option>
+      <option>신시</option><option>유시</option><option>술시</option><option>해시</option>
+    </select>
+    <button type="submit" id="go">둘의 결 보기</button>
+    <div class="err" id="err"></div>
+  </form>
+
+  <p class="note">
+    적어 주신 생년월일은 이 궁합을 보는 데에만 씁니다.
+    ${who}님의 생년월일은 여기에 보이지 않습니다.
+    90일이 지나면 지웁니다.
+  </p>
+  `}
+
+  <div id="out" class="hide"></div>
+</div>
+<script>
+(function () {
+  var f = document.getElementById('f');
+  if (!f) return;
+  var err = document.getElementById('err'), go = document.getElementById('go');
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    err.textContent = '';
+    go.disabled = true;
+    go.textContent = '보는 중...';
+    var birth = {
+      year: +document.getElementById('y').value,
+      month: +document.getElementById('m').value,
+      day: +document.getElementById('d').value,
+      hour: document.getElementById('h').value,
+    };
+    fetch('/api/invite/${encodeURIComponent(id)}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ birth: birth }),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error((res.j.error && res.j.error.message) || '잠시 후 다시 시도해 주세요.');
+        var out = document.getElementById('out'), html = '';
+        (res.j.cards || []).forEach(function (k) {
+          html += '<div class="kind"><b>' + esc(k.label || '') + '</b><p>' + esc(k.text || '') + '</p></div>';
+        });
+        if (!html) html = '<div class="kind"><p>두 분의 결을 찾았습니다. 자세한 풀이는 앱에서 볼 수 있습니다.</p></div>';
+        out.innerHTML = html + '<a class="cta" href="/">내 사주도 보러 가기</a>';
+        out.classList.remove('hide');
+        f.classList.add('hide');
+        document.getElementById('title').textContent = '두 분의 결입니다';
+        var sub = document.querySelector('.sub'), note = document.querySelector('.note');
+        if (sub) sub.remove();
+        if (note) note.remove();
+      })
+      .catch(function (e2) {
+        err.textContent = e2.message;
+        go.disabled = false;
+        go.textContent = '둘의 결 보기';
+      });
+  });
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+})();
+</script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: gone ? 404 : 200,
+    headers: {
+      'Content-Type': 'text/html; charset=UTF-8',
+      'X-Content-Type-Options': 'nosniff',
+      // 남의 답이 캐시에 남으면 안 된다.
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/** 오래된 초대는 지운다. 남의 생년월일을 계속 들고 있을 이유가 없다. */
+async function purgeStaleInvites(env, nowSec = Math.floor(Date.now() / 1000)) {
+  const cut = nowSec - INVITE_TTL_DAYS * 86400;
+  const r = await env.DB.prepare('DELETE FROM mini_invites WHERE created_at < ?')
+    .bind(cut).run().catch(() => null);
+  return r?.meta?.changes ?? 0;
 }
 
 // ════════════════════════════════════════════════════════════

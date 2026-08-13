@@ -26,6 +26,44 @@ const 배우자궁 = {
       + '정재라 하는데, 알뜰하고 성실한 결입니다.',
 };
 
+// 카톡 목록에는 앞 두 줄만 보인다. 거기에 제목이 있으면 아무도 안 누른다.
+const pullSrc = SRC.match(/function _pullQuote\(body\)[\s\S]*?\n\}/);
+assert.ok(pullSrc, '_pullQuote 를 못 찾았다');
+globalThis._pullQuote = eval(`(${pullSrc[0].replace('function _pullQuote', 'function')})`);
+
+test('첫 줄이 제목이 아니라 풀이의 한 문장이다', () => {
+  const t = _resultShareText(배우자궁, 'https://toss.im/x/abc');
+  const first = t.split('\n')[0];
+  assert.match(first, /^"/, `첫 줄이 인용이 아니다: ${first}`);
+  assert.doesNotMatch(first, /^\[/, '첫 줄이 아직 제목이다');
+  assert.match(first, /유금\(酉金\)/, '풀이의 알맹이가 첫 줄에 없다');
+  // 무엇을 본 것인지는 바로 아래에 남아 있어야 한다.
+  assert.match(t, /안도령의 배우자궁 풀이/, '무슨 풀이인지 사라졌다');
+});
+
+test('도입구는 걷어낸다', () => {
+  // "제가 기운을 살펴보니," 는 마주 앉아 들을 때는 좋지만 목록 첫 줄에서는 자리만 먹는다.
+  const { hook } = _pullQuote('제가 기운을 살펴보니, 배우자 자리에 유금이 앉아 있습니다. 다음 문장.');
+  assert.doesNotMatch(hook, /살펴보니/, '도입구가 남았다');
+  assert.match(hook, /^배우자 자리에/, '걷어내다 알맹이까지 잘랐다');
+});
+
+test('후크가 안 될 문장은 그냥 둔다', () => {
+  // 너무 짧으면 후크가 안 되고, 너무 길면 목록에서 잘린다.
+  assert.equal(_pullQuote('그렇습니다. 다음 문장이 이어집니다.').hook, '', '짧은 문장을 후크로 썼다');
+  assert.equal(_pullQuote(('가'.repeat(80) + '입니다. 뒤.')).hook, '', '너무 긴 문장을 후크로 썼다');
+  // 걷어내고 나면 남는 게 거의 없는 경우도 건드리지 않는다.
+  const r = _pullQuote('제가 살펴보니, 좋습니다. 뒤 문장.');
+  assert.ok(!r.hook || r.hook.includes('살펴보니'), '알맹이가 없는데 억지로 걷어냈다');
+});
+
+test('후크로 쓴 문장을 본문에서 한 번 더 쓰지 않는다', () => {
+  const t = _resultShareText(배우자궁, '');
+  const hook = t.split('\n')[0].replace(/^"|"$/g, '');
+  const body = t.slice(t.indexOf('\n'));
+  assert.ok(!body.includes(hook), '같은 문장이 두 번 나온다');
+});
+
 test('공유 글에 풀이 내용이 담긴다', () => {
   const t = _resultShareText(배우자궁, 'https://toss.im/x/abc');
   assert.match(t, /배우자궁 풀이/, '무엇을 본 것인지가 없다');
@@ -85,8 +123,13 @@ test('앱 링크는 맨 끝에 온다', () => {
 
 test('문단 사이 빈 줄을 살린다', () => {
   // 한 덩어리로 붙으면 메신저에서 읽기 어렵다.
-  const t = _resultShareText(배우자궁, '');
-  assert.match(t, /앉아 있습니다\.\n\n정재라 하는데/, '문단이 붙어 버렸다');
+  // 첫 문단은 후크로 떼어 가므로, 남은 문단끼리 붙지 않는지를 본다.
+  const 셋 = {
+    ...배우자궁,
+    body: ['첫 문단은 후크로 떠납니다.', '둘째 문단입니다.', '셋째 문단입니다.'].join('\n\n'),
+  };
+  const t = _resultShareText(셋, '');
+  assert.match(t, /둘째 문단입니다\.\n\n셋째 문단입니다\./, '문단이 붙어 버렸다');
 });
 
 test('부가 정보가 없는 콘텐츠도 문제없다', () => {
