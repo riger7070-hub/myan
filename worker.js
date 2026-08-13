@@ -1716,7 +1716,9 @@ export default {
       await ensureDBExt(env);
       return handleInviteAnswer(request, env, path.slice('/api/invite/'.length));
     }
-    if (path.startsWith('/i/') && method === 'GET') { await ensureDBExt(env); return handleInvitePage(request, env, path.slice(3)); }
+    // HEAD 도 받는다. 링크 미리보기를 만드는 쪽이 먼저 HEAD 를 던지는 경우가 있는데,
+    // 그때 엉뚱한 JSON 이 나가면 카톡에 미리보기가 안 붙는다.
+    if (path.startsWith('/i/') && (method === 'GET' || method === 'HEAD')) { await ensureDBExt(env); return handleInvitePage(request, env, path.slice(3)); }
     if (path === '/api/year-luck' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleYearLuck(request, env)); }
     if (path === '/api/direction' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDirection(request, env)); }
     if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
@@ -5872,6 +5874,7 @@ async function handleInvitePage(request, env, id) {
         out.classList.remove('hide');
         f.classList.add('hide');
         document.getElementById('title').textContent = '두 분의 결입니다';
+        document.title = '두 분의 결입니다 · 오늘운빨';
         var sub = document.querySelector('.sub'), note = document.querySelector('.note');
         if (sub) sub.remove();
         if (note) note.remove();
