@@ -1,9 +1,12 @@
-// 초대 페이지를 눈으로 보려고 띄운다. 실제 핸들러가 만든 HTML 그대로다.
+// 로그인 없이 열리는 화면들을 눈으로 보려고 띄운다. 실제 핸들러가 만든 HTML 그대로다.
+// 이 화면들은 미니앱 밖에서 돌아 번들도 빌드도 거치지 않으므로, 눈으로 한 번 봐야 한다.
 //   node tools/preview-invite.mjs   →  http://localhost:8799
 //
-// /        물어보는 화면
-// /done    답을 받은 뒤 화면 (스크립트가 그리는 결과를 미리 채워 둔 것)
-// /gone    지난 초대
+// /        궁합 초대 - 물어보는 화면 (열 때마다 새 초대를 만든다)
+// /done    궁합 초대 - 답을 받은 뒤 화면
+// /gone    궁합 초대 - 지난 초대
+// /tti     오늘의 띠 순위
+// /calc    무료 계산기 (/calc/samjae · /calc/sinsal · /calc/bonmyeong)
 
 import http from 'node:http';
 import { loadWorker } from '../test/load-worker.mjs';
@@ -11,6 +14,7 @@ import { createD1 } from '../test/d1-sqlite.mjs';
 
 const H = await loadWorker([
   'handleInvitePage', 'handleInviteCreate', 'handleInviteAnswer', 'createSessionToken',
+  'handleCalcHub', 'handleCalcPage', 'handleCalcApi', 'handleTtiPage',
 ]);
 
 const { db, DB } = createD1();
@@ -53,8 +57,30 @@ const 답한화면 = (await page((await mk()).id))
 
 const ROUTES = { '/': 물어보는화면, '/done': 답한화면, '/gone': 지난것 };
 
+const send = async (res, r) => {
+  res.writeHead(r.status, { 'Content-Type': r.headers.get('Content-Type') });
+  res.end(await r.text());
+};
+
 http.createServer(async (req, res) => {
   const path = req.url.split('?')[0];
+
+  // ── 로그인 없는 공개 페이지들 ──
+  if (path === '/tti') return send(res, H.handleTtiPage());
+  if (path === '/calc') return send(res, H.handleCalcHub());
+  if (path.startsWith('/calc/')) {
+    const p = H.handleCalcPage(path.slice('/calc/'.length));
+    if (p) return send(res, p);
+  }
+  if (req.method === 'POST' && path.startsWith('/api/calc/')) {
+    const body = await new Promise((ok) => {
+      let s = ''; req.on('data', (c) => { s += c; }); req.on('end', () => ok(s));
+    });
+    return send(res, await H.handleCalcApi(
+      new Request('https://x' + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      }), path.slice('/api/calc/'.length)));
+  }
 
   // 페이지 안의 스크립트가 실제로 부르는 자리. 진짜 핸들러에 그대로 넘긴다.
   if (req.method === 'POST' && path.startsWith('/api/invite/')) {

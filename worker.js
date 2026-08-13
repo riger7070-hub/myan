@@ -1704,6 +1704,22 @@ export default {
     if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
     if (path === '/api/naming' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNaming(request, env)); }
     if (path === '/api/intimacy' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleIntimacy(request, env)); }
+    // ── 무료 계산기 · 오늘의 띠 순위 (로그인 없는 공개 페이지) ──
+    // 검색해서 들어오는 사람이 앉을 자리다. AI 를 안 부르므로 몰려도 값이 안 든다.
+    if (path === '/robots.txt' && (method === 'GET' || method === 'HEAD')) return handleRobots();
+    if (path === '/sitemap.xml' && (method === 'GET' || method === 'HEAD')) return handleSitemap();
+    if (path === '/tti' && (method === 'GET' || method === 'HEAD')) return handleTtiPage();
+    if (path === '/calc' && (method === 'GET' || method === 'HEAD')) return handleCalcHub();
+    if (path.startsWith('/calc/') && (method === 'GET' || method === 'HEAD')) {
+      const page = handleCalcPage(path.slice('/calc/'.length));
+      if (page) return page;
+    }
+    if (path.startsWith('/api/calc/') && method === 'POST') {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const { success } = await env.RL_API.limit({ key: `calc:${ip}` });
+      if (!success) return cors(JSON.stringify({ error: { message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' } }), 429);
+      return handleCalcApi(request, path.slice('/api/calc/'.length));
+    }
     // ── 궁합 초대 링크 ──
     // /i/<id> 와 /api/invite/<id> 는 로그인 없이 열린다. 링크를 받은 사람은 계정이 없다.
     if (path === '/mini/api/invite' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleInviteCreate(request, env)); }
@@ -5603,6 +5619,381 @@ async function handleNaming(request, env) {
     if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
   }
+}
+
+// ════════════════════════════════════════════════════════════
+//  무료 계산기 · 오늘의 띠 순위 (공개 웹페이지)
+//
+//  사람들은 "삼재 계산", "내 신살", "본명궁"을 검색해서 들어온다. 그런데 지금은
+//  들어올 자리가 없다 — 앱을 깔아야만 볼 수 있으니 검색하던 사람은 그냥 떠난다.
+//
+//  그래서 로그인도 앱 설치도 없이 열리는 계산기를 둔다. AI 를 부르지 않고
+//  명리 표로만 계산하므로 사람이 몰려도 값이 들지 않는다. 여기서 답을 얻은 사람에게
+//  "그래서 이게 나한테 무슨 뜻인가"를 앱에서 풀어 준다고 안내한다.
+//
+//  ⚠️ 초대 페이지와 달리 여기는 **검색에 걸려야 한다**. noindex 를 붙이지 않는다.
+// ════════════════════════════════════════════════════════════
+
+const SITE = 'https://myan.riger7070.workers.dev';
+
+// 검색에 걸려야 하는 공개 페이지들. 사이트맵과 서로 잇는 링크가 여기서 나온다.
+const FREE_PAGES = [
+  { path: '/tti', label: '오늘의 띠 순위 보기', freq: 'daily', pri: '0.9' },
+  { path: '/calc/samjae', label: '삼재 계산기', freq: 'monthly', pri: '0.8' },
+  { path: '/calc/sinsal', label: '내 사주의 신살 보기', freq: 'monthly', pri: '0.8' },
+  { path: '/calc/bonmyeong', label: '본명궁 · 좋은 방위 찾기', freq: 'monthly', pri: '0.8' },
+  { path: '/calc', label: '무료 사주 계산기', freq: 'monthly', pri: '0.7' },
+];
+
+/**
+ * 검색 로봇에게 어디를 보고 어디를 보지 말지 알린다.
+ * ⚠️ /i/ 는 남의 생년월일을 받는 초대 자리다. 페이지에 noindex 를 붙여 두었지만
+ *    여기서도 한 번 더 막는다.
+ */
+function handleRobots() {
+  return new Response(
+    `User-agent: *\nAllow: /\nDisallow: /i/\nDisallow: /api/\nDisallow: /admin/\n\nSitemap: ${SITE}/sitemap.xml\n`,
+    { headers: { 'Content-Type': 'text/plain; charset=UTF-8', 'Cache-Control': 'public, max-age=86400' } });
+}
+
+function handleSitemap() {
+  const today = _kstToday();
+  const urls = [{ path: '/', freq: 'weekly', pri: '1.0' }, ...FREE_PAGES]
+    .map(p => `  <url><loc>${SITE}${p.path}</loc><lastmod>${today}</lastmod>` +
+              `<changefreq>${p.freq}</changefreq><priority>${p.pri}</priority></url>`)
+    .join('\n');
+  return new Response(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+    { headers: { 'Content-Type': 'application/xml; charset=UTF-8', 'Cache-Control': 'public, max-age=3600' } });
+}
+
+/** 공개 페이지 공통 뼈대. 검색에 걸리도록 제목·설명·정규주소를 갖춘다. */
+function _freePage({ title, desc, path, h1, lead, body, script = '' }) {
+  return new Response(`<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>${title}</title>
+<meta name="description" content="${desc}">
+<link rel="canonical" href="${SITE}${path}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:url" content="${SITE}${path}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#0d0d0f;color:#e8e4dc;
+       font-family:'Noto Serif KR',-apple-system,BlinkMacSystemFont,'Malgun Gothic',serif;
+       line-height:1.75;padding:32px 20px 64px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:460px}
+  .brand{display:block;text-align:center;letter-spacing:6px;color:#c9a96e;
+         font-size:0.8rem;margin-bottom:28px;text-decoration:none}
+  h1{font-size:1.4rem;font-weight:600;line-height:1.5;margin:0 0 10px}
+  h2{font-size:1rem;color:#c9a96e;margin:32px 0 10px;font-weight:600}
+  .lead{color:#8d8880;font-size:0.92rem;margin:0 0 26px}
+  label{display:block;font-size:0.8rem;color:#8d8880;margin:16px 0 6px;letter-spacing:1px}
+  .row{display:flex;gap:8px}
+  input,select{width:100%;padding:14px 12px;font-size:1rem;color:#e8e4dc;
+    background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.22);
+    border-radius:10px;font-family:inherit;appearance:none}
+  input:focus,select:focus{outline:none;border-color:#c9a96e}
+  button{width:100%;margin-top:24px;padding:16px;font-size:1rem;font-family:inherit;
+    color:#0d0d0f;background:#c9a96e;border:0;border-radius:10px;font-weight:700;cursor:pointer}
+  button:disabled{opacity:0.5}
+  button.ghost{background:transparent;color:#c9a96e;border:1px solid rgba(201,169,110,0.35)}
+  .err{margin-top:14px;color:#e08b7a;font-size:0.86rem}
+  .card{border:1px solid rgba(201,169,110,0.18);background:rgba(201,169,110,0.05);
+    border-radius:12px;padding:16px 18px;margin:12px 0}
+  .card b{color:#c9a96e;display:block;margin-bottom:4px;font-size:0.95rem}
+  .card p{margin:0;font-size:0.92rem;color:#bdb8b0}
+  .cta{display:block;text-align:center;margin-top:28px;padding:16px;
+    border:1px solid rgba(201,169,110,0.35);border-radius:10px;
+    color:#c9a96e;text-decoration:none;font-size:0.95rem}
+  .muted{color:#6f6a63;font-size:0.8rem;line-height:1.7;margin-top:24px}
+  .links{margin-top:32px;padding-top:20px;border-top:1px solid rgba(201,169,110,0.12)}
+  .links a{display:block;color:#8d8880;text-decoration:none;font-size:0.88rem;padding:7px 0}
+  .links a:hover{color:#c9a96e}
+  table{width:100%;border-collapse:collapse;font-size:0.92rem}
+  td{padding:11px 6px;border-bottom:1px solid rgba(201,169,110,0.1)}
+  td.r{color:#8d8880;width:2.4em}
+  td.s{text-align:right;color:#8d8880;font-size:0.84rem}
+  tr.me{background:rgba(201,169,110,0.1)}
+  tr.me td{color:#c9a96e}
+  .top td{color:#e8c98a}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="/">M ; Y 安</a>
+  <h1>${h1}</h1>
+  <p class="lead">${lead}</p>
+  ${body}
+  <div class="links">
+    ${FREE_PAGES.filter(p => p.path !== path)
+      .map(p => `<a href="${p.path}">${p.label}</a>`).join('\n    ')}
+  </div>
+</div>
+${script ? `<script>${script}</script>` : ''}
+</body>
+</html>`, {
+    headers: {
+      'Content-Type': 'text/html; charset=UTF-8',
+      'X-Content-Type-Options': 'nosniff',
+      // 계산 결과는 사람마다 다르지만 이 페이지 자체는 누구에게나 같다.
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+}
+
+/** 계산기 세 개가 공유하는 자바스크립트. 값을 모아 보내고 카드로 그린다. */
+const _CALC_JS = (kind, fields) => `
+(function () {
+  var f = document.getElementById('f'), go = document.getElementById('go'),
+      err = document.getElementById('err'), out = document.getElementById('out');
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    err.textContent = ''; go.disabled = true; go.textContent = '계산하는 중...';
+    var body = {};
+    ${fields.map(k => `body['${k}'] = document.getElementById('f-${k}').value;`).join('\n    ')}
+    fetch('/api/calc/${kind}', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error((res.j.error && res.j.error.message) || '잠시 후 다시 시도해 주세요.');
+        out.innerHTML = (res.j.cards || []).map(function (c) {
+          return '<div class="card"><b>' + esc(c.label) + '</b><p>' + esc(c.text) + '</p></div>';
+        }).join('') + '<a class="cta" href="/">이게 나에게 무슨 뜻인지 안도령에게 물어보기</a>';
+        out.classList.remove('hide');
+        out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      })
+      .catch(function (e2) { err.textContent = e2.message; })
+      .then(function () { go.disabled = false; go.textContent = '계산하기'; });
+  });
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+})();`;
+
+// 명리의 해는 1월 1일이 아니라 입춘에 바뀐다. 해만 받는 계산기에서는 이걸 말해 주지
+// 않으면 1·2월생이 조용히 틀린 답을 받아 간다.
+const _YEAR_ROW = (id, ph) => `<label>태어난 해</label>
+  <input id="f-${id}" type="number" inputmode="numeric" placeholder="${ph}" min="1900" max="${_kstYear()}" required>
+  <p class="muted" style="margin-top:8px">입춘(2월 4일 무렵) 전에 태어나셨다면 한 해 앞을 넣어 주세요.
+    명리에서 해가 바뀌는 자리는 1월 1일이 아니라 입춘입니다.</p>`;
+
+function handleCalcHub() {
+  return _freePage({
+    title: '무료 사주 계산기 · 삼재 · 신살 · 본명궁 | 오늘운빨',
+    desc: '가입 없이 바로 씁니다. 태어난 해만 넣으면 삼재가 언제 드는지, 내 사주에 어떤 신살이 있는지, 본명궁과 좋은 방위가 어디인지 계산해 드립니다.',
+    path: '/calc',
+    h1: '무료 사주 계산기',
+    lead: '가입도 설치도 필요 없습니다. 명리 표 그대로 계산합니다.',
+    body: `
+    <h2>무엇을 계산해 드릴까요</h2>
+    <div class="card"><b>삼재 계산기</b><p>내 띠에 삼재가 드는 세 해가 언제인지, 지금이 그 안인지 봅니다.</p></div>
+    <div class="card"><b>신살 풀이</b><p>도화살 · 역마살 · 화개살 · 백호살 · 괴강살 · 양인살 · 천을귀인을 찾습니다.</p></div>
+    <div class="card"><b>본명궁과 방위</b><p>태어난 해와 성별로 본명궁을 내고, 어느 쪽이 나에게 좋은 방위인지 봅니다.</p></div>
+    <p class="muted">계산은 명리 표를 그대로 따릅니다. 다만 표는 무엇이 있는지만 알려 줄 뿐,
+      그게 내 삶에서 어떻게 나타나는지는 사주 전체를 함께 봐야 합니다.</p>`,
+  });
+}
+
+function handleCalcPage(kind) {
+  const P = {
+    samjae: {
+      title: '삼재 계산기 · 내 삼재는 언제인가 | 오늘운빨',
+      desc: '태어난 해만 넣으면 삼재가 드는 세 해(들삼재·눌삼재·날삼재)를 바로 알려 드립니다. 가입 없이 무료입니다.',
+      h1: '삼재 계산기',
+      lead: '태어난 해만 넣으면 됩니다. 삼재가 드는 세 해와, 지금이 그 안인지 알려 드립니다.',
+      form: _YEAR_ROW('year', '1990'),
+      fields: ['year'],
+      note: '삼재는 태어난 해의 띠가 속한 삼합국마다 정해져 있습니다. 아홉 해가 지나면 세 해가 들고, 들삼재 · 눌삼재 · 날삼재 순으로 지나갑니다. 나쁜 일이 정해져 있다는 뜻이 아니라, 벌이던 일을 크게 늘리기보다 지키는 편이 낫다는 자리입니다.',
+    },
+    sinsal: {
+      title: '신살 풀이 계산기 · 도화살 역마살 백호살 | 오늘운빨',
+      desc: '생년월일시를 넣으면 사주에 든 신살을 찾아 드립니다. 도화살, 역마살, 화개살, 백호살, 괴강살, 양인살, 천을귀인. 가입 없이 무료입니다.',
+      h1: '내 사주의 신살',
+      lead: '생년월일을 넣으면 사주 네 기둥에 어떤 신살이 앉아 있는지 찾아 드립니다.',
+      form: `<label>생년월일</label>
+        <div class="row">
+          <input id="f-year" type="number" inputmode="numeric" placeholder="1990" min="1900" max="${_kstYear()}" required>
+          <input id="f-month" type="number" inputmode="numeric" placeholder="5" min="1" max="12" required>
+          <input id="f-day" type="number" inputmode="numeric" placeholder="15" min="1" max="31" required>
+        </div>
+        <label>태어난 시 (모르면 비워 두세요)</label>
+        <select id="f-hour">
+          <option value="">모름</option>
+          <option>자시</option><option>축시</option><option>인시</option><option>묘시</option>
+          <option>진시</option><option>사시</option><option>오시</option><option>미시</option>
+          <option>신시</option><option>유시</option><option>술시</option><option>해시</option>
+        </select>`,
+      fields: ['year', 'month', 'day', 'hour'],
+      note: '신살은 사주에서 눈에 띄는 자리를 짚어 주는 이름표입니다. 살(殺)이라는 글자 때문에 나쁜 것으로만 읽히지만, 도화는 사람을 끄는 힘이고 역마는 움직여야 풀리는 결입니다. 좋고 나쁨보다 어떻게 쓰느냐의 문제입니다.',
+    },
+    bonmyeong: {
+      title: '본명궁 계산기 · 나에게 좋은 방위 찾기 | 오늘운빨',
+      desc: '태어난 해와 성별로 본명궁을 내고, 동사택·서사택과 나에게 좋은 방위 넷을 알려 드립니다. 가입 없이 무료입니다.',
+      h1: '본명궁과 좋은 방위',
+      lead: '집을 고르거나 책상 방향을 정할 때 봅니다. 태어난 해와 성별이면 됩니다.',
+      form: `${_YEAR_ROW('year', '1990')}
+        <label>성별</label>
+        <select id="f-gender"><option value="M">남자</option><option value="F">여자</option></select>`,
+      fields: ['year', 'gender'],
+      note: '본명궁은 태어난 해로 정해지는 아홉 자리 중 하나이고, 팔택(八宅)은 그 자리에서 본 여덟 방위의 뜻입니다. 동사택과 서사택은 집을 고를 때 흔히 쓰는 구분입니다.',
+    },
+  }[kind];
+  if (!P) return null;
+
+  return _freePage({
+    title: P.title,
+    desc: P.desc,
+    path: '/calc/' + kind,
+    h1: P.h1,
+    lead: P.lead,
+    body: `
+    <form id="f">${P.form}
+      <button type="submit" id="go">계산하기</button>
+      <div class="err" id="err"></div>
+    </form>
+    <div id="out" class="hide"></div>
+    <h2>알아 두면 좋은 것</h2>
+    <p class="muted">${P.note}</p>`,
+    script: _CALC_JS(kind, P.fields),
+  });
+}
+
+/** 계산기가 부르는 자리. 로그인도 AI 도 없다. */
+async function handleCalcApi(request, kind) {
+  const b = await request.json().catch(() => ({}));
+  const year = parseInt(b.year, 10);
+  const bad = (m) => cors(JSON.stringify({ error: { message: m } }), 400);
+  if (!(year >= 1900 && year <= _kstYear())) return bad('태어난 해를 다시 확인해 주세요.');
+
+  if (kind === 'samjae') {
+    // ⚠️ 6월 1일로 세운다. 명리의 해는 1월 1일이 아니라 입춘(2월 4일 무렵)에 바뀌므로,
+    // 1월 1일을 넣으면 모두가 앞 해의 띠로 계산된다 — 1990년생이 뱀띠가 되어
+    // 삼재가 2028년이 아닌 2031년으로 나왔다. 입춘 전 출생은 페이지에서 안내한다.
+    const saju = computeSaju(year, 6, 1, '');
+    const s = saju && computeSamjae(saju.yp?.[1]);
+    if (!s) return bad('계산하지 못했습니다.');
+    const cards = [{
+      label: s.inSamjae ? `지금 삼재입니다 (${s.now}년)` : '지금은 삼재가 아닙니다',
+      text: s.inSamjae
+        ? '벌이던 일을 크게 늘리기보다 지키는 편이 낫다고 봅니다. 정해진 화가 있다는 뜻은 아닙니다.'
+        : `다음 삼재는 ${s.years[0].year}년부터입니다.`,
+    }];
+    for (const y of s.years) cards.push({ label: `${y.year}년`, text: y.kind });
+    return cors(JSON.stringify({ ok: true, cards }), 200);
+  }
+
+  if (kind === 'bonmyeong') {
+    // computeBonmyeong 은 궁 번호만 준다. 방위 표까지 붙이는 것은 computeDirection 이다.
+    const g = b.gender === 'F' ? 'F' : 'M';
+    const r = computeDirection(year, g);
+    if (!r) return bad('계산하지 못했습니다.');
+    const cards = [
+      { label: `본명궁 ${r.gungName}`, text: `${r.group}에 듭니다.` },
+      { label: '좋은 방위', text: r.good.map(x => `${x.dir}쪽 ${x.kind}(${x.mean})`).join(', ') },
+      { label: '피하면 좋은 방위', text: r.bad.map(x => `${x.dir}쪽 ${x.kind}(${x.mean})`).join(', ') },
+    ];
+    return cors(JSON.stringify({ ok: true, cards }), 200);
+  }
+
+  if (kind === 'sinsal') {
+    const month = parseInt(b.month, 10), day = parseInt(b.day, 10);
+    if (!(month >= 1 && month <= 12) || !(day >= 1 && day <= 31)) {
+      return bad('생년월일을 다시 확인해 주세요.');
+    }
+    const saju = computeSaju(year, month, day, String(b.hour || '').slice(0, 12));
+    const r = saju && computeSinsal(saju);
+    if (!r) return bad('계산하지 못했습니다.');
+    const cards = r.hits.length
+      ? r.hits.map(h => ({ label: h.name, text: `${h.where.join(' · ')}주에 있습니다. ${h.text || ''}`.trim() }))
+      : [{ label: '두드러진 신살이 없습니다', text: '없는 편이 밋밋한 것은 아닙니다. 치우침 없이 고른 사주로 봅니다.' }];
+    if (r.samjae) {
+      cards.push({
+        label: r.samjae.inSamjae ? '지금 삼재입니다' : '지금은 삼재가 아닙니다',
+        text: r.samjae.years.map(y => `${y.year}년 ${y.kind}`).join(', '),
+      });
+    }
+    return cors(JSON.stringify({ ok: true, cards }), 200);
+  }
+
+  return bad('없는 계산입니다.');
+}
+
+/**
+ * 오늘의 띠 순위. 입력이 없으므로 순위를 페이지에 미리 박아 둔다 —
+ * 열자마자 보이고, 검색 엔진도 그대로 읽어 간다.
+ *
+ * 태어난 해로 내 띠를 찾는 것은 (해 - 4) % 12 라 계산이 필요 없다. 앱 안에서 끝낸다.
+ */
+function handleTtiPage() {
+  const today = _kstToday();
+  const r = computeTtiRanking(today);
+  if (!r) return _freePage({
+    title: '오늘의 띠 순위 | 오늘운빨', desc: '오늘의 띠 순위입니다.',
+    path: '/tti', h1: '오늘의 띠 순위', lead: '오늘은 순위를 낼 수 없습니다.', body: '',
+  });
+
+  const [y, m, d] = today.split('-');
+  const rows = r.rows.map(x => `<tr data-b="${x.branch}"${x.rank <= 3 ? ' class="top"' : ''}>
+      <td class="r">${x.rank}</td><td>${x.name}띠</td>
+      <td class="s">${x.why.length ? escapeHtml(x.why.join(' · ')) : '무난'}</td>
+    </tr>`).join('');
+
+  const 일등 = r.rows[0].name;
+  return _freePage({
+    title: `오늘의 띠 순위 (${m}월 ${d}일) · 1위는 ${일등}띠 | 오늘운빨`,
+    desc: `${y}년 ${m}월 ${d}일 띠별 운세 순위입니다. 오늘 일진과 열두 띠가 맺는 관계로 냈습니다. 오늘은 ${일등}띠가 1위입니다.`,
+    path: '/tti',
+    h1: `오늘의 띠 순위`,
+    lead: `${m}월 ${d}일 · 오늘 일진(${r.dayBranch})과 열두 띠가 맺는 관계로 냈습니다. 뽑기가 아니라 계산이라 누가 보든 같습니다.`,
+    body: `
+    <label>내 띠를 짚어 드릴까요</label>
+    <input id="me" type="number" inputmode="numeric" placeholder="태어난 해 (예: 1990)" min="1900" max="${_kstYear()}">
+    <table><tbody>${rows}</tbody></table>
+    <button class="ghost" id="share" style="margin-top:22px">이 순위 공유하기</button>
+    <a class="cta" href="/">내 사주로 오늘 하루를 자세히 보기</a>
+    <h2>순위는 어떻게 나오나요</h2>
+    <p class="muted">그날의 일진 지지와 열두 띠 사이의 삼합 · 육합 · 충 · 형을 따져 점수를 냅니다.
+      무작위가 아니라 날짜의 함수라, 같은 날 다시 열어도 순위가 같습니다.
+      다만 띠 하나로 하루가 정해지지는 않습니다. 같은 띠 안에서도 사주는 저마다 다릅니다.</p>`,
+    script: `
+(function () {
+  var JJ = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+  var me = document.getElementById('me');
+  me.addEventListener('input', function () {
+    var y = parseInt(me.value, 10);
+    var rows = document.querySelectorAll('tr[data-b]');
+    for (var i = 0; i < rows.length; i++) rows[i].classList.remove('me');
+    if (!(y >= 1900 && y <= ${_kstYear()})) return;
+    var b = JJ[((y - 4) % 12 + 12) % 12];
+    var row = document.querySelector('tr[data-b="' + b + '"]');
+    if (row) { row.classList.add('me'); row.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  });
+  document.getElementById('share').addEventListener('click', function () {
+    var row = document.querySelector('tr.me');
+    var t = row
+      ? '오늘 ' + row.children[1].textContent + ' 운빨 ' + row.children[0].textContent + '위'
+      : '오늘의 띠 순위 1위는 ${일등}띠';
+    var url = '${SITE}/tti';
+    if (navigator.share) { navigator.share({ text: t, url: url }).catch(function () {}); return; }
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(t + '\\n' + url).then(function () {
+        var b = document.getElementById('share');
+        b.textContent = '주소를 복사했어요'; setTimeout(function () { b.textContent = '이 순위 공유하기'; }, 2000);
+      });
+    }
+  });
+})();`,
+  });
 }
 
 // ════════════════════════════════════════════════════════════
