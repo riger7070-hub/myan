@@ -99,3 +99,25 @@ test('인트로에서 쓰는 아이콘이 실제로 있다', () => {
   const missing = [...new Set(used)].filter(n => !new RegExp(`\\b${n}\\s*:`).test(icons));
   assert.deepEqual(missing, [], `icons.js 에 없는 아이콘: ${missing.join(', ')}`);
 });
+
+test('앱을 켤 때는 오래 기다리지 않는다', () => {
+  // 신호가 약한 곳(지하철·엘리베이터)에서 켜면 첫 화면에 1분 넘게 갇혔다.
+  // 확인이 안 되면 그냥 소개 화면을 보여주는 편이 낫다.
+  assert.match(SRC, /const BOOT_TIMEOUT = (\d+)/, '부팅용 짧은 시간제한이 없다');
+  const boot = +SRC.match(/const BOOT_TIMEOUT = (\d+)/)[1];
+  const normal = +SRC.match(/const API_TIMEOUT = (\d+)/)[1];
+  assert.ok(boot <= 10000, `부팅 대기가 ${boot}ms 나 된다`);
+  assert.ok(boot < normal, '부팅 대기가 일반 호출보다 짧지 않다');
+  assert.match(SRC, /api\('\/mini\/api\/me', \{ timeoutMs: BOOT_TIMEOUT \}\)/,
+    '켤 때 하는 확인에 짧은 시간제한을 안 걸었다');
+});
+
+test('잠깐 끊긴 것 때문에 세션을 버리지 않는다', () => {
+  // 여기서 지우면 신호가 잠깐 나빴다는 이유로 멀쩡한 사람을 다시 로그인시킨다.
+  const boot = SRC.match(/async function boot\(\)[\s\S]*?\n\}/)[0];
+  assert.match(boot, /if \(e\.status === 401\) \{ localStorage\.removeItem/,
+    '401 일 때만 세션을 지우는 조건이 없다');
+  const catchBlock = boot.slice(boot.indexOf('catch'));
+  assert.equal((catchBlock.match(/removeItem/g) || []).length, 1,
+    '401 이 아닌데도 세션을 지우는 곳이 있다');
+});

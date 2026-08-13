@@ -90,7 +90,12 @@ const COIN = `<span class="coin-ic">${icon('yeopjeon')}</span>`;
 
 // ── 서버 호출 ──────────────────────────────────────────────
 
-async function api(path, { method = 'GET', body, auth = true } = {}) {
+// 풀이는 오래 걸린다(AI 가 글을 쓴다). 그래서 기본은 넉넉히 잡는다.
+// 다만 앱을 켜자마자 하는 확인처럼 **기다릴 이유가 없는** 호출은 짧게 끊는다.
+const API_TIMEOUT = 90000;
+const BOOT_TIMEOUT = 8000;
+
+async function api(path, { method = 'GET', body, auth = true, timeoutMs = API_TIMEOUT } = {}) {
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
   if (auth && state.session) headers.Authorization = `Bearer ${state.session}`;
@@ -99,7 +104,7 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
   // 응답이 영영 안 오면 로딩 화면에 갇힌다. 실제로 그런 신고가 있었다 —
   // 무엇이 잘못됐는지도 모른 채 기다리게 두느니 끊고 알려주는 게 낫다.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 90000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     res = await fetch(API + path, {
       method, headers, signal: ctrl.signal,
@@ -177,9 +182,12 @@ async function showSplash() {
 async function boot() {
   if (state.session) {
     try {
-      const me = await api('/mini/api/me');
+      // ⚠️ 여기서는 짧게 끊는다. 기본값(90초)으로 두면 지하철이나 엘리베이터처럼
+      // 신호가 약한 곳에서 앱을 켰을 때 첫 화면에 1분 넘게 갇힌다. 사용자는
+      // 앱이 죽은 줄 안다. 확인이 안 되면 그냥 소개 화면을 보여주는 편이 낫다.
+      const me = await api('/mini/api/me', { timeoutMs: BOOT_TIMEOUT });
       state.profile = me.profile;
-    state.noAds = !!me.noAds;
+      state.noAds = !!me.noAds;
       state.tokens = me.tokens;
       // 결제는 됐는데 지급 직전에 앱이 꺼진 주문을 여기서 마저 처리한다.
       // 이게 없으면 사용자는 돈만 내고 엽전을 못 받는다.
@@ -187,7 +195,9 @@ async function boot() {
       go(state.profile?.birthYear ? 'home' : 'profile');
       return;
     } catch (e) {
-      // 세션 만료(401)면 지우고 로그인부터. 그 외 오류는 네트워크 문제일 수 있어 유지한다.
+      // 세션 만료(401)면 지운다. 그 외(네트워크·시간초과)는 **세션을 남겨 둔다** —
+      // 신호가 돌아온 다음 실행에서 그대로 이어진다. 여기서 지워 버리면
+      // 잠깐 끊긴 것 때문에 멀쩡한 사람을 다시 로그인시키게 된다.
       if (e.status === 401) { localStorage.removeItem(SESSION_KEY); state.session = ''; }
     }
   }
