@@ -191,7 +191,8 @@ async function boot() {
       if (e.status === 401) { localStorage.removeItem(SESSION_KEY); state.session = ''; }
     }
   }
-  go('login');
+  // 로그인 전에 반드시 인트로를 거친다(심사 반려 사유였다).
+  go('intro');
 }
 
 /**
@@ -1290,6 +1291,66 @@ function render() {
   state.toast = '';
 
   switch (state.screen) {
+    // ⚠️ 로그인보다 이 화면이 먼저다.
+    //
+    // 심사에서 한 번 반려됐다: "서비스 설명 없이 즉시 토스 로그인을 유도하고 있어
+    // 인트로 페이지 추가가 필요해요." 처음 온 사람은 이게 무슨 앱인지도 모르는 채
+    // 계정을 내주게 되는 셈이었다. 무엇을 해 주는 곳인지 먼저 보여주고,
+    // 로그인은 그다음 화면에서 받는다.
+    case 'intro':
+      html = `
+        <div class="brand"><h1>MY;安</h1><p>오늘운빨</p></div>
+
+        <section class="hero">
+          <div class="hero-sky"></div>
+          <div class="hero-text">
+            <p class="hero-date">명리학으로 보는 하루</p>
+            <h2 class="hero-hi">안도령이<br>오늘의 기운을 풀어 드려요</h2>
+          </div>
+        </section>
+
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('saju')}</span>무엇을 볼 수 있나요<i class="rule"></i></h3>
+          ${/* 홈의 타일과 같은 모양이되 누르는 것이 아니다(.show).
+                여기서 눌러 봐야 로그인 화면으로 튕길 뿐이라, 손가락을 부르지 않는다. */''}
+          <div class="tiles">
+            ${[
+              ['today', '오늘의 기운', '그날 일진과 내 사주를 함께 봅니다'],
+              ['saju', '사주 풀이', '타고난 네 기둥을 읽습니다'],
+              ['compat', '궁합', '두 사람의 결이 어떻게 맞물리는지'],
+              ['takil', '택일 · 신살 · 재물운', '스무 가지가 넘습니다'],
+            ].map(([ic, label, desc]) => `
+              <div class="tile show">
+                <span class="t-icon">${icon(ic)}</span>
+                <span class="t-label">${label}</span>
+                <span class="t-cost">${desc}</span>
+              </div>`).join('')}
+          </div>
+        </section>
+
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('yeopjeon')}</span>엽전으로 봅니다<i class="rule"></i></h3>
+          <div class="card">
+            <p class="muted">풀이 하나에 ${COIN}엽전이 듭니다.
+              출석하거나, 오행 퀴즈를 풀거나, 안도령을 터뜨리면
+              날마다 무료로 받을 수 있어요. 모자라면 충전할 수도 있습니다.</p>
+          </div>
+        </section>
+
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('lock')}</span>왜 로그인이 필요한가요<i class="rule"></i></h3>
+          <div class="card">
+            <p class="muted">받은 풀이와 엽전을 다음에도 그대로 쓰시려면 계정이 필요합니다.
+              토스 계정을 그대로 쓰므로 따로 가입하거나 비밀번호를 만들지 않아요.
+              생년월일은 사주를 세우는 데에만 씁니다.</p>
+          </div>
+        </section>
+
+        <button class="btn" id="btn-intro-next">시작하기</button>
+        <div class="ai-notice">${AI_NOTICE}</div>
+        ${FOOTER}`;
+      break;
+
     case 'login':
       html = `
         <div class="brand"><h1>MY;安</h1><p>사주와 오늘의 기운이 만나는 자리</p></div>
@@ -1300,6 +1361,7 @@ function render() {
             ${state.busy ? '연결 중…' : '토스로 로그인'}
           </button>
           ${err}
+          <button class="btn ghost sm" id="btn-login-back" style="margin-top:10px">다시 살펴보기</button>
         </div>
         <div class="ai-notice">${AI_NOTICE}</div>
         ${FOOTER}`;
@@ -1936,6 +1998,9 @@ function bind() {
     Object.assign(state, { session: '', profile: null, tokens: 0, history: [], result: null, error: '' });
     go('login');
   });
+  // 인트로 → 로그인. 이 순서를 지키는 것이 심사 조건이다.
+  on('btn-intro-next', () => { state.error = ''; go('login'); });
+  on('btn-login-back', () => { state.error = ''; go('intro'); });
   on('btn-menu', () => { state.menu = !state.menu; render(); });
   on('btn-retry-products', loadProducts);
   on('btn-exit-yes', closeApp);
