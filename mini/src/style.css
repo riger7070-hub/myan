@@ -388,6 +388,21 @@ h2 { font-size: 1.12rem; font-weight: 600; color: var(--gold-light); margin-bott
 /* 무료는 눈에 띄어야 한다 — 처음 온 사람이 부담 없이 누를 자리다. */
 .t-cost.free { color: var(--gold); opacity: 0.9; }
 
+/* ── 첫 구매 할인 ──
+   할인가만 덩그러니 있으면 그게 싼 값인지 알 길이 없다. 정가를 그어서 나란히 둔다.
+   금·먹 팔레트 밖으로 나가지 않는다 — 붉은 세일 딱지를 붙이면 이 화면만 싸구려가 된다. */
+.t-was {
+  color: var(--text-dim); opacity: 0.55; margin-right: 6px;
+  text-decoration-thickness: 1px;
+}
+.t-off {
+  margin-left: 7px; padding: 1px 6px; border-radius: 5px;
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0;
+  color: var(--gold); background: rgba(201, 169, 110, 0.14);
+  border: 1px solid rgba(201, 169, 110, 0.3);
+  vertical-align: middle; white-space: nowrap;
+}
+
 /* ── 카드 ── */
 .card {
   background: var(--bg-soft); border: 1px solid var(--line);

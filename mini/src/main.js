@@ -490,6 +490,25 @@ async function retry(fn, times = 3, gapMs = 500) {
   throw last;
 }
 
+/**
+ * 지금 이 사람이 할인 중인지 알아낸다.
+ *
+ * 콘솔에서 거는 할인(예: 결제 이력이 없는 사람에게 첫 구매 반값)은 사람마다 다르게
+ * 적용되고, 기간이 끝나면 저절로 사라진다. 그래서 앱에 "50% 할인" 이라고 적어 두면
+ * 안 된다 - 기간이 지나도 그 글자만 남고, 할인 대상이 아닌 사람에게도 보인다.
+ *
+ * SDK 가 주는 값(이 사람이 실제로 낼 돈)과 서버가 아는 정가를 견주기만 한다.
+ * 할인이 끝나면 두 값이 같아지므로 표시도 저절로 없어진다.
+ */
+function _discountOf(displayAmount, listed) {
+  const paid = Number(String(displayAmount ?? '').replace(/[^\d]/g, ''));
+  if (!(paid > 0) || !(listed > 0) || paid >= listed) return {};
+  const off = Math.round((1 - paid / listed) * 100);
+  // 1~2% 는 반올림이나 통화 표기 차이일 수 있다. 그런 걸로 "할인" 이라 떠들지 않는다.
+  if (off < 5 || off > 95) return {};
+  return { listPrice: listed.toLocaleString('ko-KR') + '원', off };
+}
+
 async function loadProducts() {
   state.catalogLoading = true;
   state.catalogError = '';
@@ -518,12 +537,16 @@ async function loadProducts() {
       return r;
     }, 4, 600);
     const products = res?.products || [];
-    state.catalog = products.map(p => ({
-      sku: p.sku,
-      label: p.displayName || sellable.get(p.sku)?.label || p.sku,
-      price: p.displayAmount || '',
-      known: sellable.has(p.sku),
-    }));
+    state.catalog = products.map(p => {
+      const listed = sellable.get(p.sku)?.amount || 0;
+      return {
+        sku: p.sku,
+        label: p.displayName || sellable.get(p.sku)?.label || p.sku,
+        price: p.displayAmount || '',
+        known: sellable.has(p.sku),
+        ..._discountOf(p.displayAmount, listed),
+      };
+    });
   } catch (e) {
     // 화면에는 "잠시 뒤 다시" 만 보여준다. SDK 내부 사정을 사용자가 읽을 이유가 없고,
     // 붉은 글씨는 살 수 있는데도 못 사는 줄 알게 만든다. 원인은 콘솔에 남긴다.
@@ -1679,11 +1702,16 @@ function render() {
               <div class="skel-line w40"></div></div>`).join('')
           : list.map(p => `
             <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
-              <span class="t-label">${esc(p.label)}</span>
+              <span class="t-label">${esc(p.label)}${p.off
+                ? `<span class="t-off">${p.off}% 할인</span>` : ''}</span>
               <span class="t-cost">${p.known === false
                 ? '준비 중'
-                : esc(p.price || '토스로 결제')}</span>
+                : `${p.off ? `<s class="t-was">${esc(p.listPrice)}</s>` : ''}${esc(p.price || '토스로 결제')}`}</span>
             </button>`).join('')}
+        ${/* 할인은 기간이 정해져 있고 사람마다 다르다. 그래서 이 줄도 값에서 끌어낸다 -
+              할인이 끝나면 두 값이 같아져 이 줄 자체가 사라진다. */''}
+        ${list.some(p => p.off) ? `<p class="muted small" style="text-align:center;margin:4px 0 12px">
+          지금은 첫 구매 할인 중이에요.</p>` : ''}
         ${/* 못 불러왔을 때. 사용자는 SDK 사정을 알 필요가 없다 —
               무엇을 하면 되는지만 담담히 적고, 자세한 원인은 콘솔에만 남긴다. */''}
         ${!state.catalogLoading && !list.length ? `<div class="card">
