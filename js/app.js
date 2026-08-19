@@ -778,9 +778,37 @@ function addLoader() {
 // ══════════════════════════════════════════
 const minDelay = (ms) => new Promise(r => setTimeout(r, ms));
 
+// 값이 큰 풀이일수록 오래 뜸을 들인다. 1토큰짜리와 3토큰짜리가 같은 속도로 나오면
+// 비싼 쪽이 그만큼 가벼워 보인다. 어디까지나 **최소**라, 실제 호출이 더 걸리면
+// 그대로 기다린다(여기서 더 늘리지 않는다). 그래서 느린 사람에게는 아무 영향이 없고,
+// 캐시가 즉시 답하는 콘텐츠에서만 실제로 작동한다.
+//
+// 바닥이 5초가 아니라 7.5초인 이유: 위 연출(oracle-beat)의 마지막 장면이 7.2초에
+// 시작한다. 그보다 먼저 닫으면 기둥을 세우다 만 채로 화면이 바뀐다. 연출 일정을
+// 손대면 이 값도 같이 봐야 한다.
+//
+// ⚠️ 미니앱에도 같은 장치가 있지만 상수가 다르다(mini/src/main.js 의 readMinMs).
+// 그쪽은 연출이 정해진 순서가 아니라 계속 도는 애니메이션이라 바닥이 더 낮다.
+// **일부러 다른 값이니 맞추려 들지 말 것.**
+const READ_MIN_BASE_MS     = 5000;    // 어떤 풀이든 최소 5초
+const READ_MIN_PER_COST_MS = 1200;    // 토큰 하나당 더 얹는 시간
+const READ_MIN_CAP_MS      = 12000;   // 아무리 비싸도 여기까지
+const readMinMs = (cost = 0) => Math.min(
+  READ_MIN_CAP_MS,
+  READ_MIN_BASE_MS + Math.max(0, Number(cost) || 0) * READ_MIN_PER_COST_MS,
+);
+
+// 전체화면 신탁 연출(openOracleOverlay)만 바닥이 더 높다. 마지막 장면이 7.2초에
+// 시작하므로 그보다 먼저 닫으면 기둥을 세우다 만 채로 화면이 바뀐다. 기울기는 위와 같다.
+const ORACLE_MIN_BASE_MS = 7500;
+const oracleMinMs = (cost = 0) => Math.min(
+  READ_MIN_CAP_MS,
+  ORACLE_MIN_BASE_MS + Math.max(0, Number(cost) || 0) * READ_MIN_PER_COST_MS,
+);
+
 // apiPromise를 넘기면: 최소 6초 연출 + API 응답을 함께 기다린 뒤 resolve/reject.
 // contained:true + target 지정 시 전체화면이 아닌 해당 요소 내부에 축소 렌더(상세 풀이 모달용).
-function openOracleOverlay({ apiPromise, contained = false, target = null } = {}) {
+function openOracleOverlay({ apiPromise, contained = false, target = null, cost = 0 } = {}) {
   const t = getT();
   const langNow = getLang();
   const allMsgs = _LOAD_MSGS[langNow] || _LOAD_MSGS.ko;
@@ -883,7 +911,7 @@ function openOracleOverlay({ apiPromise, contained = false, target = null } = {}
   }, 1800);
 
   // ⏱️ 실제 프로그레스 바 (0% → 100%)
-  const MIN_MS = 12000;
+  const MIN_MS = oracleMinMs(cost);
   const started = Date.now();
   const progressBar = wrap.querySelector('.oracle-loop-bar');
   let progressInterval;
@@ -1259,7 +1287,7 @@ async function send() {
   addBubble(txt, 'user'); inp.value = '';
   hist.push({role:'user', parts:[{text:processedTxt}]});
   const loader = isFirstTurn ? null : addLoader();
-  const oracleReady = isFirstTurn ? openOracleOverlay({ apiPromise: callGemini(trimmedHist()) }) : null;
+  const oracleReady = isFirstTurn ? openOracleOverlay({ apiPromise: callGemini(trimmedHist()), cost: mode === 'duo' ? 2 : 1 }) : null;
 
   try {
     const data = isFirstTurn ? await oracleReady : await callGemini(trimmedHist());
@@ -4556,7 +4584,7 @@ async function submitSajuInput(m) {
     });
 
   try {
-    const data = await openOracleOverlay({ apiPromise });
+    const data = await openOracleOverlay({ apiPromise, cost: m === 'duo' ? 2 : 1 });
     _lastSaju = { mode:m, p1, p2, dayElem: data.dayElem };
     renderSajuResult(data, m);
   } catch(e) {
@@ -4662,7 +4690,7 @@ async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
   }).then(r => r.json());
 
   try {
-    const data = await openOracleOverlay({ apiPromise, contained: true, target: '#detail-loading' });
+    const data = await openOracleOverlay({ apiPromise, contained: true, target: '#detail-loading', cost: 2 });
     const loadEl = document.getElementById('detail-loading');
     const contEl = document.getElementById('detail-content');
     if (loadEl) loadEl.style.display = 'none';
@@ -4830,7 +4858,7 @@ async function _tarotPick(idx) {
   if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.tarotShuffling || '카드를 섞는 중...'; }
 
   const started = Date.now();
-  const MIN_MS = 1800; // 오라클 연출보다 훨씬 짧게 — 재미 콘텐츠는 즉각적인 만족감이 중요
+  const MIN_MS = readMinMs(1); // 오라클 연출보다 훨씬 짧게 — 재미 콘텐츠는 즉각적인 만족감이 중요
   try {
     const res = await fetch('/api/tarot-draw', {
       method: 'POST',
@@ -4935,7 +4963,7 @@ async function openAstroTransit() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/astro-transit', {
       method: 'POST',
@@ -5087,7 +5115,7 @@ async function openAuspiciousDays() {
     if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.takilLoading; }
 
     const started = Date.now();
-    const MIN_MS = 1500;
+    const MIN_MS = readMinMs(2);
     try {
       const res = await fetch('/api/auspicious-days', {
         method: 'POST',
@@ -5202,7 +5230,7 @@ async function openDaeun() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(6);
   try {
     const res = await fetch('/api/daeun', {
       method: 'POST',
@@ -5344,7 +5372,7 @@ async function openNameReading() {
     if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.nameLoading; }
 
     const started = Date.now();
-    const MIN_MS = 1500;
+    const MIN_MS = readMinMs(4);
     try {
       const res = await fetch('/api/name-reading', {
         method: 'POST',
@@ -5499,7 +5527,7 @@ async function openCompatTiming() {
     if (statusEl) { statusEl.style.display = ''; statusEl.textContent = t.ctLoading; }
 
     const started = Date.now();
-    const MIN_MS = 1500;
+    const MIN_MS = readMinMs(6);
     try {
       const res = await fetch('/api/compat-timing', {
         method: 'POST',
@@ -5591,7 +5619,7 @@ async function openZodiacFortune() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/zodiac-fortune', {
       method: 'POST',
@@ -5655,7 +5683,7 @@ async function openLuckyPicks() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/lucky-picks', {
       method: 'POST',
@@ -5779,7 +5807,7 @@ async function _typeTestPickPartner(partnerType) {
   areaEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.typeCompatLoading || '궁합을 분석하는 중...'}</div>`;
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(2);
   try {
     const res = await fetch('/api/type-compat', {
       method: 'POST',
@@ -5865,7 +5893,7 @@ async function _fortuneTopicPick(key) {
   const birth = _u?.birthYear ? { year:_u.birthYear, month:_u.birthMonth, day:_u.birthDay, hour:_u.birthHour||'' } : undefined;
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/fortune-topic', {
       method: 'POST',
@@ -5943,7 +5971,7 @@ async function _ichingCast() {
   resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.ichingCasting || '괘를 뽑는 중...'}</div>`;
 
   const started = Date.now();
-  const MIN_MS = 1800;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/iching', {
       method: 'POST',
@@ -6015,7 +6043,7 @@ async function openNumerology() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 1500;
+  const MIN_MS = readMinMs(2);
   try {
     const res = await fetch('/api/numerology', {
       method: 'POST',
@@ -6084,7 +6112,7 @@ async function openTojeong() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 2000;
+  const MIN_MS = readMinMs(4);
   try {
     const res = await fetch('/api/tojeong', {
       method: 'POST',
@@ -6221,7 +6249,7 @@ async function _photoReadingSubmit() {
   }
 
   const started = Date.now();
-  const MIN_MS = 2000;
+  const MIN_MS = readMinMs(4);
   try {
     const res = await fetch('/api/photo-reading', {
       method: 'POST',
@@ -6363,7 +6391,7 @@ async function _dreamSubmit() {
   resultEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-dim);text-align:center">${t.dreamLoading || '꿈을 해몽하는 중...'}</div>`;
 
   const started = Date.now();
-  const MIN_MS = 1800;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/dream-interpretation', {
       method: 'POST',
@@ -6419,7 +6447,7 @@ async function openLottoNumbers() {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   const started = Date.now();
-  const MIN_MS = 1800;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/lotto-numbers', {
       method: 'POST',
@@ -6497,7 +6525,7 @@ async function _runeDraw() {
   document.getElementById('runeCardBack')?.classList.add('tarot-flipped');
 
   const started = Date.now();
-  const MIN_MS = 1800;
+  const MIN_MS = readMinMs(1);
   try {
     const res = await fetch('/api/rune-reading', {
       method: 'POST',
@@ -7160,7 +7188,7 @@ async function submitGuestReading() {
   }).then(async res => ({ status: res.status, ok: res.ok, data: await res.json() }));
 
   try {
-    const { status, ok, data } = await openOracleOverlay({ apiPromise });
+    const { status, ok, data } = await openOracleOverlay({ apiPromise, cost: 0 });
 
     if (status === 429 && data.error?.code === 'GUEST_LIMIT') {
       // 게스트 제한 도달 트래킹

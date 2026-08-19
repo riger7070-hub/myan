@@ -397,12 +397,36 @@ function openItem(item) {
   runItem(item);
 }
 
+// 풀이를 너무 빨리 돌려주면 값이 없어 보인다. 특히 캐시된 콘텐츠(타로·룬·띠운세)는
+// 서버가 곧장 답해서, 누르자마자 결과가 튀어나온다 — 안도령이 헤아린 것이 아니라
+// 미리 적어 둔 걸 꺼낸 것처럼 읽힌다. 그래서 최소 시간을 두되, 비싼 풀이일수록 길게
+// 잡는다. 6엽전짜리 대운이 1엽전짜리 타로와 같은 속도로 나오면 그만큼 가벼워 보인다.
+//
+// 어디까지나 **최소**다. 실제 호출이 더 걸리면 그대로 기다리고 여기서 더 늘리지 않는다.
+// 그래서 느린 쪽에는 아무 영향이 없고, 빨리 오는 경우에만 실제로 작동한다.
+// 실패했을 때는 기다리지 않는다 — 오류를 늦게 알리는 건 연출이 아니라 그냥 답답함이다.
+//
+// 산가지(local:true)는 서버를 안 부르는 즉석 놀이라 제외한다. 뽑는 맛이 전부인데
+// 기다리게 하면 그 맛이 죽는다.
+//
+// ⚠️ 웹에도 같은 장치가 있지만 상수가 다르다(js/app.js 의 oracleMinMs). 그쪽은 연출이
+// 7.2초짜리 정해진 순서라 바닥이 더 높다. **일부러 다른 값이니 맞추려 들지 말 것.**
+const READ_MIN_BASE_MS     = 5000;
+const READ_MIN_PER_COST_MS = 1200;
+const READ_MIN_CAP_MS      = 12000;
+
+const readMinMs = (item) => item?.local ? 0 : Math.min(
+  READ_MIN_CAP_MS,
+  READ_MIN_BASE_MS + Math.max(0, Number(item?.cost) || 0) * READ_MIN_PER_COST_MS,
+);
+
 // 요청 세대. 뒤로가기로 로딩을 벗어난 뒤 응답이 도착하면 사용자를 결과 화면으로
 // 끌고 가 버린다. 세대가 바뀌었으면 그 응답은 조용히 버린다.
 let _runSeq = 0;
 
 async function runItem(item) {
   const seq = ++_runSeq;
+  const started = Date.now();
   state.item = item;
   state.screen = 'loading';
   state.error = '';
@@ -424,6 +448,12 @@ async function runItem(item) {
 
     // 사용자가 이미 뒤로 나갔으면(또는 다른 콘텐츠를 눌렀으면) 화면을 뺏지 않는다.
     // 엽전은 이미 나갔지만 결과는 '지난 기록'에 남으므로 잃어버리지 않는다.
+    if (seq !== _runSeq || state.screen !== 'loading') return;
+
+    // 최소 시간을 채운다(readMinMs 참고). 남았을 때만 기다린다.
+    const remain = readMinMs(item) - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+    // 기다리는 동안 나갔을 수 있다. 위와 같은 이유로 한 번 더 본다.
     if (seq !== _runSeq || state.screen !== 'loading') return;
 
     // 응답 모양이 예상과 달라 여기서 던지면 화면이 로딩에 갇힌다. 본문만이라도 띄운다.
