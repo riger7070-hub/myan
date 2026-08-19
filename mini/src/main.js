@@ -10,7 +10,7 @@
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
 import {
-  appLogin, IAP, getTossShareLink, share, GoogleAdMob,
+  appLogin, TossAuth, Storage, IAP, getTossShareLink, share, GoogleAdMob,
   graniteEvent, closeView,
 } from '@apps-in-toss/web-framework';
 import {
@@ -35,7 +35,47 @@ const currentTheme = () => document.documentElement.getAttribute('data-theme') |
 applyTheme();
 
 const API = 'https://myan.riger7070.workers.dev';
+
+// ── 세션 보관 ──────────────────────────────────────────────
+//
+// 토스 웹뷰의 localStorage 는 앱을 껐다 켜면 남아 있으리라는 보장이 없다. 실제로
+// 나갔다 들어올 때마다 세션이 사라져서, 그때마다 인트로 → 로그인 → 토스 인증을
+// 다시 거쳐야 했다. 프레임워크의 Storage 는 "앱이 종료되어도 유지되는" 네이티브
+// 저장소라, 세션은 그쪽을 본다. localStorage 에도 같이 써 두는 건 다리가 없는
+// 개발용 브라우저(vite dev) 때문이지, 앱에서 믿을 곳이어서가 아니다.
 const SESSION_KEY = 'myan_mini_session';
+// 로그인을 끝낸 적이 있는가. 세션이 없을 때 처음부터 다시 물어볼지(인트로+로그인),
+// 조용히 받아 올지(자동 로그인)를 이 표식으로 가른다. 스스로 로그아웃하면 지운다.
+const LINKED_KEY = 'myan_mini_linked';
+
+const nativeGet = async (k) => { try { return await Storage.getItem(k); } catch { return null; } };
+const nativeSet = async (k, v) => { try { await Storage.setItem(k, v); } catch { /* 브라우저면 그만 */ } };
+const nativeDel = async (k) => { try { await Storage.removeItem(k); } catch { /* 위와 같다 */ } };
+
+/** 저장된 세션을 꺼낸다. 네이티브가 먼저고, 없으면 예전에 localStorage 에 둔 걸 옮겨 온다. */
+async function loadSession() {
+  const saved = await nativeGet(SESSION_KEY);
+  if (saved) return saved;
+  // 이 판이 나오기 전에 로그인한 사람의 세션. 한 번 옮겨 두면 다음부터는 살아남는다.
+  const legacy = localStorage.getItem(SESSION_KEY) || '';
+  if (legacy) await nativeSet(SESSION_KEY, legacy);
+  return legacy;
+}
+
+async function saveSession(token) {
+  state.session = token;
+  try { localStorage.setItem(SESSION_KEY, token); } catch { /* 못 써도 네이티브가 있다 */ }
+  await nativeSet(SESSION_KEY, token);
+  await nativeSet(LINKED_KEY, '1');
+}
+
+/** 세션을 지운다. keepLinked=false 면 자동 로그인 표식까지 지운다(스스로 나간 경우). */
+async function forgetSession({ keepLinked = true } = {}) {
+  state.session = '';
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* 없으면 그만 */ }
+  await nativeDel(SESSION_KEY);
+  if (!keepLinked) await nativeDel(LINKED_KEY);
+}
 
 // 값을 보여주기 위한 목록일 뿐, **결제에는 쓰이지 않는다.**
 //
@@ -65,6 +105,7 @@ const AD_AUTO_UNIT_ID = 'ait.v2.live.14d0826ccdad4c8d';
 
 const state = {
   screen: 'boot',
+  // 첫 짐작일 뿐이다. 진짜 값은 boot() 이 loadSession() 으로 다시 채운다.
   session: localStorage.getItem(SESSION_KEY) || '',
   profile: null,
   tokens: 0,
@@ -180,6 +221,7 @@ async function showSplash() {
 // ── 부팅 ──────────────────────────────────────────────────
 
 async function boot() {
+  state.session = await loadSession();
   if (state.session) {
     try {
       // ⚠️ 여기서는 짧게 끊는다. 기본값(90초)으로 두면 지하철이나 엘리베이터처럼
@@ -198,11 +240,35 @@ async function boot() {
       // 세션 만료(401)면 지운다. 그 외(네트워크·시간초과)는 **세션을 남겨 둔다** —
       // 신호가 돌아온 다음 실행에서 그대로 이어진다. 여기서 지워 버리면
       // 잠깐 끊긴 것 때문에 멀쩡한 사람을 다시 로그인시키게 된다.
-      if (e.status === 401) { localStorage.removeItem(SESSION_KEY); state.session = ''; }
+      // (표식은 남긴다 — 만료됐을 뿐 연동은 살아 있으니 아래에서 조용히 다시 받는다.)
+      if (e.status === 401) await forgetSession();
     }
+  }
+  // 세션이 없어도, 전에 로그인을 끝낸 사람이라면 다시 물어볼 게 없다. 동의는 이미
+  // 받아 둔 상태라 동의 화면 없이 통과하고, 여는 화면이 도는 동안 끝난다.
+  // 인트로를 건너뛰는 건 '처음 온 사람'이 아닐 때뿐이라 심사 조건은 그대로다.
+  if (await canResumeLogin()) {
+    try { await loginWithToss(); return; } catch { /* 안 되면 평소대로 인트로부터 */ }
   }
   // 로그인 전에 반드시 인트로를 거친다(심사 반려 사유였다).
   go('intro');
+}
+
+/**
+ * 물어보지 않고 다시 로그인해도 되는가.
+ *
+ * 두 가지가 다 맞아야 한다 — (1) 전에 이 앱에서 로그인을 끝냈고, (2) 토스 쪽 연동이
+ * 아직 살아 있다. 연동이 끊겼는데 부르면 사용자가 누르지도 않은 동의 화면이 튀어나온다.
+ * isIntegrated 는 구버전 토스에서 undefined 를 준다 — 그건 '아니다'가 아니라
+ * '못 물어봤다'는 뜻이므로, 그때는 우리 표식을 믿는다.
+ */
+async function canResumeLogin() {
+  if (await nativeGet(LINKED_KEY) !== '1') return false;
+  try {
+    return (await TossAuth.isIntegrated()) !== false;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -236,20 +302,23 @@ async function recoverPendingOrders() {
 
 // ── 인증·프로필 ────────────────────────────────────────────
 
-async function doLogin() {
-  await withBusy(async () => {
-    const { authorizationCode, referrer } = await appLogin();
-    const r = await api('/mini/api/auth/login', {
-      method: 'POST', auth: false, body: { authorizationCode, referrer },
-    });
-    state.session = r.session;
-    localStorage.setItem(SESSION_KEY, r.session);
-    const me = await api('/mini/api/me');
-    state.tokens = me.tokens;
-    state.profile = me.profile;
-    state.noAds = !!me.noAds;
-    go(state.profile?.birthYear ? 'home' : 'profile');
+/** 토스 인증 → 우리 세션. 로그인 화면의 버튼과 부팅 때의 자동 로그인이 함께 쓴다. */
+async function loginWithToss() {
+  // appLogin 은 deprecated 다. 새 이름이 있으면 그걸 쓰고, 구버전 SDK 면 예전 것으로.
+  const { authorizationCode, referrer } = await (TossAuth?.login ? TossAuth.login() : appLogin());
+  const r = await api('/mini/api/auth/login', {
+    method: 'POST', auth: false, body: { authorizationCode, referrer },
   });
+  await saveSession(r.session);
+  const me = await api('/mini/api/me');
+  state.tokens = me.tokens;
+  state.profile = me.profile;
+  state.noAds = !!me.noAds;
+  go(state.profile?.birthYear ? 'home' : 'profile');
+}
+
+async function doLogin() {
+  await withBusy(loginWithToss);
 }
 
 async function saveProfile(form) {
@@ -2001,11 +2070,13 @@ function bind() {
   on('btn-invite-again', makeInvite);
   on('btn-invite-check', () => checkInvite());
   on('btn-history', loadHistory);
-  on('btn-logout', () => {
+  on('btn-logout', async () => {
     // 세션만 지운다. 엽전과 기록은 서버의 계정(userKey)에 남아 있어서
     // 다시 로그인하면 그대로 돌아온다.
-    localStorage.removeItem(SESSION_KEY);
-    Object.assign(state, { session: '', profile: null, tokens: 0, history: [], result: null, error: '' });
+    // 자동 로그인 표식도 함께 지운다 — 스스로 나간 사람을 다음 실행에서 도로
+    // 밀어 넣으면 로그아웃 버튼이 아무 일도 안 한 것이 된다.
+    await forgetSession({ keepLinked: false });
+    Object.assign(state, { profile: null, tokens: 0, history: [], result: null, error: '' });
     go('login');
   });
   // 인트로 → 로그인. 이 순서를 지키는 것이 심사 조건이다.

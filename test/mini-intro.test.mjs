@@ -115,9 +115,11 @@ test('앱을 켤 때는 오래 기다리지 않는다', () => {
 test('잠깐 끊긴 것 때문에 세션을 버리지 않는다', () => {
   // 여기서 지우면 신호가 잠깐 나빴다는 이유로 멀쩡한 사람을 다시 로그인시킨다.
   const boot = SRC.match(/async function boot\(\)[\s\S]*?\n\}/)[0];
-  assert.match(boot, /if \(e\.status === 401\) \{ localStorage\.removeItem/,
+  // 어떻게 지우는지는 바뀔 수 있다(지금은 forgetSession — 네이티브 저장소까지 지운다).
+  // 변하면 안 되는 건 '401 일 때만'이라는 조건 쪽이다.
+  assert.match(boot, /if \(e\.status === 401\) await forgetSession\(\)/,
     '401 일 때만 세션을 지우는 조건이 없다');
   const catchBlock = boot.slice(boot.indexOf('catch'));
-  assert.equal((catchBlock.match(/removeItem/g) || []).length, 1,
+  assert.equal((catchBlock.match(/forgetSession|removeItem/g) || []).length, 1,
     '401 이 아닌데도 세션을 지우는 곳이 있다');
 });
