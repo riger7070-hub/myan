@@ -71,8 +71,15 @@ cd mini
 npm install
 npm run dev              # vite dev
 npm run build            # vite build && ait build
-npm run deploy           # ait deploy
+npm run deploy           # ait deploy --profile myan  (프로필 이름 주의, 아래 참고)
 ```
+
+**`ait deploy` 의 프로필 이름은 `myan` 이지 `default` 가 아니다.** 배포 키는 `~/.ait/credentials`
+에 `{"myan": "..."}` 로 저장돼 있는데, CLI 는 `--profile` 이 없으면 `this.profile || this.workspace ||
+"default"` 로 `default` 를 찾는다. 없으니 **키가 멀쩡히 있는데도 API 키를 다시 입력하라고 묻고**,
+거기서 멈추면 업로드는 일어나지 않는다 — 콘솔에 아무것도 안 올라온 채 성공한 줄 알기 쉽다.
+그래서 `package.json` 의 `deploy` 스크립트에 `--profile myan` 을 박아 뒀다. 다른 PC 에서 처음
+배포한다면 `npx ait token add myan` 으로 그 이름으로 등록할 것(이름을 안 주면 `default` 로 들어간다).
 
 **It is a separate service, not a second face of the web app.** Accounts and currency are deliberately unshared: a web user and a mini user are different people even if they're the same human, and 엽전 bought in the mini app do not exist on the web. The code states this as a contract rather than an accident (`_LEDGERS`, `test/mini-isolation.test.mjs`), so treat "the same person's balances don't add up across the two" as intended behaviour and don't "fix" it by joining them — if the separation ever should end, that's a product and payments decision, not a refactor.
 

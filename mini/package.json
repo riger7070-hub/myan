@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && ait build",
-    "deploy": "ait deploy"
+    "deploy": "ait deploy --profile myan"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^3.0.3"
