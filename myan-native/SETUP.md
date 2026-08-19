@@ -127,18 +127,19 @@ eas submit --platform ios
 
 ## 7. 주의 사항
 
-### ⚠️ Dependabot 취약점 4건 — 고치지 않는다 (2026-08-19 확인)
+### ⚠️ Dependabot 취약점 — 남은 3건은 고치지 않는다 (2026-08-19 확인)
 
-GitHub 가 저장소에 취약점 4건(high 3 · moderate 1)을 띄운다. **전부 이 폴더 것이다.** 루트와
+한때 4건(high 3 · moderate 1)이었다. 그중 `nanoid` 하나는 `overrides` 로 올려서 없앴고
+(아래 참고), 남은 3건(high 2 · moderate 1)은 고치지 않는다. **전부 이 폴더 것이다.** 루트와
 `mini/` 는 0건이라, 워커와 미니앱 클라이언트에는 해당 사항이 없다.
 
 | 심각도 | 패키지 | 내용 | 어디서 오나 | 앱에 실리나 |
 |---|---|---|---|---|
 | HIGH ×2 | `image-size` 1.2.1 | ICNS · JXL/HEIF 파서가 무한루프에 빠진다(DoS) | `metro` | 아니오(빌드 도구) |
-| HIGH | `nanoid` 3.3.17 | 커스텀 생성기에 size 0 을 주면 무한루프 | `expo-router`, `postcss` | **예** |
+| ~~HIGH~~ 해결 | `nanoid` 3.3.17 → **3.3.18** | 커스텀 생성기에 size 0 을 주면 무한루프 | `expo-router`, `postcss` | **예** |
 | MODERATE | `uuid` 7.0.3 | v3/v5/v6 에 `buf` 를 넘길 때 경계 검사 누락 | `@expo/config-plugins` → `xcode` | 아니오(빌드 도구) |
 
-`npm audit` 는 23건이라고 하지만 고유 권고는 위 4개고 나머지는 그것이 의존성 트리로 퍼진 것이다.
+`npm audit` 는 22건이라고 하지만 고유 권고는 남은 3개고 나머지는 그것이 의존성 트리로 퍼진 것이다.
 
 **`npm audit fix --force` 를 실행하지 말 것.** npm 이 내놓는 "수정"은 이렇다:
 
@@ -159,7 +160,7 @@ react-native   0.86.2 → 0.72.17
 
 진짜 해결은 Expo 가 자기 `metro` / `config-plugins` 를 올릴 때 따라온다.
 
-#### `nanoid` — 이유가 다르다. 앱에 실리지만, 고쳐진 파일을 우리가 안 쓴다
+#### `nanoid` — 3.3.18 로 올렸다 (overrides)
 
 ⚠️ 위 둘과 묶어서 "전부 빌드 도구"라고 적으면 틀린다. `nanoid` 는 `expo-router` 가
 런타임에 쓰므로 **앱 번들에 실제로 실린다**(`expo-router/build/fork/createMemoryHistory.js`).
@@ -190,16 +191,20 @@ async/index.native.js:  return size => tick('', size)
 부르는 곳은 트리 전체에 하나도 없다. 메인 진입점(`index.cjs`/`index.js`/`index.browser.js`)은
 3.3.17 에 이미 `if (size <= 0) return ''` 가 들어 있다.
 
-**다만 이건 다른 셋과 달리 안전하게 고칠 수는 있다.** 메이저가 아니라 패치 한 칸이라
-(3.3.17 → 3.3.18) Expo 를 건드리지 않는다. 배너를 없애고 싶으면 `myan-native/package.json` 에:
+**그래서 이건 보안 수정이 아니라 배너 정리다.** 다른 셋과 달리 메이저가 아니라 패치 한 칸
+(3.3.17 → 3.3.18)이라 Expo 를 건드리지 않아서, `package.json` 에 이렇게 넣어 올려 뒀다:
 
 ```json
 "overrides": { "nanoid": "^3.3.18" }
 ```
 
-넣고 `npm install` 하면 된다. 다만 보안상 얻는 건 없다 — 위에서 본 대로 바뀌는 파일을 우리가
-로드하지 않는다. 대신 전이 의존성을 하나 고정하게 되어 다음 Expo 업그레이드 때 충돌할 여지가
-생긴다. 그래서 지금은 넣지 않는다.
+확인한 것: `npm ls nanoid` 가 두 자리 모두 3.3.18, `npm audit` 에서 권고가 사라짐(23 → 22),
+잠금파일 변화는 nanoid 한 항목 6줄뿐(다른 패키지는 안 딸려 왔다), `npm ci` 재현됨,
+`npx expo export --platform android` 번들 성공.
+
+⚠️ **대신 전이 의존성을 하나 고정한 상태가 됐다.** Expo 를 올릴 때 `nanoid@4` 나 `5` 를 요구하는
+패키지가 들어오면 이 `overrides` 가 그걸 막아 설치가 깨진다. 그때는 고민하지 말고 이 항목을
+지우면 된다 — 애초에 보안상 얻은 게 없으므로 지켜야 할 이유도 없다.
 
 #### 다시 확인하려면
 
