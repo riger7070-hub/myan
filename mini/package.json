@@ -1,7 +1,7 @@
 {
   "name": "myan-mini",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "M;Y 安 앱인토스 미니앱 (웹 서비스와 계정·토큰이 분리된 별도 서비스)",
   "type": "module",
   "scripts": {
