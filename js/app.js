@@ -4356,6 +4356,9 @@ async function loadTokenHistory() {
       return;
     }
 
+    // 예전에는 여기 인라인 스타일로 색을 박아 두었다. 배경이 rgba(255,255,255,0.05)
+    // 라 밝은 화면에서는 크림색 위 흰색이 되어 칸이 안 보였고, 종류별 색도
+    // 보라·초록·빨강·파랑이라 금·먹 팔레트 밖으로 튀었다. 모양은 CSS 로 옮긴다.
     list.innerHTML = history.map(h => {
       const date = new Date(h.timestamp * 1000).toLocaleDateString('ko-KR', {
         year: 'numeric',
@@ -4364,25 +4367,15 @@ async function loadTokenHistory() {
         hour: '2-digit',
         minute: '2-digit'
       });
-
-      const typeColor = {
-        charge: '#667eea',
-        event: '#4bc87a',
-        referral: '#e05a4a',
-        promo: '#d4a040'
-      }[h.type] || '#999';
+      const kind = { charge: '충전', event: '이벤트', referral: '추천', promo: '혜택' }[h.type] || '';
 
       return `
-        <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ${typeColor};">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: bold; margin-bottom: 4px;">${h.desc}</div>
-              <div style="font-size: 0.85rem; color: var(--text-dim);">${date}</div>
-            </div>
-            <div style="font-size: 1.2rem; font-weight: bold; color: ${typeColor};">
-              +${h.tokens}
-            </div>
+        <div class="th-row">
+          <div class="th-main">
+            <div class="th-desc">${_escHtml(h.desc)}${kind ? `<span class="th-kind">${kind}</span>` : ''}</div>
+            <div class="th-date">${date}</div>
           </div>
+          <div class="th-amount">+${h.tokens}</div>
         </div>
       `;
     }).join('');

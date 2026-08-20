@@ -1531,19 +1531,32 @@ body::-webkit-scrollbar {
 }
 .pkg-card {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 16px 14px;
   cursor: pointer;
   background: var(--card);
-  transition: all .25s;
+  box-shadow: var(--card-shadow);
+  transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease;
   position: relative;
   overflow: hidden;
 }
+/* 미니앱 타일과 같은 빛. 이것 하나로 카드가 종이처럼 보인다. */
+.pkg-card::after {
+  content: '';
+  position: absolute;
+  left: -30%; top: -60%;
+  width: 120%; height: 120%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, var(--sheen) 0%, transparent 62%);
+}
 .pkg-card:hover {
   border-color: var(--gold-dim);
-  background: rgba(201,169,110,0.05);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.44), inset 0 1px 0 rgba(232,212,168,0.1);
+}
+/* 누를 때는 떠오르는 게 아니라 눌린다 — 미니앱과 같은 손맛이다. */
+.pkg-card:active {
+  transform: scale(0.975);
+  border-color: var(--gold-dim);
 }
 .pkg-card.sub-card { border-color: rgba(201,169,110,0.15); }
 .pkg-sub-label {
@@ -5058,3 +5071,53 @@ select option { background-color: #1a1410 !important; color: #e8d8b0 !important;
 /* 단추 안에 글씨와 나란히 서는 아이콘 */
 button > [data-icon] { display: inline-flex; vertical-align: -4px; }
 button > [data-icon] .ic { width: 18px; height: 18px; }
+
+/* ════════════════════════════════════════
+   엽전 내역 (지난 기록)
+   예전에는 app.js 안에 인라인 스타일로 색을 박아 두었다. 배경이
+   rgba(255,255,255,0.05) 라 밝은 화면에서는 크림색 위 흰색이 되어 칸이 아예
+   안 보였고, 종류별 색(보라·초록·빨강·파랑)은 금·먹 팔레트 밖으로 튀었다.
+════════════════════════════════════════ */
+.th-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.th-main { min-width: 0; }
+.th-desc {
+  font-size: 0.92rem;
+  color: var(--text);
+  margin-bottom: 4px;
+  word-break: keep-all;
+}
+/* 종류는 색이 아니라 글자로 알린다. 색으로 나누면 네 가지 색이 화면에서 다툰다. */
+.th-kind {
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  color: var(--gold);
+  background: rgba(201, 169, 110, 0.12);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+[data-theme="light"] .th-kind { background: rgba(140, 100, 32, 0.09); }
+.th-date {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.th-amount {
+  flex: none;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--gold);
+}
