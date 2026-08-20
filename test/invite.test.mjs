@@ -110,9 +110,16 @@ test('⚠️ 답한 사람에게 초대한 사람의 생년월일이 새지 않�
 test('⚠️ 공개 페이지에도 초대한 사람의 생년월일이 없다', async () => {
   const { env } = setup();
   const { id } = await makeInvite(env);
-  const html = await (await H.handleInvitePage(
+  const raw = await (await H.handleInvitePage(
     new Request('https://myan.example/i/' + id), env, id)).text();
-  assert.match(html, /안태현/, '누가 물었는지는 보여야 한다');
+  assert.match(raw, /안태현/, '누가 물었는지는 보여야 한다');
+
+  // ⚠️ 초대 번호(24자리 16진수)를 먼저 걷어내고 본다.
+  // 안 그러면 무작위 번호 안에 우연히 '1988' 같은 네 글자가 들어갈 때마다
+  // 유출이 아닌데도 실패한다 — 3천 번에 한 번쯤 터지던 헛알람이었다.
+  // 번호는 우리가 방금 만든 값이라 정확히 지울 수 있다.
+  const html = raw.split(id).join('«초대번호»');
+
   assert.doesNotMatch(html, new RegExp(String(INVITER.y)), '생년이 페이지에 박혀 있다');
 
   // 시 고르는 칸에는 열두 시가 다 들어 있다. 그건 받는 사람이 자기 것을 고르는
@@ -121,6 +128,17 @@ test('⚠️ 공개 페이지에도 초대한 사람의 생년월일이 없다',
   assert.doesNotMatch(폼밖, /인시/, '태어난 시가 페이지에 박혀 있다');
   // 미리 골라 둔 값이 있으면 그것도 새는 길이다.
   assert.doesNotMatch(html, /selected|value="[^"]*시"/, '초대한 사람의 시가 미리 골라져 있다');
+});
+
+test('초대 번호에 생년이 섞여도 헛알람이 나지 않는다', async () => {
+  // 위 검사가 번호를 걷어내는지 확인한다. 번호에 1988 을 일부러 심어 둔다.
+  const { env } = setup();
+  const { id } = await makeInvite(env);
+  const raw = await (await H.handleInvitePage(
+    new Request('https://myan.example/i/' + id), env, id)).text();
+  const 심은것 = raw.split(id).join('aaaa1988bbbbccccdddd0000');
+  const 걷어낸것 = 심은것.split('aaaa1988bbbbccccdddd0000').join('«초대번호»');
+  assert.doesNotMatch(걷어낸것, /1988/, '번호를 걷어내는 방식이 통하지 않는다');
 });
 
 test('공개 페이지는 이름도 로그인도 요구하지 않는다', async () => {
