@@ -26,6 +26,19 @@
     }
   },
   {
+    "path": "/api/gwiin",
+    "body": {
+      "lang": "ko",
+      "birth": {
+        "year": 1999,
+        "month": 7,
+        "day": 18,
+        "hour": "사시"
+      },
+      "gender": "M"
+    }
+  },
+  {
     "path": "/api/past-life",
     "body": {
       "lang": "ko",

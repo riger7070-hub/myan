@@ -1742,6 +1742,7 @@ export default {
     if (path === '/api/year-luck' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleYearLuck(request, env)); }
     if (path === '/api/direction' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDirection(request, env)); }
     if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
+    if (path === '/api/gwiin' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleGwiin(request, env)); }
     if (path === '/api/sinsal' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSinsal(request, env)); }
     if (path === '/api/tti-ranking' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiRanking(request, env)); }
     if (path === '/api/past-life' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handlePastLife(request, env)); }
@@ -5441,6 +5442,84 @@ function computeSamjae(yearBranch, fromYear) {
   return { years: out, now, inSamjae };
 }
 
+// ── 귀인(貴人) ──
+//
+// 사주에서 귀인은 "어려울 때 손 내미는 사람"이다. 흉살은 이미 신살에서 다루므로
+// 여기서는 길신만 모아 본다. 그리고 사람들이 정말 알고 싶어 하는 것은
+// "내 사주에 천을귀인이 있는가"보다 **"누가 나에게 귀인인가"** 다.
+// 천을귀인이 드는 지지가 곧 그 띠이므로, 그걸 사람으로 옮겨 준다.
+
+// 천덕귀인(天德貴人) — 태어난 달로 정해진다. 천간으로 오기도 하고 지지로 오기도 한다.
+const CHEONDEOK = {
+  寅: '丁', 卯: '申', 辰: '壬', 巳: '辛', 午: '亥', 未: '甲',
+  申: '癸', 酉: '寅', 戌: '丙', 亥: '乙', 子: '巳', 丑: '庚',
+};
+// 월덕귀인(月德貴人) — 달이 속한 삼합국으로 정해진다. 천간으로만 온다.
+const WOLDEOK = { 寅午戌: '丙', 申子辰: '壬', 亥卯未: '甲', 巳酉丑: '庚' };
+// 문창귀인(文昌貴人) — 일간으로 정해진다. 글과 시험의 별이다.
+const MUNCHANG = {
+  甲: '巳', 乙: '午', 丙: '申', 丁: '酉', 戊: '申',
+  己: '酉', 庚: '亥', 辛: '子', 壬: '寅', 癸: '卯',
+};
+
+const GWIIN_MEANING = {
+  천을귀인: '가장 귀한 별입니다. 막다른 데서 길을 내주는 사람이 나타납니다.',
+  천덕귀인: '하늘이 덮어 주는 결입니다. 큰 화가 작게 지나갑니다.',
+  월덕귀인: '달이 비추는 결입니다. 사람의 도움이 끊이지 않습니다.',
+  문창귀인: '글과 배움의 별입니다. 시험과 문서에서 힘을 냅니다.',
+};
+
+/**
+ * 귀인을 찾는다.
+ * @param {object} saju computeSaju 의 결과
+ * @param {number} [fromYear] 앞으로 볼 시작 해(기본: 올해)
+ */
+function computeGwiin(saju, fromYear) {
+  if (!saju?.dayGan) return null;
+  const pillars = [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean);
+  const POS = ['년', '월', '일', '시'];
+  const monthBranch = saju.mp?.[1];
+
+  // 어떤 글자가 귀인인지 먼저 정하고, 그 글자가 내 기둥에 앉아 있는지 본다.
+  const wanted = {
+    천을귀인: CHEONEUL[saju.dayGan] || [],
+    천덕귀인: monthBranch && CHEONDEOK[monthBranch] ? [CHEONDEOK[monthBranch]] : [],
+    월덕귀인: (() => {
+      const g = _groupOf(monthBranch);
+      const key = g && g.set.join('');
+      return key && WOLDEOK[key] ? [WOLDEOK[key]] : [];
+    })(),
+    문창귀인: MUNCHANG[saju.dayGan] ? [MUNCHANG[saju.dayGan]] : [],
+  };
+
+  const stars = [];
+  for (const [name, chars] of Object.entries(wanted)) {
+    if (!chars.length) continue;
+    const where = [];
+    // 천간에 오는 귀인도 있고 지지에 오는 귀인도 있어서 둘 다 본다.
+    [saju.yp, saju.mp, saju.dp, saju.hp].forEach((p, i) => {
+      if (!p) return;
+      if (chars.includes(p[0]) || chars.includes(p[1])) where.push(POS[i]);
+    });
+    if (where.length) stars.push({ name, where, text: GWIIN_MEANING[name] });
+  }
+
+  // 누가 나에게 귀인인가. 천을귀인이 드는 지지가 곧 그 띠다.
+  const people = (CHEONEUL[saju.dayGan] || []).map(b => ({
+    branch: b, tti: TTI_NAME[b],
+  }));
+
+  // 언제 귀인을 만나는가. 앞으로 열 해 중 천을귀인 지지가 오는 해.
+  const now = fromYear || _kstYear();
+  const years = [];
+  for (let y = now; y < now + 10; y++) {
+    const ji = JJ[(y - 4) % 12];
+    if ((CHEONEUL[saju.dayGan] || []).includes(ji)) years.push({ year: y, branch: ji });
+  }
+
+  return { stars, people, years, hasAny: stars.length > 0 };
+}
+
 // ── 오늘의 띠 순위 ──
 //
 // 그날 일진의 지지와 열두 띠가 맺는 관계로 점수를 낸다. 무작위가 아니라 계산이라
@@ -6734,6 +6813,93 @@ async function handleSinsal(request, env) {
     }), 200);
   } catch (e) {
     console.error('[SINSAL]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  귀인 찾기 (4엽전)
+//
+//  신살이 "타고난 기운의 결"이라면 귀인은 "나를 살리는 사람"이다. 흉살은 이미
+//  신살에서 다루므로 여기서는 길신만 본다 — 겁주는 화면을 하나 더 만들 이유가 없다.
+//
+//  알맹이는 "누가 나에게 귀인인가"다. 천을귀인이 드는 지지가 곧 띠이므로
+//  "소띠와 양띠 사람이 당신의 귀인입니다"처럼 사람으로 옮겨 말해 준다.
+// ════════════════════════════════════════════════════════════
+
+async function handleGwiin(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, gender } = await request.json().catch(() => ({}));
+    const saju = birth && birth.year
+      ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    if (!saju) return cors(JSON.stringify({ error: { message: '생년월일이 올바르지 않습니다.' } }), 400);
+    const gw = computeGwiin(saju);
+    if (!gw) return cors(JSON.stringify({ error: { message: '귀인을 계산하지 못했습니다.' } }), 400);
+
+    const COST = 4;
+    const paid = await accountSpend(env, acct, 'gwiin', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '귀인 찾기는 엽전 ' + COST + '개가 필요합니다. 잔액을 확인해 주세요.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'gwiin', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const g = _normalizeGender(gender);
+    const NL = String.fromCharCode(10);
+    const 별 = gw.stars.map(s => s.name + '(' + s.where.join(', ') + '주): ' + s.text).join(NL);
+    const 띠 = gw.people.map(p => p.tti + '띠').join(', ');
+    const 해 = gw.years.map(y => y.year + '년').join(', ');
+
+    const prompt = [
+      '상담자의 사주: ' + [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      '일간은 ' + saju.dayGan + ' 입니다.',
+      g ? '상담자는 ' + (g === 'M' ? '남성' : '여성') + ' 입니다.' : '',
+      '',
+      gw.hasAny ? '이 사주에 선 귀인:' + NL + 별
+        : '사주에 뚜렷하게 앉은 귀인 별은 없습니다. 그렇다고 귀인이 없는 것은 아니고, 타고난 자리가 아니라 만나서 얻는 자리라고 읽어 주세요.',
+      '',
+      '이 사람에게 귀인이 되는 띠: ' + 띠 + ' (천을귀인이 드는 지지)',
+      해 ? '앞으로 열 해 중 귀인의 기운이 드는 해: ' + 해 : '',
+      '',
+      '"내 귀인은 누구인가"를 풀어 주세요. 다음 순서로 이어지는 글로 씁니다.',
+      '1) 어떤 사람이 이 사람에게 귀인인지 — ' + 띠 + ' 를 먼저 짚되, 띠만으로 사람을 고르라는 뜻이 아니라',
+      '   "이런 결을 가진 사람"이라는 쪽으로 풀어 주세요',
+      '2) 그 귀인이 어떤 모습으로 나타나는지 — 윗사람인지 또래인지, 어떤 자리에서 만나는지',
+      '3) 사주에 선 귀인 별이 있다면 그것이 삶에서 어떻게 드러나는지',
+      '4) 귀인을 만나려면 어떻게 해야 하는지 — 기다리는 법이 아니라 사람을 대하는 태도로',
+      '',
+      '⚠️ 반드시 지킬 것: 특정한 띠의 사람만 만나라거나 다른 띠를 멀리하라고 하지 마세요.',
+      '사람을 띠로 갈라 놓는 말은 쓰지 않습니다. 귀인은 정해진 한 사람이 아니라',
+      '여러 모습으로 오며, 결국 내가 어떻게 사람을 대하느냐에 달렸다고 분명히 말해 주세요.',
+      '점집에서 흔히 하는 "귀인이 나타날 것이다" 같은 막연한 약속도 하지 마세요.',
+      '전체 700자 내외.',
+    ].filter(Boolean).join(NL);
+
+    const reading = await cachedReading(env, 'gwiin:' + _sajuKey(saju, g), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'gwiin', '귀인 ' + 띠, reading,
+      { people: gw.people.map(p => p.tti), stars: gw.stars.map(s => s.name) }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading,
+      people: gw.people, stars: gw.stars, years: gw.years,
+      saju: [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).join(' '),
+      remaining: remainingTokens,
+    }), 200);
+  } catch (e) {
+    console.error('[GWIIN]', e?.message);
     if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
   }

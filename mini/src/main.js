@@ -357,6 +357,7 @@ function bodyFor(item, profile, form) {
     case 'yearluck':   return { ...base, birth, gender: profile.gender || '' };
     case 'intimacy':   return { ...base, birth, partner: form.partner, gender: profile.gender || '' };
     case 'sinsal':     return { ...base, birth, gender: profile.gender || '' };
+    case 'gwiin':       return { ...base, birth, gender: profile.gender || '' };
     case 'pastlife':   return { ...base, birth, gender: profile.gender || '' };
     case 'vocation':   return { ...base, birth, gender: profile.gender || '' };
     // 띠 순위는 생년만 있으면 내 띠를 짚어 준다. 없어도 순위는 볼 수 있다.
@@ -517,6 +518,16 @@ function extractResult(d) {
   // 재물운 — 어떤 그림인지와 재물이 드는 해
   if (d.shape) add('재물의 결', d.shape);
   // 이사 방위 — 본명궁과 가장 좋은 쪽
+  // 귀인 — 알맹이는 "누가 나에게 귀인인가"다. 그 줄이 요약 맨 앞에 와야 한다.
+  if (Array.isArray(d.people) && d.people.length) {
+    add('내 귀인', d.people.map(p => p.tti + '띠').join(', '));
+  }
+  if (Array.isArray(d.stars) && d.stars.length) {
+    add('사주에 선 귀인', d.stars.map(x => x.name).join(', '));
+  }
+  if (Array.isArray(d.years) && d.years.length && d.people) {
+    add('귀인이 드는 해', d.years.slice(0, 3).map(y => y.year + '년').join(', '));
+  }
   if (d.gungName) add('본명궁', d.gungName + ' ' + (d.group || ''));
   if (Array.isArray(d.good) && d.good.length) add('좋은 쪽', d.good.map(x => x.dir).join(', '));
   if (Array.isArray(d.bad) && d.bad.length) add('꺼리는 쪽', d.bad.map(x => x.dir).join(', '));

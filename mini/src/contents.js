@@ -91,6 +91,7 @@ export const SECTIONS = [
     items: [
       { id: 'wealth',     icon: 'wealth',     label: '재물운',             cost: 4, path: '/api/wealth',        need: null },
       { id: 'sinsal',     icon: 'sinsal',     label: '신살 풀이',          cost: 3, path: '/api/sinsal',         need: null },
+      { id: 'gwiin',      icon: 'gwiin',      label: '귀인 찾기',          cost: 4, path: '/api/gwiin',          need: null },
       { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
       { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
       { id: 'daeun',      icon: 'daeun',      label: '대운, 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },

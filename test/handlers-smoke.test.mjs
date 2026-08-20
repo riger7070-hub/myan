@@ -24,6 +24,7 @@ const PARTNER = { year: 1997, month: 4, day: 9, hour: '오시' };
 
 // [핸들러 이름, 보낼 값]
 const CASES = [
+  ['handleGwiin',       { birth: BIRTH, gender: 'M' }],
   ['handleSinsal',      { birth: BIRTH, gender: 'M' }],
   ['handlePastLife',    { birth: BIRTH, gender: 'M' }],
   ['handleVocation',    { birth: BIRTH, gender: 'M' }],
