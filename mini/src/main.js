@@ -181,6 +181,9 @@ async function api(path, { method = 'GET', body, auth = true, timeoutMs = API_TI
 // 두 가지를 지킨다.
 //   - 연출이 끝나기를 기다리되, 준비가 늦으면 더 기다리지 않는다(둘 중 늦은 쪽에 맞춘다).
 //   - 두 번째부터는 짧게 지나간다. 매번 3초를 보고 있으면 그때부터는 장벽이다.
+// 달 위상(0~7)을 덮개가 움직일 거리로 옮긴다. 삭은 다 덮이고, 보름은 덮개가 밖으로 나간다.
+// 차오를 때(1~3)는 오른쪽부터 밝아지므로 덮개를 왼쪽으로 민다.
+const MOON_SHIFT = ['0%', '-26%', '-52%', '-78%', '-150%', '78%', '52%', '26%'];
 const SPLASH_MS = 2600;
 const SPLASH_SEEN = 'myan_mini_seen';
 
@@ -195,7 +198,8 @@ function splashHtml() {
 
   return `<div class="splash" id="splash">
     <div class="sky">${stars}
-      <div class="moon" title="${moon.name}">${moon.icon}</div>
+      <div class="moon" title="${moon.name}" aria-label="${moon.name}"
+           style="--mshift:${MOON_SHIFT[moon.index] || '-150%'}"></div>
     </div>
     <div class="gate">
       <div class="door left"></div>
