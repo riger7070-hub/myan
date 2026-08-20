@@ -7359,9 +7359,10 @@ function toggleHistoryEntry(idx) {
   const body = document.getElementById(`hist-body-${idx}`);
   const btn  = document.getElementById(`hist-toggle-${idx}`);
   if (!body || !btn) return;
+  // 높이는 CSS 가 data-open 을 보고 정한다. 여기서 인라인으로 다시 쓰면
+  // 두 군데가 같은 값을 들고 있게 되어 한쪽만 고쳤을 때 어긋난다.
   const open = body.dataset.open === '1';
   body.dataset.open = open ? '0' : '1';
-  body.style.maxHeight = open ? '3.4em' : 'none';
   btn.textContent = open ? getT().histExpand : getT().histCollapse;
 }
 
@@ -7412,7 +7413,7 @@ async function showSajuHistory() {
     const entries = [];
 
     (sajuData.history || []).forEach(h => {
-      const modeIcon = h.mode === 'duo' ? '💞' : '☯';
+      const modeIcon = h.mode === 'duo' ? 'compat' : 'saju';   // js/icons.js 의 선화 이름
       const modeText = h.mode === 'duo' ? t.s2 : t.s1;   // 홈 타일과 같은 이름을 재사용
       const names = h.mode === 'duo'
         ? `${h.p1.name || t.histP1} & ${h.p2?.name || t.histP2}`
@@ -7425,27 +7426,33 @@ async function showSajuHistory() {
 
     // 라벨은 각 콘텐츠 화면에서 쓰는 기존 번역 키를 그대로 재사용한다 —
     // 기록 목록에만 따로 번역을 두면 화면과 이름이 어긋난다.
+    // ⚠️ 이모지가 아니라 js/icons.js 의 선화 이름이다. 홈 타일과 같은 그림을 쓴다 —
+    //    기록 목록만 이모지로 남아 있어 여기만 결이 달랐다(이모지는 기기마다 모양·색이
+    //    갈려 금빛 화면에서 겉돈다. 홈에서 이미 겪고 바꾼 문제다).
     const FEATURE_META = {
-      detail:     { icon: null, label: t.detailTitle },
-      tarot:      { icon: '🔮', label: t.tarotTitle },
-      zodiac:     { icon: '🐉', label: t.zodiacTitle },
-      lucky:      { icon: '🍀', label: t.luckyTitle },
-      typecompat: { icon: '🔯', label: t.drTypeTitle },
-      astro:      { icon: '🪐', label: t.astroTitle },
-      takil:      { icon: '📅', label: t.takilTitle },
-      daeun:      { icon: '🌊', label: t.daeunTitle },
-      name:       { icon: '✍️', label: t.nameTitle },
-      compat:     { icon: '💞', label: t.ctTitle },
+      detail:     { icon: 'saju',       label: t.detailTitle },
+      tarot:      { icon: 'tarot',      label: t.tarotTitle },
+      zodiac:     { icon: 'zodiac',     label: t.zodiacTitle },
+      lucky:      { icon: 'lucky',      label: t.luckyTitle },
+      typecompat: { icon: 'typecompat', label: t.drTypeTitle },
+      astro:      { icon: 'astro',      label: t.astroTitle },
+      takil:      { icon: 'takil',      label: t.takilTitle },
+      daeun:      { icon: 'daeun',      label: t.daeunTitle },
+      name:       { icon: 'name',       label: t.nameTitle },
+      compat:     { icon: 'compat',     label: t.ctTitle },
     };
     (featureData.history || []).forEach(h => {
-      const fm = FEATURE_META[h.feature] || { icon: '✨', label: h.feature };
-      let icon = fm.icon;
+      const fm = FEATURE_META[h.feature] || { icon: 'saju', label: h.feature };
+      // ⚠️ 이름을 icon 으로 두면 전역 icon() 함수를 가린다. 여기서는 안 쓰지만
+      //    나중에 이 블록에서 아이콘을 그리려다 "icon is not a function" 을 만난다.
+      const iconName = fm.icon;
       let title = h.title ? `${fm.label} · ${h.title}` : fm.label;
       let body = h.content;
 
       if (h.feature === 'detail') {
+        // 갈래 이름은 제목에 붙인다. 갈래마다 그림을 따로 두면 선화를 열 개 더 그려야 한다.
         const cat = (typeof DETAIL_CATS !== 'undefined' ? DETAIL_CATS : []).find(c => c.key === h.meta?.category);
-        icon = cat?.icon || '📖';
+        if (cat?.label && !h.title) title = `${fm.label} · ${cat.label}`;
       } else if (h.feature === 'lucky') {
         try {
           const picks = JSON.parse(h.content);
@@ -7459,7 +7466,7 @@ async function showSajuHistory() {
         title += ` (${t.tarotReversed})`;
       }
 
-      entries.push({ createdAt: h.createdAt, icon, title, sub: null, body });
+      entries.push({ createdAt: h.createdAt, icon: iconName, title, sub: null, body });
     });
 
     entries.sort((a, b) => b.createdAt - a.createdAt);
@@ -7490,21 +7497,19 @@ async function showSajuHistory() {
       const needsToggle = body.split('\n').length > 2 || body.length > 80;
 
       return `
-        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-            <div>
-              <div style="font-size: 0.9rem; color: var(--gold); margin-bottom: 4px;">${en.icon || ''} ${_escHtml(en.title)}</div>
-              ${en.sub ? `<div style="font-size: 0.85rem; color: var(--text-dim);">${_escHtml(en.sub)}</div>` : ''}
+        ${/* 모양은 CSS(.hist-card) 로 옮겼다. 예전엔 배경을 rgba(255,255,255,0.03) 으로
+              박아 두었는데, 밝은 화면에서는 크림색 위 흰색이라 칸이 아예 안 보였다. */''}
+        <div class="hist-card">
+          <div class="hist-head">
+            <div class="hist-title-wrap">
+              <div class="hist-title"><span class="hist-ic">${icon(en.icon)}</span>${_escHtml(en.title)}</div>
+              ${en.sub ? `<div class="hist-sub">${_escHtml(en.sub)}</div>` : ''}
             </div>
-            <div style="text-align: right; font-size: 0.75rem; color: var(--text-dim);">
-              <div>${dateStr}</div>
-              <div>${timeStr}</div>
-            </div>
+            <div class="hist-when"><div>${dateStr}</div><div>${timeStr}</div></div>
           </div>
-          <div id="hist-body-${i}" data-open="0" style="font-size: 0.85rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; opacity: 0.85; max-height: 3.4em; overflow: hidden;">${_escHtml(body)}</div>
+          <div id="hist-body-${i}" data-open="0" class="hist-body">${_escHtml(body)}</div>
           ${needsToggle ? `
-            <button id="hist-toggle-${i}" onclick="toggleHistoryEntry(${i})"
-              style="margin-top: 8px; background: none; border: none; color: var(--gold); font-size: 0.8rem; cursor: pointer; padding: 4px 0;">
+            <button id="hist-toggle-${i}" class="hist-toggle" onclick="toggleHistoryEntry(${i})">
               ${_escHtml(t.histExpand)}
             </button>` : ''}
         </div>

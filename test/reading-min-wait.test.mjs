@@ -22,7 +22,14 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // 주석은 빼고 본다. 설명문에 적힌 숫자가 코드로 오인되지 않게 한다.
-const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+//
+// ⚠️ /* 를 무조건 주석 시작으로 보면 안 된다. app.js 에는 accept="image/*" 가 있는데,
+//    거기서부터 다음 */ 까지 5만 자가 넘게 통째로 지워졌다. 그 안에 있던
+//    const MIN_MS 네 곳이 안 보여서, 멀쩡한 코드를 두고 검사만 틀렸다.
+//    진짜 주석 앞은 비었거나 여는 괄호·구분자다. image/* 는 앞이 글자다.
+const strip = (s) => s
+  .replace(/(^|[\s{(,;=&|?:])\/\*[\s\S]*?\*\//g, '$1')
+  .replace(/^\s*\/\/.*$/gm, '');
 const web = strip(readFileSync(join(ROOT, 'js', 'app.js'), 'utf8'));
 const mini = strip(readFileSync(join(ROOT, 'mini', 'src', 'main.js'), 'utf8'));
 

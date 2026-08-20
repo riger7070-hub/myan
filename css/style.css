@@ -5077,6 +5077,49 @@ button > [data-icon] .ic { width: 18px; height: 18px; }
    rgba(255,255,255,0.05) 라 밝은 화면에서는 크림색 위 흰색이 되어 칸이 아예
    안 보였고, 종류별 색(보라·초록·빨강·파랑)은 금·먹 팔레트 밖으로 튀었다.
 ════════════════════════════════════════ */
+/* ── 지난 기록 ──
+   미니앱의 .card.hist 와 같은 결. 엽전을 쓰고 받은 풀이를 다시 읽는 자리라
+   카드가 종이처럼 놓여 보여야 한다. */
+.hist-card {
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.hist-head {
+  display: flex; justify-content: space-between; align-items: start;
+  gap: 12px; margin-bottom: 10px;
+}
+.hist-title-wrap { min-width: 0; }
+.hist-title {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 0.95rem; color: var(--gold-light); font-weight: 500;
+  margin-bottom: 4px; word-break: keep-all;
+}
+/* 선화 아이콘. 이모지를 쓰다가 바꿨다 — 기록 목록만 이모지로 남아 홈과 결이 달랐다. */
+.hist-ic { display: inline-flex; flex: none; }
+.hist-ic .ic { width: 17px; height: 17px; }
+.hist-sub { font-size: 0.85rem; color: var(--text-dim); }
+.hist-when {
+  text-align: right; flex: none;
+  font-size: 0.75rem; color: var(--text-dim); line-height: 1.5;
+}
+.hist-body {
+  font-size: 0.88rem; line-height: 1.8; color: var(--text);
+  white-space: pre-wrap; overflow: hidden;
+  max-height: 3.4em;
+  transition: max-height 0.25s ease;
+}
+/* 펼침 여부는 data-open 하나로 정한다(js 는 그 값만 뒤집는다). */
+.hist-body[data-open="1"] { max-height: none; }
+.hist-toggle {
+  margin-top: 8px; padding: 4px 0;
+  background: none; border: none; cursor: pointer;
+  color: var(--gold); font-size: 0.8rem; font-family: inherit;
+}
+
 .th-row {
   display: flex;
   align-items: center;
