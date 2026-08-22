@@ -16,13 +16,32 @@ const worker = readFileSync(join(ROOT, 'worker.js'), 'utf8');
 
 test('모든 Gemini 호출이 안도령 인격을 달고 나간다', () => {
   const calls = [...worker.matchAll(/generativelanguage\.googleapis\.com\/v1beta/g)].map(m => m.index);
-  assert.ok(calls.length >= 10, `Gemini 호출을 ${calls.length}곳만 찾았다 — 추출을 확인할 것`);
+  assert.ok(calls.length >= 1, `Gemini 호출을 하나도 못 찾았다 — 추출을 확인할 것`);
 
-  // 호출 지점부터 본문이 끝날 만한 폭 안에 systemInstruction 이 있어야 한다.
-  const missing = calls.filter(i => !worker.slice(i, i + 800).includes('_ANDORYEONG_SI'));
+  // 호출 지점 앞뒤로 본문이 끝날 만한 폭 안에 systemInstruction 이 있어야 한다.
+  // (앞도 보는 이유: geminiText 는 body 를 먼저 만들고 그 다음에 URL 을 쓴다.)
+  const missing = calls.filter(i => !worker.slice(Math.max(0, i - 800), i + 800).includes('_ANDORYEONG_SI'));
   assert.equal(missing.length, 0,
     `안도령 없이 나가는 호출 ${missing.length}곳 (줄 ${missing.map(i =>
       worker.slice(0, i).split('\n').length).join(', ')})`);
+});
+
+test('유료 핸들러는 스스로 Gemini 를 부르지 않는다', () => {
+  // 예전엔 여덟 곳이 각자 fetch 했다. 그러면 추론 끄기·타임아웃·페르소나를 저마다
+  // 다시 적어야 하고, 빠뜨려도 화면은 멀쩡해 보인다. 호출을 geminiText 한 곳으로
+  // 모았으니, 이제는 "핸들러 안에 URL 이 있다" 자체가 회귀 신호다.
+  const starts = [...worker.matchAll(/^async function (\w+)\(request, env\)/gm)];
+  const offenders = starts
+    .map((m, i) => ({
+      name: m[1],
+      span: worker.slice(m.index, starts[i + 1] ? starts[i + 1].index : worker.length),
+    }))
+    .filter(h => /await accountSpend\(env, acct, /.test(h.span))
+    .filter(h => h.span.includes('generativelanguage.googleapis.com'))
+    .map(h => h.name);
+
+  assert.deepEqual(offenders, [],
+    `직접 Gemini 를 부르는 유료 핸들러: ${offenders.join(', ')} — geminiText 로 옮길 것`);
 });
 
 test('인격에 초보자 배려가 들어 있다', () => {

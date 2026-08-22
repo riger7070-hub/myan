@@ -52,10 +52,12 @@ test('빈 값이 와도 터지지 않는다', () => {
 });
 
 test('AI 가 쓴 글은 모두 이 거름망을 지난다', () => {
-  // geminiText 를 안 거치고 직접 뽑는 자리가 여덟 곳 있었다. 하나라도 새면
-  // 그 콘텐츠에서만 줄표가 튀어나온다.
+  // geminiText 를 안 거치고 직접 뽑는 자리가 여덟 곳 있었다 — 하나라도 새면
+  // 그 콘텐츠에서만 줄표가 튀어나온다. 지금은 그 여덟을 geminiText 로 모아서
+  // 남은 추출 자리가 둘뿐이다(거름망 본체와, JSON 을 받아 파싱하는 자리).
+  // 그래서 개수 하한이 아니라 **새는 곳이 없는지**만 본다.
   const raw = [...SRC.matchAll(/candidates\?\.\[0\]\?\.content\?\.parts\?\.\[0\]\?\.text/g)];
-  assert.ok(raw.length >= 9, `추출 자리가 ${raw.length}곳뿐이다 — 확인할 것`);
+  assert.ok(raw.length >= 1, `추출 자리를 하나도 못 찾았다 — 확인할 것`);
   for (const m of raw) {
     const line = SRC.slice(SRC.lastIndexOf('\n', m.index) + 1, SRC.indexOf('\n', m.index));
     // JSON 을 받아 파싱하는 자리(raw)는 본문이 아니므로 뺀다.

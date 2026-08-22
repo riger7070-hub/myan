@@ -920,15 +920,25 @@ function _sajuKey(saju, gender) {
 const CACHE_DAY  = 26 * 3600;        // 하루짜리(날짜를 타는 풀이)
 const CACHE_LONG = 90 * 24 * 3600;   // 사주처럼 안 바뀌는 것
 
-async function geminiText(env, prompt, generationConfig = {}) {
+/**
+ * Gemini 를 부르는 **유일한** 자리. 여기로 오지 않으면 아래 셋을 각자 다시 적어야 하고,
+ * 빠뜨려도 아무도 모른다 — 추론 끄기, 타임아웃, 안도령 페르소나.
+ *
+ * @param prompt 글 한 덩이. 사진처럼 이미지를 함께 보낼 때는 parts 배열을 그대로 넘긴다.
+ * @param extra  safetySettings 처럼 이 호출에만 필요한 것(관상은 얼굴 사진이라 완화가 필요하다).
+ */
+async function geminiText(env, prompt, generationConfig = {}, extra = {}) {
   // 추론 토큰을 끄지 않으면 답을 내기 전에 생각에만 시간을 쓴다. 느려지고, 출력 예산까지
   // 갉아먹어 본문이 잘린다(토정비결에서 겪었고, 라이프패스가 한참 안 뜨던 원인도 이것이다).
   // 사주 풀이는 긴 추론이 필요한 작업이 아니다 — 프롬프트에 이미 계산된 사주를 준다.
   const cfg = { temperature: 0.9, thinkingConfig: { thinkingBudget: 0 }, ...generationConfig };
+  const parts = Array.isArray(prompt) ? prompt : [{ text: prompt }];
+  const body = { systemInstruction: _ANDORYEONG_SI, contents: [{ parts }], generationConfig: cfg };
+  if (extra.safetySettings) body.safetySettings = extra.safetySettings;
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
     { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }], generationConfig: cfg }) }
+      body: JSON.stringify(body) }
   );
   let data = null;
   try { data = await resp.json(); } catch { data = null; }
@@ -4334,17 +4344,9 @@ async function handleDetailReading(request, env) {
 
 JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, maxOutputTokens:1200, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    const reading = await geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1200 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '상세 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -4642,17 +4644,9 @@ ${transitLines}
 - 400~500자 분량. 문단 2~3개.
 - JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9, maxOutputTokens:1200, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    const reading = await geminiText(env, prompt, { temperature: 0.9, maxOutputTokens: 1200 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '천궁도 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -7759,17 +7753,12 @@ async function handleFortuneTopic(request, env) {
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, maxOutputTokens:1000, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    // 같은 날·같은 사주·같은 주제면 같은 답이다. 키를 프롬프트에서 뽑으므로
+    // 날짜가 어긋날 여지가 없다 — 프롬프트 안의 ilchin() 이 곧 키의 일부다.
+    const reading = await cachedReading(env, 'fortune:' + _promptKey(prompt), CACHE_DAY,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1000 }));
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -7840,17 +7829,9 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
 
 중요: 한자를 쓸 경우 바로 옆에 괄호로 한글 독음과 뜻을 써주세요. JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, maxOutputTokens:1000, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    const reading = await geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1000 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '괘 풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -7994,17 +7975,12 @@ ${langLabel}로 아래 4개 섹션을 각각 2~3문장씩 작성하세요(섹션
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요(섹션 제목은 줄바꿈으로 구분). 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.8, maxOutputTokens: 4096, thinkingConfig:{ thinkingBudget: 0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    // 같은 사주·같은 해면 같은 신수다. 쌍둥이인 올해 세운(handleYearLuck)은 진작
+    // 이렇게 캐시하고 있었는데 여기만 빠져 있었다 — 신년에 몰릴수록 그대로 요금이 된다.
+    const reading = await cachedReading(env, 'tojeong:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 4096 }));
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '신년운세를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -8015,7 +7991,9 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    // e.message 를 그대로 돌려주면 내부 사정이 사용자에게 새어 나간다.
+    console.error('[TOJEONG]', e?.message);
+    return cors(JSON.stringify({ error:{ message: '신년운세를 생성하지 못했습니다.' } }), 500);
   }
 }
 
@@ -8081,30 +8059,19 @@ ${langLabel}로 5~7문장, 친근하고 희망적인 톤으로 작성하세요.
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          systemInstruction: _ANDORYEONG_SI,
-          contents:[{ parts:[
-            { text: prompt },
-            { inlineData: { mimeType: 'image/jpeg', data: b64 } }
-          ]}],
-          generationConfig:{ temperature:0.7, maxOutputTokens:1600, thinkingConfig:{ thinkingBudget:0 } },
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-          ],
-        }) }
-    );
-    // Gemini 응답 파싱 — 형식이 예상과 다르거나(JSON 아님 등) 실패해도 아래에서 안전하게 처리
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    // 사진은 캐시하지 않는다 — 같은 사진이 두 번 올라올 일이 없다.
+    // 세이프티는 얼굴·손 사진이라 기본값이면 멀쩡한 사진도 막힌다. 이 호출에만 완화한다.
+    const reading = await geminiText(env,
+      [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: b64 } }],
+      { temperature: 0.7, maxOutputTokens: 1600 },
+      { safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+        ] });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       // API 오류 또는 세이프티 필터 등으로 응답이 비면 엽전 환불
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '사진을 분석하지 못했습니다. 다른 사진으로 다시 시도해 주세요. 엽전은 환불되었습니다.' } }), 422);
@@ -8233,17 +8200,9 @@ ${langLabel}로 4~6문장, 꿈에 나온 상징들의 전통적인 해몽 의미
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.85, maxOutputTokens:1000, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1000 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '해몽하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
@@ -8298,17 +8257,9 @@ async function handleLottoNumbers(request, env) {
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-      { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ systemInstruction: _ANDORYEONG_SI, contents:[{ parts:[{ text: prompt }] }],
-          generationConfig:{ temperature:0.9, maxOutputTokens:800, thinkingConfig:{ thinkingBudget:0 } } }) }
-    );
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    const reading = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+    const reading = await geminiText(env, prompt, { temperature: 0.9, maxOutputTokens: 800 });
 
-    if (!resp.ok || !reading) {
+    if (!reading) {
       await refund(); refund = null;
       return cors(JSON.stringify({ error: { message: '코멘트를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
     }
