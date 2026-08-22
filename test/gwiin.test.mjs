@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadWorker } from './load-worker.mjs';
 
-const H = await loadWorker(['computeGwiin', 'computeSaju']);
+const H = await loadWorker(['computeGwiin', 'computeSaju', 'computeSinsal']);
 
 // 일간별 천을귀인 지지. 명리 고서의 표 그대로다.
 //   甲戊庚 - 丑未 / 乙己 - 子申 / 丙丁 - 亥酉 / 辛 - 午寅 / 壬癸 - 巳卯
@@ -207,4 +207,55 @@ test('띠로 사람을 가르지 말라는 지시가 프롬프트에 있다', ()
   const body = f.slice(0, f.indexOf('\n}\n'));
   assert.match(body, /사람을 띠로 갈라/, '띠로 사람을 가르지 말라는 지시가 없다');
   assert.match(body, /막연한 약속도 하지/, '막연한 약속을 막는 지시가 없다');
+});
+
+// ── 표를 나눠 쓰는 데서 오는 것들 ──
+//
+// 아래 둘은 계산이 "틀리는" 경우가 아니라 **조용히 반쪽만 도는** 경우를 막는다.
+// 둘 다 화면에는 멀쩡한 문장이 나와서 눈으로는 못 잡는다.
+
+test('천을귀인은 신살 풀이와 같은 답을 낸다', () => {
+  // 두 화면이 같은 사람에게 다른 귀인을 말하면 둘 다 못 믿게 된다.
+  // 지금은 CHEONEUL 표 하나를 나눠 쓰지만, 어느 한쪽이 표를 복사해 가면 여기서 갈린다.
+  let checked = 0;
+  for (let m = 1; m <= 12; m++) {
+    for (const d of [3, 17, 28]) {
+      const saju = H.computeSaju(1988, m, d, '오시');
+      if (!saju) continue;
+      const gwiin = H.computeGwiin(saju);
+      const sinsal = H.computeSinsal(saju);
+      assert.ok(gwiin, '귀인을 못 구했다');
+
+      const 신살이본다 = (sinsal?.hits || []).some(h => h.name === '천을귀인');
+      const 귀인이본다 = gwiin.stars.some(s => s.name === '천을귀인');
+      assert.equal(귀인이본다, 신살이본다,
+        `${saju.dp} 일주: 신살은 ${신살이본다}, 귀인은 ${귀인이본다} 라 한다`);
+      checked++;
+    }
+  }
+  assert.ok(checked >= 30, `${checked}개만 봤다 — 사주를 못 세우고 있다`);
+});
+
+test('천덕귀인은 지지로 오는 네 달에도 선다', () => {
+  // 천덕은 천간으로 오는 달이 대부분이지만 卯→申, 酉→寅, 子→巳, 午→亥 넷은 **지지**다.
+  // 표를 옮길 때 천간(p[0])만 훑도록 짜면 이 네 달에 태어난 사람은 천덕이 영영 안 선다.
+  const 지지천덕 = { 卯: '申', 酉: '寅', 子: '巳', 午: '亥' };
+  let 실제로선적 = 0, 봤다 = 0;
+  for (let y = 1970; y <= 2005; y++) {
+    for (let m = 1; m <= 12; m++) {
+      const saju = H.computeSaju(y, m, 15, '자시');
+      if (!saju) continue;
+      const want = 지지천덕[saju.mp[1]];
+      if (!want) continue;
+      봤다++;
+
+      const 지지들 = [saju.yp, saju.mp, saju.dp, saju.hp].filter(Boolean).map(p => p[1]);
+      const 섰나 = H.computeGwiin(saju).stars.some(s => s.name === '천덕귀인');
+      assert.equal(섰나, 지지들.includes(want),
+        `${saju.mp[1]}월: 천덕 ${want} 가 지지에 ${지지들.includes(want) ? '있는데 안 섰다' : '없는데 섰다'}`);
+      if (지지들.includes(want)) 실제로선적++;
+    }
+  }
+  assert.ok(봤다 > 0, '지지로 천덕이 오는 달을 한 번도 못 만났다');
+  assert.ok(실제로선적 > 0, '지지 천덕이 실제로 선 경우가 없었다 — 검사가 헛돈다');
 });
