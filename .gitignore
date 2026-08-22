@@ -50,3 +50,8 @@ mini/*.ait
 *.pfx
 toss*.zip
 toss-cert/
+
+# quick-mobile-test.js 가 뱉는 스크린샷.
+# 루트는 통째로 정적 자산으로 서빙되므로(wrangler.toml 의 [assets]) 여기 커밋하면
+# 홈·가입 화면 스크린샷이 그대로 공개된다. 실제로 셋이 올라가 있었다.
+mobile-test-*.png
