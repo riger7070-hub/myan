@@ -85,33 +85,65 @@ export const PURPOSES = [
   { v: 'ritual',   label: '고사와 기도' },
 ];
 
+// 묶음은 계열이 아니라 **사람이 찾는 이유**로 나눈다. 웹(js/app.js 의 _homeSections)과
+// 제목·순서가 같아야 한다 — test/client-sections-sync.test.mjs 가 대조한다.
+// 담기는 항목까지 같지는 않다(로또는 웹에만, 출석·산가지는 미니앱에만 있다).
 export const SECTIONS = [
   {
     icon: 'secMe', title: '사주로 보는 나',
     items: [
+      // 무료 풀이를 맨 앞에 둔다 — 처음 온 사람이 엽전을 쓰기 전에 한 번 받아 볼 자리다.
+      { id: 'saju',       icon: 'saju',       label: '내 사주 풀이',       cost: 0, path: '/saju-reading',       need: null, free: true },
       { id: 'wealth',     icon: 'wealth',     label: '재물운',             cost: 4, path: '/api/wealth',        need: null },
       { id: 'sinsal',     icon: 'sinsal',     label: '신살 풀이',          cost: 3, path: '/api/sinsal',         need: null },
       { id: 'gwiin',      icon: 'gwiin',      label: '귀인 찾기',          cost: 4, path: '/api/gwiin',          need: null },
-      { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
       { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
       { id: 'daeun',      icon: 'daeun',      label: '대운, 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
-      { id: 'naming',     icon: 'naming',     label: '작명에 참고할 결', cost: 4, path: '/api/naming',      need: 'surname' },
-      { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
-      { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
+      { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
+    ],
+  },
+  {
+    // 궁합은 그것만 보러 오는 사람이 있다. 전에는 '때를 고르다' 안에 궁합 시기와
+    // 속궁합이 섞여 있어서 그 사람이 못 찾았다 — 그래서 밖으로 뺐다.
+    icon: 'secLove', title: '궁합과 인연',
+    items: [
+      { id: 'compat',  icon: 'compat',  label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'intimacy', icon: 'intimacy', label: '속궁합',              cost: 5, path: '/api/intimacy',      need: 'partner' },
       { id: 'typecompat', icon: 'typecompat', label: '오행 유형 테스트',    cost: 2, path: '/api/type-compat',    need: 'type' },
+      { id: 'spouse',  icon: 'spouse',  label: '배우자궁 풀이',          cost: 3, path: '/api/spouse-palace',   need: null },
+    ],
+  },
+  {
+    // 작명·이름·관상은 목적이 뚜렷해서 사주 일반과 섞이면 오히려 안 보인다.
+    icon: 'secName', title: '이름과 인상',
+    items: [
+      { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
+      { id: 'naming',     icon: 'naming',     label: '작명에 참고할 결', cost: 4, path: '/api/naming',      need: 'surname' },
+      { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
       { id: 'numerology', icon: 'numerology', label: '라이프패스 넘버',     cost: 2, path: '/api/numerology',     need: null },
     ],
   },
   {
-    icon: 'secTiming', title: '때를 고르다',
+    icon: 'secTiming', title: '때와 방위',
     items: [
-      { id: 'direction', icon: 'direction', label: '이사 방위',            cost: 3, path: '/api/direction',    need: null },
       { id: 'takil',   icon: 'takil',   label: '택일, 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
-      { id: 'compat',  icon: 'compat',  label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'direction', icon: 'direction', label: '이사 방위',            cost: 3, path: '/api/direction',    need: null },
       { id: 'yearluck', icon: 'yearluck', label: '올해 세운',           cost: 4, path: '/api/year-luck',     need: null },
-      { id: 'intimacy', icon: 'intimacy', label: '속궁합',              cost: 5, path: '/api/intimacy',      need: 'partner' },
-      { id: 'spouse',  icon: 'spouse',  label: '배우자궁 풀이',          cost: 3, path: '/api/spouse-palace',   need: null },
       { id: 'tojeong', icon: 'tojeong', label: '토정비결풍 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
+    ],
+  },
+  {
+    icon: 'secDaily', title: '오늘의 운세',
+    items: [
+      { id: 'today',  icon: 'today',  label: '오늘의 운세',        cost: 1, path: '/mini/api/today',     need: null },
+      { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',     cost: 1, path: '/api/tti-ranking',    need: null },
+      { id: 'zodiac', icon: 'zodiac', label: '띠와 별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },
+      { id: 'topic',  icon: 'topic',  label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
+      { id: 'lucky',  icon: 'lucky',  label: '오늘의 럭키 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
+      { id: 'astro',  icon: 'astro',  label: '천궁도 트랜싯',      cost: 1, path: '/api/astro-transit',  need: null },
+      // 산가지는 서버를 안 부르는 무료 재미다. 엽전이 걸린 놀이들과 같은 칸에 두면
+      // 보상이 있는 줄 알고 눌렀다 실망한다. 오늘의 운세 곁이 제자리다.
+      { id: 'stick',  icon: 'stick',  label: '산가지 뽑기',         cost: 0, path: null,                  need: null, free: true, local: true },
     ],
   },
   {
@@ -123,21 +155,6 @@ export const SECTIONS = [
       { id: 'rune',   icon: 'rune',   label: '룬 문자 점',   cost: 1, path: '/api/rune-reading',        need: null },
       { id: 'dream',  icon: 'dream',  label: '꿈해몽',       cost: 1, path: '/api/dream-interpretation', need: 'text',
         prompt: '어떤 꿈을 꾸셨나요?', placeholder: '예: 맑은 물에서 잉어를 봤어요', required: true, field: 'dream' },
-    ],
-  },
-  {
-    icon: 'secDaily', title: '오늘의 운세',
-    items: [
-      { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',     cost: 1, path: '/api/tti-ranking',    need: null },
-      { id: 'today',  icon: 'today',  label: '오늘의 운세',        cost: 1, path: '/mini/api/today',     need: null },
-      { id: 'astro',  icon: 'astro',  label: '천궁도 트랜싯',      cost: 1, path: '/api/astro-transit',  need: null },
-      { id: 'zodiac', icon: 'zodiac', label: '띠와 별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },
-      { id: 'topic',  icon: 'topic',  label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
-      { id: 'lucky',  icon: 'lucky',  label: '오늘의 럭키 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
-      { id: 'saju',   icon: 'saju',   label: '내 사주 풀이',        cost: 0, path: '/saju-reading',       need: null, free: true },
-      // 산가지는 서버를 안 부르는 무료 재미다. 엽전이 걸린 놀이들과 같은 칸에 두면
-      // 보상이 있는 줄 알고 눌렀다 실망한다. 오늘의 운세 곁이 제자리다.
-      { id: 'stick',  icon: 'stick',  label: '산가지 뽑기',         cost: 0, path: null,                  need: null, free: true, local: true },
     ],
   },
 ];
