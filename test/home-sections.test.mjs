@@ -84,6 +84,17 @@ test('타일에 적힌 값이 서버가 실제로 빼는 값과 같다', () => {
   // 다른 파일에 따로 적혀 있어 한쪽만 고치기 쉬우므로 여기서 맞물려 둔다.
   // 이 표가 홈 타일과 결제 핸들러를 잇는 유일한 연결이다 — 새 유료 기능은 여기에도 적을 것.
   const HANDLER_OF = {
+    'openWealth()':         'handleWealth',
+    'openSinsal()':         'handleSinsal',
+    'openGwiin()':          'handleGwiin',
+    'openVocation()':       'handleVocation',
+    'openPastLife()':       'handlePastLife',
+    'openIntimacy()':       'handleIntimacy',
+    'openSpousePalace()':   'handleSpousePalace',
+    'openNaming()':         'handleNaming',
+    'openDirection()':      'handleDirection',
+    'openYearLuck()':       'handleYearLuck',
+    'openTtiRanking()':     'handleTtiRanking',
     'openDaeun()':          'handleDaeun',
     'openNameReading()':    'handleNameReading',
     'openPhotoReading()':   'handlePhotoReading',

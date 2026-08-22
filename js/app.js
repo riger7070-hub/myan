@@ -6140,6 +6140,245 @@ async function openTojeong() {
 }
 
 // ════════════════════════════════════════════
+//  미니앱에만 있던 콘텐츠 11종 — 웹으로 옮긴 것
+//
+//  서버 핸들러도 프롬프트도 이미 있었다. 없던 것은 웹 화면뿐이라, 같은 기능이
+//  미니앱에서는 팔리는데 웹에서는 살 수조차 없었다(재물운·신살·귀인·전생·천직·
+//  작명·이사 방위·올해 세운·속궁합·배우자궁·띠 순위).
+//
+//  아홉은 흐름이 완전히 같다: 로그인 → 생년월일 → 모달 → /api/* → 최소 대기 →
+//  풀이. openTojeong 을 아홉 번 복사하면 700줄이 늘고, 고칠 일이 생기면 아홉
+//  군데를 고쳐야 한다. 다른 것은 스펙뿐이라 표로 두고 openReading 이 공통을 맡는다.
+//  (미니앱도 같은 구조다 — mini/src/main.js 의 bodyFor / extractResult)
+//
+//  ⚠️ cost 는 여기가 아니라 _homeSections() 에 적힌다. home-sections.test.mjs 가
+//     그 값을 서버의 accountSpend 와 대조하므로, 값을 바꿀 때는 서버부터 볼 것.
+// ════════════════════════════════════════════
+const _READINGS = {
+  wealth:    { icon:'wealth',    path:'/api/wealth',        titleKey:'wealthTitle' },
+  sinsal:    { icon:'sinsal',    path:'/api/sinsal',        titleKey:'sinsalTitle' },
+  gwiin:     { icon:'gwiin',     path:'/api/gwiin',         titleKey:'gwiinTitle' },
+  pastlife:  { icon:'pastlife',  path:'/api/past-life',     titleKey:'pastlifeTitle' },
+  vocation:  { icon:'vocation',  path:'/api/vocation',      titleKey:'vocationTitle' },
+  // 이사 방위는 목적을 함께 받는다. 웹에서는 '이사'로 고정한다 — 목적 고르기는
+  // 택일(openAuspiciousDays)이 이미 맡고 있어 두 화면이 겹칠 이유가 없다.
+  direction: { icon:'direction', path:'/api/direction',     titleKey:'directionTitle', extra:{ purpose:'move' } },
+  yearluck:  { icon:'yearluck',  path:'/api/year-luck',     titleKey:'yearluckTitle' },
+  spouse:    { icon:'spouse',    path:'/api/spouse-palace', titleKey:'spouseTitle' },
+  // 띠 순위는 생년만 본다 — 서버도 성별을 읽지 않으므로 보내지 않는다.
+  ttirank:   { icon:'ttirank',   path:'/api/tti-ranking',   titleKey:'ttirankTitle', noGender:true },
+};
+
+/**
+ * 풀이와 함께 오는 "값"들을 한 줄씩 뽑는다.
+ *
+ * 서버는 산문(reading) 말고도 계산 결과를 함께 준다 — 신살 목록, 귀인의 띠,
+ * 좋은 방위 같은 것들이다. 산문만 보여 주면 그 화면의 알맹이가 본문에 묻힌다
+ * ("당신의 귀인은 소띠와 양띠입니다" 가 그렇다).
+ *
+ * 모르는 필드는 조용히 버린다 — 서버가 필드를 늘려도 화면이 깨지지 않는다.
+ * 미니앱에서 같은 일을 하는 것은 mini/src/main.js 의 extractResult 다.
+ */
+function _readingFacts(d, t) {
+  const out = [];
+  const add = (label, value) => { if (label && value) out.push([label, String(value)]); };
+  // 목록을 한 줄로 잇는다. 서버가 필드 이름을 바꾸면 map 이 undefined 를 뱉는데,
+  // 그대로 join 하면 "undefined, undefined" 라는 멀쩡해 보이는 문자열이 되어
+  // 화면에 그대로 뜬다. 값이 없으면 줄 자체가 없는 편이 맞다.
+  const list = (arr, pick) => (arr || []).map(pick).filter(v => v != null && v !== '').join(', ');
+
+  // 신살 — 없으면 "없다"고 적는 편이 빈 화면보다 낫다.
+  if (Array.isArray(d.hits)) {
+    add(t.factSinsal, d.hits.length ? list(d.hits, h => h.name) : t.factNoSinsal);
+    if (d.samjae?.years?.length) {
+      add(d.samjae.inSamjae ? t.factSamjaeNow : t.factSamjaeNext,
+          list(d.samjae.years, y => y.year));
+    }
+  }
+  // 귀인 — 알맹이는 "누가 나에게 귀인인가"다. 그 줄이 맨 앞에 와야 한다.
+  if (Array.isArray(d.people) && d.people.length) add(t.factGwiinPeople, list(d.people, p => p.tti));
+  if (Array.isArray(d.stars) && d.stars.length)   add(t.factGwiinStars,  list(d.stars, x => x.name));
+  if (Array.isArray(d.years) && d.years.length && d.people) {
+    add(t.factGwiinYears, list(d.years.slice(0, 3), y => y.year));
+  }
+  // 이사 방위
+  if (d.gungName) add(t.factGung, `${d.gungName} ${d.group || ''}`.trim());
+  if (Array.isArray(d.good) && d.good.length) add(t.factGoodDir, list(d.good, x => x.dir));
+  if (Array.isArray(d.bad) && d.bad.length)   add(t.factBadDir,  list(d.bad, x => x.dir));
+  // 재물운
+  if (d.shape) add(t.factWealthShape, d.shape);
+  if (Array.isArray(d.wealthYears) && d.wealthYears.length) {
+    add(t.factWealthYears, list(d.wealthYears.filter(y => !y.feeds).slice(0, 4), y => y.year));
+  }
+  // 천직 — 가장 두터운 십신 셋
+  if (Array.isArray(d.top) && d.top.length) add(t.factSipsinTop, list(d.top, x => x));
+  // 배우자궁
+  if (d.branch && d.sipsin) add(t.factSpouseGung, `${d.branch}(${d.elem || ''}) ${d.sipsin}`);
+  // 띠 순위 — 내 띠가 몇 위인지가 제일 궁금한 값이다.
+  if (d.mine?.name) add(t.factMyTti, `${d.mine.name} ${d.mine.rank}`);
+
+  if (!out.length) return '';
+  return `<div class="detail-area-card" style="margin-bottom:10px;font-size:0.78rem">${
+    out.map(([k, v]) =>
+      `<div style="display:flex;gap:8px;margin:3px 0"><span style="color:var(--gold);flex:0 0 auto">${_escHtml(k)}</span><span>${_escHtml(v)}</span></div>`
+    ).join('')}</div>`;
+}
+
+/** _READINGS 의 한 항목을 연다. 차감도 안내도 서버가 하므로 여기서는 값을 모른다. */
+async function openReading(id) {
+  const spec = _READINGS[id];
+  if (!spec) return;
+  const ctx = _readingContext();
+  if (!ctx) return;
+  const { token, t, lang, birth, user } = ctx;
+  const title = t[spec.titleKey] || '';
+
+  const overlay = _readingOverlay(spec.icon, title, '', t);
+  const body = { lang, birth, ...(spec.noGender ? {} : { gender:user.gender || '' }), ...(spec.extra || {}) };
+  await _runReading(overlay, spec, body, token, t, lang, title);
+}
+
+/** 모달 껍데기. formHtml 이 있으면 먼저 입력을 받고, 없으면 바로 부르는 모양이 된다. */
+function _readingOverlay(iconName, title, formHtml, t) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay active';
+  overlay.style.zIndex = '1200';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:420px;padding:28px 22px;text-align:center;max-height:80vh;overflow-y:auto">
+      <div class="modal-title"><span class="ic-title">${icon(iconName)}</span>${_escHtml(title)}</div>
+      ${formHtml ? `<div id="rdForm" style="margin-top:16px">${formHtml}</div>` : ''}
+      <div id="rdStatus" style="${formHtml ? 'display:none;' : ''}font-size:0.8rem;color:var(--text-dim);margin-top:14px">${formHtml ? '' : _escHtml(t.readingLoading || '')}</div>
+      <div id="rdResult" style="display:none;text-align:left;margin-top:18px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  return overlay;
+}
+
+/** 호출·최소 대기·그리기. 입력을 먼저 받는 콘텐츠(작명·속궁합)도 이 뒤를 함께 쓴다. */
+async function _runReading(overlay, spec, body, token, t, lang, title) {
+  const statusEl = overlay.querySelector('#rdStatus');
+  const resultEl = overlay.querySelector('#rdResult');
+  const started = Date.now();
+  const MIN_MS = readMinMs(4);
+  try {
+    const res = await fetch(spec.path, {
+      method: 'POST',
+      headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    const remain = MIN_MS - (Date.now() - started);
+    if (remain > 0) await new Promise(r => setTimeout(r, remain));
+
+    if (!data.success) {
+      if (statusEl) { statusEl.style.display = ''; statusEl.innerHTML = _resultErrorHtml(res, data); }
+      return false;
+    }
+    if (statusEl) statusEl.style.display = 'none';
+    if (!resultEl) return true;
+    resultEl.style.display = '';
+    resultEl.innerHTML = `
+      ${_readingFacts(data, t)}
+      <div class="detail-area-card"><div class="detail-area-body" id="rdBody"></div></div>
+      ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${_escHtml(t.tokenUnit || '잔여 엽전')}: ${data.remaining}</div>` : ''}
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"✦",title:${JSON.stringify(title)},filename:"myan-reading"})'>📤 ${{ ko:'공유하기', en:'Share', zh:'分享', ja:'共有' }[lang] || '공유하기'}</button>`;
+    const bodyEl = overlay.querySelector('#rdBody');
+    if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
+    return true;
+  } catch (e) {
+    if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '오류가 발생했습니다.'; }
+    return false;
+  }
+}
+
+// 타일은 동작을 fn:'openXxx()' 라는 **문자열**로 들고 있다가 onclick 에 그대로 박는다.
+// 인자를 넘기는 형태로 두면 home-sections.test.mjs 의 "그 함수가 실제로 있는가"
+// 검사를 빠져나가므로, 이름 있는 함수로 하나씩 둔다.
+function openWealth()       { return openReading('wealth'); }
+function openSinsal()       { return openReading('sinsal'); }
+function openGwiin()        { return openReading('gwiin'); }
+function openPastLife()     { return openReading('pastlife'); }
+function openVocation()     { return openReading('vocation'); }
+function openDirection()    { return openReading('direction'); }
+function openYearLuck()     { return openReading('yearluck'); }
+function openSpousePalace() { return openReading('spouse'); }
+function openTtiRanking()   { return openReading('ttirank'); }
+
+/** 작명 — 성(姓)을 먼저 받는다. */
+async function openNaming() {
+  const ctx = _readingContext();
+  if (!ctx) return;
+  const { token, t, lang, birth, user } = ctx;
+  const spec = { icon:'naming', path:'/api/naming' };
+  const title = t.namingTitle || '';
+  const overlay = _readingOverlay('naming', title, `
+    <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.namingAsk || '')}</div>
+    <input type="text" id="rdSurname" class="takil-field" maxlength="2" autocomplete="off"
+           placeholder="${_escHtml(t.namingPlaceholder || '')}" style="text-align:center;font-size:1rem">
+    <button class="oracle-skip-btn" id="rdRun" style="width:100%;margin-top:12px">${_escHtml(t.namingRun || '')}</button>`, t);
+  overlay.querySelector('#rdSurname')?.focus();
+
+  const run = async () => {
+    const surname = (overlay.querySelector('#rdSurname')?.value || '').trim();
+    if (!surname) return;
+    _readingStartWait(overlay, t);
+    await _runReading(overlay, spec, { lang, birth, gender:user.gender || '', surname }, token, t, lang, title);
+  };
+  overlay.querySelector('#rdRun')?.addEventListener('click', run);
+  overlay.querySelector('#rdSurname')?.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+}
+
+/** 속궁합 — 상대의 생년월일을 먼저 받는다(궁합 시기와 같은 입력 문구를 쓴다). */
+async function openIntimacy() {
+  const ctx = _readingContext();
+  if (!ctx) return;
+  const { token, t, lang, birth, user } = ctx;
+  const spec = { icon:'intimacy', path:'/api/intimacy' };
+  const title = t.intimacyTitle || '';
+  const overlay = _readingOverlay('intimacy', title, `
+    <div style="font-size:0.84rem;color:var(--text-dim);margin-bottom:10px">${_escHtml(t.ctAsk || '')}</div>
+    <input type="date" id="rdPartnerBirth" class="takil-field">
+    <button class="oracle-skip-btn" id="rdRun" style="width:100%;margin-top:12px">${_escHtml(t.ctRun || '')}</button>`, t);
+
+  overlay.querySelector('#rdRun')?.addEventListener('click', async () => {
+    const m = (overlay.querySelector('#rdPartnerBirth')?.value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return;
+    _readingStartWait(overlay, t);
+    const partner = { year:+m[1], month:+m[2], day:+m[3], hour:'' };
+    await _runReading(overlay, spec, { lang, birth, partner, gender:user.gender || '' }, token, t, lang, title);
+  });
+}
+
+/** 로그인·생년월일을 확인하고 공통 값을 돌려준다. 못 갖추면 안내하고 null. */
+function _readingContext() {
+  const token = getGoogleIdToken();
+  if (!token) {
+    showToast(getT().loginRequired || '로그인 후 이용할 수 있습니다.');
+    return null;
+  }
+  const t = getT();
+  const user = (typeof getUser === 'function') ? getUser() : null;
+  if (!user?.birthYear) {
+    showToast(t.tojeongNeedBirth || '먼저 마이페이지에서 생년월일을 등록해 주세요.');
+    openMyPage();
+    return null;
+  }
+  return {
+    token, t, lang: getLang(), user,
+    birth: { year:user.birthYear, month:user.birthMonth, day:user.birthDay, hour:user.birthHour || '' },
+  };
+}
+
+/** 입력칸을 접고 기다리는 표시로 넘어간다. */
+function _readingStartWait(overlay, t) {
+  const form = overlay.querySelector('#rdForm');
+  if (form) form.style.display = 'none';
+  const st = overlay.querySelector('#rdStatus');
+  if (st) { st.style.display = ''; st.textContent = t.readingLoading || ''; }
+}
+
+// ════════════════════════════════════════════
 //  관상·손금 사진 분석 (재미 콘텐츠, 엽전 2개)
 // ════════════════════════════════════════════
 let _photoReadingType = null;
@@ -6571,34 +6810,58 @@ async function _runeDraw() {
 // ════════════════════════════════════════════
 function _homeSections() {
   const t = getT();
+  // 묶음은 계열이 아니라 **사람이 찾는 이유**로 나눈다. 콘텐츠가 29종이 되면서
+  // 넷으로는 한 칸이 열넷까지 부풀어 아무것도 못 찾는 상태가 됐다.
+  //
+  // 특히 궁합을 밖으로 뺐다. 다른 사주 서비스가 예외 없이 '궁합'을 최상위에
+  // 두는 이유가 있다 — 궁합은 목적이 뚜렷해서 그것만 보러 오는 사람이 있고,
+  // 예전처럼 '때를 고르다' 안에 궁합 시기와 속궁합이 섞여 있으면 그 사람은
+  // 못 찾는다. 이름·인상도 같은 이유로 따로 뺐다(작명은 목적이 분명하다).
+  //
+  // 한 묶음이 일곱을 넘으면 다시 나눌 때다 — home-sections.test.mjs 가 그 선을 지킨다.
   return [
     // icon 은 js/icons.js 의 이름이다(이모지가 아니다). 기기마다 모양·색이 갈리던 것을
     // 직접 그린 선화로 바꿨다 — currentColor 라 밝은 화면에서도 저절로 맞는다.
     { icon:'secMe', title: t.csMe || '사주로 보는 나', items: [
+      { icon:'wealth',     label: t.wealthTitle     || '재물운',            cost:4, fn:'openWealth()' },
+      { icon:'sinsal',     label: t.sinsalTitle     || '신살 풀이',         cost:3, fn:'openSinsal()' },
+      { icon:'gwiin',      label: t.gwiinTitle      || '귀인 찾기',         cost:4, fn:'openGwiin()' },
+      { icon:'vocation',   label: t.vocationTitle   || '천직과 적성',       cost:4, fn:'openVocation()' },
       { icon:'daeun',      label: t.daeunTitle      || '대운 · 10년의 흐름', cost:6, fn:'openDaeun()' },
-      { icon:'name',       label: t.nameTitle       || '이름 풀이',         cost:4, fn:'openNameReading()' },
-      { icon:'photo',      label: t.photoModalTitle || '관상·손금',         cost:4, fn:'openPhotoReading()' },
+      { icon:'pastlife',   label: t.pastlifeTitle   || '전생 이야기',       cost:4, fn:'openPastLife()' },
+    ]},
+    { icon:'secLove', title: t.csLove || '궁합과 인연', items: [
+      { icon:'compat',     label: t.ctTitle         || '궁합 시기',         cost:6, fn:'openCompatTiming()' },
+      { icon:'intimacy',   label: t.intimacyTitle   || '속궁합',            cost:5, fn:'openIntimacy()' },
       { icon:'typecompat', label: t.typeTitle       || '오행 유형 테스트',   cost:2, fn:'openTypeTest()' },
+      { icon:'spouse',     label: t.spouseTitle     || '배우자궁 풀이',      cost:3, fn:'openSpousePalace()' },
+    ]},
+    { icon:'secName', title: t.csName || '이름과 인상', items: [
+      { icon:'name',       label: t.nameTitle       || '이름 풀이',         cost:4, fn:'openNameReading()' },
+      { icon:'naming',     label: t.namingTitle     || '작명에 참고할 결',   cost:4, fn:'openNaming()' },
+      { icon:'photo',      label: t.photoModalTitle || '관상·손금',         cost:4, fn:'openPhotoReading()' },
       { icon:'numerology', label: t.numerologyTitle || '라이프패스 넘버',    cost:2, fn:'openNumerology()' },
     ]},
-    { icon:'secTiming', title: t.csTiming || '때를 고르다', items: [
-      { icon:'takil',   label: t.takilTitle   || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
-      { icon:'compat',  label: t.ctTitle      || '궁합 시기',            cost:6, fn:'openCompatTiming()' },
-      { icon:'tojeong', label: t.tojeongTitle || '토정비결풍 신년운세',   cost:4, fn:'openTojeong()' },
+    { icon:'secTiming', title: t.csTiming || '때와 방위', items: [
+      { icon:'takil',      label: t.takilTitle      || '택일 · 좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
+      { icon:'direction',  label: t.directionTitle  || '이사 방위',         cost:3, fn:'openDirection()' },
+      { icon:'yearluck',   label: t.yearluckTitle   || '올해 세운',         cost:4, fn:'openYearLuck()' },
+      { icon:'tojeong',    label: t.tojeongTitle    || '토정비결풍 신년운세', cost:4, fn:'openTojeong()' },
+    ]},
+    { icon:'secDaily', title: t.csDaily || '오늘의 운세', items: [
+      { icon:'ttirank',      label: t.ttirankTitle      || '오늘의 띠 순위',   cost:1, fn:'openTtiRanking()' },
+      { icon:'zodiac',       label: t.zodiacTitle       || '띠·별자리 운세',    cost:1, fn:'openZodiacFortune()' },
+      { icon:'topic',        label: t.fortuneModalTitle || '오늘의 운세 모음',  cost:1, fn:'openFortuneTopics()' },
+      { icon:'lucky',        label: t.luckyTitle        || '오늘의 럭키 아이템', cost:1, fn:'openLuckyPicks()' },
+      { icon:'astro',        label: t.astroTitle        || '천궁도 트랜싯',    cost:1, fn:'openAstroTransit()' },
+      { icon:'lotto',        label: t.lottoTitle        || '오늘의 로또번호',   cost:1, fn:'openLottoNumbers()' },
+      { icon:'quickFortune', label: t.quickFortuneTitle || '오늘의 행운',      cost:0, fn:'openFortuneModal()' },
     ]},
     { icon:'secAsk', title: t.csAsk || '물어보는 점', items: [
       { icon:'tarot',  label: t.tarotTitle  || '오늘의 타로',   cost:1, fn:'openTarotDraw()' },
       { icon:'iching', label: t.ichingTitle || '주역 괘 풀이',  cost:1, fn:'openIching()' },
       { icon:'rune',   label: t.runeTitle   || '룬 문자 점',    cost:1, fn:'openRuneReading()' },
       { icon:'dream',  label: t.dreamTitle  || '꿈해몽',        cost:1, fn:'openDreamInterpretation()' },
-    ]},
-    { icon:'secDaily', title: t.csDaily || '오늘의 운세', items: [
-      { icon:'astro',        label: t.astroTitle        || '천궁도 트랜싯',     cost:1, fn:'openAstroTransit()' },
-      { icon:'zodiac',       label: t.zodiacTitle       || '띠·별자리 운세',     cost:1, fn:'openZodiacFortune()' },
-      { icon:'topic',        label: t.fortuneModalTitle || '오늘의 운세 모음',   cost:1, fn:'openFortuneTopics()' },
-      { icon:'lucky',        label: t.luckyTitle        || '오늘의 럭키 아이템', cost:1, fn:'openLuckyPicks()' },
-      { icon:'lotto',        label: t.lottoTitle        || '오늘의 로또번호',    cost:1, fn:'openLottoNumbers()' },
-      { icon:'quickFortune', label: t.quickFortuneTitle || '오늘의 행운',       cost:0, fn:'openFortuneModal()' },
     ]},
   ];
 }
