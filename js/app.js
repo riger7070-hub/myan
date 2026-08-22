@@ -7611,11 +7611,9 @@ function renderUngiPuddingCard(ohaeng) {
 // ════════════════════════════════════════════
 // 기록 본문에는 사용자가 입력한 이름과 AI 응답이 그대로 들어가므로,
 // innerHTML 로 그리기 전에 반드시 이스케이프한다.
-function _escHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// _escHtml 은 위(사주 기록 조회 UI 위쪽)에 한 벌만 둔다. 여기에도 같은 함수가
+// 하나 더 있었는데, 함수 선언은 뒤엣것이 이기므로 위를 고쳐도 반영되지 않았다 —
+// 이스케이프처럼 안전에 걸린 함수가 두 벌인 것은 그 자체로 위험하다.
 
 // 펼침 상태를 innerHTML 재생성 없이 토글한다(본문은 이미 DOM 에 들어있고 CSS 로만 접는다).
 function toggleHistoryEntry(idx) {

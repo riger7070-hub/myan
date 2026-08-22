@@ -27,6 +27,16 @@ function grab(name) {
   assert.ok(m, `${name} 을 app.js 에서 찾지 못했다 — 이름이 바뀌었는지 확인할 것`);
   return m[0];
 }
+// 같은 이름의 함수가 두 벌이면 이 파일이 뽑아 쓰는 것과 브라우저에서 실제로 도는
+// 것이 달라진다(선언은 뒤엣것이 이긴다). _escHtml 이 실제로 두 벌이었고, 이 검사가
+// 없었다면 여기서 통과한 이스케이프가 화면에서는 다른 함수였을 것이다.
+for (const name of ['_escHtml', '_readingFacts']) {
+  test(`${name} 이 app.js 에 한 벌만 있다`, () => {
+    const n = (appSrc.match(new RegExp(`^function ${name}\\s*\\(`, 'gm')) || []).length;
+    assert.equal(n, 1, `${name} 정의가 ${n}개다 — 뒤엣것이 이기므로 앞을 고쳐도 반영되지 않는다`);
+  });
+}
+
 const sandbox = { __out: null };
 runInNewContext(`${grab('_escHtml')}\n${grab('_readingFacts')}\n; __out = _readingFacts;`, sandbox);
 const readingFacts = sandbox.__out;
