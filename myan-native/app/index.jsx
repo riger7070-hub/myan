@@ -22,6 +22,18 @@ const EXIT_HINT = {
 };
 const EXIT_WINDOW_MS = 2000;
 
+// 앱링크로 들어온 주소 중 우리 사이트인 것만 웹뷰에 태운다.
+// 이 웹뷰에는 구글 로그인 브릿지(window.__nativeGoogleToken)가 주입돼 있어서,
+// 남의 페이지를 여기서 열면 그 페이지가 브릿지를 부를 수 있다. 그래서 호스트를 본다.
+function safeSiteUrl(url) {
+  if (typeof url !== 'string' || !url.startsWith(WEB_URL)) return null;
+  // 호스트가 정말 여기서 끝나는지 확인한다. 이 검사가 없으면
+  // https://myan.riger7070.workers.dev.evil.com/ 도 startsWith 를 통과한다.
+  const rest = url.slice(WEB_URL.length);
+  if (rest === '' || rest[0] === '/' || rest[0] === '?' || rest[0] === '#') return url;
+  return null;
+}
+
 async function openExternalUrl(url) {
   try { await Linking.openURL(url); }
   catch (e) { console.warn('[myan] 외부 링크 열기 실패:', url, e); }
@@ -51,6 +63,9 @@ export default function WebScreen() {
   const webRef  = useRef(null);
   const insets  = useSafeAreaInsets();
   const [ready, setReady] = useState(false);
+  // 앱링크로 열렸다면 그 주소에서 시작한다. 정해지기 전에는 웹뷰를 그리지 않는다 —
+  // 먼저 홈을 띄우고 나중에 바꾸면 화면이 두 번 로드된다.
+  const [startUrl, setStartUrl] = useState(null);
 
   // Android 뒤로가기: 웹 히스토리 우선
   const canGoBack = useRef(false);
@@ -75,6 +90,25 @@ export default function WebScreen() {
       ToastAndroid.show(EXIT_HINT[lang.current] || EXIT_HINT.ko, ToastAndroid.SHORT);
     }
     return true;
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    Linking.getInitialURL()
+      .then((url) => { if (alive) setStartUrl(safeSiteUrl(url) || WEB_URL); })
+      .catch(() => { if (alive) setStartUrl(WEB_URL); });
+
+    // 앱이 이미 떠 있는 상태에서 링크를 누른 경우. source 를 바꾸면 웹뷰가 다시
+    // 마운트되면서 로그인 세션까지 날아가므로, 웹뷰 안에서 이동시킨다.
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
+      const next = safeSiteUrl(url);
+      if (next) {
+        webRef.current?.injectJavaScript(
+          'location.href=' + JSON.stringify(next) + ';true;'
+        );
+      }
+    });
+    return () => { alive = false; linkSub.remove(); };
   }, []);
 
   useEffect(() => {
@@ -140,9 +174,9 @@ export default function WebScreen() {
   // (웹뷰 안의 env(safe-area-inset-*) 은 안드로이드에서 0 으로 보고되는 경우가 많음)
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <WebView
+      {startUrl && <WebView
         ref={webRef}
-        source={{ uri: WEB_URL }}
+        source={{ uri: startUrl }}
         style={styles.webview}
         onMessage={handleMessage}
         injectedJavaScriptBeforeContentLoaded={INJECTED_JS_BEFORE}
@@ -159,7 +193,7 @@ export default function WebScreen() {
         allowsFullscreenVideo
         mediaCapturePermissionGrantType="grant"
         onContentProcessDidTerminate={() => webRef.current?.reload()}
-      />
+      />}
       {!ready && (
         <View style={styles.loader}>
           <ActivityIndicator color="#C9A96E" size="large" />
