@@ -3021,7 +3021,34 @@ function renderTokenCostGuide() {
     <div class="cost-guide-note">${_escHtml(t.tmCostNote || '')}</div>`;
 }
 
+/**
+ * 실결제를 못 받는 동안 충전 입구의 문구를 바꾼다.
+ *
+ * ⚠️ "충전" 이라 써 두면 누른 사람은 여기서 충전이 된다고 믿는다. 그런데 지금은
+ *    토스 앱으로 보내는 것이 전부이고, 거기서 산 엽전은 **웹 잔액에 안 들어온다**
+ *    (계정이 별개다). 그러면 버튼이 못 지킬 약속을 한 셈이 된다.
+ *
+ *    라이브 키로 바꾸면 이 함수가 아무것도 안 하므로 원래 문구가 그대로 나온다.
+ */
+function _relabelChargeEntries() {
+  if (_webPayLive()) return;
+  const T = {
+    ko: { title: '토스 앱에서 보기', desc: '엽전 충전은 토스 앱에서' },
+    en: { title: 'Open in Toss', desc: 'Tokens are sold in the Toss app' },
+    zh: { title: '在 Toss 中打开', desc: '代币在 Toss 应用中购买' },
+    ja: { title: 'Toss アプリで見る', desc: 'トークンは Toss アプリで' },
+  };
+  const t = T[getLang()] || T.ko;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('quickTokenTitle', t.title);   set('quickTokenDesc', t.desc);
+  set('mpBotChargeTitle', t.title);  set('mpBotChargeDesc', t.desc);
+}
+
 function openTokenModal() {
+  // ⚠️ 웹에서 실결제를 못 받는 동안은 충전 화면 자체를 안 열어야 한다.
+  // 상품 카드를 보여 주면 사려는 사람은 '여기서 살 수 있다'고 읽는다 —
+  // 그런데 사면 웹 잔액은 그대로다(계정이 별개). 그것이 약속을 어기는 것이다.
+  if (!_webPayLive()) { _showMiniPayGuide(); return; }
   document.getElementById('token-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   updateAllTokenDisplays(); // 잔액 최신화
@@ -3609,6 +3636,9 @@ function _syncDrawerLangs() {
   _t('mpBotChargeDesc',   t.mpBotChargeDesc);
   _t('mpBotSupportTitle', t.mpBotSupport);
   _t('mpBotSupportDesc',  t.mpBotSupportDesc);
+
+  // 위에서 원래 문구를 다시 칠했으므로, 안 되는 동안은 다시 덮어쓴다.
+  _relabelChargeEntries();
 }
 
 function _syncDrawerTheme() {
@@ -3856,6 +3886,9 @@ class ParticleField {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // 충전 입구 문구를 첫 그림에서부터 맞춰 둔다.
+  // 언어를 바꿀 때만 불리는 곳에 두면, 처음 들어온 사람은 여전히 '충전' 을 본다.
+  try { _relabelChargeEntries(); } catch (e) {}
   new ParticleField('bg-canvas');
   _restoreOhaengIndicator();
   // ?promo= URL 파라미터 감지

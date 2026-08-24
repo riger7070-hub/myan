@@ -115,3 +115,37 @@ test('닫을 길이 두 개 있다', () => {
   assert.match(f, /\.mpg-close.*onclick|querySelector\('\.mpg-close'\)\.onclick/s, '닫기 버튼이 없다');
   assert.match(f, /e\.target === el/, '바깥을 눌러도 안 닫힌다');
 });
+
+test('⚠️ 충전 화면 자체를 열지 않는다', () => {
+  // 상품 카드를 보여 주면 사려는 사람은 "여기서 살 수 있다" 고 읽는다.
+  // 그런데 사면 웹 잔액은 그대로다(계정이 별개) — 못 지킬 약속이 된다.
+  const f = APP.match(/function openTokenModal\(\)[\s\S]*?\n\}/)[0];
+  assert.match(f, /_webPayLive\(\)/, '충전 화면이 실결제 가능 여부를 안 본다');
+  const guard = f.indexOf('_webPayLive()');
+  const show = f.indexOf("style.display = 'flex'");
+  assert.ok(guard > -1 && (show === -1 || guard < show),
+    '상품 카드를 먼저 띄우고 나서 막는다');
+});
+
+test('⚠️ 입구 문구가 못 지킬 약속을 하지 않는다', () => {
+  // "충전" 이라 써 두면 누른 사람은 여기서 충전이 된다고 믿는다.
+  const f = APP.match(/function _relabelChargeEntries\(\)[\s\S]*?\n\}/)?.[0];
+  assert.ok(f, '입구 문구를 바꾸는 함수가 없다');
+  assert.match(f, /if \(_webPayLive\(\)\) return;/,
+    '라이브 키로 바꿔도 문구가 안 돌아온다');
+  // 네 언어 모두 바꿔 준다
+  for (const [lang, 말] of [['ko', /토스 앱에서/], ['en', /Toss/],
+                            ['zh', /Toss/], ['ja', /Toss/]]) {
+    assert.match(f, 말, `${lang}: 바꿀 문구가 없다`);
+  }
+  // 두 입구를 다 덮는다
+  for (const id of ['quickTokenTitle', 'quickTokenDesc', 'mpBotChargeTitle', 'mpBotChargeDesc']) {
+    assert.ok(f.includes(id), `${id} 를 안 바꾼다`);
+  }
+});
+
+test('첫 그림에서부터 문구가 맞다', () => {
+  // 언어를 바꿀 때만 부르면, 처음 들어온 사람은 여전히 "충전" 을 본다.
+  assert.match(APP, /DOMContentLoaded[\s\S]{0,400}_relabelChargeEntries\(\)/,
+    '초기 로드에서 안 부른다');
+});
