@@ -86,7 +86,7 @@ TOSS_CLIENT_KEY = "test_ck_lpP2YxJ4K877JAdv7KX8RGZwXLOb"
 # secret 이 아니라 여기 vars 에 둔다.
 #
 GOOGLE_VERIFY = "googleda4ce1c162313124.html"
-# NAVER_VERIFY  = "naver1a2b3c4d.html"
+NAVER_VERIFY  = "naver059885f47b75a56a26377f7ee10f08f6.html"
 
 # 비밀 값들은 wrangler secret put 명령어로 설정:
 # wrangler secret put GEMINI_API_KEY
