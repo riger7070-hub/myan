@@ -26,6 +26,18 @@ const OUT = join(ROOT, 'insta');
 // 인스타 피드에서 가장 크게 잡히는 비율(4:5).
 const W = 1080, H = 1350;
 
+// 카드에 박아 넣는 주소.
+//
+// ⚠️ 캡션이 아니라 **그림 안에** 넣는다. 인스타는 캡션의 링크가 눌리지 않아서
+//    어차피 손으로 쳐야 하는데, 스크린샷으로 퍼지면 캡션은 아예 떨어져 나간다.
+//    그림에 있으면 어디서 다시 나타나든 출처가 따라간다.
+//
+//    그래서 짧은 주소여야 한다. myan.riger7070.workers.dev/... 는 보고 칠 사람이
+//    없다. 이건 토스가 만들어 준 공유 주소라 짧고, 딥링크와 달리 토스가 없는
+//    사람은 설치 안내로 간다 — 눌러도 아무 일 없는 상태가 되지 않는다.
+//    worker.js 의 MINI_SHARE_LINK 와 같은 값이니, 그쪽이 바뀌면 여기도 바꾼다.
+const SHARE = 'minion.toss.im/H0LAdMNg';
+
 // 2025~2027 삼재는 亥卯未 삼합국 — 토끼·양·돼지다.
 const SAMJAE = {
   tti: ['토끼', '양', '돼지'],
@@ -75,7 +87,7 @@ const shell = (body, extraCss = '') => `<!doctype html><html><head><meta charset
        안 그러면 글이 위로 쏠리고 아래 3분의 1이 허옇게 빈다. */''}
   <div class="mid">${body}</div>
   <div class="rule"></div>
-  <div class="foot">오늘운빨 · 프로필 링크에서 바로 확인</div>
+  <div class="foot">오늘운빨 · ${SHARE}</div>
 </body></html>`;
 
 const CARDS = [
