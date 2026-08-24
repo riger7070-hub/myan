@@ -1656,6 +1656,19 @@ async function ensureDBExt(env) {
     );
     CREATE INDEX IF NOT EXISTS idx_inv_user ON mini_invites (user_key, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_inv_created ON mini_invites (created_at);
+
+    -- 어디서 왔는지. 하루치를 한 줄로 합쳐서 쌓는다.
+    --
+    -- ⚠️ 사람을 따라다니지 않는다. 날짜·출처·페이지 셋뿐이고 누가 왔는지는 세지 않는다
+    --    (IP·쿠키·사용자 아이디를 저장하지 않는다). 같은 사람이 열 번 오면 열로 세어진다.
+    CREATE TABLE IF NOT EXISTS hits (
+      day  TEXT    NOT NULL,
+      ref  TEXT    NOT NULL,
+      page TEXT    NOT NULL DEFAULT 'etc',
+      n    INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (day, ref, page)
+    );
+    CREATE INDEX IF NOT EXISTS idx_hits_day ON hits (day);
   `, 'mini');
 
   // 아래는 이미 배포된 테이블에 컬럼을 덧붙이는 보정이라 위 배치와 분리한다.
@@ -1722,6 +1735,9 @@ export default {
     }
     if (path === '/robots.txt' && (method === 'GET' || method === 'HEAD')) return handleRobots();
     if (path === '/sitemap.xml' && (method === 'GET' || method === 'HEAD')) return handleSitemap();
+    if (path === '/app' && (method === 'GET' || method === 'HEAD')) return handleAppLanding(request);
+    if (path === '/api/hit' && (method === 'POST' || method === 'GET')) { await ensureDBExt(env); return handleHit(request, env); }
+    if (path === '/admin/hits' && method === 'GET') { await ensureDBExt(env); return handleHitsReport(request, env); }
     if (path === '/tti' && (method === 'GET' || method === 'HEAD')) return handleTtiPage();
     if (path === '/calc' && (method === 'GET' || method === 'HEAD')) return handleCalcHub();
     if (path.startsWith('/calc/') && (method === 'GET' || method === 'HEAD')) {
@@ -5715,6 +5731,7 @@ const SITE = 'https://myan.riger7070.workers.dev';
 
 // 검색에 걸려야 하는 공개 페이지들. 사이트맵과 서로 잇는 링크가 여기서 나온다.
 const FREE_PAGES = [
+  { path: '/app', label: '토스에서 앱으로 열기', freq: 'monthly', pri: '0.9' },
   { path: '/tti', label: '오늘의 띠 순위 보기', freq: 'daily', pri: '0.9' },
   { path: '/calc/samjae', label: '삼재 계산기', freq: 'monthly', pri: '0.8' },
   { path: '/calc/sinsal', label: '내 사주의 신살 보기', freq: 'monthly', pri: '0.8' },
@@ -5772,7 +5789,30 @@ function handleSitemap() {
 }
 
 /** 공개 페이지 공통 뼈대. 검색에 걸리도록 제목·설명·정규주소를 갖춘다. */
-function _freePage({ title, desc, path, h1, lead, body, script = '' }) {
+/**
+ * 링크 미리보기에 쓸 그림.
+ *
+ * 페이지마다 다른 카드를 미리 그려 두었다(tools/build-og-cards.mjs). 카톡·트위터는
+ * 미리보기로 래스터 그림만 받으므로 즉석에서 만들 수 없고, 그렇다고 여섯 페이지가
+ * 다 같은 앱 아이콘이면 어느 글에서 온 링크인지 구별이 안 된다.
+ *
+ * 없는 이름이면 앱 아이콘으로 돌아간다 — 그림 하나 없다고 페이지가 망가지진 않는다.
+ */
+const OG_CARD = {
+  '/tti': 'tti',
+  '/calc': 'calc',
+  '/calc/samjae': 'calc-samjae',
+  '/calc/sinsal': 'calc-sinsal',
+  '/calc/bonmyeong': 'calc-bonmyeong',
+};
+
+function _ogImage(path, card) {
+  const name = card || OG_CARD[path];
+  return name ? `${SITE}/og/${encodeURIComponent(name)}.png` : `${SITE}/icon-og-512-512.png`;
+}
+
+function _freePage({ title, desc, path, h1, lead, body, script = '', ogCard }) {
+  const ogImage = _ogImage(path, ogCard);
   return new Response(`<!doctype html>
 <html lang="ko">
 <head>
@@ -5790,14 +5830,14 @@ function _freePage({ title, desc, path, h1, lead, body, script = '' }) {
 ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터에서 회색 빈 칸이 뜬다.
       홍보로 뿌리려고 만든 페이지들인데 정작 여기만 빠져 있었다(홈에는 있었다).
       webp 는 미리보기를 만드는 쪽이 못 읽는 데가 있어 png 로 준다. */''}
-<meta property="og:image" content="${SITE}/icon-og-512-512.png">
-<meta property="og:image:width" content="512">
-<meta property="og:image:height" content="512">
+<meta property="og:image" content="${ogImage}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="오늘운빨">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${desc}">
-<meta name="twitter:image" content="${SITE}/icon-og-512-512.png">
+<meta name="twitter:image" content="${ogImage}">
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;background:#0d0d0f;color:#e8e4dc;
@@ -5838,6 +5878,18 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
   tr.me{background:rgba(201,169,110,0.1)}
   tr.me td{color:#c9a96e}
   .top td{color:#e8c98a}
+  /* /app 의 "토스에서 열기". 이 페이지에서 가장 눌려야 하는 자리다. */
+  .cta-btn{width:100%;margin-top:8px;padding:17px;font-size:1.02rem;font-family:inherit;
+    font-weight:700;color:#1a1408;background:linear-gradient(160deg,#d8b978,#a5854e);
+    border:0;border-radius:12px;cursor:pointer}
+  .cta-btn:active{transform:scale(.985)}
+  /* 열리지 않았을 때만 이 색이 된다. 처음부터 붉으면 고장난 것처럼 보인다. */
+  .warn{color:#e08b7a}
+  .sec{margin-top:34px}
+  .sec h3{display:flex;align-items:center;gap:10px;font-size:.95rem;font-weight:600;
+    color:#c9a96e;letter-spacing:.04em;margin-bottom:12px}
+  .sec h3 .rule,.sec h3 i{flex:1;height:1px;border:0;
+    background:linear-gradient(90deg,rgba(201,169,110,.35),transparent)}
   .hide{display:none}
 </style>
 </head>
@@ -5852,7 +5904,14 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
       .map(p => `<a href="${p.path}">${p.label}</a>`).join('\n    ')}
   </div>
 </div>
-${script ? `<script>${script}</script>` : ''}
+<script>
+// 어디서 온 링크인지만 남긴다(?ref=). 사람을 알아보지 않는다 —
+// 날짜·출처·페이지만 센다. ⚠️ 반드시 한 블록으로 둔다 — 검사가 페이지 스크립트를
+// 첫 <script> 로 찾기 때문에, 따로 두면 이게 먼저 잡힌다.
+(function(){try{var r=new URLSearchParams(location.search).get('ref');
+if(r)navigator.sendBeacon('/api/hit?ref='+encodeURIComponent(r)+'&p='+encodeURIComponent(location.pathname));}catch(e){}})();
+${script}
+</script>
 </body>
 </html>`, {
     headers: {
@@ -6066,6 +6125,10 @@ function handleTtiPage() {
 
   const 일등 = r.rows[0].name;
   return _freePage({
+    // 미리보기 그림도 오늘 1위에 맞춘다. 열두 띄 카드를 미리 그려 두었으므로
+    // 어느 날에 걸리든 맞는 그림이 나간다 — "오늘 1위는 말띄입니다" 가 그림에
+    // 박혀 나가면, 제목만 있는 것보다 훨씬 잘 눌린다.
+    ogCard: `tti-${일등}`,
     title: `오늘의 띠 순위 (${m}월 ${d}일) · 1위는 ${일등}띠 | 오늘운빨`,
     desc: `${y}년 ${m}월 ${d}일 띠별 운세 순위입니다. 오늘 일진과 열두 띠가 맺는 관계로 냈습니다. 오늘은 ${일등}띠가 1위입니다.`,
     path: '/tti',
@@ -6108,6 +6171,137 @@ function handleTtiPage() {
       });
     }
   });
+})();`,
+  });
+}
+
+// ── 어디서 왔는지 세기 (/api/hit) ──
+//
+// 홍보 문서(docs/홍보.md)는 "가입 수가 아니라 무료 페이지 체류로 본다"고 적고 있는데,
+// 정작 그걸 볼 방법이 없었다. 어느 글이 사람을 데려오는지 모르면 다음에 어디에
+// 힘을 쓸지도 못 정한다.
+//
+// ⚠️ 사람을 따라다니지 않는다. 남기는 것은 **날짜 · 어디서 · 어느 페이지** 셋뿐이고,
+//    누가 왔는지는 세지 않는다 — IP 도 쿠키도 사용자 아이디도 저장하지 않는다.
+//    같은 사람이 열 번 들어오면 열로 세어진다. 채널을 견주는 데는 그걸로 충분하고,
+//    사람을 알아보려 드는 순간 개인정보가 된다.
+//
+// 하루치 한 줄로 합쳐서 쌓는다(날짜+출처+페이지가 열쇠). 방문 하나에 한 줄씩
+// 쌓으면 D1 이 금세 커지는데, 우리가 볼 것은 "어제 디스콰이엇에서 몇 명"뿐이다.
+
+const HIT_MAX_REF = 40;
+
+/** 출처 이름은 우리가 링크에 적어 보낸 값이다. 아무 글자나 받지 않는다. */
+const _cleanRef = (s) => String(s || '').slice(0, HIT_MAX_REF).replace(/[^\w가-힣-]/g, '');
+
+async function handleHit(request, env) {
+  // 204 로 답하고 끝낸다. 세는 데 실패했다고 사용자 화면이 달라질 이유가 없다.
+  const quiet = () => new Response(null, {
+    status: 204,
+    headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+  });
+  try {
+    const u = new URL(request.url);
+    const ref = _cleanRef(u.searchParams.get('ref'));
+    if (!ref) return quiet();
+    const page = _cleanRef(u.searchParams.get('p')) || 'etc';
+    const day = _kstToday();
+    await env.DB.prepare(
+      `INSERT INTO hits (day, ref, page, n) VALUES (?, ?, ?, 1)
+       ON CONFLICT(day, ref, page) DO UPDATE SET n = n + 1`
+    ).bind(day, ref, page).run();
+  } catch (e) {
+    console.warn('[HIT]', e?.message);
+  }
+  return quiet();
+}
+
+/** 관리자만 본다. 어느 채널이 사람을 데려왔는지. */
+async function handleHitsReport(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  const secret = env.ADMIN_SECRET;
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
+  }
+  const days = Math.min(90, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
+  const from = _kstToday(Date.now() - days * 86400000);
+  const { results } = await env.DB.prepare(
+    `SELECT ref, page, SUM(n) AS n FROM hits WHERE day >= ?
+      GROUP BY ref, page ORDER BY n DESC LIMIT 200`
+  ).bind(from).all().catch(() => ({ results: [] }));
+  const byRef = {};
+  for (const r of results || []) byRef[r.ref] = (byRef[r.ref] || 0) + r.n;
+  return cors(JSON.stringify({ from, days, byRef, detail: results || [] }), 200);
+}
+
+// ── 미니앱으로 보내는 한 자리 (/app) ──
+//
+// 홍보 글에 붙일 주소가 필요하다. 딥링크(intoss://myan)를 그대로 붙이면
+// 토스가 깔린 기기에서만 열리고, 안 깔린 사람이 누르면 아무 일도 안 일어난다.
+// 그렇다고 미니앱 안에서 getTossShareLink 로 받는 주소는 앱을 켜야 얻을 수 있어서
+// 글에 미리 박아 둘 수가 없다.
+//
+// 그래서 이 주소 하나를 둔다. 인스타 프로필이든 커뮤니티 글이든 여기만 붙이면 된다.
+//   · 토스가 있으면 딥링크로 넘어간다
+//   · 없으면 무엇인지 설명하고 웹으로 안내한다
+//   · 어디서 왔는지(?ref=)를 그대로 넘겨 유입을 셀 수 있게 한다
+//
+// ⚠️ 서버가 리다이렉트로 던지지 않는다. intoss:// 로 302 를 쏘면 토스가 없는 기기의
+//    브라우저는 "알 수 없는 주소" 오류만 띄우고 끝이다. 열어 보고 안 되면 안내가
+//    남도록, 페이지를 먼저 보여준 뒤 스크립트가 열어 본다.
+
+const MINI_DEEPLINK = 'intoss://myan';
+
+function handleAppLanding(request) {
+  const ref = (new URL(request.url).searchParams.get('ref') || '').slice(0, 40)
+    .replace(/[^\w가-힣-]/g, '');
+
+  return _freePage({
+    title: '오늘운빨 — 토스에서 여는 사주 미니앱',
+    desc: '토스 앱 안에서 바로 열립니다. 설치할 것이 없고, 사주·오늘의 기운·궁합·택일을 안도령이 풀어 드립니다.',
+    path: '/app',
+    ogCard: 'home',
+    h1: '토스에서 여는<br>오늘운빨',
+    lead: '따로 설치할 것이 없습니다. 토스 안에서 바로 열립니다.',
+    body: `
+    <button id="open" class="cta-btn">토스에서 열기</button>
+    <p class="muted" id="hint">토스 앱이 있으면 바로 넘어갑니다.</p>
+
+    <section class="sec">
+      <h3>무엇을 볼 수 있나요<i class="rule"></i></h3>
+      <div class="card"><b>오늘의 기운</b><p>그날 일진과 내 사주를 함께 봅니다.</p></div>
+      <div class="card"><b>사주 · 궁합 · 택일</b><p>스무 가지가 넘습니다.</p></div>
+      <div class="card"><b>귀인 찾기</b><p>어떤 사람이 나를 돕는지 봅니다.</p></div>
+    </section>
+
+    <a class="cta" href="/">토스 없이 웹에서 보기</a>
+    <p class="muted" style="margin-top:18px">
+      토스가 없으셔도 괜찮습니다. 위 웹에서도 같은 풀이를 볼 수 있고,
+      <a href="/tti">오늘의 띠 순위</a>와 <a href="/calc">무료 계산기</a>는 가입 없이 열립니다.
+    </p>`,
+    script: `
+(function () {
+  var btn = document.getElementById('open'), hint = document.getElementById('hint');
+  var DEEP = '${MINI_DEEPLINK}';
+  var ref = ${JSON.stringify(ref)};
+
+  function open() {
+    // 어디서 왔는지 남긴다. 실패해도 여는 것을 막지 않는다.
+    if (ref) { try { navigator.sendBeacon('/api/hit?ref=' + encodeURIComponent(ref) + '&p=app'); } catch (e) {} }
+    var t = Date.now();
+    location.href = DEEP;
+    // 토스가 없으면 아무 일도 안 일어난다. 잠시 뒤에도 이 화면이면 안내를 바꾼다.
+    setTimeout(function () {
+      if (Date.now() - t < 2500 && !document.hidden) {
+        hint.textContent = '토스 앱이 없거나 열리지 않았어요. 아래 웹에서 바로 보실 수 있어요.';
+        hint.className = 'muted warn';
+      }
+    }, 1200);
+  }
+
+  btn.addEventListener('click', open);
+  // 토스 안에서 이 주소를 열었다면 굳이 한 번 더 누르게 하지 않는다.
+  if (/toss/i.test(navigator.userAgent)) open();
 })();`,
   });
 }
