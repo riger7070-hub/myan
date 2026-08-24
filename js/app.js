@@ -1759,6 +1759,18 @@ async function _confirmTossPayment({ paymentKey, orderId, amount }) {
 // 짝이 맞지 않아 승인 단계에서 실패한다. 그래서 폴백 없이 명시적으로 막는다.
 const TOSS_CLIENT_KEY = window.ENV?.TOSS_CLIENT_KEY || '';
 
+// 실결제를 받을 수 있는 상태인가.
+//
+// 키가 test_ck_ 로 시작하면 결제창은 떠도 실제로 돈이 오가지 않는다. 그 상태에서
+// 결제 버튼을 그대로 두면 사려는 사람이 오류만 보고 떠난다 — 그게 제일 나쁘다.
+// 대신 토스 미니앱으로 안내한다(거기는 인앱결제라 PG 계약 없이 실결제가 된다).
+//
+// ⚠️ 키 앞자리로 판단하는 이유: 라이브 키(live_ck_)로 바꾸는 순간 이 함수가 저절로
+//    true 가 되어 웹 결제가 되살아난다. 따로 켜 줄 스위치를 두면 그걸 잊는다.
+function _webPayLive() {
+  return /^live_ck_/.test(TOSS_CLIENT_KEY);
+}
+
 // 결제 시작 전 키가 있는지 확인. 없으면 결제창을 띄우지 않는다.
 function _ensureTossKey() {
   if (TOSS_CLIENT_KEY) return true;
@@ -1771,9 +1783,80 @@ function _ensureTossKey() {
   return false;
 }
 
+/**
+ * 웹에서 실결제를 못 받는 동안 띄우는 안내.
+ *
+ * ⚠️ "이어서 결제하기" 라고 쓰지 않는다. 웹과 미니앱은 **계정도 엽전도 완전히 별개**다
+ *    (worker.js 의 _LEDGERS, test/mini-isolation.test.mjs). 미니앱에서 충전하면
+ *    웹 잔액은 그대로다. 이어진다고 말해 놓고 안 이어지면 그게 제일 나쁜 거짓말이다.
+ *    그래서 "토스 앱에서 이용하세요" 로 쓰고, 별개라는 점을 그 자리에서 밝힌다.
+ */
+function _showMiniPayGuide() {
+  const T = {
+    ko: {
+      title: '토스 앱에서 이용해 주세요',
+      body: '웹 결제는 준비 중입니다. 지금은 토스 앱의 <b>오늘운빨</b>에서 엽전을 충전하고 모든 풀이를 보실 수 있습니다.',
+      warn: '토스 앱의 오늘운빨은 <b>별개의 계정</b>입니다. 웹에서 쓰시던 엽전과 기록은 웹에 그대로 남아 있고, 토스 쪽에서 충전한 엽전은 토스에서 쓰입니다.',
+      free: '웹에서는 <a href="/tti">오늘의 띠 순위</a>와 <a href="/calc">무료 계산기</a>를 가입 없이 보실 수 있습니다.',
+      go: '토스 앱에서 열기', close: '닫기',
+    },
+    en: {
+      title: 'Please use the Toss app',
+      body: 'Web payments are not open yet. For now you can top up and read everything in <b>오늘운빨</b> inside the Toss app.',
+      warn: 'That is a <b>separate account</b>. Your tokens and history here stay here; tokens bought in Toss are used in Toss.',
+      free: 'On the web you can still open <a href="/tti">today\u2019s zodiac ranking</a> and the <a href="/calc">free calculators</a> without signing in.',
+      go: 'Open in Toss', close: 'Close',
+    },
+    zh: {
+      title: '请在 Toss 应用中使用',
+      body: '网页支付尚未开放。目前可在 Toss 应用的 <b>오늘운빨</b> 中充值并查看全部解读。',
+      warn: '那是<b>独立的账户</b>。您在网页的代币和记录仍保留在网页，在 Toss 充值的代币在 Toss 使用。',
+      free: '网页上仍可免费查看<a href="/tti">今日生肖运势排名</a>和<a href="/calc">免费计算器</a>。',
+      go: '在 Toss 中打开', close: '关闭',
+    },
+    ja: {
+      title: 'Toss アプリでご利用ください',
+      body: 'ウェブ決済は準備中です。今は Toss アプリの <b>오늘운빨</b> でトークンを購入し、すべての鑑定をご覧いただけます。',
+      warn: 'そちらは<b>別のアカウント</b>です。ウェブのトークンと履歴はウェブに残り、Toss で購入したトークンは Toss で使われます。',
+      free: 'ウェブでは<a href="/tti">今日の干支ランキング</a>と<a href="/calc">無料計算機</a>をログインなしでご覧いただけます。',
+      go: 'Toss で開く', close: '閉じる',
+    },
+  };
+  const t = T[getLang()] || T.ko;
+
+  document.getElementById('mini-pay-guide')?.remove();
+  const el = document.createElement('div');
+  el.id = 'mini-pay-guide';
+  el.className = 'modal-overlay';
+  el.innerHTML = `
+    <div class="modal-box mpg-box">
+      <div class="modal-title">${t.title}</div>
+      <p class="mpg-body">${t.body}</p>
+      <div class="mpg-warn">${t.warn}</div>
+      <p class="mpg-free">${t.free}</p>
+      <a class="mpg-go" href="${MINI_APP_LINK}">${t.go}</a>
+      <button class="mpg-close">${t.close}</button>
+    </div>`;
+  document.body.appendChild(el);
+  // .modal-overlay 는 기본이 display:none 이다(다른 모달도 JS 로 켠다).
+  // 붙이기만 하고 켜지 않으면 화면에 아무것도 안 보인다 — 실제로 그랬다.
+  el.style.display = 'flex';
+
+  const close = () => el.remove();
+  el.querySelector('.mpg-close').onclick = close;
+  el.onclick = (e) => { if (e.target === el) close(); };
+}
+
+// 토스 미니앱으로 가는 주소. worker.js 의 MINI_SHARE_LINK 와 같은 값이다 —
+// 딥링크가 아니라 토스가 만들어 준 공유 주소라 PC 에서도 열린다.
+const MINI_APP_LINK = 'https://myan.riger7070.workers.dev/app?ref=web-charge';
+
 async function buyToken(pkg) {
   const user = getUser();
   if (!user || !isLoggedIn()) { showLogin(); return; }
+
+  // 실결제를 받을 수 없는 동안은 결제창을 띄우지 않고 미니앱으로 안내한다.
+  if (!_webPayLive()) { _showMiniPayGuide(); return; }
 
   const pkgs = {
     'S': { name: '마이안 엽전 30개',  amount: 4900, tokens: 30  },
@@ -1828,6 +1911,9 @@ async function subscribeMembership(plan) {
   if (!user || !isLoggedIn()) { showLogin(); return; }
   const info = SUB_PLANS_FE[plan];
   if (!info) return;
+
+  // 충전과 같다 — 실결제를 못 받는 동안은 결제창을 띄우지 않는다.
+  if (!_webPayLive()) { _showMiniPayGuide(); return; }
   if (typeof Analytics !== 'undefined') Analytics.trackPayment('start', info.amount, info.tokens);
 
   if (!_ensureTossKey()) return;
