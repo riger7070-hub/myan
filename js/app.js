@@ -1837,6 +1837,9 @@ function _showMiniPayGuide() {
       <a class="mpg-go" href="${MINI_APP_LINK}">${t.go}</a>
       <button class="mpg-close">${t.close}</button>
     </div>`;
+  // 안내를 본 사람을 센다. 이것과 /app 도착 수를 견주면
+  // 몇이 도중에 떠났는지가 보이고, 그게 웹에 PG 를 붙일 가치가 있는가에 대한 답이 된다.
+  try { navigator.sendBeacon('/api/hit?ref=web-charge&p=guide'); } catch (e) {}
   document.body.appendChild(el);
   // .modal-overlay 는 기본이 display:none 이다(다른 모달도 JS 로 켠다).
   // 붙이기만 하고 켜지 않으면 화면에 아무것도 안 보인다 — 실제로 그랬다.

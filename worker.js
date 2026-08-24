@@ -5896,6 +5896,12 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
   .qr{display:block;margin:14px auto 12px;border-radius:8px;background:#fff;padding:8px}
   .btn-copy{padding:9px 16px;font-size:.84rem;font-family:inherit;cursor:pointer;
     color:#c9a96e;background:transparent;border:1px solid rgba(201,169,110,.35);border-radius:8px}
+  /* 유입 집계 막대. 숫자만 늘어놓으면 누가 많은지 한눈에 안 보인다. */
+  td.barcell{width:52%;padding-right:10px}
+  td.barcell i{display:block;height:7px;border-radius:4px;
+    background:linear-gradient(90deg,#c9a96e,rgba(201,169,110,.35))}
+  code{font-size:.86em;padding:1px 5px;border-radius:4px;
+    background:rgba(201,169,110,.12);color:#c9a96e}
   .hide{display:none}
 </style>
 </head>
@@ -6225,19 +6231,91 @@ async function handleHit(request, env) {
 /** 관리자만 본다. 어느 채널이 사람을 데려왔는지. */
 async function handleHitsReport(request, env) {
   const auth = request.headers.get('Authorization') || '';
+  const url = new URL(request.url);
+  // 브라우저로 열어 볼 때는 헤더를 못 붙이므로 ?key= 도 받는다.
+  // 관리자 열쇠라 주소창에 남는 것이 마뜩잖지만, 안 보면 안 세는 것과 같다.
+  const given = auth.replace('Bearer ', '').trim() || url.searchParams.get('key') || '';
   const secret = env.ADMIN_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!secret || given !== secret) {
     return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
   }
-  const days = Math.min(90, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
+
+  const days = Math.min(90, Math.max(1, Number(url.searchParams.get('days')) || 30));
   const from = _kstToday(Date.now() - days * 86400000);
   const { results } = await env.DB.prepare(
     `SELECT ref, page, SUM(n) AS n FROM hits WHERE day >= ?
       GROUP BY ref, page ORDER BY n DESC LIMIT 200`
   ).bind(from).all().catch(() => ({ results: [] }));
+  const rows = results || [];
+
   const byRef = {};
-  for (const r of results || []) byRef[r.ref] = (byRef[r.ref] || 0) + r.n;
-  return cors(JSON.stringify({ from, days, byRef, detail: results || [] }), 200);
+  for (const r of rows) byRef[r.ref] = (byRef[r.ref] || 0) + r.n;
+
+  // 값을 그대로 주는 쪽(다른 도구로 쓸 때)
+  if (url.searchParams.get('format') === 'json') {
+    return cors(JSON.stringify({ from, days, byRef, detail: rows }), 200);
+  }
+
+  // 사람이 읽는 쪽. 원시 JSON 은 눈으로 견주기 어렵다.
+  const esc = (s) => escapeHtml(String(s));
+  const 총 = Object.values(byRef).reduce((a, b) => a + b, 0);
+  const 순 = Object.entries(byRef).sort((a, b) => b[1] - a[1]);
+  const max = 순[0]?.[1] || 1;
+
+  // 웹에서 토스로 넘어가는 길목. 안내를 본 사람과 실제로 넘어간 사람을 견준다.
+  const guide = rows.filter(r => r.ref === 'web-charge' && r.page === 'guide')
+    .reduce((a, r) => a + r.n, 0);
+  const moved = rows.filter(r => r.ref === 'web-charge' && r.page !== 'guide')
+    .reduce((a, r) => a + r.n, 0);
+
+  const bar = (n) => `<i style="width:${Math.round((n / max) * 100)}%"></i>`;
+  const body = `
+    <p class="lead">${from} 부터 ${days}일 · 모두 ${총.toLocaleString('ko-KR')}번</p>
+
+    ${총 === 0 ? '<div class="card"><p class="muted">아직 아무도 안 왔습니다. 홍보 글에 <code>?ref=</code> 를 붙였는지 확인해 주세요.</p></div>' : `
+    <section class="sec">
+      <h3>어디서 왔나<i class="rule"></i></h3>
+      <table><tbody>${순.map(([ref, n]) => `
+        <tr><td>${esc(ref)}</td>
+            <td class="barcell">${bar(n)}</td>
+            <td class="s">${n.toLocaleString('ko-KR')}</td></tr>`).join('')}
+      </tbody></table>
+    </section>`}
+
+    ${guide ? `
+    <section class="sec">
+      <h3>웹 → 토스 앱<i class="rule"></i></h3>
+      <div class="card">
+        <p>충전을 눌러 안내를 본 사람 <b>${guide}</b>명 중
+           <b>${moved}</b>명이 앱으로 넘어갔습니다
+           (${Math.round((moved / guide) * 100)}%).</p>
+        <p class="muted">이 비율이 높고 수가 쌓이면, 웹에 결제를 붙일 값어치가 있다는 뜻입니다.</p>
+      </div>
+    </section>` : ''}
+
+    <section class="sec">
+      <h3>어느 페이지로<i class="rule"></i></h3>
+      <table><tbody>${rows.slice(0, 40).map(r => `
+        <tr><td>${esc(r.ref)}</td><td>${esc(r.page)}</td>
+            <td class="s">${r.n.toLocaleString('ko-KR')}</td></tr>`).join('')
+        || '<tr><td class="s">아직 없습니다</td></tr>'}
+      </tbody></table>
+    </section>
+
+    <p class="muted" style="margin-top:20px">
+      사람을 따라다니지 않습니다 — 날짜·출처·페이지만 셉니다.
+      같은 사람이 열 번 오면 열로 세어집니다.
+    </p>`;
+
+  const res = _freePage({
+    title: '유입 집계', desc: '관리자용', path: '/admin/hits',
+    h1: '어디서 왔나', lead: '', body,
+  });
+  // ⚠️ 관리자 화면이다. 검색에 걸리거나 캐시에 남으면 안 된다.
+  const out = new Response(res.body, res);
+  out.headers.set('Cache-Control', 'no-store');
+  out.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return out;
 }
 
 // ── 미니앱으로 보내는 한 자리 (/app) ──

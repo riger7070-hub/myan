@@ -159,12 +159,33 @@ test('집계는 관리자만 본다', async () => {
   const bare = await H.handleHitsReport(new Request('https://x/admin/hits'), env);
   assert.equal(bare.status, 401, '아무나 볼 수 있다');
 
+  // 브라우저로 열어 볼 때는 헤더를 못 붙이므로 ?key= 도 받는다.
+  const byKey = await H.handleHitsReport(
+    new Request('https://x/admin/hits?key=secret'), env);
+  assert.equal(byKey.status, 200, '열쇠를 주소로 줘도 안 열린다');
+
   const ok = await H.handleHitsReport(new Request('https://x/admin/hits', {
     headers: { Authorization: 'Bearer secret' },
   }), env);
   assert.equal(ok.status, 200);
-  const j = JSON.parse(await ok.text());
-  assert.ok(j.byRef && j.detail, '집계 모양이 아니다');
+  const html = await ok.text();
+  assert.match(html, /어디서 왔나/, '사람이 읽을 화면이 아니다');
+
+  // 값이 필요하면 json 으로도 준다.
+  const j = await H.handleHitsReport(
+    new Request('https://x/admin/hits?key=secret&format=json'), env);
+  const parsed = JSON.parse(await j.text());
+  assert.ok(parsed.byRef && parsed.detail, '집계 모양이 아니다');
+});
+
+test('⚠️ 관리자 화면이 검색에 걸리지 않는다', async () => {
+  const { DB } = createD1();
+  const res = await H.handleHitsReport(new Request('https://x/admin/hits?key=s'),
+    { DB, ADMIN_SECRET: 's' });
+  assert.match(res.headers.get('X-Robots-Tag') || '', /noindex/,
+    '검색 로봇에게 열려 있다');
+  assert.match(res.headers.get('Cache-Control') || '', /no-store/,
+    '집계가 캐시에 남는다');
 });
 
 test('관리자 열쇠가 없으면 아예 안 열린다', async () => {

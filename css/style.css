@@ -5189,3 +5189,44 @@ button > [data-icon] .ic { width: 18px; height: 18px; }
   color: var(--text-dim); background: none;
   border: 1px solid var(--border); border-radius: 10px;
 }
+
+/* ── 토스 앱 안내 (웹 하단) ──
+   웹은 베타라 무료 엽전까지만 쓸 수 있다. 그 사실을 숨기지 않고 갈 곳을 알려 준다. */
+.toss-invite {
+  max-width: 640px;
+  margin: 34px auto 0;
+  padding: 22px 22px 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  font-family: -apple-system, 'Pretendard', sans-serif;
+}
+.ti-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.ti-head b { font-size: 1rem; color: var(--gold-light); }
+.ti-tag {
+  flex: none; padding: 2px 8px; border-radius: 999px;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--gold); background: rgba(201, 169, 110, 0.14);
+  border: 1px solid var(--border);
+}
+.ti-desc { font-size: 0.88rem; line-height: 1.75; color: var(--text-dim); margin-bottom: 16px; }
+.ti-desc b { color: var(--gold); }
+.ti-body { display: flex; align-items: center; gap: 18px; }
+.ti-qr { flex: none; border-radius: 10px; background: #fff; padding: 7px; }
+.ti-right { flex: 1; min-width: 0; }
+.ti-hint { font-size: 0.82rem; color: var(--text-dim); margin-bottom: 10px; }
+.ti-go {
+  display: block; text-align: center; text-decoration: none;
+  padding: 13px 16px; border-radius: 11px;
+  font-size: 0.94rem; font-weight: 700;
+  color: var(--on-accent); background: linear-gradient(160deg, #d8b978, #a5854e);
+}
+.ti-note { margin-top: 9px; font-size: 0.75rem; line-height: 1.6; color: var(--text-dim); opacity: 0.85; }
+
+/* 폰에서는 QR 이 쓸모없다 — 자기 화면을 자기가 찍을 수 없다. 버튼만 남긴다. */
+@media (max-width: 640px) {
+  .toss-invite { margin-top: 26px; padding: 18px; }
+  .ti-qr, .ti-desktop { display: none; }
+  .ti-body { display: block; }
+}

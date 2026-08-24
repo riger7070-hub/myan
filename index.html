@@ -954,6 +954,32 @@ if ('serviceWorker' in navigator) {
 <!-- 무료로 열려 있는 자리들.
      검색 로봇은 링크를 타고 다닌다. 사이트맵에만 적어 두는 것보다
      첫 페이지에서 실제로 이어져 있는 편이 훨씬 잘 걸린다. -->
+<!-- 토스 앱 안내.
+     웹은 베타라 무료 엽전까지만 쓸 수 있고, 그 뒤로는 살 방법이 없다(계정도 별개다).
+     그 사실을 숨기지 않고, 대신 갈 곳을 함께 알려 준다.
+     ⚠️ 폰에서는 QR 이 쓸모없다(자기 화면을 자기가 못 찍는다). 그때는 버튼만 보인다. -->
+<section class="toss-invite">
+  <div class="ti-head">
+    <span class="ti-tag">베타</span>
+    <b>더 많은 풀이는 토스 앱에서</b>
+  </div>
+  <p class="ti-desc">
+    웹은 아직 베타라 무료 엽전까지만 보실 수 있습니다.
+    토스 앱의 <b>오늘운빨</b>에서는 스무 가지가 넘는 풀이를 모두 이용하실 수 있어요.
+  </p>
+  <div class="ti-body">
+    <!-- ⚠️ loading="lazy" 를 붙이지 말 것. 이 자리에서는 풀리지 않아 그림이 영영
+         안 뜬다(브라우저가 요청조차 안 한다). 2KB 짜리라 아껴서 얻을 것도 없다. -->
+    <img class="ti-qr" src="/og/qr-app.png" alt="오늘운빨 여는 QR"
+         width="132" height="132">
+    <div class="ti-right">
+      <p class="ti-hint ti-desktop">폰 카메라로 왼쪽을 비춰 주세요.</p>
+      <a class="ti-go" href="/app?ref=web-banner">토스 앱에서 열기</a>
+      <p class="ti-note">토스 앱의 오늘운빨은 별개의 계정입니다.</p>
+    </div>
+  </div>
+</section>
+
 <nav class="free-links" aria-label="무료 계산기">
   <a href="/tti">오늘의 띠 순위</a>
   <a href="/calc/samjae">삼재 계산기</a>
