@@ -38,12 +38,45 @@ test('⚠️ 서버가 딥링크로 던지지 않는다', async () => {
   assert.equal(res.headers.get('Location'), null, 'Location 헤더로 던지고 있다');
 });
 
-test('열리지 않으면 그렇다고 알려 준다', async () => {
-  const script = (await page().text()).match(/<script>([\s\S]*?)<\/script>/)[1];
+test('⚠️ 딥링크가 아니라 토스가 준 공유 주소를 쓴다', async () => {
+  // intoss:// 는 토스가 깔린 폰에서만 열린다 — PC 에서는 그냥 죽는다.
+  // toss 가 만들어 준 공유 주소는 onelink 를 거쳐서, 앱이 있으면 앱으로
+  // 없으면 설치 안내로, PC 에서도 웹 페이지로 열린다. 커뮤니티 글은 대개 PC 로 읽는다.
+  const html = await page().text();
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   new vm.Script(script, { filename: 'app-landing.js' });   // 문법부터 확인
-  assert.match(script, /setTimeout/, '열렸는지 확인하지 않는다');
-  assert.match(script, /토스 앱이 없거나/, '안 열렸을 때 문구가 없다');
-  assert.match(script, /intoss:\/\/myan/, '딥링크가 없다');
+  assert.match(SRC, /const MINI_SHARE_LINK = 'https:\/\//, '공유 주소가 없다');
+  const link = SRC.match(/const MINI_SHARE_LINK = '([^']+)'/)[1];
+  assert.ok(html.includes(link), '페이지가 공유 주소를 안 쓴다');
+  assert.doesNotMatch(script, /location\.href = ['"]intoss:/,
+    '아직 딥링크로 던진다 — PC 에서 죽는다');
+});
+
+test('스크립트가 죽어도 링크는 눌린다', async () => {
+  // 홍보 글에서 온 사람을 스크립트 하나에 걸지 않는다.
+  const html = await page().text();
+  const link = SRC.match(/const MINI_SHARE_LINK = '([^']+)'/)[1];
+  assert.match(html, new RegExp(`<a id="open"[^>]*href="${link.replace(/[/.]/g, '\\$&')}"`),
+    '여는 자리가 <a href> 가 아니다 — 스크립트가 죽으면 아무 데도 못 간다');
+});
+
+test('PC 로 보면 폰으로 옮겨 갈 길을 준다', async () => {
+  const html = await page().text();
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script, /mobile/, '기기를 가리지 않는다');
+  assert.match(html, /id="desk"/, 'PC 용 안내 자리가 없다');
+  assert.match(html, /qr-app\.png/, 'QR 이 없다');
+  assert.match(html, /id="copy"/, '주소를 복사할 길이 없다');
+  // QR 은 미리 그려 둔 것을 쓴다. 사용자 브라우저에서 남의 스크립트를 받지 않는다.
+  assert.doesNotMatch(html, /qrcode(js)?\.min\.js|chart\.googleapis/,
+    'QR 라이브러리를 바깥에서 받아 온다');
+});
+
+test('QR 그림이 실제로 있다', () => {
+  const p = join(ROOT, 'og', 'qr-app.png');
+  const buf = readFileSync(p);
+  assert.equal(buf[0], 0x89, 'PNG 가 아니다');
+  assert.ok(buf.length > 500, `${buf.length}바이트뿐이다 — 제대로 안 그려졌다`);
 });
 
 test('딥링크가 미니앱 이름과 같다', () => {

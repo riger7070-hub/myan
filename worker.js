@@ -5890,6 +5890,12 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
     color:#c9a96e;letter-spacing:.04em;margin-bottom:12px}
   .sec h3 .rule,.sec h3 i{flex:1;height:1px;border:0;
     background:linear-gradient(90deg,rgba(201,169,110,.35),transparent)}
+  /* <a> 를 버튼처럼 쓴다 — 스크립트가 죽어도 눌리도록. */
+  .cta-btn{display:block;text-align:center;text-decoration:none}
+  .qr-card{text-align:center}
+  .qr{display:block;margin:14px auto 12px;border-radius:8px;background:#fff;padding:8px}
+  .btn-copy{padding:9px 16px;font-size:.84rem;font-family:inherit;cursor:pointer;
+    color:#c9a96e;background:transparent;border:1px solid rgba(201,169,110,.35);border-radius:8px}
   .hide{display:none}
 </style>
 </head>
@@ -6250,7 +6256,19 @@ async function handleHitsReport(request, env) {
 //    브라우저는 "알 수 없는 주소" 오류만 띄우고 끝이다. 열어 보고 안 되면 안내가
 //    남도록, 페이지를 먼저 보여준 뒤 스크립트가 열어 본다.
 
+// 딥링크. 토스가 깔린 기기에서만 열린다 — PC 나 미설치 기기에서는 아무 일도 안 난다.
 const MINI_DEEPLINK = 'intoss://myan';
+
+// 토스가 만들어 준 공유 주소. 실제로 사람들에게 뿌릴 것은 이쪽이다.
+//
+// 딥링크와 성격이 다르다. toss.onelink.me(AppsFlyer)를 거치므로
+//   · 토스가 있으면 → 미니앱이 열린다
+//   · 없으면       → 설치 안내로 보낸다
+//   · PC 에서도     → 웹 페이지로 열린다 (딥링크는 여기서 그냥 죽는다)
+//
+// 미니앱 안에서 getTossShareLink() 로 한 번 받아 둔 값이다(앱마다 고정).
+// 다시 받으려면 앱 → 오른쪽 위 메뉴 → 친구에게 알리기.
+const MINI_SHARE_LINK = 'https://minion.toss.im/H0LAdMNg';
 
 function handleAppLanding(request) {
   const ref = (new URL(request.url).searchParams.get('ref') || '').slice(0, 40)
@@ -6264,8 +6282,21 @@ function handleAppLanding(request) {
     h1: '토스에서 여는<br>오늘운빨',
     lead: '따로 설치할 것이 없습니다. 토스 안에서 바로 열립니다.',
     body: `
-    <button id="open" class="cta-btn">토스에서 열기</button>
+    ${/* ⚠️ 버튼이 아니라 <a> 다. 스크립트가 죽어도 링크는 눌린다 —
+          홍보 글에서 온 사람을 스크립트 하나에 걸지 않는다. */''}
+    <a id="open" class="cta-btn" href="${MINI_SHARE_LINK}">토스에서 열기</a>
     <p class="muted" id="hint">토스 앱이 있으면 바로 넘어갑니다.</p>
+
+    ${/* PC 로 보는 사람에게는 폰으로 옮겨 갈 길을 준다. 커뮤니티 글은 대개 PC 로 읽는다. */''}
+    <div id="desk" class="hide">
+      <div class="card qr-card">
+        <b>휴대폰으로 열어 주세요</b>
+        <p class="muted">토스는 휴대폰 앱이라 PC 에서는 열리지 않습니다.
+          폰 카메라로 아래를 비추시면 바로 열립니다.</p>
+        <img class="qr" src="${SITE}/og/qr-app.png" alt="오늘운빨 여는 QR" width="168" height="168">
+        <button class="btn-copy" id="copy">주소 복사</button>
+      </div>
+    </div>
 
     <section class="sec">
       <h3>무엇을 볼 수 있나요<i class="rule"></i></h3>
@@ -6282,26 +6313,32 @@ function handleAppLanding(request) {
     script: `
 (function () {
   var btn = document.getElementById('open'), hint = document.getElementById('hint');
-  var DEEP = '${MINI_DEEPLINK}';
+  var LINK = ${JSON.stringify(MINI_SHARE_LINK)};
   var ref = ${JSON.stringify(ref)};
 
-  function open() {
-    // 어디서 왔는지 남긴다. 실패해도 여는 것을 막지 않는다.
-    if (ref) { try { navigator.sendBeacon('/api/hit?ref=' + encodeURIComponent(ref) + '&p=app'); } catch (e) {} }
-    var t = Date.now();
-    location.href = DEEP;
-    // 토스가 없으면 아무 일도 안 일어난다. 잠시 뒤에도 이 화면이면 안내를 바꾼다.
-    setTimeout(function () {
-      if (Date.now() - t < 2500 && !document.hidden) {
-        hint.textContent = '토스 앱이 없거나 열리지 않았어요. 아래 웹에서 바로 보실 수 있어요.';
-        hint.className = 'muted warn';
-      }
-    }, 1200);
-  }
+  // 손에 든 기기인가. 토스는 휴대폰 앱이라 PC 에서는 열 수 없다.
+  var mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
 
-  btn.addEventListener('click', open);
-  // 토스 안에서 이 주소를 열었다면 굳이 한 번 더 누르게 하지 않는다.
-  if (/toss/i.test(navigator.userAgent)) open();
+  function mark() {
+    if (!ref) return;
+    try { navigator.sendBeacon('/api/hit?ref=' + encodeURIComponent(ref) + '&p=app'); } catch (e) {}
+  }
+  btn.addEventListener('click', mark);
+
+  if (mobile) {
+    // 토스 안에서 이 주소를 열었다면 굳이 한 번 더 누르게 하지 않는다.
+    if (/toss/i.test(navigator.userAgent)) { mark(); location.href = LINK; }
+  } else {
+    document.getElementById('desk').classList.remove('hide');
+    hint.textContent = 'PC 에서는 토스 앱이 열리지 않습니다. 아래를 봐 주세요.';
+    var copy = document.getElementById('copy');
+    copy.addEventListener('click', function () {
+      navigator.clipboard.writeText(LINK).then(function () {
+        copy.textContent = '복사했어요';
+        setTimeout(function () { copy.textContent = '주소 복사'; }, 2000);
+      });
+    });
+  }
 })();`,
   });
 }
