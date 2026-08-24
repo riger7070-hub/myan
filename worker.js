@@ -5785,7 +5785,19 @@ function _freePage({ title, desc, path, h1, lead, body, script = '' }) {
 <meta property="og:description" content="${desc}">
 <meta property="og:url" content="${SITE}${path}">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="오늘운빨">
+<meta property="og:locale" content="ko_KR">
+${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터에서 회색 빈 칸이 뜬다.
+      홍보로 뿌리려고 만든 페이지들인데 정작 여기만 빠져 있었다(홈에는 있었다).
+      webp 는 미리보기를 만드는 쪽이 못 읽는 데가 있어 png 로 준다. */''}
+<meta property="og:image" content="${SITE}/icon-og-512-512.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:image:alt" content="오늘운빨">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${SITE}/icon-og-512-512.png">
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;background:#0d0d0f;color:#e8e4dc;

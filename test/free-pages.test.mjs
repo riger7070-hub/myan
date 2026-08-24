@@ -267,3 +267,23 @@ test('공개 페이지는 로그인을 요구하지 않는다', async () => {
     assert.doesNotMatch(html, /Authorization|Bearer|로그인이 필요/, '로그인을 끌어들인다');
   }
 });
+
+test('⚠️ 링크를 뿌렸을 때 미리보기 그림이 뜬다', async () => {
+  // 홍보로 뿌릴 페이지들이다. og:image 가 없으면 카톡·디스콰이엇·트위터에
+  // 회색 빈 칸이 뜬다 — 실제로 홈에만 있고 여기 넷은 다 빠져 있었다.
+  const pages = [
+    ['/calc', H.handleCalcHub()], ['/tti', H.handleTtiPage()],
+    ...KINDS.map(k => ['/calc/' + k, H.handleCalcPage(k)]),
+  ];
+  for (const [path, res] of pages) {
+    const html = await res.text();
+    const img = html.match(/property="og:image" content="([^"]+)"/)?.[1];
+    assert.ok(img, `${path}: 미리보기 그림이 없다`);
+    assert.match(img, /^https:\/\//, `${path}: 그림 주소가 절대 주소가 아니다 — 남의 화면에서 안 뜬다`);
+    assert.doesNotMatch(img, /\.webp$/i,
+      `${path}: webp 는 미리보기를 만드는 쪽이 못 읽는 데가 있다`);
+    // 크기를 알려 주지 않으면 일부 메신저가 그림을 아예 안 받아 온다.
+    assert.match(html, /property="og:image:width"/, `${path}: 그림 크기가 없다`);
+    assert.match(html, /name="twitter:image"/, `${path}: 트위터용 그림이 없다`);
+  }
+});

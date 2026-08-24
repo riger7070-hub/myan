@@ -1,1 +1,14 @@
-﻿[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"dev.pages.myan.an","sha256_cert_fingerprints":["89:20:B8:E8:AE:B8:A5:B0:52:B0:53:B4:17:0C:9D:80:9A:8D:21:15:AE:FA:5B:5E:E2:EA:54:06:B5:19:AF:03"]}}]
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.myan.app",
+      "sha256_cert_fingerprints": [
+        "89:20:B8:E8:AE:B8:A5:B0:52:B0:53:B4:17:0C:9D:80:9A:8D:21:15:AE:FA:5B:5E:E2:EA:54:06:B5:19:AF:03"
+      ]
+    }
+  }
+]
