@@ -1741,7 +1741,14 @@ export default {
     if (path === '/tti' && (method === 'GET' || method === 'HEAD')) return handleTtiPage();
     if (path === '/calc' && (method === 'GET' || method === 'HEAD')) return handleCalcHub();
     if (path.startsWith('/calc/') && (method === 'GET' || method === 'HEAD')) {
-      const page = handleCalcPage(path.slice('/calc/'.length));
+      const rest = path.slice('/calc/'.length);
+      // /calc/samjae/1990 — 결과가 제 주소를 갖는 자리. 폼(/calc/samjae)보다 먼저 본다.
+      const yr = /^samjae[/](\d{4})$/.exec(rest);
+      if (yr) {
+        const page = handleSamjaeYearPage(Number(yr[1]));
+        if (page) return page;
+      }
+      const page = handleCalcPage(rest);
       if (page) return page;
     }
     if (path.startsWith('/api/calc/') && method === 'POST') {
@@ -5777,9 +5784,21 @@ function handleSearchVerify(env, path) {
   });
 }
 
+// 삼재 결과 페이지를 사이트맵에 올릴 범위.
+//
+// "1990년생 삼재" 처럼 해를 붙여 검색하는 사람을 받으려고 만든 자리라, 페이지가
+// 있다는 것만으로는 부족하고 사이트맵에 있어야 빨리 걸린다. 페이지 자체는 1900년부터
+// 열리지만 그 말을 실제로 검색하는 사람은 살아 있는 세대다 — 1940년부터 올린다.
+const SAMJAE_FROM = 1940;
+
 function handleSitemap() {
   const today = _kstToday();
-  const urls = [{ path: '/', freq: 'weekly', pri: '1.0' }, ...FREE_PAGES]
+  const extra = [];
+  for (let y = SAMJAE_FROM; y <= _kstYear(); y++) {
+    // 답이 바뀌는 것은 해가 넘어갈 때뿐이라 yearly 로 적는다.
+    extra.push({ path: `/calc/samjae/${y}`, freq: 'yearly', pri: '0.6' });
+  }
+  const urls = [{ path: '/', freq: 'weekly', pri: '1.0' }, ...FREE_PAGES, ...extra]
     .map(p => `  <url><loc>${SITE}${p.path}</loc><lastmod>${today}</lastmod>` +
               `<changefreq>${p.freq}</changefreq><priority>${p.pri}</priority></url>`)
     .join('\n');
@@ -5967,6 +5986,23 @@ const _CALC_JS = (kind, fields) => `
   }
 })();`;
 
+/**
+ * 삼재만 다르게 낸다 — 결과가 제 주소를 갖기 때문이다(/calc/samjae/1990).
+ * 폼 안에서 답을 그리지 않고 그 주소로 보낸다.
+ */
+const _CALC_GO_JS = (base) => `
+(function () {
+  var f = document.getElementById('f'), err = document.getElementById('err');
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var y = parseInt(document.getElementById('f-year').value, 10);
+    if (!(y >= 1900 && y <= ${_kstYear()})) {
+      err.textContent = '태어난 해를 다시 확인해 주세요.'; return;
+    }
+    location.href = '${base}' + y;
+  });
+})();`;
+
 // 명리의 해는 1월 1일이 아니라 입춘에 바뀐다. 해만 받는 계산기에서는 이걸 말해 주지
 // 않으면 1·2월생이 조용히 틀린 답을 받아 간다.
 const _YEAR_ROW = (id, ph) => `<label>태어난 해</label>
@@ -6051,7 +6087,89 @@ function handleCalcPage(kind) {
     <div id="out" class="hide"></div>
     <h2>알아 두면 좋은 것</h2>
     <p class="muted">${P.note}</p>`,
-    script: _CALC_JS(kind, P.fields),
+    // 삼재는 답이 제 주소를 갖는다(/calc/samjae/1990). 나머지 둘은 폼 안에서 끝난다.
+    script: kind === 'samjae' ? _CALC_GO_JS('/calc/samjae/') : _CALC_JS(kind, P.fields),
+  });
+}
+
+/**
+ * 삼재 결과에 제 주소를 준다 — /calc/samjae/1990
+ *
+ * 왜 결과를 페이지로 따로 두는가:
+ *   하나, 공유가 된다. 답이 폼 안에서만 그려지면 링크를 보내도 받는 사람은 빈 폼을
+ *   본다. 미리보기 그림도 마찬가지라, 남의 결과가 아니라 **자기 결과**가 박혀
+ *   나가야 눌린다. 그림은 열두 장이면 모든 경우를 덮는다 — 삼재 안이면 들·눌·날
+ *   셋 중 하나, 밖이면 다음 삼재까지 남은 해가 1~9 중 하나다.
+ *   둘, "1990년생 삼재" 는 사람들이 실제로 검색해서 들어오는 말이다. 폼 한 장으로는
+ *   그 말에 걸리지 않는다. 해마다 한 장씩 있어야 걸린다.
+ *
+ * AI 를 부르지 않는다. 명리 표 계산이라 사람이 몰려도 요금이 들지 않는다.
+ */
+function handleSamjaeYearPage(year) {
+  if (!(year >= 1900 && year <= _kstYear())) return null;
+
+  // ⚠️ 6월 1일로 세우는 것은 handleCalcApi 와 같은 이유다 — 명리의 해는 입춘에
+  //    바뀌므로 1월 1일로 세우면 모두가 앞 해의 띠로 계산된다.
+  const saju = computeSaju(year, 6, 1, '');
+  const branch = saju && saju.yp && saju.yp[1];
+  const s = branch && computeSamjae(branch);
+  if (!s) return null;
+
+  const tti = TTI_NAME[branch] || '';
+  const first = s.years[0].year;
+  const left = first - s.now;          // 삼재 밖일 때 다음 삼재까지 남은 해 (1~9)
+  const kind = s.inSamjae ? s.years[s.now - first].kind : '';
+
+  const rows = s.years.map(y => `<tr${y.year === s.now ? ' class="me"' : ''}>
+      <td>${y.year}년</td><td class="s">${y.kind}</td>
+    </tr>`).join('');
+
+  const verdict = s.inSamjae ? `지금 ${kind}입니다` : '지금은 삼재가 아닙니다';
+  const detail = s.inSamjae
+    ? `${s.now}년은 세 해 가운데 ${s.now - first + 1}번째입니다. ` +
+      `${s.years[2].year}년이 지나면 아홉 해 동안 삼재가 없습니다.`
+    : `다음 삼재는 ${first}년부터입니다. ${left}년 남았습니다.`;
+
+  return _freePage({
+    ogCard: s.inSamjae ? `samjae-${kind}` : `samjae-${left}`,
+    title: s.inSamjae
+      ? `${year}년생 삼재 · 지금 ${kind}입니다 | 오늘운빨`
+      : `${year}년생 삼재 · ${first}년부터입니다 | 오늘운빨`,
+    desc: `${year}년생(${tti}띠)의 삼재는 ${s.years.map(y => `${y.year}년 ${y.kind}`).join(', ')}입니다. ` +
+          `${detail} 가입 없이 무료로 봅니다.`,
+    path: `/calc/samjae/${year}`,
+    h1: `${year}년생 삼재`,
+    lead: `${year}년에 태어나셨으면 ${tti}띠입니다. ${verdict}.`,
+    body: `
+    <div class="card"><b>${verdict}</b><p>${detail}</p></div>
+    <table><tbody>${rows}</tbody></table>
+    <button class="ghost" id="share" style="margin-top:22px">내 삼재 공유하기</button>
+    <a class="cta" href="/">이게 나에게 무슨 뜻인지 안도령에게 물어보기</a>
+    <h2>삼재는 넷 중 하나입니다</h2>
+    <p class="muted">열두 띠는 삼합국 넷으로 갈리고, 한 무리마다 세 해가 듭니다.
+      그래서 어느 해를 집어도 삼재인 사람은 넷 중 하나입니다.
+      드물어서 무서운 것이 아니라, 아홉 해에 한 번 돌아오는 자리라는 뜻입니다.</p>
+    <h2>알아 두면 좋은 것</h2>
+    <p class="muted">삼재는 나쁜 일이 정해져 있다는 뜻이 아닙니다.
+      벌이던 일을 크게 늘리기보다 지키는 편이 낫다고 보는 자리입니다.
+      입춘(2월 4일 무렵) 전에 태어나셨다면 한 해 앞으로 보셔야 합니다 —
+      명리에서 해가 바뀌는 자리는 1월 1일이 아니라 입춘입니다.</p>
+    <p class="muted"><a href="/calc/samjae" style="color:#c9a96e">다른 해로 다시 계산하기</a></p>`,
+    script: `
+(function () {
+  var b = document.getElementById('share');
+  var t = ${JSON.stringify(`${year}년생 · `)} + ${JSON.stringify(s.inSamjae ? `지금 ${kind}입니다` : `다음 삼재까지 ${left}년 남았습니다`)};
+  var url = '${SITE}/calc/samjae/${year}';
+  b.addEventListener('click', function () {
+    if (navigator.share) { navigator.share({ text: t, url: url }).catch(function () {}); return; }
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(t + '\\n' + url).then(function () {
+        b.textContent = '주소를 복사했어요';
+        setTimeout(function () { b.textContent = '내 삼재 공유하기'; }, 2000);
+      });
+    }
+  });
+})();`,
   });
 }
 

@@ -25,6 +25,7 @@ const OUT = join(ROOT, 'og');
 const W = 1200, H = 630;
 
 const TTI = ['쥐', '소', '호랑이', '토끼', '용', '뱀', '말', '양', '원숭이', '닭', '개', '돼지'];
+const SAMJAE_KIND = ['들삼재', '눌삼재', '날삼재'];
 
 /** 카드 한 장. 화면 CSS 와 같은 금·먹 팔레트를 쓴다. */
 function card({ eyebrow, title, sub }) {
@@ -89,6 +90,23 @@ const CARDS = [
     sub: '삼재 · 신살 · 본명궁' },
   { name: 'calc-samjae', eyebrow: '삼재 계산기', title: '내 삼재는<br>언제인가',
     sub: '태어난 해만 넣으면 됩니다' },
+  // 삼재 결과 카드. /calc/samjae/<해> 가 자기 결과를 미리보기에 박아 내보낸다.
+  //
+  // 나올 수 있는 답이 열두 가지뿐이라 미리 그려 둘 수 있다 — 삼재 안이면
+  // 들 · 눌 · 날 셋 중 하나이고, 밖이면 다음 삼재까지 남은 해가 1~9 중 하나다.
+  // (삼재는 열두 해에 세 해 드니 밖에 있는 해는 아홉 해다.)
+  ...SAMJAE_KIND.map((k) => ({
+    name: `samjae-${k}`,
+    eyebrow: '삼재 계산기',
+    title: `지금<br>${k}입니다`,
+    sub: '열두 띠 가운데 셋 — 넷에 하나가 삼재입니다',
+  })),
+  ...Array.from({ length: 9 }, (_, i) => i + 1).map((n) => ({
+    name: `samjae-${n}`,
+    eyebrow: '삼재 계산기',
+    title: `다음 삼재까지<br>${n}년`,
+    sub: '지금은 삼재가 아닙니다',
+  })),
   { name: 'calc-sinsal', eyebrow: '신살 풀이', title: '내 사주에 든<br>신살 찾기',
     sub: '도화 · 역마 · 화개 · 백호 · 천을귀인' },
   { name: 'calc-bonmyeong', eyebrow: '본명궁과 방위', title: '나에게 좋은<br>방위 찾기',
