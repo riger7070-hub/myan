@@ -4160,6 +4160,19 @@ function cors(body, status = 200) {
   });
 }
 
+/**
+ * 예외를 로그에 남기고, 사용자에게는 정해진 한국어 한 줄만 돌려준다.
+ *
+ * ⚠️ e.message 를 그대로 내보내면 D1 오류 원문이나 내부 사정이 화면에 뜬다 —
+ *    한국어 화면에 영어 한 줄이 튀어나오고, 어떤 테이블·필드에서 터졌는지까지
+ *    말해 준다. 서른네 곳이 그 상태였고, 그중 어디도 로그를 남기지 않아서
+ *    사용자 화면이 유일한 단서였다. 이제 반대로 한다 — 원문은 로그에만.
+ */
+function serverError(tag, e, message = '요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.') {
+  console.error('[' + tag + ']', e?.message || e);
+  return cors(JSON.stringify({ error: { message } }), 500);
+}
+
 // ════════════════════════════
 //  공통 법적 페이지 스타일
 // ════════════════════════════
@@ -4535,7 +4548,7 @@ JSON이나 마크다운, 코드블록 없이 조언 본문만 순수 텍스트�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('DETAIL_READING', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -4600,7 +4613,7 @@ async function handleTarotDraw(request, env) {
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('TAROT_DRAW', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -4715,7 +4728,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('ZODIAC_FORTUNE', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -4841,7 +4854,7 @@ ${transitLines}
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('ASTRO_TRANSIT', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -5088,7 +5101,7 @@ ${dayLines}
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('AUSPICIOUS_DAYS', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8113,7 +8126,7 @@ ${daeun.next ? `다음 대운 ${daeun.next.ganzhi} [${el(daeun.next)}] — ${dae
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('DAEUN', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8265,7 +8278,7 @@ ${sajuLine}
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('NAME_READING', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8414,7 +8427,7 @@ ${timing.best.map(line).join('\n')}
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('COMPAT_TIMING', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8485,7 +8498,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('LUCKY_PICKS', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8534,7 +8547,7 @@ async function handleTypeCompat(request, env) {
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('TYPE_COMPAT', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8610,7 +8623,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('FORTUNE_TOPIC', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8687,7 +8700,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('ICHING', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8763,7 +8776,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('NUMEROLOGY', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -8943,7 +8956,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('PHOTO_READING', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -9054,7 +9067,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('DREAM_INTERPRETATION', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -9111,7 +9124,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('LOTTO_NUMBERS', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -9171,7 +9184,7 @@ async function handleRuneReading(request, env) {
   } catch(e) {
     // Gemini 호출이 던지는 등 위에서 예외가 나면 차감만 남는다 — 여기서 되돌린다.
     if (refund) await refund().catch(() => {});
-    return cors(JSON.stringify({ error:{ message: e.message } }), 500);
+    return serverError('RUNE_READING', e, '풀이 중 오류가 발생했습니다. 엽전은 환불되었습니다.');
   }
 }
 
@@ -9232,7 +9245,7 @@ async function handlePushSubscribe(request, env) {
     ).bind(id, subscription.endpoint, subscription.keys?.p256dh||'', subscription.keys?.auth||'', lang, email).run();
     return cors(JSON.stringify({success:true}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('PUSH_SUBSCRIBE', e);
   }
 }
 
@@ -9262,7 +9275,7 @@ async function handlePushUnsubscribe(request, env) {
     await env.DB.prepare('DELETE FROM push_subscriptions WHERE id=?').bind(id).run();
     return cors(JSON.stringify({success:true}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('PUSH_UNSUBSCRIBE', e);
   }
 }
 
@@ -9422,7 +9435,7 @@ async function handleStreakCheckin(request, env) {
 
     return cors(JSON.stringify({success:true,current,max,total,bonus:current%7===0,lastCheckin:today}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('STREAK_CHECKIN', e);
   }
 }
 
@@ -9436,7 +9449,7 @@ async function handleGetStreak(request, env) {
     if (!row) return cors(JSON.stringify({current:0,max:0,total:0,lastCheckin:null}),200);
     return cors(JSON.stringify({current:row.current_streak,max:row.max_streak,total:row.total_checkins,lastCheckin:row.last_checkin}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('GET_STREAK', e);
   }
 }
 
@@ -9454,7 +9467,7 @@ async function handleOhaengHistory(request, env) {
     ).bind(email).all();
     return cors(JSON.stringify({history: rows.results||[]}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('OHAENG_HISTORY', e);
   }
 }
 
@@ -9491,7 +9504,7 @@ async function handleWeeklyReport(request, env) {
       streak: streakRow?.current_streak || 0
     }),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('WEEKLY_REPORT', e);
   }
 }
 
@@ -9524,7 +9537,7 @@ async function handleShareBonus(request, env) {
 
     return cors(JSON.stringify({success:true, tokens:1}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('SHARE_BONUS', e);
   }
 }
 
@@ -9546,7 +9559,7 @@ async function handleFeedback(request, env) {
     ).bind(id,email,date,ohaeng,isCorrect?1:0).run();
     return cors(JSON.stringify({success:true}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('FEEDBACK', e);
   }
 }
 
@@ -9567,7 +9580,7 @@ async function handleReferralGenerate(request, env) {
     await env.DB.prepare('INSERT INTO referrals (code,referrer_email) VALUES (?,?)').bind(code,email).run();
     return cors(JSON.stringify({code}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('REFERRAL_GENERATE', e);
   }
 }
 
@@ -9603,7 +9616,7 @@ async function handleReferralClaim(request, env) {
     ).bind(refId2, ref.referrer_email).run();
     return cors(JSON.stringify({success:true,bonus:3}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('REFERRAL_CLAIM', e);
   }
 }
 
@@ -9620,7 +9633,7 @@ async function handleGetReferral(request, env) {
       used: (refs.results||[]).filter(r=>r.referee_email).length
     }),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('GET_REFERRAL', e);
   }
 }
 
@@ -9711,7 +9724,7 @@ async function handleTokenHistory(request, env) {
 
     return cors(JSON.stringify({ history }), 200);
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    return serverError('TOKEN_HISTORY', e);
   }
 }
 
@@ -9739,7 +9752,7 @@ async function handleUngiAdminLogin(request, env) {
 
     return cors(JSON.stringify({ success: true, email }), 200);
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    return serverError('UNGI_ADMIN_LOGIN', e);
   }
 }
 
@@ -9826,7 +9839,7 @@ async function handleUngiGiveTokens(request, env) {
 
     return cors(JSON.stringify({ success: true, tokens, email }), 200);
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    return serverError('UNGI_GIVE_TOKENS', e);
   }
 }
 
@@ -9873,7 +9886,7 @@ async function handleFortuneQrGenerate(request, env) {
 
     return cors(JSON.stringify({ success: true, batchId, codes }), 200);
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    return serverError('FORTUNE_QR_GENERATE', e);
   }
 }
 
@@ -9919,7 +9932,7 @@ async function handleFortuneQrRedeem(request, env) {
 
     return cors(JSON.stringify({ success: true, seed, revisit: false }), 200);
   } catch (e) {
-    return cors(JSON.stringify({ error: { message: e.message } }), 500);
+    return serverError('FORTUNE_QR_REDEEM', e);
   }
 }
 
@@ -9939,7 +9952,7 @@ async function handleOhaengHistorySave(request, env) {
     ).bind(id,email,date,ohaeng).run();
     return cors(JSON.stringify({success:true}),200);
   } catch(e) {
-    return cors(JSON.stringify({error:{message:e.message}}),500);
+    return serverError('OHAENG_HISTORY_SAVE', e);
   }
 }
 
