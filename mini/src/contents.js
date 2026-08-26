@@ -173,5 +173,46 @@ export const SANGAJI = [
   { n: '八', t: '진(進)',   m: '나아가기 좋습니다. 망설이던 한 걸음을 떼어 보세요.' },
 ];
 
+
+// ── 누가 풀어 주는가 ──
+//
+// 넷이 같은 집안이고, 콘텐츠마다 맡은 사람이 다르다. 화면에 세울 그림과 이름이
+// 여기 있고, 실제로 글을 쓰는 인격은 서버(worker.js 의 SPEAKERS)에 있다.
+//
+// ⚠️ 서버의 SPEAKERS / FEATURE_SPEAKER 와 **글자 하나까지 같아야 한다**. 어긋나면
+//    화면에는 안낭자가 서 있는데 글은 안할매가 쓴 것이 된다. 사용자는 그걸 바로 알아챈다.
+//    test/speakers.test.mjs 가 두 파일을 대조한다.
+export const SPEAKERS = {
+  doryeong: { name: '안도령', file: '/andoryeong.svg', intro: '산중에서 기운을 읽어 온 젊은 도인' },
+  nangja:   { name: '안낭자', file: '/annangja.svg',   intro: '사람과 사람 사이의 인연을 보는 이' },
+  halmae:   { name: '안할매', file: '/anhalmae.svg',   intro: '액을 막고 흉을 눅이는 산중의 어른' },
+  dongja:   { name: '안동자', file: '/andongja.svg',   intro: '길한 것을 찾아내는 눈 밝은 아이' },
+};
+
+export const DEFAULT_SPEAKER = 'doryeong';
+
+export const FEATURE_SPEAKER = {
+  // 안낭자 — 인연
+  '/api/compat-timing':        'nangja',
+  '/api/intimacy':             'nangja',
+  '/api/type-compat':          'nangja',
+  '/api/spouse-palace':        'nangja',
+  // 안할매 — 액막이와 오래된 책
+  '/api/sinsal':               'halmae',
+  '/api/tojeong':              'halmae',
+  '/api/dream-interpretation': 'halmae',
+  '/api/iching':               'halmae',
+  '/api/auspicious-days':      'halmae',
+  '/api/direction':            'halmae',
+  '/api/past-life':            'halmae',
+  // 안동자 — 길신
+  '/api/gwiin':                'dongja',
+  '/api/lucky-picks':          'dongja',
+};
+
+/** 표에 없는 콘텐츠는 안도령이 맡는다. 산가지처럼 서버를 안 부르는 것도 여기로 온다. */
+export const speakerOf = (item) =>
+  SPEAKERS[FEATURE_SPEAKER[item && item.path] || DEFAULT_SPEAKER];
+
 export const ALL_ITEMS = SECTIONS.flatMap(s => s.items);
 export const itemById = (id) => ALL_ITEMS.find(i => i.id === id);

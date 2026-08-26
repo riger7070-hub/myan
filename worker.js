@@ -803,21 +803,15 @@ const _fortuneInflight = new Map();
 // 뒤에 온 요청이 앞선 요청의 약속을 그대로 기다린다). 끊고 환불하는 편이 낫다.
 const GEMINI_TIMEOUT_MS = 45000;
 
-const ANDORYEONG = `너는 "안도령(安道令)"이다. 산중에서 오래 기운을 읽어 온 젊은 도인이고,
-찾아온 사람의 사주와 그날의 기운을 함께 살펴 이야기를 들려준다.
-
-말하는 법
-- 존댓말을 쓰되 예스럽거나 근엄하게 굴지 않는다. 곁에 앉은 사람에게 조곤조곤 말하듯 한다.
-- "제가 기운을 살펴보니", "오늘 흐름을 보면" 처럼 네가 직접 살펴본 것으로 말한다.
-- 스스로를 AI 나 모델이라 부르지 않는다. 안도령으로만 말한다.
-
-풀이하는 법 (이게 가장 중요하다)
+// 말하는 법과 풀이하는 법은 넷이 함께 쓴다. 여기가 흔들리면 누가 말하든 티가 난다.
+const _VOICE_COMMON = `풀이하는 법 (이게 가장 중요하다)
 - 찾아온 사람은 사주를 전혀 모른다고 여겨라. 전문용어를 쓸 때는 반드시 그 자리에서
   쉬운 말로 풀어 준다. 예: "일간(日干), 그러니까 타고난 본바탕을 말합니다"
 - 결론만 던지지 말고 왜 그렇게 보는지를 함께 말한다. 근거가 있어야 납득이 된다.
 - 뜬구름 잡는 말 대신 오늘 당장 해볼 수 있는 것을 하나라도 짚어 준다.
 - 단정적인 예언을 하지 않는다. "반드시 ~한다" 대신 "~한 기운이 있으니 ~해 보시면 좋겠습니다".
 - 나쁜 기운도 숨기지 않되, 겁주지 않고 대비할 방법과 함께 말한다.
+- 스스로를 AI 나 모델이라 부르지 않는다. 네 이름으로만 말한다.
 
 쓰지 않는 것
 - 별표(*), 우물정자(#), 소제목, 번호를 붙이지 않는다.
@@ -829,7 +823,96 @@ const ANDORYEONG = `너는 "안도령(安道令)"이다. 산중에서 오래 기
 예외
 - JSON 형식으로 답하라는 요청을 받으면 그때는 JSON 만 출력한다. 인사말도 설명도 붙이지 않는다.`;
 
-const _ANDORYEONG_SI = { parts: [{ text: ANDORYEONG }] };
+// ⚠️ 넷은 **같은 집안**이어야 한다. 말투만 바꾸고 풀이의 깊이나 태도는 위(_VOICE_COMMON)를
+//    그대로 따른다. 인격을 너무 세게 주면 JSON 을 받는 콘텐츠(럭키 아이템 등)에 산문이
+//    붙어 파싱이 깨진다 — _VOICE_COMMON 의 마지막 "예외" 항목이 그것을 막고 있다.
+//
+// file 은 그림 파일, intro 는 화면에서 이름 옆에 붙일 한 줄이다. 클라이언트도 같은 값을
+// 써야 하므로 미니앱 mini/src/contents.js 의 SPEAKERS 와 짝이 맞아야 한다
+// (test/speakers.test.mjs 가 어긋남을 잡는다).
+const SPEAKERS = {
+  doryeong: {
+    name: '안도령',
+    file: '/andoryeong.svg',
+    intro: '산중에서 기운을 읽어 온 젊은 도인',
+    self: `너는 "안도령(安道令)"이다. 산중에서 오래 기운을 읽어 온 젊은 도인이고,
+찾아온 사람의 사주와 그날의 기운을 함께 살펴 이야기를 들려준다.
+
+말하는 법
+- 존댓말을 쓰되 예스럽거나 근엄하게 굴지 않는다. 곁에 앉은 사람에게 조곤조곤 말하듯 한다.
+- "제가 기운을 살펴보니", "오늘 흐름을 보면" 처럼 네가 직접 살펴본 것으로 말한다.`,
+  },
+  nangja: {
+    name: '안낭자',
+    file: '/annangja.svg',
+    intro: '사람과 사람 사이의 인연을 보는 이',
+    self: `너는 "안낭자(安娘子)"다. 안도령과 같은 산중에서 자랐고, 사람과 사람 사이의 인연을 본다.
+궁합, 짝, 만남과 헤어짐의 때가 네 몫이다.
+
+말하는 법
+- 존댓말을 쓰되 다정하다. 연애 이야기를 들어 주는 손위 사람처럼 말한다.
+- "두 분의 기운을 겹쳐 보니", "인연의 결을 짚어 보면" 처럼 관계를 두고 말한다.
+- 좋은 짝이라 부추기지도, 나쁜 짝이라 갈라놓지도 않는다. 무엇이 잘 맞고 무엇이 부딪히는지를
+  알려 주고, 부딪히는 자리를 어떻게 다루면 되는지까지 말해 준다.`,
+  },
+  halmae: {
+    name: '안할매',
+    file: '/anhalmae.svg',
+    intro: '액을 막고 흉을 눅이는 산중의 어른',
+    self: `너는 "안할매"다. 이 산중에서 가장 오래 산 사람이고, 액을 막고 흉을 눅이는 일을 맡는다.
+신살, 삼재, 꿈, 오래된 책의 풀이가 네 몫이다.
+
+말하는 법
+- 존댓말을 쓰되 말수가 적고 무겁다. 어물쩍 넘기지 않는다.
+- "내가 오래 보아 오니", "예부터 이런 자리는" 처럼 세월을 두고 말한다.
+- 나쁜 것을 말할 때는 반드시 막는 법을 함께 준다. 그것이 네가 하는 일이다.
+- 무서운 말을 무섭게 하지 않는 것이 네 방식이다. 호들갑을 떨지 않는다.`,
+  },
+  dongja: {
+    name: '안동자',
+    file: '/andongja.svg',
+    intro: '길한 것을 찾아내는 눈 밝은 아이',
+    self: `너는 "안동자(安童子)"다. 안도령을 따라다니는 아이이고, 길한 것을 찾아내는 눈이 밝다.
+귀인, 길신, 오늘의 복이 네 몫이다.
+
+말하는 법
+- 존댓말을 쓰되 밝고 씩씩하다. 다만 까불지 않는다.
+- "제가 찾아보니", "여기 좋은 것이 있어요" 처럼 찾아낸 것을 내놓듯 말한다.
+- 좋은 것을 말하는 자리이니 기운을 북돋되, 없는 복을 지어내지 않는다.`,
+  },
+};
+
+const DEFAULT_SPEAKER = 'doryeong';
+
+/**
+ * 콘텐츠마다 누가 말하는지. 여기 없으면 안도령이 맡는다.
+ * ⚠️ 미니앱 contents.js 의 item.speaker 와 반드시 같아야 한다. 어긋나면 화면에는
+ *    안낭자가 서 있는데 글은 안할매가 쓴 것이 된다.
+ */
+const FEATURE_SPEAKER = {
+  // 안낭자 — 인연
+  '/api/compat-timing':        'nangja',
+  '/api/intimacy':             'nangja',
+  '/api/type-compat':          'nangja',
+  '/api/spouse-palace':        'nangja',
+  // 안할매 — 액막이와 오래된 책
+  '/api/sinsal':               'halmae',
+  '/api/tojeong':              'halmae',
+  '/api/dream-interpretation': 'halmae',
+  '/api/iching':               'halmae',
+  '/api/auspicious-days':      'halmae',
+  '/api/direction':            'halmae',
+  '/api/past-life':            'halmae',
+  // 안동자 — 길신
+  '/api/gwiin':                'dongja',
+  '/api/lucky-picks':          'dongja',
+};
+
+const _SI = Object.fromEntries(Object.entries(SPEAKERS).map(
+  ([k, sp]) => [k, { parts: [{ text: sp.self + '\n\n' + _VOICE_COMMON }] }]));
+
+/** 모르는 이름이 들어와도 안도령으로 떨어진다 — 화자가 없다고 풀이가 멈추면 안 된다. */
+function speakerSI(id) { return _SI[id] || _SI[DEFAULT_SPEAKER]; }
 
 /**
  * 기계가 쓴 티가 나는 기호를 걷어낸다.
@@ -933,7 +1016,7 @@ async function geminiText(env, prompt, generationConfig = {}, extra = {}) {
   // 사주 풀이는 긴 추론이 필요한 작업이 아니다 — 프롬프트에 이미 계산된 사주를 준다.
   const cfg = { temperature: 0.9, thinkingConfig: { thinkingBudget: 0 }, ...generationConfig };
   const parts = Array.isArray(prompt) ? prompt : [{ text: prompt }];
-  const body = { systemInstruction: _ANDORYEONG_SI, contents: [{ parts }], generationConfig: cfg };
+  const body = { systemInstruction: speakerSI(extra.speaker), contents: [{ parts }], generationConfig: cfg };
   if (extra.safetySettings) body.safetySettings = extra.safetySettings;
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -4916,7 +4999,7 @@ ${dayLines}
     // 인라인 fetch 로 두면 실패가 서버 어디에도 안 남아 "가끔 안 된다"를 추적할 수 없다.
     // (systemInstruction·타임아웃·thinkingBudget 은 geminiText 안에 들어 있다 — 여기서 다시 주지 않는다.)
     const reading = await cachedReading(env, 'takil:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 }));
+      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 }, { speaker: 'halmae' }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -5830,7 +5913,7 @@ function _ogImage(path, card) {
   return name ? `${SITE}/og/${encodeURIComponent(name)}.png` : `${SITE}/icon-og-512-512.png`;
 }
 
-function _freePage({ title, desc, path, h1, lead, body, script = '', ogCard }) {
+function _freePage({ title, desc, path, h1, lead, body, script = '', ogCard, speaker }) {
   const ogImage = _ogImage(path, ogCard);
   return new Response(`<!doctype html>
 <html lang="ko">
@@ -5922,11 +6005,22 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
   code{font-size:.86em;padding:1px 5px;border-radius:4px;
     background:rgba(201,169,110,.12);color:#c9a96e}
   .hide{display:none}
+  /* 이 자리를 맡은 사람. 검색으로 처음 들어온 사람이 가장 먼저 보는 얼굴이라
+     제목보다 위에 둔다. */
+  .who{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .who img{width:52px;height:52px;flex:none}
+  .who span{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .who b{font-size:.86rem;font-weight:600;letter-spacing:.03em;color:#c9a96e}
+  .who i{font-style:normal;font-size:.74rem;line-height:1.45;color:#8d8880;word-break:keep-all}
 </style>
 </head>
 <body>
 <div class="wrap">
   <a class="brand" href="/">M ; Y 安</a>
+  ${speaker && SPEAKERS[speaker] ? `<div class="who">
+    <img src="${SPEAKERS[speaker].file}" alt="" onerror="this.style.display='none'">
+    <span><b>${SPEAKERS[speaker].name}</b><i>${SPEAKERS[speaker].intro}</i></span>
+  </div>` : ''}
   <h1>${h1}</h1>
   <p class="lead">${lead}</p>
   ${body}
@@ -6036,6 +6130,7 @@ function handleCalcPage(kind) {
       lead: '태어난 해만 넣으면 됩니다. 삼재가 드는 세 해와, 지금이 그 안인지 알려 드립니다.',
       form: _YEAR_ROW('year', '1990'),
       fields: ['year'],
+      speaker: 'halmae',
       note: '삼재는 태어난 해의 띠가 속한 삼합국마다 정해져 있습니다. 아홉 해가 지나면 세 해가 들고, 들삼재 · 눌삼재 · 날삼재 순으로 지나갑니다. 나쁜 일이 정해져 있다는 뜻이 아니라, 벌이던 일을 크게 늘리기보다 지키는 편이 낫다는 자리입니다.',
     },
     sinsal: {
@@ -6057,6 +6152,7 @@ function handleCalcPage(kind) {
           <option>신시</option><option>유시</option><option>술시</option><option>해시</option>
         </select>`,
       fields: ['year', 'month', 'day', 'hour'],
+      speaker: 'halmae',
       note: '신살은 사주에서 눈에 띄는 자리를 짚어 주는 이름표입니다. 살(殺)이라는 글자 때문에 나쁜 것으로만 읽히지만, 도화는 사람을 끄는 힘이고 역마는 움직여야 풀리는 결입니다. 좋고 나쁨보다 어떻게 쓰느냐의 문제입니다.',
     },
     bonmyeong: {
@@ -6068,6 +6164,7 @@ function handleCalcPage(kind) {
         <label>성별</label>
         <select id="f-gender"><option value="M">남자</option><option value="F">여자</option></select>`,
       fields: ['year', 'gender'],
+      speaker: 'halmae',
       note: '본명궁은 태어난 해로 정해지는 아홉 자리 중 하나이고, 팔택(八宅)은 그 자리에서 본 여덟 방위의 뜻입니다. 동사택과 서사택은 집을 고를 때 흔히 쓰는 구분입니다.',
     },
   }[kind];
@@ -6079,6 +6176,7 @@ function handleCalcPage(kind) {
     path: '/calc/' + kind,
     h1: P.h1,
     lead: P.lead,
+    speaker: P.speaker,
     body: `
     <form id="f">${P.form}
       <button type="submit" id="go">계산하기</button>
@@ -6131,6 +6229,9 @@ function handleSamjaeYearPage(year) {
     : `다음 삼재는 ${first}년부터입니다. ${left}년 남았습니다.`;
 
   return _freePage({
+    // 삼재는 안할매 몫이다. 폼(/calc/samjae)에는 세워 두고 결과(/calc/samjae/1990)에는
+    // 빠뜨리면, 계산 한 번에 사람이 바뀐 것처럼 보인다.
+    speaker: 'halmae',
     ogCard: s.inSamjae ? `samjae-${kind}` : `samjae-${left}`,
     title: s.inSamjae
       ? `${year}년생 삼재 · 지금 ${kind}입니다 | 오늘운빨`
@@ -6903,7 +7004,7 @@ async function handleIntimacy(request, env) {
     ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'intimacy:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'nangja' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -7056,7 +7157,7 @@ async function handleDirection(request, env) {
     ].join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'direction:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'halmae' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -7229,7 +7330,7 @@ async function handleSinsal(request, env) {
     ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'sinsal:' + _sajuKey(saju, g), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'halmae' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -7316,7 +7417,7 @@ async function handleGwiin(request, env) {
     ].filter(Boolean).join(NL);
 
     const reading = await cachedReading(env, 'gwiin:' + _sajuKey(saju, g), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'dongja' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -7460,7 +7561,7 @@ async function handlePastLife(request, env) {
     ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'pastlife:' + _sajuKey(saju, g), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.95, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.95, maxOutputTokens: 2048 }, { speaker: 'halmae' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -7600,7 +7701,7 @@ async function handleSpousePalace(request, env) {
     ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'spouse:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'nangja' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -7994,7 +8095,7 @@ ${timing.best.map(line).join('\n')}
 
     // geminiText 로 부른다 — 실패 사유를 로그에 남기기 위해서다(택일 쪽 주석 참고).
     const reading = await cachedReading(env, 'compat:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 }, { speaker: 'nangja' }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -8058,7 +8159,7 @@ JSON 형식으로만 답하세요, 다른 텍스트 없이:
     const raw = await cachedFortune(
       env, `lucky|${lang}|${_kstYmd()}`,
       async () => {
-        const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9, maxOutputTokens: 1000 });
+        const text = await geminiText(env, prompt, { responseMimeType:'application/json', temperature:0.9, maxOutputTokens: 1000 }, { speaker: 'dongja' });
         // 캐시에 넣기 전에 걸러야 깨진 JSON 이 하루 종일 재사용되지 않는다.
         try {
           const p = JSON.parse(text);
@@ -8119,7 +8220,7 @@ async function handleTypeCompat(request, env) {
     const on = ON[lang] || ON.ko;
     // 유형 두 개로만 정해진다 — 5 × 5 × 4개국어 = 100개면 전 조합이 채워지고 날짜도 안 탄다.
     const { bucket, prompt } = typeCompatSpec(lang, myType, partnerType);
-    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt, { maxOutputTokens: 1200 }));
+    const reading = await cachedFortune(env, bucket, () => geminiText(env, prompt, { maxOutputTokens: 1200 }, { speaker: 'nangja' }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -8268,7 +8369,7 @@ ${cleanQuestion ? `질문: "${cleanQuestion}"` : '특정 질문 없이 오늘의
 
 중요: 한자를 쓸 경우 바로 옆에 괄호로 한글 독음과 뜻을 써주세요. JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const reading = await geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1000 });
+    const reading = await geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1000 }, { speaker: 'halmae' });
 
     if (!reading) {
       await refund(); refund = null;
@@ -8417,7 +8518,7 @@ JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답�
     // 같은 사주·같은 해면 같은 신수다. 쌍둥이인 올해 세운(handleYearLuck)은 진작
     // 이렇게 캐시하고 있었는데 여기만 빠져 있었다 — 신년에 몰릴수록 그대로 요금이 된다.
     const reading = await cachedReading(env, 'tojeong:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 4096 }));
+      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 4096 }, { speaker: 'halmae' }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -8639,7 +8740,7 @@ ${langLabel}로 4~6문장, 꿈에 나온 상징들의 전통적인 해몽 의미
 
 JSON이나 마크다운, 코드블록 없이 본문만 순수 텍스트로 답하세요. 별표(*)나 긴 줄표(—) 같은 기호는 쓰지 말고, 쉼표와 자연스러운 접속사(그리고, 다만, 특히 등)로 편하게 이어서 사람이 말하듯 써주세요.`;
 
-    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1000 });
+    const reading = await geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 1000 }, { speaker: 'halmae' });
 
     if (!reading) {
       await refund(); refund = null;
@@ -9956,7 +10057,7 @@ ${lang === 'ko' ? '오늘의 기운과 나의 오행 궁합을 짧게 풀어주�
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            systemInstruction: _ANDORYEONG_SI,
+            systemInstruction: speakerSI(DEFAULT_SPEAKER),
             contents: [
               { parts: [{ text: sysText + '\n\n' + userMsg }] }
             ],

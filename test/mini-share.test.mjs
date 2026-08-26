@@ -11,6 +11,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { speakerOf } from '../mini/src/contents.js';
+
+// 공유 문구는 이제 누가 풀었는지 밝힌다. 떼어 낸 함수가 speakerOf 를 부르므로
+// **실제** 표를 주입한다 — 여기서 가짜를 쓰면 표가 어긋나도 이 파일은 통과한다.
+globalThis.speakerOf = speakerOf;
 
 const SRC = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'mini', 'src', 'main.js'), 'utf8');
@@ -20,7 +25,7 @@ assert.ok(fn, '_resultShareText 를 못 찾았다');
 const _resultShareText = eval(`(${fn[0].replace('function _resultShareText', 'function')})`);
 
 const 배우자궁 = {
-  item: { label: '배우자궁 풀이', icon: 'spouse' },
+  item: { label: '배우자궁 풀이', icon: 'spouse', path: '/api/spouse-palace' },
   extras: [{ label: '배우자궁', value: '酉(金) · 정재' }, { label: '살펴볼 해', value: '2027년' }],
   body: '제가 기운을 살펴보니, 태현님의 배우자 자리에는 유금(酉金)이 앉아 있습니다.\n\n'
       + '정재라 하는데, 알뜰하고 성실한 결입니다.',
@@ -38,7 +43,7 @@ test('첫 줄이 제목이 아니라 풀이의 한 문장이다', () => {
   assert.doesNotMatch(first, /^\[/, '첫 줄이 아직 제목이다');
   assert.match(first, /유금\(酉金\)/, '풀이의 알맹이가 첫 줄에 없다');
   // 무엇을 본 것인지는 바로 아래에 남아 있어야 한다.
-  assert.match(t, /안도령의 배우자궁 풀이/, '무슨 풀이인지 사라졌다');
+  assert.match(t, /안낭자의 배우자궁 풀이/, '무슨 풀이인지, 누가 풀었는지 사라졌다');
 });
 
 test('도입구는 걷어낸다', () => {
@@ -133,7 +138,7 @@ test('문단 사이 빈 줄을 살린다', () => {
 });
 
 test('부가 정보가 없는 콘텐츠도 문제없다', () => {
-  const t = _resultShareText({ item: { label: '오늘의 타로' }, body: '별 정방향입니다.' }, '');
+  const t = _resultShareText({ item: { label: '오늘의 타로', path: '/api/tarot-draw' }, body: '별 정방향입니다.' }, '');
   assert.match(t, /오늘의 타로/);
   assert.match(t, /별 정방향입니다/);
   // 부가 정보가 없다고 빈 자리가 남으면 안 된다(줄이 셋뿐이어야 한다).

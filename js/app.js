@@ -6276,6 +6276,57 @@ async function openTojeong() {
 //  ⚠️ cost 는 여기가 아니라 _homeSections() 에 적힌다. home-sections.test.mjs 가
 //     그 값을 서버의 accountSpend 와 대조하므로, 값을 바꿀 때는 서버부터 볼 것.
 // ════════════════════════════════════════════
+// ════════════════════════════════════════════
+//  누가 풀어 주는가
+// ════════════════════════════════════════════
+//  넷이 같은 집안이고, 콘텐츠마다 맡은 사람이 다르다.
+//
+//  ⚠️ 서버(worker.js 의 SPEAKERS / FEATURE_SPEAKER)와 미니앱(mini/src/contents.js)에
+//     같은 표가 있고, 셋이 **글자 하나까지 같아야 한다**. 어긋나면 화면에는 안낭자가
+//     서 있는데 글은 안할매가 쓴 것이 된다 — 사용자는 그것을 바로 알아챈다.
+//     test/speakers.test.mjs 가 세 파일을 대조한다.
+const _SPEAKERS = {
+  doryeong: { name:'안도령', file:'/andoryeong.svg', intro:'산중에서 기운을 읽어 온 젊은 도인' },
+  nangja:   { name:'안낭자', file:'/annangja.svg',   intro:'사람과 사람 사이의 인연을 보는 이' },
+  halmae:   { name:'안할매', file:'/anhalmae.svg',   intro:'액을 막고 흉을 눅이는 산중의 어른' },
+  dongja:   { name:'안동자', file:'/andongja.svg',   intro:'길한 것을 찾아내는 눈 밝은 아이' },
+};
+
+const _DEFAULT_SPEAKER = 'doryeong';
+
+const _FEATURE_SPEAKER = {
+  // 안낭자 — 인연
+  '/api/compat-timing':        'nangja',
+  '/api/intimacy':             'nangja',
+  '/api/type-compat':          'nangja',
+  '/api/spouse-palace':        'nangja',
+  // 안할매 — 액막이와 오래된 책
+  '/api/sinsal':               'halmae',
+  '/api/tojeong':              'halmae',
+  '/api/dream-interpretation': 'halmae',
+  '/api/iching':               'halmae',
+  '/api/auspicious-days':      'halmae',
+  '/api/direction':            'halmae',
+  '/api/past-life':            'halmae',
+  // 안동자 — 길신
+  '/api/gwiin':                'dongja',
+  '/api/lucky-picks':          'dongja',
+};
+
+/** 표에 없는 콘텐츠는 안도령이 맡는다. */
+function _speakerOf(path) {
+  return _SPEAKERS[_FEATURE_SPEAKER[path] || _DEFAULT_SPEAKER];
+}
+
+/** 풀이 위에 붙는 한 줄. 이름만 적으면 넷이 다 안도령처럼 읽혀서 얼굴을 함께 세운다. */
+function _speakerLine(path) {
+  const sp = _speakerOf(path);
+  return `<div class="rd-who">
+    <img class="rd-face" src="${sp.file}" alt="" onerror="this.style.display='none'">
+    <span><b>${_escHtml(sp.name)}의 풀이</b><i>${_escHtml(sp.intro)}</i></span>
+  </div>`;
+}
+
 const _READINGS = {
   wealth:    { icon:'wealth',    path:'/api/wealth',        titleKey:'wealthTitle' },
   sinsal:    { icon:'sinsal',    path:'/api/sinsal',        titleKey:'sinsalTitle' },
@@ -6401,6 +6452,7 @@ async function _runReading(overlay, spec, body, token, t, lang, title) {
     if (!resultEl) return true;
     resultEl.style.display = '';
     resultEl.innerHTML = `
+      ${_speakerLine(spec.path)}
       ${_readingFacts(data, t)}
       <div class="detail-area-card"><div class="detail-area-body" id="rdBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${_escHtml(t.tokenUnit || '잔여 엽전')}: ${data.remaining}</div>` : ''}

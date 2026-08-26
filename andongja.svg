@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 800" role="img" aria-label="안동자">
+<title>안동자</title>
+<!-- ⚠️ 안도령(andoryeong.svg)과 안쪽 좌표가 같다. 형제로 보이려면 건드리지 않는다.
+     맡은 자리: 귀인·길신(복주머니). 그래서 초록(#4a8a5e)을 쓴다.
+
+     ⚠️ 아이라서 키가 작아야 한다. 좌표를 하나씩 줄이는 대신 통째로 0.86 배 하고
+        바닥에 붙였다 — 다른 셋과 같은 viewBox 에 넣어야 나란히 세웠을 때
+        키 차이만 보이고 그림 크기는 안 흔들린다. -->
+<g transform="translate(47.6, 112) scale(0.86)">
+  <rect x="495" y="370" width="50" height="190" rx="25" fill="#f6ead0" stroke="#2b1d10" stroke-width="10" transform="rotate(12 520 380)"/>
+  <rect x="135" y="370" width="50" height="190" rx="25" fill="#f6ead0" stroke="#2b1d10" stroke-width="10" transform="rotate(-12 160 380)"/>
+  <rect x="345" y="620" width="90" height="110" rx="45" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+  <rect x="245" y="620" width="90" height="110" rx="45" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+  <rect x="170" y="200" width="340" height="480" rx="140" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+  <line x1="245" y1="452" x2="340" y2="505" stroke="#4a8a5e" stroke-width="11" stroke-linecap="round"/>
+  <line x1="435" y1="452" x2="340" y2="505" stroke="#4a8a5e" stroke-width="11" stroke-linecap="round"/>
+  <!-- 허리에 찬 복주머니 -->
+  <line x1="340" y1="516" x2="340" y2="546" stroke="#c9a96e" stroke-width="8" stroke-linecap="round"/>
+  <path d="M 340 552 Q 284 570 296 610 Q 308 642 340 642 Q 372 642 384 610 Q 396 570 340 552 Z"
+        fill="#c9a96e" stroke="#2b1d10" stroke-width="8" stroke-linejoin="round"/>
+  <line x1="302" y1="574" x2="378" y2="574" stroke="#2b1d10" stroke-width="7" stroke-linecap="round"/>
+  <!-- 아이라 볼과 눈을 키웠다 -->
+  <ellipse cx="242" cy="404" rx="34" ry="25" fill="#f0b06a" opacity="0.8"/>
+  <ellipse cx="438" cy="404" rx="34" ry="25" fill="#f0b06a" opacity="0.8"/>
+  <circle cx="280" cy="345" r="31" fill="#2b1d10"/>
+  <circle cx="400" cy="345" r="31" fill="#2b1d10"/>
+  <circle cx="269" cy="333" r="11" fill="#ffffff"/>
+  <circle cx="389" cy="333" r="11" fill="#ffffff"/>
+  <path d="M 298 400 Q 340 436 382 400" fill="none" stroke="#2b1d10" stroke-width="10" stroke-linecap="round"/>
+  <!-- 앞머리는 가르마 없이 둥글게 -->
+  <path d="M 174 328 Q 176 204 340 201 Q 504 204 506 328 Q 430 276 340 280 Q 250 276 174 328 Z"
+        fill="#241a12" stroke="#2b1d10" stroke-width="10" stroke-linejoin="round"/>
+  <!-- 양쪽으로 묶어 올린 머리 -->
+  <circle cx="250" cy="158" r="46" fill="#241a12" stroke="#2b1d10" stroke-width="9"/>
+  <circle cx="430" cy="158" r="46" fill="#241a12" stroke="#2b1d10" stroke-width="9"/>
+</g>
+</svg>

@@ -5230,3 +5230,19 @@ button > [data-icon] .ic { width: 18px; height: 18px; }
   .ti-qr, .ti-desktop { display: none; }
   .ti-body { display: block; }
 }
+
+/* 풀이 위에 붙는 화자 줄. 넷 중 누가 풀었는지 얼굴로 먼저 알린다. */
+.rd-who {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 16px; padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 18%, transparent);
+}
+.rd-face { width: 52px; height: 52px; flex: none; }
+.rd-who span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rd-who b {
+  font-size: 0.86rem; font-weight: 600; letter-spacing: 0.03em; color: var(--gold);
+}
+.rd-who i {
+  font-style: normal; font-size: 0.72rem; line-height: 1.5;
+  color: var(--text-dim); word-break: keep-all;
+}

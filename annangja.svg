@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 800" role="img" aria-label="안낭자">
+<title>안낭자</title>
+<!-- ⚠️ 안도령(andoryeong.svg)과 몸·팔·다리·눈·입의 좌표가 같다. 형제로 보이려면
+     여기를 건드리지 않는다. 다른 것은 머리와 옷고름 색뿐이다.
+     맡은 자리: 궁합·인연. 그래서 다홍(#b8354a)을 쓴다.
+
+     ⚠️ 머리를 크게 그리면 못생겨진다. 처음엔 어깨까지 오는 두 갈래를 그렸다가
+        얼굴이 좁아지고 팔이 통째로 가려 다시 그렸다. 이 캐릭터들이 귀여운 것은
+        얼굴이 훤하기 때문이다 — 머리는 옆머리 두 가닥까지만 두고,
+        모자란 실루엣은 머리 위 꽃으로 낸다. 지켜야 할 선 셋:
+          · 옆머리는 볼(x 215~275, 405~465)을 침범하지 않는다
+          · 옆머리는 팔(x 135~185, 495~545)까지 내려오지 않는다
+          · 앞머리 아래 끝은 눈(y 345)에서 넉넉히 떨어뜨린다 -->
+<rect x="495" y="370" width="50" height="190" rx="25" fill="#f6ead0" stroke="#2b1d10" stroke-width="10" transform="rotate(12 520 380)"/>
+<rect x="135" y="370" width="50" height="190" rx="25" fill="#f6ead0" stroke="#2b1d10" stroke-width="10" transform="rotate(-12 160 380)"/>
+<rect x="345" y="620" width="90" height="110" rx="45" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+<rect x="245" y="620" width="90" height="110" rx="45" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+<rect x="170" y="200" width="340" height="480" rx="140" fill="#f6ead0" stroke="#2b1d10" stroke-width="10"/>
+<line x1="245" y1="452" x2="340" y2="505" stroke="#b8354a" stroke-width="11" stroke-linecap="round"/>
+<line x1="435" y1="452" x2="340" y2="505" stroke="#b8354a" stroke-width="11" stroke-linecap="round"/>
+<line x1="340" y1="520" x2="340" y2="585" stroke="#c9a96e" stroke-width="8" stroke-linecap="round"/>
+<circle cx="340" cy="522" r="15" fill="#b8354a" stroke="#2b1d10" stroke-width="6"/>
+<ellipse cx="245" cy="402" rx="30" ry="22" fill="#f0b06a" opacity="0.75"/>
+<ellipse cx="435" cy="402" rx="30" ry="22" fill="#f0b06a" opacity="0.75"/>
+<circle cx="280" cy="345" r="27" fill="#2b1d10"/>
+<circle cx="400" cy="345" r="27" fill="#2b1d10"/>
+<circle cx="271" cy="334" r="9" fill="#ffffff"/>
+<circle cx="391" cy="334" r="9" fill="#ffffff"/>
+<path d="M 300 400 Q 340 432 380 400" fill="none" stroke="#2b1d10" stroke-width="10" stroke-linecap="round"/>
+<!-- 머리. 앞머리와 옆머리를 **한 덩어리로** 그린다.
+     ⚠️ 둘로 나눠 그렸더니 관자놀이에서 둘이 만나는 자리에 아래로 뾰족한 침이 생겼다 —
+        얼굴 옆에 뿔이 달린 꼴이었다. 이음새를 없애려면 path 하나여야 한다.
+     ⚠️ 바깥 선은 몸통 안쪽(x=176, 몸통 왼쪽 벽이 170)을 따라 내려간다. 밖으로 나가면
+        또 뿔이 된다. 위쪽 곡선도 몸통 상단 호(중심 310,340 / 반지름 140) 안쪽에 둔다.
+     ⚠️ 이마 선은 꺾지 않는다. 가르마를 내려고 가운데를 L 로 꺾었더니 그 자리에
+        작은 돌기가 남았다 — 이 그림체는 각이 지면 티가 난다. -->
+<path d="M 176 350
+         Q 178 210 340 201
+         Q 502 210 504 350
+         L 504 472
+         Q 504 494 482 494
+         Q 460 494 460 472
+         L 460 380
+         Q 456 306 424 262
+         Q 386 280 340 274
+         Q 294 280 256 262
+         Q 224 306 220 380
+         L 220 472
+         Q 220 494 198 494
+         Q 176 494 176 472
+         Z"
+      fill="#241a12" stroke="#2b1d10" stroke-width="10" stroke-linejoin="round"/>
+<!-- 머리에 꽂은 꽃. 몸통 위로 조금 나가서 실루엣을 만든다(안도령의 갓과 같은 몫). -->
+<circle cx="250" cy="196" r="17" fill="#d94f63" stroke="#2b1d10" stroke-width="7"/>
+<circle cx="271" cy="211" r="17" fill="#d94f63" stroke="#2b1d10" stroke-width="7"/>
+<circle cx="263" cy="236" r="17" fill="#d94f63" stroke="#2b1d10" stroke-width="7"/>
+<circle cx="237" cy="236" r="17" fill="#d94f63" stroke="#2b1d10" stroke-width="7"/>
+<circle cx="229" cy="211" r="17" fill="#d94f63" stroke="#2b1d10" stroke-width="7"/>
+<circle cx="250" cy="218" r="12" fill="#f2d98c" stroke="#2b1d10" stroke-width="6"/>
+</svg>

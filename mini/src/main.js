@@ -15,6 +15,7 @@ import {
 } from '@apps-in-toss/web-framework';
 import {
   SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS, SANGAJI,
+  speakerOf,
   moonToday,
 } from './contents.js';
 import { icon } from './icons.js';
@@ -435,9 +436,8 @@ async function runItem(item) {
   state.item = item;
   state.screen = 'loading';
   state.error = '';
-  // 문구는 화면에 들어올 때 한 번만 고른다. render() 안에서 뽑으면 다시 그릴 때마다
-  // 문구가 바뀌어 깜빡이는 것처럼 보인다.
-  state.loadingLine = LOADING_LINES[Math.floor(Math.random() * LOADING_LINES.length)];
+  // ⚠️ 여기서 state.loadingLine 을 뽑아 두던 줄이 있었는데, 읽는 곳이 없었다.
+  //    로딩 문구는 화면이 loadingLines() 로 첫 줄을 깔고 티커가 차례로 넘긴다.
   render();
   try {
     const data = await api(item.path, {
@@ -1163,8 +1163,8 @@ function _resultShareText(r, link) {
   const { hook, rest } = _pullQuote(body);
   return [
     // 후크가 잡히면 그것이 첫 줄이고, 무엇을 본 것인지는 그 아래로 내린다.
-    hook ? `"${hook}"` : `[${r.item.label}] 안도령의 풀이`,
-    hook ? `안도령의 ${r.item.label}` : '',
+    hook ? `"${hook}"` : `[${r.item.label}] ${speakerOf(r.item).name}의 풀이`,
+    hook ? `${speakerOf(r.item).name}의 ${r.item.label}` : '',
     facts,
     hook ? rest : body,
     link || '토스에서 "오늘운빨"을 찾아보세요.',
@@ -1302,14 +1302,22 @@ const FOOTER = `<footer><p class="muted">
 
 // 기다리는 동안 문구가 차례로 바뀐다. 한 문장을 붙잡고 있으면 멈춘 것처럼 보이는데,
 // 순서대로 넘어가면 "지금 이 단계를 하고 있구나"로 읽힌다.
-const LOADING_LINES = [
-  '안도령이 붓을 고르는 중입니다',
+// ⚠️ 첫 줄에만 이름이 들어간다. 받침에 따라 "안도령이 / 안낭자가" 로 갈리므로
+//    조사를 손으로 적지 않는다.
+const _iGa = (w) => ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? '이' : '가');
+const LOADING_TAIL = [
   '오늘의 일진을 펼쳐 보는 중입니다',
   '사주의 오행을 헤아리는 중입니다',
   '기운의 결을 따라가는 중입니다',
   '풀이를 글로 옮기는 중입니다',
   '마지막으로 다듬는 중입니다',
 ];
+
+/** 지금 보는 콘텐츠의 화자로 첫 줄을 맞춘다. */
+function loadingLines() {
+  const sp = speakerOf(state.item);
+  return [`${sp.name}${_iGa(sp.name)} 붓을 고르는 중입니다`, ...LOADING_TAIL];
+}
 
 // 안도령 둘레를 도는 오행. 상생 순서(木火土金水)로 놓아 도는 방향에 뜻이 있게 했다.
 const ORBIT = [
@@ -1322,15 +1330,16 @@ let _loadingTimer = null;
 
 function startLoadingTicker() {
   stopLoadingTicker();
+  const lines = loadingLines();
   let i = 0;
   _loadingTimer = setInterval(() => {
     // 마지막 문구에 닿으면 거기서 멈춘다. 계속 돌면 끝나지 않는 것처럼 보인다.
-    if (i >= LOADING_LINES.length - 1) { stopLoadingTicker(); return; }
+    if (i >= lines.length - 1) { stopLoadingTicker(); return; }
     i++;
     const el = document.getElementById('load-line');
     if (!el) { stopLoadingTicker(); return; }
     el.style.opacity = '0';
-    setTimeout(() => { el.textContent = LOADING_LINES[i]; el.style.opacity = '1'; }, 260);
+    setTimeout(() => { el.textContent = lines[i]; el.style.opacity = '1'; }, 260);
   }, 2600);
 }
 
@@ -1644,12 +1653,12 @@ function render() {
         <div class="loading">
           <div class="orbit-stage">
             <div class="orbit-halo"></div>
-            <img src="${API}/andoryeong.svg" alt="" class="oracle" onerror="this.style.display='none'">
+            <img src="${API}${speakerOf(state.item).file}" alt="" class="oracle" onerror="this.style.display='none'">
             ${ORBIT.map((o, i) => `<span class="orb" style="
                 --a:${(360 / ORBIT.length) * i}deg; color:${o.color};
                 animation-delay:${-i * 1.4}s">${o.ch}</span>`).join('')}
           </div>
-          <p class="muted load-line" id="load-line">${esc(LOADING_LINES[0])}</p>
+          <p class="muted load-line" id="load-line">${esc(loadingLines()[0])}</p>
           <p class="muted small">${esc(state.item?.label || '')}</p>
           <p class="muted small" style="margin-top:14px">풀이는 지난 기록에도 저장돼요</p>
         </div>`;
@@ -1675,7 +1684,14 @@ function render() {
         <section class="hero result">
           <div class="hero-sky"></div>
           <div class="hero-text">
-            <p class="hero-date">안도령의 풀이</p>
+            <div class="hero-who">
+              <img class="hero-face" src="${API}${speakerOf(r.item).file}" alt=""
+                   onerror="this.style.display='none'">
+              <span>
+                <b>${esc(speakerOf(r.item).name)}의 풀이</b>
+                <i>${esc(speakerOf(r.item).intro)}</i>
+              </span>
+            </div>
             <h2 class="hero-hi"><span class="ic-title">${icon(r.item.icon)}</span>${esc(r.item.label)}</h2>
             ${r.extras?.length ? `<div class="mp-facts">${r.extras.map(e =>
               `<span><i>${esc(e.label)}</i>${esc(e.value)}</span>`).join('')}</div>` : ''}
