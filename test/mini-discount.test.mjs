@@ -3,10 +3,13 @@
 // 콘솔에서 "결제 이력이 없는 유저" 에게 할인을 걸면 결제도 지급도 알아서 된다
 // (지급은 SKU 로 하므로 금액과 무관하다). 문제는 **사람이 그걸 모른다**는 것이다.
 //
-// SDK 의 소모품 타입(ConsumableProductListItem)이 주는 값은 displayAmount 하나뿐이라,
-// "원래 4,290원" 이라는 정보가 아예 안 내려온다. offers(할인 정보)는 구독 상품에만
-// 붙고 엽전은 소모품이다. 그래서 정가는 우리 서버(/mini/api/products)에서 받아
-// 두 값을 견준다.
+// SDK 의 소모품 타입(ConsumableProductListItem)이 주는 값은 displayAmount 하나뿐이고,
+// **그 값은 할인 전 가격이다.** offers(할인 정보)는 구독 상품에만 붙고 엽전은 소모품이라,
+// 앱은 SDK 만으로는 할인 중인지 알 방법이 없다 — 콘솔에 50% 할인을 걸어 둔 상태에서
+// 앱에는 9,900원이, 결제창에는 4,950원이 떴다.
+//
+// 그래서 정가와 **할인가 둘 다** 서버(/mini/api/products)에서 받는다. 할인가는
+// MINI_SALE 시크릿에 만료일과 함께 적고, 날짜가 지나면 서버가 아예 안 내려보낸다.
 //
 // ⚠️ 할인율도 기간도 코드에 박으면 안 된다. 기간이 끝나면 그 글자만 남고,
 //    할인 대상이 아닌 사람(이미 결제한 사람)에게도 보인다.
@@ -16,14 +19,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { loadWorker } from './load-worker.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP = readFileSync(join(ROOT, 'mini', 'src', 'main.js'), 'utf8');
 const CSS = readFileSync(join(ROOT, 'mini', 'src', 'style.css'), 'utf8');
 const WORKER = readFileSync(join(ROOT, 'worker.js'), 'utf8');
 
+// ⚠️ 인자 이름으로 찾지 않는다. 무엇과 견주는지가 바뀌면서 이름도 바뀌었는데,
+//    그때 이 테스트가 함수를 못 찾아 파일 전체가 통째로 죽었다.
 const _discountOf = eval(
-  `(${APP.match(/function _discountOf\(displayAmount, listed\) \{[\s\S]*?\n\}/)[0]
+  `(${APP.match(/function _discountOf\([^)]*\) \{[\s\S]*?\n\}/)[0]
     .replace('function _discountOf', 'function')})`);
 
 // 콘솔에 건 할인. 정가 → 할인가.
@@ -70,14 +76,18 @@ test('정가는 서버가 내려주는 값에서 온다', () => {
   // 앱에 적어 둔 PRODUCTS 는 콘솔 목록을 못 받았을 때의 자리표시일 뿐이다.
   // 정가는 반드시 /mini/api/products 가 준 값이어야 한다.
   const f = APP.match(/async function loadProducts\(\)[\s\S]*?\n\}/)[0];
-  assert.match(f, /sellable\.get\(p\.sku\)\?\.amount/, '서버가 준 정가를 안 쓴다');
-  assert.match(f, /_discountOf\(p\.displayAmount/, 'SDK 가 준 값과 견주지 않는다');
+  assert.match(f, /srv\?\.amount/, '서버가 준 정가를 안 쓴다');
+  assert.match(f, /srv\?\.saleAmount/, '서버가 준 할인가를 안 쓴다');
+  assert.match(f, /_discountOf\(sale, listed\)/, '할인가와 정가를 견주지 않는다');
+  // ⚠️ 화면에 적는 값도 할인가여야 한다. SDK 값을 그대로 쓰면 결제창과 어긋난다 —
+  //    화면 9,900원 / 결제창 4,950원이 실제로 그렇게 났다.
+  assert.match(f, /price: sale \?/, '할인 중인데 화면에는 SDK 의 할인 전 가격을 적는다');
 
-  // 서버가 실제로 amount 를 실어 보내는지. 안 보내면 표시가 조용히 안 뜬다.
+  // 서버가 실제로 정가와 할인가를 실어 보내는지. 안 보내면 표시가 조용히 안 뜬다.
   const products = WORKER.slice(WORKER.indexOf('const MINI_PRODUCTS = {'));
   assert.match(products.slice(0, 400), /amount:\s*\d+/, 'MINI_PRODUCTS 에 정가가 없다');
-  assert.match(WORKER, /\.map\(\(\[sku, key\]\) => \(\{ sku, \.\.\.MINI_PRODUCTS\[key\] \}\)\)/,
-    '/mini/api/products 가 정가를 빼고 보낸다');
+  assert.match(WORKER, /item\.saleAmount = s\.amount/,
+    '/mini/api/products 가 할인가를 빼고 보낸다');
 });
 
 test('할인율도 기간도 화면에 박아 두지 않는다', () => {
@@ -112,4 +122,64 @@ test('세일 딱지 색을 쓰지 않는다', () => {
   const block = CSS.slice(CSS.indexOf('.t-was'), CSS.indexOf('.t-was') + 700);
   assert.doesNotMatch(block, /red|#f00|#e74|crimson|tomato/i, '붉은 세일 딱지를 붙였다');
   assert.match(block, /--gold|--text-dim/, '팔레트 변수를 안 쓴다');
+});
+
+// ── 서버가 아는 할인 (MINI_SALE) ──
+//
+// 표시용 값이라 실제 청구액과 어긋나면 그대로 거짓말이 된다. 그래서 만료일을
+// 반드시 함께 받고, 날짜가 지났거나 형식이 아니면 아예 없는 것으로 본다 —
+// 할인이 끝난 뒤 시크릿 지우는 것을 잊어도 표시가 저절로 사라지도록.
+
+const H = await loadWorker(['_miniSale', '_miniSellableSkus']);
+
+const 내일 = new Date(Date.now() + 9 * 3600 * 1000 + 86400000).toISOString().slice(0, 10);
+const 어제 = new Date(Date.now() + 9 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+
+test('⚠️ 기간이 지난 할인은 없는 것으로 본다', () => {
+  const sale = H._miniSale({ MINI_SALE: JSON.stringify({
+    token_30:  { amount: 4950,  until: 어제 },
+    token_100: { amount: 13750, until: 내일 },
+  }) });
+  assert.equal(sale.token_30, undefined, '끝난 할인이 그대로 남았다 — 화면과 결제창이 어긋난다');
+  assert.equal(sale.token_100.amount, 13750);
+});
+
+test('⚠️ 만료일이 없으면 쓰지 않는다', () => {
+  // 날짜를 안 적으면 영원히 남는다. 그것이 가장 위험하므로 아예 안 받는다.
+  for (const bad of [
+    { token_30: { amount: 4950 } },
+    { token_30: { amount: 4950, until: '' } },
+    { token_30: { amount: 4950, until: '2026/09/30' } },
+    { token_30: 4950 },
+  ]) {
+    assert.deepEqual(H._miniSale({ MINI_SALE: JSON.stringify(bad) }), {},
+      `${JSON.stringify(bad)} 를 할인으로 받았다`);
+  }
+});
+
+test('시크릿이 없거나 깨져도 조용히 넘어간다', () => {
+  assert.deepEqual(H._miniSale({}), {});
+  assert.deepEqual(H._miniSale({ MINI_SALE: '' }), {});
+  assert.deepEqual(H._miniSale({ MINI_SALE: '{망가진' }), {});
+});
+
+test('⚠️ 정가보다 비싼 값은 할인이 아니다', () => {
+  const env = {
+    MINI_SKU_ALIAS: JSON.stringify({ 'ait.x': 'token_30' }),
+    MINI_SALE: JSON.stringify({ token_30: { amount: 99000, until: 내일 } }),
+  };
+  const [item] = H._miniSellableSkus(env);
+  assert.equal(item.saleAmount, undefined, '정가보다 비싼데 할인이라고 내려보냈다');
+});
+
+test('할인 중이면 정가와 할인가를 함께 내려준다', () => {
+  const env = {
+    MINI_SKU_ALIAS: JSON.stringify({ 'ait.x': 'token_30' }),
+    MINI_SALE: JSON.stringify({ token_30: { amount: 4950, until: 내일 } }),
+  };
+  const [item] = H._miniSellableSkus(env);
+  assert.equal(item.amount, 9900, '정가가 없다');
+  assert.equal(item.saleAmount, 4950, '할인가가 없다');
+  assert.equal(item.saleUntil, 내일);
+  assert.equal(item.tokens, 30, '지급할 엽전 수가 빠졌다');
 });

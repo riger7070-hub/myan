@@ -2613,11 +2613,55 @@ function _miniProductForSku(env, sku) {
 }
 
 /** 지금 실제로 팔 수 있는 것들 — 콘솔 SKU 가 매핑된 상품만. 클라이언트가 이걸 보고 타일을 연다. */
+/**
+ * 콘솔에 걸어 둔 할인. **화면에 보여주기 위한 값일 뿐**이고, 실제 청구는 토스가 한다.
+ *
+ * 왜 서버가 알아야 하나 — 토스 SDK 는 소모품 상품에 `displayAmount` 하나만 준다.
+ * 그 값이 **할인 전 가격**이라, 앱은 SDK 만으로는 할인 중인지 알 방법이 없다.
+ * (실제로 콘솔에 50% 할인을 걸어 둔 상태에서 앱에는 9,900원, 결제창에는 4,950원이
+ *  떴다. 그래서 화면과 결제창이 어긋나 있었다.)
+ *
+ * ⚠️ 여기 적은 값이 실제 청구액과 다르면 "4,950원" 이라 써 놓고 9,900원이 빠져나간다.
+ *    그래서 **만료일을 반드시 함께 받는다.** 날짜가 없거나 지난 것은 아예 무시하므로,
+ *    할인이 끝난 뒤 시크릿을 지우는 것을 잊어도 표시가 저절로 사라진다.
+ *
+ * 코드에 박지 않고 시크릿에 두는 이유는 MINI_SKU_ALIAS 와 같다 — 할인은 콘솔에서
+ * 하는 일이지 배포할 일이 아니다.
+ *   wrangler secret put MINI_SALE
+ *   {"token_30":{"amount":4950,"until":"2026-09-30"},
+ *    "token_100":{"amount":13750,"until":"2026-09-30"}}
+ */
+function _miniSale(env) {
+  let raw = {};
+  try { raw = JSON.parse(env.MINI_SALE || '{}'); } catch { return {}; }
+  const today = _kstYmd();
+  const out = {};
+  for (const [key, v] of Object.entries(raw || {})) {
+    const amount = Number(v && v.amount);
+    const until = String((v && v.until) || '');
+    if (!(amount > 0)) continue;
+    // 날짜 형식이 아니거나 이미 지났으면 없는 것으로 본다(안전한 기본값).
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until < today) continue;
+    out[key] = { amount, until };
+  }
+  return out;
+}
+
 function _miniSellableSkus(env) {
   const alias = _miniSkuAlias(env);
+  const sale = _miniSale(env);
   return Object.entries(alias)
     .filter(([, key]) => MINI_PRODUCTS[key])
-    .map(([sku, key]) => ({ sku, ...MINI_PRODUCTS[key] }));
+    .map(([sku, key]) => {
+      const item = { sku, ...MINI_PRODUCTS[key] };
+      const s = sale[key];
+      // 정가보다 싼 값만 할인으로 친다. 잘못 적어 더 비싸게 뜨는 일은 없어야 한다.
+      if (s && s.amount < item.amount) {
+        item.saleAmount = s.amount;
+        item.saleUntil = s.until;
+      }
+      return item;
+    });
 }
 
 // 결제가 끝난 상태. PURCHASED 는 지급까지 끝난 상태, PAYMENT_COMPLETED 는 결제만 끝나고

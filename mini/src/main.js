@@ -626,17 +626,17 @@ async function retry(fn, times = 3, gapMs = 500) {
 }
 
 /**
- * 지금 이 사람이 할인 중인지 알아낸다.
+ * 지금 할인 중인지 알아낸다. 할인율을 앱에 적어 두지 않고 두 값을 견주기만 한다 —
+ * 기간이 지나도 글자만 남는 일을 막기 위해서다.
  *
- * 콘솔에서 거는 할인(예: 결제 이력이 없는 사람에게 첫 구매 반값)은 사람마다 다르게
- * 적용되고, 기간이 끝나면 저절로 사라진다. 그래서 앱에 "50% 할인" 이라고 적어 두면
- * 안 된다 - 기간이 지나도 그 글자만 남고, 할인 대상이 아닌 사람에게도 보인다.
- *
- * SDK 가 주는 값(이 사람이 실제로 낼 돈)과 서버가 아는 정가를 견주기만 한다.
- * 할인이 끝나면 두 값이 같아지므로 표시도 저절로 없어진다.
+ * ⚠️ 견주는 값이 바뀌었다. 예전에는 SDK 의 displayAmount 를 "이 사람이 낼 돈" 으로
+ *    보고 서버 정가와 견줬는데, **토스는 소모품에 할인 전 가격을 준다.** 콘솔에
+ *    50% 할인을 걸어 둔 상태에서 앱에는 9,900원, 결제창에는 4,950원이 떴다.
+ *    그래서 지금은 서버가 아는 할인가(saleAmount)와 정가를 견준다.
+ *    서버 쪽은 만료일이 지나면 saleAmount 를 아예 안 주므로 표시도 저절로 사라진다.
  */
-function _discountOf(displayAmount, listed) {
-  const paid = Number(String(displayAmount ?? '').replace(/[^\d]/g, ''));
+function _discountOf(saleAmount, listed) {
+  const paid = Number(String(saleAmount ?? '').replace(/[^\d]/g, ''));
   if (!(paid > 0) || !(listed > 0) || paid >= listed) return {};
   const off = Math.round((1 - paid / listed) * 100);
   // 1~2% 는 반올림이나 통화 표기 차이일 수 있다. 그런 걸로 "할인" 이라 떠들지 않는다.
@@ -673,13 +673,19 @@ async function loadProducts() {
     }, 4, 600);
     const products = res?.products || [];
     state.catalog = products.map(p => {
-      const listed = sellable.get(p.sku)?.amount || 0;
+      const srv = sellable.get(p.sku);
+      const listed = srv?.amount || 0;
+      const sale = srv?.saleAmount || 0;
       return {
         sku: p.sku,
-        label: p.displayName || sellable.get(p.sku)?.label || p.sku,
-        price: p.displayAmount || '',
+        label: p.displayName || srv?.label || p.sku,
+        // ⚠️ 할인 중이면 **서버가 아는 할인가**를 적는다. SDK 의 displayAmount 는
+        //    할인 전 가격이라, 그대로 쓰면 화면은 9,900원인데 결제창은 4,950원이 된다.
+        //    할인이 없으면(또는 기간이 끝났으면) 서버가 saleAmount 를 안 주므로
+        //    예전처럼 SDK 값이 그대로 쓰인다.
+        price: sale ? `${sale.toLocaleString('ko-KR')}원` : (p.displayAmount || ''),
         known: sellable.has(p.sku),
-        ..._discountOf(p.displayAmount, listed),
+        ..._discountOf(sale, listed),
       };
     });
   } catch (e) {
