@@ -14,7 +14,7 @@ import {
   graniteEvent, closeView,
 } from '@apps-in-toss/web-framework';
 import {
-  SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
+  SECTIONS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
   speakerOf,
   moonToday,
 } from './contents.js';
