@@ -146,7 +146,7 @@ test('토큰을 차감하는 모든 핸들러가 환불 배선을 갖추고 있�
   const paid = spans.filter(s => /await accountSpend\(env, acct, /.test(s));
   // 개수가 바뀌면 여기서 걸린다. 새 유료 기능을 넣었다면 아래 배선 검사를 통과하는지
   // 확인한 뒤 숫자를 올릴 것 — 무심코 올리면 환불 없는 핸들러가 섞여 든다.
-  assert.equal(paid.length, 29, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
+  assert.equal(paid.length, 30, `유료 핸들러 개수가 달라졌다(${paid.length}) — 아래 검사도 함께 확인할 것`);
 
   for (const span of paid) {
     const name = (span.match(/^async function (\w+)/) || [])[1] || span.slice(0, 40);
@@ -197,7 +197,7 @@ test('차감한 만큼 환불한다 — 액수가 어긋난 핸들러가 없다'
     }
   }
   // 위 개수 검사와 같은 이유로 고정한다. 유료 기능을 늘렸다면 여기도 의식적으로 올릴 것.
-  assert.equal(checked, 29, `차감 지점이 ${checked}개다 — 유료 기능이 늘었다면 숫자를 함께 올릴 것`);
+  assert.equal(checked, 30, `차감 지점이 ${checked}개다 — 유료 기능이 늘었다면 숫자를 함께 올릴 것`);
 });
 
 test('잔액이 모자라면 차감도 호출도 일어나지 않는다', async () => {

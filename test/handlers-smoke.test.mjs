@@ -33,6 +33,8 @@ const CASES = [
   ['handleDirection',   { birth: BIRTH, gender: 'M', purpose: 'move' }],
   ['handleNaming',      { birth: BIRTH, gender: 'M', surname: '김' }],
   ['handleIntimacy',    { birth: BIRTH, partner: PARTNER, gender: 'M' }],
+  // 어떤 사이인지는 안 보내도 되지만, 보냈을 때 터지지 않는지도 함께 본다.
+  ['handleRelation',    { birth: BIRTH, partner: PARTNER, relation: 'work' }],
   ['handleYearLuck',    { birth: BIRTH, gender: 'M' }],
   ['handleSpousePalace', { birth: BIRTH, gender: 'M' }],
   ['handleDaeun',       { birth: BIRTH, gender: 'M' }],

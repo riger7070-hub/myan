@@ -14,7 +14,7 @@ import {
   graniteEvent, closeView,
 } from '@apps-in-toss/web-framework';
 import {
-  SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, SIJI, GENDERS, SANGAJI,
+  SECTIONS, ALL_ITEMS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
   speakerOf,
   moonToday,
 } from './contents.js';
@@ -328,11 +328,20 @@ async function doLogin() {
 
 async function saveProfile(form) {
   await withBusy(async () => {
-    await api('/mini/api/profile', { method: 'POST', body: form });
-    const me = await api('/mini/api/me');
-    state.profile = me.profile;
-    state.noAds = !!me.noAds;
-    state.tokens = me.tokens;
+    // ⚠️ 저장 응답이 **방금 저장된 값**을 그대로 준다. 예전에는 저장한 뒤
+    //    /mini/api/me 를 다시 불렀는데, 그 GET 이 웹뷰 캐시에 걸려 옛 값이 돌아왔다 —
+    //    고치고 저장해도 화면에서 나갔다 들어와야 바뀐 것이 보이던 원인이다.
+    //    서버에도 no-store 를 붙였지만, 다시 묻지 않는 편이 애초에 확실하다.
+    const saved = await api('/mini/api/profile', { method: 'POST', body: form });
+    if (saved?.profile) {
+      state.profile = saved.profile;
+    } else {
+      // 서버가 아직 옛 버전일 때를 위한 길(앱과 워커의 배포 시차).
+      const me = await api('/mini/api/me');
+      state.profile = me.profile;
+      state.noAds = !!me.noAds;
+      state.tokens = me.tokens;
+    }
     go('home');
   });
 }
@@ -380,6 +389,7 @@ function bodyFor(item, profile, form) {
     case 'takil':      return { ...base, purpose: form.purpose, birth, from: form.from || '', days: form.days || 30 };
     case 'compat':
       return { ...base, p1: { ...birth, name: profile.name || '' }, p2: form.partner };
+    case 'relation':   return { ...base, birth, partner: form.partner, relation: form.relation || '' };
     default:           return base;
   }
 }
@@ -394,7 +404,7 @@ function openItem(item) {
     go('need');
     // 링크를 보낸 뒤 앱을 껐다가 돌아왔을 수도 있다. 상대의 답이 이미 와 있으면
     // 다시 물어보게 하지 않는다. 앱을 켠 뒤 한 번만 확인한다(호출을 아낀다).
-    if (item.need === 'partner' && !state.inviteChecked) {
+    if ((item.need === 'partner' || item.need === 'relation') && !state.inviteChecked) {
       state.inviteChecked = true;
       checkInvite({ quiet: true }).then(render);
     }
@@ -2001,6 +2011,21 @@ function needForm(it) {
         <label>태어난 시각 (선택)</label>
         <input id="p-h" placeholder="예: 오전 9시" value="${esc(p.hour || '')}">
         ${invitePanel()}`;
+    case 'relation':
+      // 상대 생일은 'partner' 와 같은 칸을 쓴다(collectForm 도 같은 id 를 읽는다).
+      return `<label>어떤 사이인가요</label>
+        <select id="f-rel">${RELATIONS.map(r =>
+          `<option value="${r.v}"${r.v === (p.relation || '') ? ' selected' : ''}>${r.label}</option>`).join('')}</select>
+        <label>상대방 생년월일</label>
+        <div class="grid3">
+          <input id="p-y" type="number" inputmode="numeric" placeholder="1990" value="${esc(p.year || '')}">
+          <input id="p-m" type="number" inputmode="numeric" placeholder="5" value="${esc(p.month || '')}">
+          <input id="p-d" type="number" inputmode="numeric" placeholder="15" value="${esc(p.day || '')}">
+        </div>
+        <label>태어난 시각 (선택)</label>
+        <input id="p-h" placeholder="예: 오전 9시" value="${esc(p.hour || '')}">
+        <p class="muted small" style="margin-top:8px">시각까지 넣으면 앞날을 그리는 자리(시의 기둥)까지 함께 봅니다.</p>
+        ${invitePanel()}`;
     case 'photo':
       return `<label>무엇을 볼까요?</label>
         <select id="f-ptype"><option value="face">관상 (얼굴)</option><option value="palm">손금</option></select>
@@ -2102,6 +2127,11 @@ function collectForm(it) {
       const y = v('p-y'), m = v('p-m'), d = v('p-d');
       if (!y || !m || !d) return { error: '상대방 생년월일을 모두 입력해 주세요.' };
       return { partner: { year: +y, month: +m, day: +d, hour: v('p-h') } };
+    }
+    case 'relation': {
+      const y = v('p-y'), m = v('p-m'), d = v('p-d');
+      if (!y || !m || !d) return { error: '상대방 생년월일을 모두 입력해 주세요.' };
+      return { relation: v('f-rel'), partner: { year: +y, month: +m, day: +d, hour: v('p-h') } };
     }
     default: return {};
   }

@@ -73,6 +73,18 @@ export const TOPICS = [
 ];
 
 // ⚠️ v 는 서버의 TAKIL_PURPOSES 키와 정확히 같아야 한다(같은 이유).
+// 이 사람과 어떤 사이인가. 안 골라도 되지만, 고르면 같은 자리를 다르게 읽어 준다 —
+// 달의 기둥이 부딪히는 것이 연인에게는 취향 차이지만 같이 일하는 사이에서는
+// 일하는 방식 차이가 된다.
+export const RELATIONS = [
+  { v: '',       label: '고르지 않음' },
+  { v: 'lover',  label: '연인' },
+  { v: 'spouse', label: '부부' },
+  { v: 'family', label: '가족' },
+  { v: 'friend', label: '친구' },
+  { v: 'work',   label: '같이 일하는 사이' },
+];
+
 export const PURPOSES = [
   { v: 'wedding',  label: '결혼과 약혼' },
   { v: 'moving',   label: '이사와 입주' },
@@ -95,10 +107,10 @@ export const SECTIONS = [
       // 무료 풀이를 맨 앞에 둔다 — 처음 온 사람이 엽전을 쓰기 전에 한 번 받아 볼 자리다.
       { id: 'saju',       icon: 'saju',       label: '내 사주 풀이',       cost: 0, path: '/saju-reading',       need: null, free: true },
       { id: 'wealth',     icon: 'wealth',     label: '재물운',             cost: 4, path: '/api/wealth',        need: null },
-      { id: 'sinsal',     icon: 'sinsal',     label: '신살 풀이',          cost: 3, path: '/api/sinsal',         need: null },
-      { id: 'gwiin',      icon: 'gwiin',      label: '귀인 찾기',          cost: 4, path: '/api/gwiin',          need: null },
+      { id: 'sinsal',     icon: 'sinsal',     label: '도화살·역마살 찾기',          cost: 3, path: '/api/sinsal',         need: null },
+      { id: 'gwiin',      icon: 'gwiin',      label: '나를 돕는 귀인',          cost: 4, path: '/api/gwiin',          need: null },
       { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
-      { id: 'daeun',      icon: 'daeun',      label: '대운, 10년의 흐름', cost: 6, path: '/api/daeun',          need: null },
+      { id: 'daeun',      icon: 'daeun',      label: '10년마다 바뀌는 운', cost: 6, path: '/api/daeun',          need: null },
       { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
     ],
   },
@@ -107,10 +119,11 @@ export const SECTIONS = [
     // 속궁합이 섞여 있어서 그 사람이 못 찾았다 — 그래서 밖으로 뺐다.
     icon: 'secLove', title: '궁합과 인연',
     items: [
-      { id: 'compat',  icon: 'compat',  label: '궁합 시기',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'compat',  icon: 'compat',  label: '궁합과 좋은 때',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
       { id: 'intimacy', icon: 'intimacy', label: '속궁합',              cost: 5, path: '/api/intimacy',      need: 'partner' },
-      { id: 'typecompat', icon: 'typecompat', label: '오행 유형 테스트',    cost: 2, path: '/api/type-compat',    need: 'type' },
-      { id: 'spouse',  icon: 'spouse',  label: '배우자궁 풀이',          cost: 3, path: '/api/spouse-palace',   need: null },
+      { id: 'relation', icon: 'compat', label: '이 사람과의 관계', cost: 5, path: '/api/relation', need: 'relation' },
+      { id: 'typecompat', icon: 'typecompat', label: '오행 궁합 알아보기',    cost: 2, path: '/api/type-compat',    need: 'type' },
+      { id: 'spouse',  icon: 'spouse',  label: '내 짝은 어떤 사람',          cost: 3, path: '/api/spouse-palace',   need: null },
     ],
   },
   {
@@ -118,18 +131,18 @@ export const SECTIONS = [
     icon: 'secName', title: '이름과 인상',
     items: [
       { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
-      { id: 'naming',     icon: 'naming',     label: '작명에 참고할 결', cost: 4, path: '/api/naming',      need: 'surname' },
+      { id: 'naming',     icon: 'naming',     label: '이름 짓기 참고', cost: 4, path: '/api/naming',      need: 'surname' },
       { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
-      { id: 'numerology', icon: 'numerology', label: '라이프패스 넘버',     cost: 2, path: '/api/numerology',     need: null },
+      { id: 'numerology', icon: 'numerology', label: '생일로 보는 나',     cost: 2, path: '/api/numerology',     need: null },
     ],
   },
   {
     icon: 'secTiming', title: '때와 방위',
     items: [
-      { id: 'takil',   icon: 'takil',   label: '택일, 좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
-      { id: 'direction', icon: 'direction', label: '이사 방위',            cost: 3, path: '/api/direction',    need: null },
-      { id: 'yearluck', icon: 'yearluck', label: '올해 세운',           cost: 4, path: '/api/year-luck',     need: null },
-      { id: 'tojeong', icon: 'tojeong', label: '토정비결풍 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
+      { id: 'takil',   icon: 'takil',   label: '좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
+      { id: 'direction', icon: 'direction', label: '이사 갈 방향',            cost: 3, path: '/api/direction',    need: null },
+      { id: 'yearluck', icon: 'yearluck', label: '올해 운세',           cost: 4, path: '/api/year-luck',     need: null },
+      { id: 'tojeong', icon: 'tojeong', label: '토정비결 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
     ],
   },
   {
@@ -139,8 +152,8 @@ export const SECTIONS = [
       { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',     cost: 1, path: '/api/tti-ranking',    need: null },
       { id: 'zodiac', icon: 'zodiac', label: '띠와 별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },
       { id: 'topic',  icon: 'topic',  label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
-      { id: 'lucky',  icon: 'lucky',  label: '오늘의 럭키 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
-      { id: 'astro',  icon: 'astro',  label: '천궁도 트랜싯',      cost: 1, path: '/api/astro-transit',  need: null },
+      { id: 'lucky',  icon: 'lucky',  label: '오늘의 행운 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
+      { id: 'astro',  icon: 'astro',  label: '행성으로 보는 오늘',      cost: 1, path: '/api/astro-transit',  need: null },
       // 산가지는 서버를 안 부르는 무료 재미다. 엽전이 걸린 놀이들과 같은 칸에 두면
       // 보상이 있는 줄 알고 눌렀다 실망한다. 오늘의 운세 곁이 제자리다.
       { id: 'stick',  icon: 'stick',  label: '산가지 뽑기',         cost: 0, path: null,                  need: null, free: true, local: true },
@@ -150,7 +163,7 @@ export const SECTIONS = [
     icon: 'secAsk', title: '물어보는 점',
     items: [
       { id: 'tarot',  icon: 'tarot',  label: '오늘의 타로',  cost: 1, path: '/api/tarot-draw',          need: null },
-      { id: 'iching', icon: 'iching', label: '주역 괘 풀이', cost: 1, path: '/api/iching',              need: 'text',
+      { id: 'iching', icon: 'iching', label: '주역으로 물어보기', cost: 1, path: '/api/iching',              need: 'text',
         prompt: '무엇이 궁금하신가요? (비워도 됩니다)', placeholder: '예: 지금 이직해도 될까요' },
       { id: 'rune',   icon: 'rune',   label: '룬 문자 점',   cost: 1, path: '/api/rune-reading',        need: null },
       { id: 'dream',  icon: 'dream',  label: '꿈해몽',       cost: 1, path: '/api/dream-interpretation', need: 'text',
@@ -195,6 +208,7 @@ export const FEATURE_SPEAKER = {
   // 안낭자 — 인연
   '/api/compat-timing':        'nangja',
   '/api/intimacy':             'nangja',
+  '/api/relation':             'nangja',
   '/api/type-compat':          'nangja',
   '/api/spouse-palace':        'nangja',
   // 안할매 — 액막이와 오래된 책

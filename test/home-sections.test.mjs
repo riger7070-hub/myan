@@ -90,6 +90,7 @@ test('타일에 적힌 값이 서버가 실제로 빼는 값과 같다', () => {
     'openVocation()':       'handleVocation',
     'openPastLife()':       'handlePastLife',
     'openIntimacy()':       'handleIntimacy',
+    'openRelation()':       'handleRelation',
     'openSpousePalace()':   'handleSpousePalace',
     'openNaming()':         'handleNaming',
     'openDirection()':      'handleDirection',
@@ -150,5 +151,61 @@ test('토큰 비용이 타일마다 붙어 있다', () => {
       assert.equal(typeof i.cost, 'number', `${i.fn}: 비용이 숫자가 아니다`);
       assert.ok(i.cost >= 0 && i.cost <= 6, `${i.fn}: 비용이 ${i.cost} 다`);
     }
+  }
+});
+
+// ⚠️ 위의 sections 는 t 를 undefined 로 두고 평가한 것이라 **폴백 문자열**이 담긴다.
+//    화면에 실제로 뜨는 것은 번역(ko)이다. 둘이 어긋나 있어도 폴백만 보면 못 잡는다 —
+//    실제로 폴백은 '오늘의 행운 아이템' 인데 ko 는 '오늘의 행운' 이라 화면에서만
+//    이름이 겹쳐 있었다. 아래 둘은 진짜 화면 값으로 본다.
+const koSections = runInNewContext(
+  `${body[0]}\n; __out = _homeSections();`,
+  { getT: () => ko, __out: null },
+  { timeout: 2000 },
+);
+const koItems = koSections.flatMap((s) => s.items);
+
+test('⚠️ 홈에 같은 이름이 두 번 나오지 않는다', () => {
+  // 실제로 그랬다. 럭키 아이템과 빠른 운세가 둘 다 '오늘의 행운' 으로 그려져,
+  // 같은 묶음에 똑같은 이름의 타일이 나란히 있었다. 누르기 전에는 뭐가 다른지 모른다.
+  const seen = new Map();
+  for (const i of koItems) {
+    const prev = seen.get(i.label);
+    assert.ok(!prev, `"${i.label}" 이 ${prev} 와 ${i.fn} 두 곳에 있다`);
+    seen.set(i.label, i.fn);
+  }
+});
+
+test('이름에 설명 없는 전문용어를 남기지 않는다', () => {
+  // 초심자가 읽고 무엇인지 짐작할 수 있어야 한다. 널리 쓰이는 말(사주·궁합·관상·
+  // 타로·주역·토정비결·오행)은 남기되, 아래는 그 자체로는 뜻이 통하지 않는다.
+  const HARD = ['신살', '대운', '세운', '배우자궁', '천궁도', '트랜싯', '라이프패스', '작명'];
+  for (const i of koItems) {
+    for (const w of HARD) {
+      assert.ok(!i.label.includes(w),
+        `"${i.label}"(${i.fn})에 "${w}" 가 그대로 있다 — 쉬운 말로 바꾸거나 함께 풀어 쓸 것`);
+    }
+  }
+});
+
+test('⚠️ 번역 파일에 같은 키를 두 번 적지 않는다', () => {
+  // 실제로 luckyTitle 이 ko 블록에 두 번 있었다. 자바스크립트는 조용히 뒤의 것을
+  // 쓰므로, 앞의 것을 고치면 "고쳤는데 화면이 그대로"가 된다 — 원인을 찾기가 아주 어렵다.
+  const src = readFileSync(join(ROOT, 'js', 'locales.js'), 'utf8');
+  const blocks = [...src.matchAll(/^ {2}(ko|en|zh|ja):\{/gm)];
+  assert.ok(blocks.length >= 2, '언어 블록을 찾지 못했다');
+
+  for (let b = 0; b < blocks.length; b++) {
+    const lang = blocks[b][1];
+    const body = src.slice(blocks[b].index, blocks[b + 1]?.index ?? src.length);
+    const seen = new Map();
+    // ⚠️ 화면에 이름으로 뜨는 키만 센다. 블록 안에는 퀴즈 목록처럼 중첩된 객체가
+    //    있어서 모든 키를 세면 그 안의 q, opts 같은 것까지 걸린다.
+    for (const m of body.matchAll(/(?:^|[{,\s])(\w+(?:Title|Color|Label))\s*:/g)) {
+      const k = m[1];
+      seen.set(k, (seen.get(k) || 0) + 1);
+    }
+    const dup = [...seen].filter(([, n]) => n > 1).map(([k, n]) => `${k}(${n})`);
+    assert.deepEqual(dup, [], `${lang} 블록에 같은 키가 여러 번 있다: ${dup.join(', ')}`);
   }
 });

@@ -893,6 +893,7 @@ const FEATURE_SPEAKER = {
   // 안낭자 — 인연
   '/api/compat-timing':        'nangja',
   '/api/intimacy':             'nangja',
+  '/api/relation':             'nangja',
   '/api/type-compat':          'nangja',
   '/api/spouse-palace':        'nangja',
   // 안할매 — 액막이와 오래된 책
@@ -1810,6 +1811,7 @@ export default {
     if (path === '/api/spouse-palace' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSpousePalace(request, env)); }
     if (path === '/api/naming' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleNaming(request, env)); }
     if (path === '/api/intimacy' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleIntimacy(request, env)); }
+    if (path === '/api/relation' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleRelation(request, env)); }
     // ── 무료 계산기 · 오늘의 띠 순위 (로그인 없는 공개 페이지) ──
     // 검색해서 들어오는 사람이 앉을 자리다. AI 를 안 부르므로 몰려도 값이 안 든다.
     if (/^\/(?:google|naver)[\w-]+\.html$/.test(path) && method === 'GET') {
@@ -2434,7 +2436,26 @@ async function handleMiniSaveProfile(request, env) {
       console.error('[MINI PROFILE] 아무 행도 바뀌지 않았다:', userKey);
       return miniCors(request, JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
     }
-    return miniCors(request, JSON.stringify({ ok: true }), 200);
+
+    // ⚠️ 방금 쓴 값을 **여기서 읽어 돌려준다.** 예전에는 {ok:true} 만 주고 앱이
+    //    /mini/api/me 를 따로 불렀는데, 그 사이에 캐시가 끼면 옛 값이 돌아왔다.
+    //    같은 요청 안에서 읽으면 방금 쓴 것이 반드시 보이고, 왕복도 하나 준다.
+    //    gender 는 COALESCE 로 넣으므로 보낸 값과 저장된 값이 다를 수 있다 —
+    //    앱이 화면에 그대로 그리려면 저장된 쪽이어야 한다.
+    const row = await env.DB.prepare(
+      `SELECT name, birth_year, birth_month, birth_day, birth_hour, gender
+         FROM mini_users WHERE user_key = ?`
+    ).bind(userKey).first().catch(() => null);
+
+    return miniCors(request, JSON.stringify({
+      ok: true,
+      profile: {
+        name: row?.name || '',
+        birthYear: row?.birth_year || '', birthMonth: row?.birth_month || '',
+        birthDay: row?.birth_day || '', birthHour: row?.birth_hour || '',
+        gender: row?.gender || '',
+      },
+    }), 200);
   } catch (e) {
     console.error('[MINI PROFILE]', e?.message);
     return miniCors(request, JSON.stringify({ error: { message: '저장에 실패했습니다.' } }), 500);
@@ -4080,6 +4101,11 @@ function cors(body, status = 200) {
       'Access-Control-Allow-Origin': 'https://myan.riger7070.workers.dev',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      // ⚠️ API 응답은 캐시하지 않는다. 여기가 비어 있어서 토스 웹뷰가 GET 을 캐시했고,
+      //    내 정보를 고치고 저장한 직후 /mini/api/me 가 **옛 값**을 돌려줬다 —
+      //    화면에서 나갔다 다시 들어와야 바뀐 것이 보이는 증상의 원인이다.
+      //    잔액·기록처럼 사람마다 다른 값이 남의 손에 캐시되는 것도 막는다.
+      'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -5207,9 +5233,12 @@ const _JIJI_RELATION = {
   무관: '특별히 얽힌 것이 없습니다. 나쁜 것이 아니라, 둘이 만들어 가야 하는 사이입니다.',
 };
 
-function computeIntimacy(sajuA, sajuB) {
-  if (!sajuA?.dp || !sajuB?.dp) return null;
-  const a = sajuA.dp[1], b = sajuB.dp[1];
+/**
+ * 지지 두 글자가 맺는 관계. 속궁합(일지)과 관계 풀이(네 기둥)가 함께 쓴다.
+ * 하나가 아니라 여럿일 수 있다 — 삼합이면서 형인 자리가 있다.
+ */
+function _jijiKinds(a, b) {
+  if (!a || !b) return [];
   const kinds = [];
   const group = SAMHAP_GROUPS.find(g => g.set.includes(a));
   if (a === b) kinds.push('같음');
@@ -5218,15 +5247,98 @@ function computeIntimacy(sajuA, sajuB) {
   if (JJ_CHUNG[a] === b) kinds.push('충');
   if ((JJ_HYUNG[a] || []).includes(b)) kinds.push('형');
   if (!kinds.length) kinds.push('무관');
+  return kinds;
+}
+
+/** 상대의 일간을 내 일간 기준으로 무엇이라 보는가. */
+function _sipsinBetween(myDayGan, otherDayGan) {
+  const gi = CG.indexOf(otherDayGan);
+  if (gi < 0) return null;
+  return _sipsin(myDayGan, CGO[gi], gi % 2 === 0);
+}
+
+function computeIntimacy(sajuA, sajuB) {
+  if (!sajuA?.dp || !sajuB?.dp) return null;
+  const a = sajuA.dp[1], b = sajuB.dp[1];
+  const kinds = _jijiKinds(a, b);
 
   // 일간끼리의 관계도 함께 본다. 몸의 결이 일지라면 마음의 결은 일간이다.
-  const gi = CG.indexOf(sajuB.dayGan);
-  const sipsin = gi >= 0 ? _sipsin(sajuA.dayGan, CGO[gi], gi % 2 === 0) : null;
+  const sipsin = _sipsinBetween(sajuA.dayGan, sajuB.dayGan);
 
   return {
     branchA: a, branchB: b, kinds,
     notes: kinds.map(k => ({ kind: k, text: _JIJI_RELATION[k] })),
     sipsin, meaning: sipsin ? _SIPSIN_MEANING[sipsin] : null,
+  };
+}
+
+// ── 이 사람과의 관계 (네 기둥을 겹쳐 본다) ──
+//
+// 속궁합은 일지 하나만 보고, 궁합 시기는 앞으로 어느 해가 좋은지를 본다.
+// 여기서는 **네 기둥을 자리마다 겹쳐** 어디서 맞고 어디서 부딪히는지를 찾는다.
+// 연인만의 것이 아니다 — 동료·가족·친구도 같은 방식으로 본다.
+//
+// 기둥마다 뜻하는 자리가 다르다는 것이 핵심이다. 같은 '충'이라도 달의 기둥에서
+// 나면 평소 성향이 어긋나는 것이고, 시의 기둥에서 나면 앞날을 그리는 그림이
+// 다른 것이다. "안 맞는다" 한마디로 뭉뚱그리지 않으려고 자리를 나눈다.
+const _REL_PILLARS = [
+  { key: 'yp', label: '해의 기둥', means: '자란 배경과 집안의 결' },
+  { key: 'mp', label: '달의 기둥', means: '평소 성향과 바깥에서의 모습' },
+  { key: 'dp', label: '날의 기둥', means: '둘 사이의 가장 가까운 자리' },
+  { key: 'hp', label: '시의 기둥', means: '앞날을 그리는 그림' },
+];
+
+const _REL_GOOD = ['삼합', '육합'];
+const _REL_BAD  = ['충', '형'];
+
+function computeRelation(sajuA, sajuB) {
+  if (!sajuA?.dayGan || !sajuB?.dayGan) return null;
+
+  const pillars = _REL_PILLARS.map((p) => {
+    const a = sajuA[p.key]?.[1], b = sajuB[p.key]?.[1];
+    if (!a || !b) return null;              // 생시를 모르면 시의 기둥이 없다
+    const kinds = _jijiKinds(a, b);
+    return {
+      label: p.label, means: p.means, a, b, kinds,
+      good: kinds.some((k) => _REL_GOOD.includes(k)),
+      bad: kinds.some((k) => _REL_BAD.includes(k)),
+      notes: kinds.map((k) => _JIJI_RELATION[k]).filter(Boolean),
+    };
+  }).filter(Boolean);
+
+  // 서로를 어떻게 보는가. 한쪽만 보면 관계가 대칭인 것처럼 읽힌다 —
+  // 실제로는 "나는 저 사람을 정관으로, 저 사람은 나를 상관으로" 보는 일이 흔하다.
+  const aToB = _sipsinBetween(sajuA.dayGan, sajuB.dayGan);
+  const bToA = _sipsinBetween(sajuB.dayGan, sajuA.dayGan);
+
+  // 서로 모자란 것을 채워 주는가. 오행이 겹치기만 하면 편하되 넓어지지 않는다.
+  const ba = computeElementBalance(sajuA);
+  const bb = computeElementBalance(sajuB);
+  const fills = (mine, yours) =>
+    (mine?.lacking || []).concat(mine?.thin || [])
+      .filter((e, i, arr) => arr.indexOf(e) === i)
+      .filter((e) => (yours?.heavy || []).includes(e));
+
+  const harmony = pillars.filter((p) => p.good).length;
+  const friction = pillars.filter((p) => p.bad).length;
+
+  return {
+    pillars, harmony, friction,
+    // 부딪히는 자리를 따로 뽑아 둔다. 사용자가 가장 알고 싶어 하는 것이고,
+    // 산문에 묻히면 "그래서 어디가 문제인데" 가 남는다.
+    frictionAt: pillars.filter((p) => p.bad).map((p) => ({
+      label: p.label, means: p.means, kinds: p.kinds.filter((k) => _REL_BAD.includes(k)),
+    })),
+    harmonyAt: pillars.filter((p) => p.good).map((p) => ({
+      label: p.label, means: p.means, kinds: p.kinds.filter((k) => _REL_GOOD.includes(k)),
+    })),
+    sipsin: { aToB, bToA },
+    meaning: {
+      aToB: aToB ? _SIPSIN_MEANING[aToB] : null,
+      bToA: bToA ? _SIPSIN_MEANING[bToA] : null,
+    },
+    // 내가 얇은 오행을 상대가 넉넉히 갖고 있으면 서로 기대는 자리가 된다.
+    complement: { aGetsFromB: fills(ba, bb), bGetsFromA: fills(bb, ba) },
   };
 }
 
@@ -7016,6 +7128,112 @@ async function handleIntimacy(request, env) {
     return cors(JSON.stringify(Object.assign({ success: true, reading, remaining: remainingTokens }, { kinds: im.kinds, branchA: im.branchA, branchB: im.branchB, sipsin: im.sipsin })), 200);
   } catch (e) {
     console.error('[INTIMACY]', e?.message);
+    if (refund) await refund().catch(() => {});
+    return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  이 사람과의 관계 (5엽전)
+//
+//  이미 있는 궁합 셋과 무엇이 다른가 — 겹치면 만들 이유가 없다.
+//    속궁합      일지 하나. 몸과 마음의 결.
+//    궁합 시기   앞으로 열 해 중 언제가 좋은가.
+//    오행 유형   사주가 아니라 고른 유형 두 개로 본다(가볍게 즐기는 자리).
+//    여기        네 기둥을 자리마다 겹쳐, **어디서 맞고 어디서 부딪히는지**.
+//
+//  연인만의 것이 아니다. 같이 일하는 사람, 가족, 오래된 친구도 같은 방식으로 본다.
+//  그래서 화면에서도 연애로 몰지 않는다 — 사이가 왜 자꾸 어긋나는지 알고 싶은
+//  사람에게 자리를 짚어 준다.
+// ════════════════════════════════════════════════════════════
+async function handleRelation(request, env) {
+  let refund = null;
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth, partner, relation } = await request.json().catch(() => ({}));
+    const a = birth && birth.year ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
+    const b = partner && partner.year ? computeSaju(partner.year, partner.month, partner.day, partner.hour) : null;
+    if (!a || !b) return cors(JSON.stringify({ error: { message: '두 사람의 생년월일이 모두 필요합니다.' } }), 400);
+
+    const rel = computeRelation(a, b);
+    if (!rel) return cors(JSON.stringify({ error: { message: '관계를 계산하지 못했습니다.' } }), 400);
+
+    // 어떤 사이인지 받아 두면 같은 '충'도 다르게 읽어 준다. 안 보내도 된다.
+    const KIND = { lover: '연인', spouse: '부부', family: '가족', friend: '친구', work: '같이 일하는 사이' };
+    const kindLabel = KIND[relation] || '';
+
+    const COST = 5;
+    const paid = await accountSpend(env, acct, 'relation', COST);
+    if (!paid) {
+      return cors(JSON.stringify({ error: { message: '이 사람과의 관계는 엽전 ' + COST + '개가 필요합니다.' } }), 402);
+    }
+    refund = () => accountRefund(env, acct, 'relation', COST);
+    const remainingTokens = await accountBalance(env, acct);
+
+    const NL = String.fromCharCode(10);
+    const prompt = [
+      '두 사람의 사주입니다.',
+      '나: ' + [a.yp, a.mp, a.dp, a.hp].filter(Boolean).join(' ') + ' (일간 ' + a.dayGan + ')',
+      '상대: ' + [b.yp, b.mp, b.dp, b.hp].filter(Boolean).join(' ') + ' (일간 ' + b.dayGan + ')',
+      kindLabel ? '두 사람은 ' + kindLabel + ' 입니다.' : '',
+      '',
+      '네 기둥을 자리마다 겹쳐 보았습니다.',
+      rel.pillars.map(p =>
+        '- ' + p.label + '(' + p.means + '): ' + p.a + ' 와 ' + p.b + ' 가 ' + p.kinds.join(', ') +
+        (p.notes.length ? ' / ' + p.notes.join(' ') : '')).join(NL),
+      '',
+      '맞는 자리 ' + rel.harmony + '곳, 부딪히는 자리 ' + rel.friction + '곳입니다.',
+      // ⚠️ 무작위 조합 400쌍을 돌려 보니 14%는 네 자리가 모두 무관으로 나온다.
+      //    그때 "얽힌 것이 없습니다" 만 반복하면 돈을 낸 사람이 빈손이 된다.
+      //    일간 관계와 오행 보완으로 풀어 갈 길을 미리 열어 준다.
+      (rel.harmony === 0 && rel.friction === 0)
+        ? '네 자리 모두 특별히 얽힌 것이 없습니다. 나쁜 뜻이 아니라 서로에게 강한 끌림도 ' +
+          '큰 마찰도 없다는 뜻입니다. 이런 사이는 일간이 서로를 어떻게 보는지와 서로 채워 주는 ' +
+          '오행을 중심으로 풀어 주고, 둘이 하기에 따라 달라지는 사이라는 점을 분명히 말해 주세요.' : '',
+      rel.sipsin.aToB ? '상대는 나에게 ' + rel.sipsin.aToB + ' 입니다. ' + (rel.meaning.aToB || '') : '',
+      rel.sipsin.bToA ? '나는 상대에게 ' + rel.sipsin.bToA + ' 입니다. ' + (rel.meaning.bToA || '') : '',
+      rel.complement.aGetsFromB.length
+        ? '내게 얇은 ' + rel.complement.aGetsFromB.join(', ') + ' 를 상대가 넉넉히 갖고 있습니다.' : '',
+      rel.complement.bGetsFromA.length
+        ? '상대에게 얇은 ' + rel.complement.bGetsFromA.join(', ') + ' 를 내가 넉넉히 갖고 있습니다.' : '',
+      '',
+      '두 사람이 서로 맞는 사이인지, 어디서 부딪히는지를 풀어 주세요. 이 순서로 씁니다.',
+      '1) 둘이 함께 있을 때 어떤 사이가 되는지',
+      '2) 잘 맞물리는 자리 — 어느 기둥이고 그것이 일상에서 어떻게 나타나는지',
+      '3) 부딪히는 자리 — 어느 기둥이고, 실제로 무슨 일로 다투게 되는지 구체적으로',
+      '4) 그 부딪힘을 어떻게 다루면 되는지. 한쪽만 참으라는 말은 하지 마세요.',
+      '',
+      '⚠️ 반드시 지킬 것: 점수나 등급을 매기지 마세요. "인연이 아니다", "헤어지는 게',
+      '낫다" 같은 말을 하지 마세요. 부딪히는 자리가 있다는 것은 나쁜 사이라는 뜻이',
+      '아니라 조심할 곳을 안다는 뜻입니다. 사주에 없는 사건을 지어내지 마세요.',
+      '전체 800자 내외.',
+    ].filter(Boolean).join(NL);
+
+    const reading = await cachedReading(env, 'relation:' + _promptKey(prompt), CACHE_LONG,
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2400 }, { speaker: 'nangja' }));
+    if (!reading) {
+      if (refund) await refund().catch(() => {});
+      return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
+    }
+
+    const summary = '맞는 자리 ' + rel.harmony + ', 부딪히는 자리 ' + rel.friction;
+    await saveFeatureHistory(env, accountHistoryKey(acct), 'relation',
+      (kindLabel ? kindLabel + ' · ' : '') + summary, reading,
+      { harmony: rel.harmony, friction: rel.friction }).catch(() => {});
+
+    return cors(JSON.stringify({
+      success: true, reading, remaining: remainingTokens,
+      harmony: rel.harmony, friction: rel.friction,
+      pillars: rel.pillars.map(p => ({ label: p.label, a: p.a, b: p.b, kinds: p.kinds })),
+      frictionAt: rel.frictionAt, harmonyAt: rel.harmonyAt,
+      sipsin: rel.sipsin,
+    }), 200);
+  } catch (e) {
+    console.error('[RELATION]', e?.message);
     if (refund) await refund().catch(() => {});
     return cors(JSON.stringify({ error: { message: '풀이 중 오류가 발생했습니다.' } }), 500);
   }
