@@ -127,7 +127,17 @@ test('⚠️ 공개 페이지에도 초대한 사람의 생년월일이 없다',
   const 폼밖 = html.replace(/<select[\s\S]*?<\/select>/g, '');
   assert.doesNotMatch(폼밖, /인시/, '태어난 시가 페이지에 박혀 있다');
   // 미리 골라 둔 값이 있으면 그것도 새는 길이다.
-  assert.doesNotMatch(html, /selected|value="[^"]*시"/, '초대한 사람의 시가 미리 골라져 있다');
+  //
+  // ⚠️ value="…시" 를 유출 신호로 보면 안 된다. 예전에는 option 에 value 가 아예
+  //    없어서(<option>자시</option>) 그 속성이 보이면 누군가의 값이 박힌 것이었지만,
+  //    지금은 열두 시진 모두 value 를 갖는다("자시 (23~01시)" 로 글자를 바꾸면서
+  //    서버가 읽는 이름을 value 에 따로 담아야 했다). 미리 골라 뒀는지는
+  //    selected 로만 판별된다.
+  assert.doesNotMatch(html, /selected/, '초대한 사람의 시가 미리 골라져 있다');
+  // 생년월일 칸도 비어 있어야 한다. placeholder 는 예시라 괜찮지만 value 는 안 된다.
+  for (const m of html.matchAll(/<input[^>]*>/g)) {
+    assert.doesNotMatch(m[0], /\svalue=/, `입력칸에 값이 미리 채워져 있다: ${m[0]}`);
+  }
 });
 
 test('초대 번호에 생년이 섞여도 헛알람이 나지 않는다', async () => {

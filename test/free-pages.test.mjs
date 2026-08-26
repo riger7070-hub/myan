@@ -287,3 +287,58 @@ test('⚠️ 링크를 뿌렸을 때 미리보기 그림이 뜬다', async () =>
     assert.match(html, /name="twitter:image"/, `${path}: 트위터용 그림이 없다`);
   }
 });
+
+// ── 무료 페이지에서 나가는 길 ──
+//
+// 계산만 해 주고 끝내면 거기가 막다른 곳이 된다. 웹은 베타라 유료 풀이를 팔 수
+// 없으므로(결제가 토스 안에만 있다), 결과를 본 사람을 앱으로 이어 줘야 한다.
+//
+// ⚠️ 예전에는 CTA 가 웹 홈(/)으로 갔다. 홈은 로그인을 요구하고 결제도 안 되니
+//    "안도령에게 물어보기" 를 눌러도 물어볼 수가 없었다. /app 은 토스로 여는 버튼과
+//    PC 용 QR·주소를 가진 자리다 — 그리로 보낸다.
+
+test('⚠️ 무료 페이지의 CTA 가 막다른 웹 홈으로 보내지 않는다', async () => {
+  const H2 = await loadWorker(['handleCalcPage', 'handleSamjaeYearPage', 'handleTtiPage']);
+  const pages = [
+    ['신살', H2.handleCalcPage('sinsal')],
+    ['본명궁', H2.handleCalcPage('bonmyeong')],
+    ['삼재 결과', H2.handleSamjaeYearPage(1990)],
+  ];
+  for (const [name, res] of pages) {
+    const html = await res.text();
+    const ctas = [...html.matchAll(/<a class="cta" href="([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(ctas.length, `${name}: 나가는 길(CTA)이 아예 없다`);
+    for (const href of ctas) {
+      assert.notEqual(href, '/', `${name}: CTA 가 웹 홈으로 간다 — 거기서는 물어볼 수 없다`);
+      assert.match(href, /^\/app\?ref=/, `${name}: CTA 가 ${href} 로 간다 — /app 이어야 한다`);
+    }
+  }
+});
+
+test('⚠️ 결과를 본 사람에게 웹이 베타라는 것을 알린다', async () => {
+  // 알리지 않으면 유료 풀이를 찾다가 못 찾고 나간다.
+  const H2 = await loadWorker(['handleSamjaeYearPage', 'handleTtiPage']);
+  for (const [name, res] of [['삼재 결과', H2.handleSamjaeYearPage(1990)], ['띠 순위', H2.handleTtiPage()]]) {
+    const html = await res.text();
+    assert.match(html, /class="beta"/, `${name}: 베타 안내가 없다`);
+    assert.match(html, /토스 앱에서/, `${name}: 어디로 가야 하는지 안 적혀 있다`);
+  }
+});
+
+test('⚠️ 태어난 시를 고를 때 몇 시인지 보인다', async () => {
+  // 시진 이름만 적어 두면 자기가 몇 시에 났는지 아는 사람도 못 고른다.
+  const H2 = await loadWorker(['handleCalcPage']);
+  const html = await H2.handleCalcPage('sinsal').text();
+  assert.match(html, /자시 \(23~01시\)/, '시진에 시각이 없다');
+  assert.match(html, /해시 \(21~23시\)/, '마지막 시진에 시각이 없다');
+  // ⚠️ 값은 서버가 읽는 이름 그대로여야 한다. 화면 글자를 그대로 보내면 사주가 틀어진다.
+  assert.match(html, /<option value="자시">/, 'option 의 값이 시진 이름이 아니다');
+});
+
+test('⚠️ 펼친 목록이 흰 바탕에 흰 글자가 되지 않는다', async () => {
+  // select 에만 색을 주면 브라우저가 목록을 자기 배경(흰색)에 그려서 아무것도 안 보였다.
+  const H2 = await loadWorker(['handleCalcPage']);
+  const html = await H2.handleCalcPage('sinsal').text();
+  assert.match(html, /select option\{background:#[0-9a-f]{6};color:#[0-9a-f]{6}\}/,
+    'option 에 배경·글자색을 직접 주지 않았다');
+});

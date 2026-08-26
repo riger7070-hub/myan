@@ -6113,6 +6113,9 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
     background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.22);
     border-radius:10px;font-family:inherit;appearance:none}
   input:focus,select:focus{outline:none;border-color:#c9a96e}
+  /* ⚠️ 펼친 목록은 브라우저가 **자기 배경**에 그린다. select 에만 색을 주면
+     흰 바탕에 흰 글자가 되어 아무것도 안 보인다(실제로 그랬다). option 에 직접 준다. */
+  select option{background:#16161a;color:#e8e4dc}
   button{width:100%;margin-top:24px;padding:16px;font-size:1rem;font-family:inherit;
     color:#0d0d0f;background:#c9a96e;border:0;border-radius:10px;font-weight:700;cursor:pointer}
   button:disabled{opacity:0.5}
@@ -6161,6 +6164,14 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
   code{font-size:.86em;padding:1px 5px;border-radius:4px;
     background:rgba(201,169,110,.12);color:#c9a96e}
   .hide{display:none}
+  /* 본문 링크. 안 주면 기본 파랑이라 이 화면에서만 색이 튄다. */
+  .wrap a{color:#c9a96e}
+  /* 웹은 베타라 유료 풀이를 못 판다. 그 사실을 숨기지 않고, 갈 곳과 함께 적는다.
+     ⚠️ 계산기를 쓰기도 전에 앞에서 막아서면 안 된다 — 결과 아래에만 둔다. */
+  .beta{margin-top:26px;padding:15px 16px;border-radius:12px;
+    background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.18);
+    font-size:0.86rem;line-height:1.7;color:#8d8880}
+  .beta b{color:#c9a96e;font-weight:600}
   /* 이 자리를 맡은 사람. 검색으로 처음 들어온 사람이 가장 먼저 보는 얼굴이라
      제목보다 위에 둔다. */
   .who{display:flex;align-items:center;gap:12px;margin-bottom:18px}
@@ -6222,7 +6233,8 @@ const _CALC_JS = (kind, fields) => `
         if (!res.ok) throw new Error((res.j.error && res.j.error.message) || '잠시 후 다시 시도해 주세요.');
         out.innerHTML = (res.j.cards || []).map(function (c) {
           return '<div class="card"><b>' + esc(c.label) + '</b><p>' + esc(c.text) + '</p></div>';
-        }).join('') + '<a class="cta" href="/">이게 나에게 무슨 뜻인지 안도령에게 물어보기</a>';
+        }).join('') + '<a class="cta" href="/app?ref=calc-${kind}">이게 나에게 어떻게 나타나는지 안할매에게 물어보기</a>'
+          + '${BETA_NOTE}';
         out.classList.remove('hide');
         out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       })
@@ -6235,6 +6247,27 @@ const _CALC_JS = (kind, fields) => `
     });
   }
 })();`;
+
+/**
+ * 웹에서 할 수 있는 데까지 하고, 그다음은 어디로 가면 되는지 알린다.
+ *
+ * 웹은 베타라 유료 풀이를 팔 수 없다 — 결제가 토스 안에만 있다. 그 사실을 숨기면
+ * 눌러 본 사람이 막다른 곳에서 되돌아 나온다. 무료로 어디까지 되는지와 그다음
+ * 갈 곳을 함께 적는다.
+ * ⚠️ 계산하기 **전에** 앞을 막지 않는다. 결과를 본 뒤에만 보여준다.
+ */
+const BETA_NOTE = '<p class="beta">여기까지는 가입 없이 무료입니다. '
+  + '<b>더 깊은 풀이는 토스 앱에서</b> 볼 수 있어요 — 웹은 아직 베타라 앱에서만 열립니다.</p>';
+
+/**
+ * 시진과 그 시각. 미니앱 contents.js 의 SIJI 와 같은 구간이다.
+ * ⚠️ 앞의 값은 서버(computeSaju)가 읽는 이름이라 바꾸면 안 된다. 뒤만 사람에게 보인다.
+ */
+const _SIJI_HOURS = [
+  ['자시', '23~01시'], ['축시', '01~03시'], ['인시', '03~05시'], ['묘시', '05~07시'],
+  ['진시', '07~09시'], ['사시', '09~11시'], ['오시', '11~13시'], ['미시', '13~15시'],
+  ['신시', '15~17시'], ['유시', '17~19시'], ['술시', '19~21시'], ['해시', '21~23시'],
+];
 
 /**
  * 삼재만 다르게 낸다 — 결과가 제 주소를 갖기 때문이다(/calc/samjae/1990).
@@ -6301,11 +6334,12 @@ function handleCalcPage(kind) {
           <input id="f-day" type="number" inputmode="numeric" placeholder="15" min="1" max="31" required>
         </div>
         <label>태어난 시 (모르면 비워 두세요)</label>
+        ${/* ⚠️ 시진 이름만 적어 두면 자기가 몇 시에 태어났는지 아는 사람도 못 고른다.
+              "자시" 가 몇 시인지 아는 사람은 드물다 — 시각을 함께 적는다.
+              값(value)은 서버가 읽는 시진 이름 그대로 두어야 한다. */''}
         <select id="f-hour">
           <option value="">모름</option>
-          <option>자시</option><option>축시</option><option>인시</option><option>묘시</option>
-          <option>진시</option><option>사시</option><option>오시</option><option>미시</option>
-          <option>신시</option><option>유시</option><option>술시</option><option>해시</option>
+          ${_SIJI_HOURS.map(([v, h]) => `<option value="${v}">${v} (${h})</option>`).join('')}
         </select>`,
       fields: ['year', 'month', 'day', 'hour'],
       speaker: 'halmae',
@@ -6401,7 +6435,8 @@ function handleSamjaeYearPage(year) {
     <div class="card"><b>${verdict}</b><p>${detail}</p></div>
     <table><tbody>${rows}</tbody></table>
     <button class="ghost" id="share" style="margin-top:22px">내 삼재 공유하기</button>
-    <a class="cta" href="/">이게 나에게 무슨 뜻인지 안도령에게 물어보기</a>
+    <a class="cta" href="/app?ref=samjae">올해를 어떻게 넘기면 좋을지 안할매에게 물어보기</a>
+    ${BETA_NOTE}
     <h2>삼재는 넷 중 하나입니다</h2>
     <p class="muted">열두 띠는 삼합국 넷으로 갈리고, 한 무리마다 세 해가 듭니다.
       그래서 어느 해를 집어도 삼재인 사람은 넷 중 하나입니다.
@@ -6526,7 +6561,8 @@ function handleTtiPage() {
     <input id="me" type="number" inputmode="numeric" placeholder="태어난 해 (예: 1990)" min="1900" max="${_kstYear()}">
     <table><tbody>${rows}</tbody></table>
     <button class="ghost" id="share" style="margin-top:22px">이 순위 공유하기</button>
-    <a class="cta" href="/">내 사주로 오늘 하루를 자세히 보기</a>
+    <a class="cta" href="/app?ref=tti">내 사주로 오늘 하루를 안도령에게 물어보기</a>
+    ${BETA_NOTE}
     <h2>순위는 어떻게 나오나요</h2>
     <p class="muted">그날의 일진 지지와 열두 띠 사이의 삼합 · 육합 · 충 · 형을 따져 점수를 냅니다.
       무작위가 아니라 날짜의 함수라, 같은 날 다시 열어도 순위가 같습니다.
@@ -6978,6 +7014,9 @@ async function handleInvitePage(request, env, id) {
     background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.22);
     border-radius:10px;font-family:inherit;appearance:none}
   input:focus,select:focus{outline:none;border-color:#c9a96e}
+  /* ⚠️ 펼친 목록은 브라우저가 **자기 배경**에 그린다. select 에만 색을 주면
+     흰 바탕에 흰 글자가 되어 아무것도 안 보인다(실제로 그랬다). option 에 직접 준다. */
+  select option{background:#16161a;color:#e8e4dc}
   button{width:100%;margin-top:28px;padding:16px;font-size:1rem;font-family:inherit;
     color:#0d0d0f;background:#c9a96e;border:0;border-radius:10px;font-weight:700}
   button:disabled{opacity:0.5}
@@ -7002,7 +7041,7 @@ async function handleInvitePage(request, env, id) {
   <p class="sub">${gone
     ? '링크가 만료되었거나 없는 초대입니다.'
     : '한 번 답한 초대는 다시 열 수 없습니다.'}</p>
-  <a class="cta" href="/">오늘운빨에서 내 궁합 보기</a>
+  <a class="cta" href="/app?ref=invite-gone">안낭자에게 내 궁합 물어보기</a>
   ` : `
   <p class="sub">생년월일만 적으면 둘의 결이 나옵니다.<br>가입도 이름도 필요하지 않습니다.</p>
 
@@ -7016,9 +7055,7 @@ async function handleInvitePage(request, env, id) {
     <label>태어난 시 (모르면 비워 두세요)</label>
     <select id="h">
       <option value="">모름</option>
-      <option>자시</option><option>축시</option><option>인시</option><option>묘시</option>
-      <option>진시</option><option>사시</option><option>오시</option><option>미시</option>
-      <option>신시</option><option>유시</option><option>술시</option><option>해시</option>
+      ${_SIJI_HOURS.map(([v, h]) => `<option value="${v}">${v} (${h})</option>`).join('')}
     </select>
     <button type="submit" id="go">둘의 결 보기</button>
     <div class="err" id="err"></div>
@@ -7061,7 +7098,7 @@ async function handleInvitePage(request, env, id) {
           html += '<div class="kind"><b>' + esc(k.label || '') + '</b><p>' + esc(k.text || '') + '</p></div>';
         });
         if (!html) html = '<div class="kind"><p>두 분의 결을 찾았습니다. 자세한 풀이는 앱에서 볼 수 있습니다.</p></div>';
-        out.innerHTML = html + '<a class="cta" href="/">내 사주도 보러 가기</a>';
+        out.innerHTML = html + '<a class="cta" href="/app?ref=invite">내 사주도 안도령에게 물어보기</a>';
         out.classList.remove('hide');
         f.classList.add('hide');
         document.getElementById('title').textContent = '두 분의 결입니다';
