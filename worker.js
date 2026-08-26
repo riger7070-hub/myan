@@ -1368,6 +1368,17 @@ const _LEDGERS = {
  * 요청자를 계정으로 해석한다.
  * @returns {{kind:'web'|'mini', key:string}|null} 인증 실패면 null
  */
+/**
+ * "어디서 고치라"고 안내할 때 부를 화면 이름. 웹은 마이페이지, 미니앱은 내 정보다.
+ *
+ * ⚠️ 한 핸들러가 두 클라이언트를 함께 모시므로 문구를 고정하면 한쪽은 반드시 틀린다.
+ *    실제로 대운은 "마이페이지에서", 이사 방위는 "내 정보에서" 라고 서로 다르게
+ *    적혀 있었고, 각각 미니앱 사용자와 웹 사용자에게 없는 화면을 가리켰다.
+ */
+function _profileScreen(acct) {
+  return acct && acct.kind === 'mini' ? '내 정보' : '마이페이지';
+}
+
 async function resolveAccount(request, env) {
   const token = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
   if (!token) return null;
@@ -7405,7 +7416,7 @@ async function handleDirection(request, env) {
     const { birth, gender, purpose } = await request.json().catch(() => ({}));
     const g = _normalizeGender(gender);
     if (!g) {
-      return cors(JSON.stringify({ error: { message: '이사 방위는 성별에 따라 셈이 달라집니다. 내 정보에서 성별을 등록해 주세요.' } }), 400);
+      return cors(JSON.stringify({ error: { message: '이사 방위는 성별에 따라 셈이 달라집니다. ' + _profileScreen(acct) + '에서 성별을 등록해 주세요.' } }), 400);
     }
     const saju = birth && birth.year
       ? computeSaju(birth.year, birth.month, birth.day, birth.hour) : null;
@@ -8025,7 +8036,7 @@ async function handleDaeun(request, env) {
       return cors(JSON.stringify({ error: { message: '생년월일이 필요합니다.' } }), 400);
     }
     if (gender !== 'M' && gender !== 'F') {
-      return cors(JSON.stringify({ error: { message: '대운은 성별에 따라 방향이 달라집니다. 마이페이지에서 성별을 등록해 주세요.' } }), 400);
+      return cors(JSON.stringify({ error: { message: '대운은 성별에 따라 방향이 달라집니다. ' + _profileScreen(acct) + '에서 성별을 등록해 주세요.' } }), 400);
     }
 
     const saju = computeSaju(birth.year, birth.month, birth.day, birth.hour);
