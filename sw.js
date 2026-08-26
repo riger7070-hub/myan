@@ -289,10 +289,16 @@ const _BODY= {
   },
 };
 
+// ⚠️ 일진은 KST 자정에 넘어간다. 런타임의 로컬 시각(new Date().setHours(0,0,0,0))을
+//    쓰면 "오늘"이 코드가 도는 곳마다 달라진다 — 여기는 사용자 기기의 서비스워커라
+//    로컬이 곧 그 사람의 시간대다. 그래서 해외 사용자는 아침 푸시에 적힌 오행이
+//    앱 화면·유료 풀이와 다른 날을 가리켰다(한국에서는 로컬=KST 라 티가 안 났다).
+//    worker.js·js/constants.js 의 ilchin() 과 같은 식을 쓴다 — 사본이 셋이므로
+//    한쪽만 고치면 또 갈라진다. test/ilchin-kst.test.mjs 가 셋을 함께 본다.
 function _swIlchin() {
-  const ref = new Date(2023, 0, 1); ref.setHours(0, 0, 0, 0);
-  const now = new Date(); now.setHours(0, 0, 0, 0);
-  const idx = ((44 + Math.round((now - ref) / 864e5)) % 60 + 60) % 60;
+  const day    = Math.floor((Date.now() + 9 * 3600000) / 864e5);  // KST 기준 epoch 일수
+  const refDay = Date.UTC(2023, 0, 1) / 864e5;                    // 2023-01-01(KST) 을 같은 축에서
+  const idx = ((44 + day - refDay) % 60 + 60) % 60;
   return { ci: idx % 10, ji: idx % 12, o: _CGO[idx % 10] };
 }
 

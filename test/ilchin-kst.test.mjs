@@ -11,7 +11,7 @@
 // 여기서 지키는 것 셋:
 //   1. 날짜별 간지가 예전 한국 브라우저가 보여 준 값 그대로다 (기준점 2023-01-01 = 44).
 //   2. 로컬 존이 무엇이든 결과가 같다.
-//   3. worker.js 와 js/constants.js 의 두 사본이 계속 같은 계산을 한다.
+//   3. worker.js·js/constants.js 의 두 사본과 sw.js 의 셋째 사본이 같은 날을 가리킨다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -145,4 +145,43 @@ test('worker.js 와 js/constants.js 의 ilchin 이 같은 계산을 한다', () 
   });
   assert.equal(bodies[0], bodies[1],
     'ilchin() 두 사본의 계산이 다르다 — 한쪽만 고쳤다');
+});
+
+// ── 셋째 사본: 서비스워커 ──
+//
+// sw.js 는 페이지와 따로 도는 코드라 ilchin() 을 가져다 쓸 수 없어 제 것을 갖고 있다.
+// 그 사본만 런타임 로컬 시각(new Date().setHours(0,0,0,0))을 그대로 쓰고 있었다.
+// 여기는 **사용자 기기**라 로컬이 곧 그 사람의 시간대다 — 해외 사용자는 아침 푸시에
+// 적힌 오행이 앱 화면·유료 풀이와 다른 날을 가리켰다(한국은 로컬=KST 라 티가 안 났다).
+function swIlchin() {
+  const src = readFileSync(join(ROOT, 'sw.js'), 'utf8');
+  const cgo = (src.match(/const _CGO = \[[^\]]*\];/) || [])[0];
+  const fn = (src.match(/function _swIlchin\(\) \{[\s\S]*?\n\}/) || [])[0];
+  assert.ok(cgo && fn, 'sw.js 에서 _swIlchin 을 찾지 못했다');
+  return { fn: new Function(cgo + '\n' + fn + '\nreturn _swIlchin;')(), src: fn };
+}
+
+test('sw.js 의 일진이 나머지 둘과 같은 날을 가리킨다', () => {
+  const { fn } = swIlchin();
+  for (const [date, gzExpected, oExpected] of GOLDEN) {
+    const [y, m, d] = date.split('-').map(Number);
+    for (const localAsUtc of [false, true]) {   // 사용자 기기는 어느 시간대든 될 수 있다
+      const il = at(kstAt(y, m, d, 10), fn, { localAsUtc });
+      assert.equal(gz(il), gzExpected, date + ': 간지가 다르다');
+      assert.equal(il.o, oExpected, date + ': 오행이 다르다');
+    }
+  }
+});
+
+test('sw.js 의 일진도 KST 자정에 넘어간다', () => {
+  const { fn } = swIlchin();
+  // 로컬 자정을 쓰면 여기가 어긋난다 — 로컬=UTC 로 흉내 내면 09:00 KST 에 넘어갔었다.
+  assert.equal(gz(at(kstAt(2026, 8, 12, 23), fn, { localAsUtc: true })), '丁未');
+  assert.equal(gz(at(kstAt(2026, 8, 13, 0), fn, { localAsUtc: true })), '戊申');
+});
+
+test('sw.js 의 일진이 로컬 시간을 읽지 않는다', () => {
+  const { src } = swIlchin();
+  assert.doesNotMatch(src, /setHours/, 'setHours 로 로컬 자정을 만든다 — Date.now() 를 KST 축에서 셀 것');
+  assert.doesNotMatch(src, /new Date\(\s*\d{4}/, '로컬 시간대로 해석되는 날짜를 만든다 — Date.UTC 를 쓸 것');
 });
