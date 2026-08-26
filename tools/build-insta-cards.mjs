@@ -151,6 +151,30 @@ const CARDS = [
       .li i { color: #c9a96e; font-style: normal; font-size: 28px; }
       .note { margin-top: 46px; font-size: 30px; line-height: 1.66; color: rgba(233,228,218,0.5); }`),
   },
+  {
+    // 새 풀이를 알리는 자리.
+    //
+    // ⚠️ "잘 맞는 사람을 찾아 준다" 로 쓰지 않는다. 그건 궁합이 하는 말이고,
+    //    이 풀이는 **이미 곁에 있는 사람과 어디서 부딪히는지**를 본다. 둘을 섞어
+    //    적으면 기대와 다른 답이 나가서, 돈을 낸 사람이 속았다고 느낀다.
+    name: 'relation',
+    html: shell(`
+      <div class="eyebrow">새 풀이 · 안낭자</div>
+      <div class="title gold">왜 자꾸<br>이 사람과<br>어긋날까</div>
+      <div class="lead">궁합이 “둘이 맞나”를 본다면<br>이건 “어디서 부딪히나”를 봅니다.</div>
+      <div class="li"><i>年</i><span>자란 집안과 뿌리</span></div>
+      <div class="li"><i>月</i><span>성향과 일하는 결</span></div>
+      <div class="li"><i>日</i><span>가장 가까운 자리</span></div>
+      <div class="li"><i>時</i><span>함께 갈 앞날</span></div>
+      <div class="note">네 기둥을 하나씩 견주어<br>맞물리는 자리와 어긋나는 자리를 따로 짚습니다.</div>`, `
+      .title { font-size: 84px; font-weight: 600; line-height: 1.28; margin-top: 24px; word-break: keep-all; }
+      .lead { margin-top: 44px; font-size: 36px; line-height: 1.6;
+              color: rgba(233,228,218,0.72); word-break: keep-all; }
+      .li { display: flex; gap: 24px; align-items: baseline; margin-top: 22px; font-size: 36px;
+            line-height: 1.5; color: rgba(233,228,218,0.82); word-break: keep-all; }
+      .li i { color: #c9a96e; font-style: normal; font-size: 32px; min-width: 40px; }
+      .note { margin-top: 44px; font-size: 29px; line-height: 1.66; color: rgba(233,228,218,0.5); }`),
+  },
 ];
 
 // ── 오늘의 띠 순위 ──
@@ -168,9 +192,12 @@ if (!process.argv.includes('--offline')) {
             <td class="r">${x.rank}</td><td>${x.name}</td>
             <td class="w">${x.why === '무난' ? '' : x.why}</td>
           </tr>`).join('')}</tbody></table>`, `
-        .title { font-size: 78px; font-weight: 600; line-height: 1.28; margin: 22px 0 40px; word-break: keep-all; }
+        ${/* ⚠️ 열두 줄이 다 들어가야 한다. 줄당 몇 px 만 커져도 마지막 줄이 아래
+              주소와 겹친다 — 실제로 그렇게 나갔다. 값을 키우려거든 빌드가
+              "카드를 넘는다"고 하는지 보고 키울 것. */''}
+        .title { font-size: 74px; font-weight: 600; line-height: 1.26; margin: 20px 0 32px; word-break: keep-all; }
         table { width: 100%; border-collapse: collapse; }
-        td { padding: 11px 0; font-size: 34px; border-bottom: 1px solid rgba(201,169,110,0.13); }
+        td { padding: 7px 0; font-size: 33px; border-bottom: 1px solid rgba(201,169,110,0.13); }
         td.r { width: 84px; color: rgba(233,228,218,0.42); font-size: 28px; }
         td.w { text-align: right; color: rgba(233,228,218,0.42); font-size: 24px; }
         tr.top td { color: #e8c98a; font-weight: 600; }
@@ -185,10 +212,39 @@ mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 
+let 넘침 = 0;
+
 for (const c of CARDS) {
   await page.setContent(c.html, { waitUntil: 'networkidle' });
   // 웹폰트가 앉을 때까지 기다린다. 안 기다리면 기본 고딕으로 찍힌다.
   await page.evaluate(() => document.fonts.ready);
+
+  // ⚠️ 글이 카드 밖으로 밀렸는지 **재 본다.**
+  //
+  //    body 가 overflow:hidden 이라 넘쳐도 잘리기만 하고 아무 말이 없다. 실제로
+  //    띠 순위 카드에서 12위 줄이 아래 주소와 겹친 채로 만들어졌고, 그림을 눈으로
+  //    보기 전까지 아무것도 알려 주지 않았다 — 하마터면 그대로 올릴 뻔했다.
+  //
+  //    날마다 새로 그리는 카드가 있는 한 이 일은 또 난다(글자 수는 날마다 다르다).
+  //    그래서 사람 눈이 아니라 여기서 막는다.
+  const fit = await page.evaluate(() => {
+    const mid = document.querySelector('.mid');
+    const rule = document.querySelector('.rule');
+    if (!mid || !rule) return null;
+    const last = mid.lastElementChild;
+    return {
+      바닥: Math.round(last ? last.getBoundingClientRect().bottom : mid.getBoundingClientRect().bottom),
+      금선: Math.round(rule.getBoundingClientRect().top),
+      넘친높이: Math.max(0, mid.scrollHeight - mid.clientHeight),
+    };
+  });
+  if (fit && (fit.넘친높이 > 0 || fit.바닥 > fit.금선)) {
+    넘침++;
+    console.error(`  ✖ ${c.name}: 글이 카드를 넘는다 —`
+      + ` 마지막 줄 ${fit.바닥}px, 금선 ${fit.금선}px`
+      + (fit.넘친높이 ? ` (${fit.넘친높이}px 잘림)` : ''));
+  }
+
   const buf = await page.screenshot({ type: 'png' });
   writeFileSync(join(OUT, `${c.name}.png`), buf);
   console.log(`insta/${c.name}.png  ${(buf.length / 1024).toFixed(0)}KB`);
@@ -196,3 +252,7 @@ for (const c of CARDS) {
 
 await browser.close();
 console.log(`\n${CARDS.length}장 만들었다.`);
+if (넘침) {
+  console.error(`\n${넘침}장이 카드를 넘는다. 글자 크기나 줄 간격을 줄이고 다시 돌릴 것.`);
+  process.exit(1);
+}
