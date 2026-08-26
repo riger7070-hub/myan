@@ -100,6 +100,32 @@ await check('상품 구성이 이 체크아웃과 같다', async () => {
   assert(got === tokenList(WANT), `지급량 구성이 ${got} — 이 체크아웃은 ${tokenList(WANT)}`);
 });
 
+// ── 지금 걸린 할인 ──
+//
+// 검사가 아니라 **눈으로 대조하라고 찍는다.** 진짜 값은 앱인토스 콘솔에 있고 여기서는
+// 읽을 수 없다. 서버는 MINI_SALE 시크릿에 적힌 것만 알기 때문에, 콘솔에서 가격을 바꾸고
+// 시크릿을 안 고치면 둘이 **조용히** 어긋난다.
+//
+// ⚠️ 실제로 세 번 어긋났다. 앱에는 9,900원이 뜨는데 결제창에는 4,950원이 뜨는 식이라
+//    사람이 결제 직전에야 알아챘다. 아래 줄을 콘솔 「인앱 상품」 화면과 나란히 놓고 보면
+//    바로 보인다. 고치는 법은 아래에 함께 찍는다.
+{
+  const { json } = await get('/mini/api/products');
+  console.log('\n  지금 서버가 아는 할인 — 콘솔 「인앱 상품」과 대조할 것');
+  for (const p of json.products) {
+    const off = p.saleAmount ? Math.round((1 - p.saleAmount / p.amount) * 1000) / 10 : null;
+    console.log(`    ${p.label.padEnd(9)} ${p.amount.toLocaleString('ko-KR')}원`
+      + (p.saleAmount
+        ? ` → ${p.saleAmount.toLocaleString('ko-KR')}원 (${off}%)  ~${p.saleUntil} 까지`
+        : '  (할인 없음)'));
+  }
+  console.log('\n  어긋나면: MINI_SALE 시크릿을 콘솔에 맞춰 다시 넣는다.'
+    + '\n    echo \'{"token_10":{"amount":3300,"until":"2026-09-30"}, ...}\' > sale.json'
+    + '\n    npx wrangler secret put MINI_SALE < sale.json'
+    + '\n  ⚠️ until 은 반드시 적는다. 안 적으면 서버가 그 할인을 아예 안 받는다 —'
+    + '\n     할인이 끝난 뒤 시크릿 지우는 것을 잊어도 표시가 저절로 사라지게 한 장치다.\n');
+}
+
 // ── 인증이 실제로 닫혀 있는가 ──
 await check('로그인 없이 잔액을 못 본다', async () => {
   const { res } = await get('/mini/api/tokens');
