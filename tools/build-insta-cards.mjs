@@ -6,7 +6,8 @@
 //   차지하고, 글자를 넣기에도 세로가 넉넉하다. 그래서 같은 팔레트로 비율만
 //   다시 그린다 — og 카드를 잘라 쓰면 글자가 날아간다.
 //
-//   node tools/build-insta-cards.mjs
+//   node tools/build-insta-cards.mjs            전부
+//   node tools/build-insta-cards.mjs --offline  서버를 안 타는 것만
 //
 // 결과물은 insta/ 아래에 들어간다. 사이트가 쓰는 그림이 아니라 손으로 올리는
 // 자료라 워커는 이걸 서빙하지 않는다.
@@ -14,6 +15,10 @@
 // ⚠️ 삼재 카드의 띠와 연도는 **박아 넣은 값이다.** 삼재는 2027년에 끝나므로
 //    2028년부터는 SAMJAE 상수를 고쳐서 다시 돌려야 한다. 지금 값이 맞는지는
 //    /calc/samjae/<그 띠의 아무 해> 를 열어 보면 확인된다.
+//
+// 띠 순위 카드만 성격이 다르다. 날마다 바뀌므로 **서버에서 오늘 값을 받아** 그린다.
+// 그래야 날마다 올릴 거리가 생긴다 — 새 서비스가 홍보를 못 하는 이유는 대개
+// 올릴 것이 떨어져서다. 서버가 안 잡히면 그 한 장만 건너뛰고 나머지는 그린다.
 
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -22,6 +27,7 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'insta');
+const SITE = 'https://myan.riger7070.workers.dev';
 
 // 인스타 피드에서 가장 크게 잡히는 비율(4:5).
 const W = 1080, H = 1350;
@@ -44,6 +50,18 @@ const SAMJAE = {
   years: [[2025, '들삼재'], [2026, '눌삼재'], [2027, '날삼재']],
   now: 2026,
 };
+
+/** 오늘의 띠 순위를 서버에서 그대로 가져온다. 앱과 같은 숫자여야 한다. */
+async function fetchRanking() {
+  const html = await (await fetch(`${SITE}/tti`)).text();
+  const rows = [...html.matchAll(/<td class="r">(\d+)<\/td><td>([^<]+)<\/td>\s*<td class="s">([^<]*)<\/td>/g)]
+    .map((m) => ({ rank: +m[1], name: m[2], why: m[3].trim() }));
+  if (rows.length !== 12) throw new Error(`순위를 ${rows.length}개만 받았다 — /tti 가 바뀌었는지 볼 것`);
+  const title = html.match(/<title>([^<]+)<\/title>/)?.[1] || '';
+  const date = title.match(/\((\d+)월 (\d+)일\)/);
+  const ji = html.match(/일진\(([^)]+)\)/)?.[1] || '';
+  return { rows, month: date?.[1], day: date?.[2], ji };
+}
 
 const shell = (body, extraCss = '') => `<!doctype html><html><head><meta charset="utf-8">
 <style>
@@ -117,7 +135,51 @@ const CARDS = [
       .title { font-size: 82px; font-weight: 600; line-height: 1.3; margin-top: 26px; word-break: keep-all; }
       .body { margin-top: 72px; font-size: 42px; line-height: 1.62; color: rgba(233,228,218,0.62); word-break: keep-all; }`),
   },
+  {
+    // 계정에 처음 온 사람이 보는 자리. 무엇을 하는 곳인지 한 장으로 말한다.
+    name: 'intro',
+    html: shell(`
+      <div class="eyebrow">명리학으로 보는 하루</div>
+      <div class="title gold">안도령이<br>오늘의 기운을<br>풀어 드려요</div>
+      <div class="li"><i>一</i><span>그날 일진과 내 사주를 함께 봅니다</span></div>
+      <div class="li"><i>二</i><span>궁합, 택일, 신살, 귀인까지 스무 가지</span></div>
+      <div class="li"><i>三</i><span>띠 순위와 삼재 계산기는 가입 없이 무료</span></div>
+      <div class="note">뽑기가 아니라 계산입니다.<br>같은 날에는 누가 보든 같은 답이 나옵니다.</div>`, `
+      .title { font-size: 82px; font-weight: 600; line-height: 1.3; margin-top: 26px; word-break: keep-all; }
+      .li { display: flex; gap: 20px; align-items: baseline; margin-top: 26px; font-size: 36px;
+            line-height: 1.5; color: rgba(233,228,218,0.82); word-break: keep-all; }
+      .li i { color: #c9a96e; font-style: normal; font-size: 28px; }
+      .note { margin-top: 46px; font-size: 30px; line-height: 1.66; color: rgba(233,228,218,0.5); }`),
+  },
 ];
+
+// ── 오늘의 띠 순위 ──
+// 하나뿐인 "날마다 새로 그리는" 카드다. 서버가 안 잡히면 이 장만 빼고 간다.
+if (!process.argv.includes('--offline')) {
+  try {
+    const r = await fetchRanking();
+    CARDS.push({
+      name: `tti-${String(r.month).padStart(2, '0')}-${String(r.day).padStart(2, '0')}`,
+      html: shell(`
+        <div class="eyebrow">${r.month}월 ${r.day}일 · 일진 ${r.ji}</div>
+        <div class="title gold">오늘 1위는<br>${r.rows[0].name}입니다</div>
+        <table><tbody>${r.rows.map((x) => `
+          <tr${x.rank <= 3 ? ' class="top"' : ''}>
+            <td class="r">${x.rank}</td><td>${x.name}</td>
+            <td class="w">${x.why === '무난' ? '' : x.why}</td>
+          </tr>`).join('')}</tbody></table>`, `
+        .title { font-size: 78px; font-weight: 600; line-height: 1.28; margin: 22px 0 40px; word-break: keep-all; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 11px 0; font-size: 34px; border-bottom: 1px solid rgba(201,169,110,0.13); }
+        td.r { width: 84px; color: rgba(233,228,218,0.42); font-size: 28px; }
+        td.w { text-align: right; color: rgba(233,228,218,0.42); font-size: 24px; }
+        tr.top td { color: #e8c98a; font-weight: 600; }
+        tr.top td.r { color: #c9a96e; }`),
+    });
+  } catch (e) {
+    console.warn(`띠 순위는 건너뛴다: ${e.message}`);
+  }
+}
 
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
