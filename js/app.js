@@ -5868,7 +5868,7 @@ function _renderTypeQuestion() {
   const q = s.questions[s.qIdx];
   const progress = (t.typeProgress || '{n} / {total}').replace('{n}', s.qIdx + 1).replace('{total}', s.questions.length);
   box.innerHTML = `
-    <div class="modal-title" style="text-align:center">🔯 ${t.typeTitle || '오행 궁합 알아보기'}</div>
+    <div class="modal-title" style="text-align:center">🔯 ${t.typeTitle || '오행으로 보는 두 사람'}</div>
     <div style="text-align:center;font-size:0.72rem;color:var(--text-dim);margin:4px 0 18px">${progress}</div>
     <div style="text-align:center;font-weight:600;margin-bottom:16px">${q.q}</div>
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -5978,7 +5978,7 @@ function openFortuneTopics() {
     </div>`;
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title"><span class="ic-title">${icon('topic')}</span>${t.fortuneModalTitle || '오늘의 운세 모음'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('topic')}</span>${t.fortuneModalTitle || '궁금한 것만 골라 보기'}</div>
       <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.fortuneModalSub || '궁금한 주제를 골라보세요'}</div>
       ${birthHint}
       <div id="fortuneTopicGrid" class="fortune-topic-grid">${topicBtnsHtml}</div>
@@ -6150,7 +6150,7 @@ async function openNumerology() {
   overlay.style.zIndex = '1200';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:380px;padding:32px 24px;text-align:center">
-      <div class="modal-title"><span class="ic-title">${icon('numerology')}</span>${t.numerologyTitle || '생일로 보는 나'}</div>
+      <div class="modal-title"><span class="ic-title">${icon('numerology')}</span>${t.numerologyTitle || '숫자로 보는 내 성향'}</div>
       <div id="numerologyStatus" style="font-size:0.8rem;color:var(--text-dim);margin-top:14px">${t.numerologyLoading || '숫자를 계산하는 중...'}</div>
       <div id="numerologyResult" style="display:none;text-align:left;margin-top:18px"></div>
     </div>`;
@@ -6534,7 +6534,7 @@ async function openRelation() {
   if (!ctx) return;
   const { token, t, lang, birth } = ctx;
   const spec = { icon:'compat', path:'/api/relation' };
-  const title = t.relationTitle || '이 사람과의 관계';
+  const title = t.relationTitle || '왜 자꾸 이 사람과 어긋날까';
   const KINDS = [
     ['',       t.relAny    || '고르지 않음'],
     ['lover',  t.relLover  || '연인'],
@@ -7034,36 +7034,36 @@ function _homeSections() {
     // icon 은 js/icons.js 의 이름이다(이모지가 아니다). 기기마다 모양·색이 갈리던 것을
     // 직접 그린 선화로 바꿨다 — currentColor 라 밝은 화면에서도 저절로 맞는다.
     { icon:'secMe', title: t.csMe || '사주로 보는 나', items: [
-      { icon:'wealth',     label: t.wealthTitle     || '재물운',            cost:4, fn:'openWealth()' },
-      { icon:'sinsal',     label: t.sinsalTitle     || '도화살·역마살 찾기',         cost:3, fn:'openSinsal()' },
-      { icon:'gwiin',      label: t.gwiinTitle      || '나를 돕는 귀인',         cost:4, fn:'openGwiin()' },
-      { icon:'vocation',   label: t.vocationTitle   || '천직과 적성',       cost:4, fn:'openVocation()' },
-      { icon:'daeun',      label: t.daeunTitle      || '10년마다 바뀌는 운', cost:6, fn:'openDaeun()' },
-      { icon:'pastlife',   label: t.pastlifeTitle   || '전생 이야기',       cost:4, fn:'openPastLife()' },
+      { icon:'wealth',     label: t.wealthTitle     || '돈이 모이는 자리',            cost:4, fn:'openWealth()' },
+      { icon:'sinsal',     label: t.sinsalTitle     || '내 사주에 앉은 살',         cost:3, fn:'openSinsal()' },
+      { icon:'gwiin',      label: t.gwiinTitle      || '누가 나를 도와줄까',         cost:4, fn:'openGwiin()' },
+      { icon:'vocation',   label: t.vocationTitle   || '이 길이 내 길이 맞을까',       cost:4, fn:'openVocation()' },
+      { icon:'daeun',      label: t.daeunTitle      || '지금 나는 어느 10년', cost:6, fn:'openDaeun()' },
+      { icon:'pastlife',   label: t.pastlifeTitle   || '전생에 나는 누구였나',       cost:4, fn:'openPastLife()' },
     ]},
     { icon:'secLove', title: t.csLove || '궁합과 인연', items: [
-      { icon:'compat',     label: t.ctTitle         || '궁합과 좋은 때',         cost:6, fn:'openCompatTiming()' },
+      { icon:'compat',     label: t.ctTitle         || '이 사람과 좋은 때',         cost:6, fn:'openCompatTiming()' },
       { icon:'intimacy',   label: t.intimacyTitle   || '속궁합',            cost:5, fn:'openIntimacy()' },
-      { icon:'compat',     label: t.relationTitle   || '이 사람과의 관계',   cost:5, fn:'openRelation()' },
-      { icon:'typecompat', label: t.typeTitle       || '오행 궁합 알아보기',   cost:2, fn:'openTypeTest()' },
+      { icon:'compat',     label: t.relationTitle   || '왜 자꾸 이 사람과 어긋날까',   cost:5, fn:'openRelation()' },
+      { icon:'typecompat', label: t.typeTitle       || '오행으로 보는 두 사람',   cost:2, fn:'openTypeTest()' },
       { icon:'spouse',     label: t.spouseTitle     || '내 짝은 어떤 사람',      cost:3, fn:'openSpousePalace()' },
     ]},
     { icon:'secName', title: t.csName || '이름과 인상', items: [
-      { icon:'name',       label: t.nameTitle       || '이름 풀이',         cost:4, fn:'openNameReading()' },
-      { icon:'naming',     label: t.namingTitle     || '이름 짓기 참고',   cost:4, fn:'openNaming()' },
+      { icon:'name',       label: t.nameTitle       || '내 이름에 담긴 기운',         cost:4, fn:'openNameReading()' },
+      { icon:'naming',     label: t.namingTitle     || '아이 이름 지을 때',   cost:4, fn:'openNaming()' },
       { icon:'photo',      label: t.photoModalTitle || '관상·손금',         cost:4, fn:'openPhotoReading()' },
-      { icon:'numerology', label: t.numerologyTitle || '생일로 보는 나',    cost:2, fn:'openNumerology()' },
+      { icon:'numerology', label: t.numerologyTitle || '숫자로 보는 내 성향',    cost:2, fn:'openNumerology()' },
     ]},
     { icon:'secTiming', title: t.csTiming || '때와 방위', items: [
-      { icon:'takil',      label: t.takilTitle      || '좋은 날 고르기', cost:2, fn:'openAuspiciousDays()' },
-      { icon:'direction',  label: t.directionTitle  || '이사 갈 방향',         cost:3, fn:'openDirection()' },
-      { icon:'yearluck',   label: t.yearluckTitle   || '올해 운세',         cost:4, fn:'openYearLuck()' },
+      { icon:'takil',      label: t.takilTitle      || '이 일에 좋은 날', cost:2, fn:'openAuspiciousDays()' },
+      { icon:'direction',  label: t.directionTitle  || '나에게 좋은 방향',         cost:3, fn:'openDirection()' },
+      { icon:'yearluck',   label: t.yearluckTitle   || '올해 나에게 오는 것',         cost:4, fn:'openYearLuck()' },
       { icon:'tojeong',    label: t.tojeongTitle    || '토정비결 신년운세', cost:4, fn:'openTojeong()' },
     ]},
     { icon:'secDaily', title: t.csDaily || '오늘의 운세', items: [
       { icon:'ttirank',      label: t.ttirankTitle      || '오늘의 띠 순위',   cost:1, fn:'openTtiRanking()' },
       { icon:'zodiac',       label: t.zodiacTitle       || '띠·별자리 운세',    cost:1, fn:'openZodiacFortune()' },
-      { icon:'topic',        label: t.fortuneModalTitle || '오늘의 운세 모음',  cost:1, fn:'openFortuneTopics()' },
+      { icon:'topic',        label: t.fortuneModalTitle || '궁금한 것만 골라 보기',  cost:1, fn:'openFortuneTopics()' },
       { icon:'lucky',        label: t.luckyTitle        || '오늘의 행운 아이템', cost:1, fn:'openLuckyPicks()' },
       { icon:'astro',        label: t.astroTitle        || '행성으로 보는 오늘',    cost:1, fn:'openAstroTransit()' },
       { icon:'lotto',        label: t.lottoTitle        || '오늘의 로또번호',   cost:1, fn:'openLottoNumbers()' },
@@ -7131,7 +7131,7 @@ function openExperienceHub() {
     { icon:'zodiac', label: t.zodiacTitle || '띠·별자리 운세', fn: openZodiacFortune },
     { icon:'lucky', label: t.luckyTitle || '오늘의 행운 아이템', fn: openLuckyPicks },
     { icon:'typecompat', label: t.typeTitle || '오행 유형·궁합', fn: openTypeTest },
-    { icon:'topic', label: t.fortuneModalTitle || '오늘의 운세 모음', fn: openFortuneTopics },
+    { icon:'topic', label: t.fortuneModalTitle || '궁금한 것만 골라 보기', fn: openFortuneTopics },
     { icon:'iching', label: t.ichingTitle || '주역으로 물어보기', fn: openIching },
     { icon:'numerology', label: t.numerologyTitle || '수비학', fn: openNumerology },
     { icon:'tojeong', label: t.tojeongTitle || '토정비결 신년운세', fn: openTojeong },
@@ -7139,10 +7139,10 @@ function openExperienceHub() {
     { icon:'dream', label: t.dreamTitle || '꿈해몽', fn: openDreamInterpretation },
     { icon:'lotto', label: t.lottoTitle || '오늘의 로또번호', fn: openLottoNumbers },
     { icon:'rune', label: t.runeTitle || '룬 문자 점', fn: openRuneReading },
-    { icon:'takil', label: t.takilTitle || '좋은 날 고르기', fn: openAuspiciousDays },
-    { icon:'daeun', label: t.daeunTitle || '10년마다 바뀌는 운', fn: openDaeun },
-    { icon:'name', label: t.nameTitle || '이름 풀이', fn: openNameReading },
-    { icon:'compat', label: t.ctTitle || '궁합과 좋은 때', fn: openCompatTiming },
+    { icon:'takil', label: t.takilTitle || '이 일에 좋은 날', fn: openAuspiciousDays },
+    { icon:'daeun', label: t.daeunTitle || '지금 나는 어느 10년', fn: openDaeun },
+    { icon:'name', label: t.nameTitle || '내 이름에 담긴 기운', fn: openNameReading },
+    { icon:'compat', label: t.ctTitle || '이 사람과 좋은 때', fn: openCompatTiming },
   ];
   const overlay = document.createElement('div');
   overlay.id = 'experienceHubOverlay';

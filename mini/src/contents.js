@@ -106,12 +106,12 @@ export const SECTIONS = [
     items: [
       // 무료 풀이를 맨 앞에 둔다 — 처음 온 사람이 엽전을 쓰기 전에 한 번 받아 볼 자리다.
       { id: 'saju',       icon: 'saju',       label: '내 사주 풀이',       cost: 0, path: '/saju-reading',       need: null, free: true },
-      { id: 'wealth',     icon: 'wealth',     label: '재물운',             cost: 4, path: '/api/wealth',        need: null },
-      { id: 'sinsal',     icon: 'sinsal',     label: '도화살·역마살 찾기',          cost: 3, path: '/api/sinsal',         need: null },
-      { id: 'gwiin',      icon: 'gwiin',      label: '나를 돕는 귀인',          cost: 4, path: '/api/gwiin',          need: null },
-      { id: 'vocation',   icon: 'vocation',   label: '천직과 적성',        cost: 4, path: '/api/vocation',       need: null },
-      { id: 'daeun',      icon: 'daeun',      label: '10년마다 바뀌는 운', cost: 6, path: '/api/daeun',          need: null },
-      { id: 'pastlife',   icon: 'pastlife',   label: '전생 이야기',        cost: 4, path: '/api/past-life',      need: null },
+      { id: 'wealth',     icon: 'wealth',     label: '돈이 모이는 자리',             cost: 4, path: '/api/wealth',        need: null },
+      { id: 'sinsal',     icon: 'sinsal',     label: '내 사주에 앉은 살',          cost: 3, path: '/api/sinsal',         need: null },
+      { id: 'gwiin',      icon: 'gwiin',      label: '누가 나를 도와줄까',          cost: 4, path: '/api/gwiin',          need: null },
+      { id: 'vocation',   icon: 'vocation',   label: '이 길이 내 길이 맞을까',        cost: 4, path: '/api/vocation',       need: null },
+      { id: 'daeun',      icon: 'daeun',      label: '지금 나는 어느 10년', cost: 6, path: '/api/daeun',          need: null },
+      { id: 'pastlife',   icon: 'pastlife',   label: '전생에 나는 누구였나',        cost: 4, path: '/api/past-life',      need: null },
     ],
   },
   {
@@ -119,10 +119,10 @@ export const SECTIONS = [
     // 속궁합이 섞여 있어서 그 사람이 못 찾았다 — 그래서 밖으로 뺐다.
     icon: 'secLove', title: '궁합과 인연',
     items: [
-      { id: 'compat',  icon: 'compat',  label: '궁합과 좋은 때',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
+      { id: 'compat',  icon: 'compat',  label: '이 사람과 좋은 때',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
       { id: 'intimacy', icon: 'intimacy', label: '속궁합',              cost: 5, path: '/api/intimacy',      need: 'partner' },
-      { id: 'relation', icon: 'compat', label: '이 사람과의 관계', cost: 5, path: '/api/relation', need: 'relation' },
-      { id: 'typecompat', icon: 'typecompat', label: '오행 궁합 알아보기',    cost: 2, path: '/api/type-compat',    need: 'type' },
+      { id: 'relation', icon: 'compat', label: '왜 자꾸 이 사람과 어긋날까', cost: 5, path: '/api/relation', need: 'relation' },
+      { id: 'typecompat', icon: 'typecompat', label: '오행으로 보는 두 사람',    cost: 2, path: '/api/type-compat',    need: 'type' },
       { id: 'spouse',  icon: 'spouse',  label: '내 짝은 어떤 사람',          cost: 3, path: '/api/spouse-palace',   need: null },
     ],
   },
@@ -130,18 +130,18 @@ export const SECTIONS = [
     // 작명·이름·관상은 목적이 뚜렷해서 사주 일반과 섞이면 오히려 안 보인다.
     icon: 'secName', title: '이름과 인상',
     items: [
-      { id: 'name',       icon: 'name',       label: '이름 풀이',          cost: 4, path: '/api/name-reading',   need: 'name' },
-      { id: 'naming',     icon: 'naming',     label: '이름 짓기 참고', cost: 4, path: '/api/naming',      need: 'surname' },
+      { id: 'name',       icon: 'name',       label: '내 이름에 담긴 기운',          cost: 4, path: '/api/name-reading',   need: 'name' },
+      { id: 'naming',     icon: 'naming',     label: '아이 이름 지을 때', cost: 4, path: '/api/naming',      need: 'surname' },
       { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
-      { id: 'numerology', icon: 'numerology', label: '생일로 보는 나',     cost: 2, path: '/api/numerology',     need: null },
+      { id: 'numerology', icon: 'numerology', label: '숫자로 보는 내 성향',     cost: 2, path: '/api/numerology',     need: null },
     ],
   },
   {
     icon: 'secTiming', title: '때와 방위',
     items: [
-      { id: 'takil',   icon: 'takil',   label: '좋은 날 고르기', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
-      { id: 'direction', icon: 'direction', label: '이사 갈 방향',            cost: 3, path: '/api/direction',    need: null },
-      { id: 'yearluck', icon: 'yearluck', label: '올해 운세',           cost: 4, path: '/api/year-luck',     need: null },
+      { id: 'takil',   icon: 'takil',   label: '이 일에 좋은 날', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
+      { id: 'direction', icon: 'direction', label: '나에게 좋은 방향',            cost: 3, path: '/api/direction',    need: null },
+      { id: 'yearluck', icon: 'yearluck', label: '올해 나에게 오는 것',           cost: 4, path: '/api/year-luck',     need: null },
       { id: 'tojeong', icon: 'tojeong', label: '토정비결 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
     ],
   },
