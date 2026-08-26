@@ -1042,10 +1042,6 @@ function setLang(l) {
 // ── 다크 / 라이트 모드 ──
 const currentTheme = () => document.documentElement.getAttribute('data-theme') || 'dark';
 
-function toggleTheme() {
-  applyTheme(currentTheme() === 'light' ? 'dark' : 'light');
-}
-
 /**
  * 밝기를 정한다.
  * 인자를 주면 사용자가 직접 고른 것으로 보고 기억한다. 인자가 없으면

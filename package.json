@@ -4,7 +4,9 @@
   "description": "M;Y 安 Web Application",
   "scripts": {
     "convert-webp": "node convert-to-webp.js",
+    "pretest": "node -e \"require('fs').rmSync('test/.tmp',{recursive:true,force:true})\"",
     "test": "node --test \"test/*.test.mjs\"",
+    "dead": "node tools/find-dead.mjs",
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run",
     "smoke": "node tools/smoke.mjs",
     "check:mini": "npm ci --prefix mini && npm run build --prefix mini"

@@ -377,15 +377,6 @@ const _ELEM_FR = { ko:{木:'목(나무)',火:'화(불)',土:'토(흙)',金:'금(
 const _GEN  = {木:'火',火:'土',土:'金',金:'水',水:'木'};   // 상생
 const _CTRL = {木:'土',土:'水',水:'火',火:'金',金:'木'};   // 상극
 
-// 십성(十星) - 오행 관계에 따른 의미 (일간 기준)
-const _SIPSEONG = {
-  same: {ko:'비견(比肩) - 형제/동료', en:'Equal - Siblings/Peers', zh:'比肩 - 兄弟/同事', ja:'比肩 - 兄弟/同僚'},
-  gen: {ko:'식신(食神) - 표현/자유', en:'Food God - Expression/Freedom', zh:'食神 - 表达/自由', ja:'食神 - 表現/自由'},
-  birth: {ko:'정재(正財) - 안정/재물', en:'Proper Wealth - Stability/Money', zh:'正财 - 稳定/财物', ja:'正財 - 安定/財物'},
-  ctrl: {ko:'정관(正官) - 직장/명예', en:'Proper Officer - Career/Honor', zh:'正官 - 职位/名誉', ja:'正官 - 職位/名誉'},
-  ctrlme: {ko:'정인(正印) - 학문/지혜', en:'Proper Seal - Study/Wisdom', zh:'正印 - 学问/智慧', ja:'正印 - 学問/知恵'}
-};
-
 // 용신(用神) - 필요한 기운에 따른 추천 행동
 const _YONGSIN_ADVICE = {
   ko: {

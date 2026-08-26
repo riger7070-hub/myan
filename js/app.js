@@ -145,12 +145,6 @@ function hapticMedium() {
   } catch {}
 }
 
-function hapticHeavy() {
-  try {
-    if (navigator.vibrate) navigator.vibrate([30, 10, 30]);
-  } catch {}
-}
-
 function hapticSuccess() {
   try {
     if (navigator.vibrate) navigator.vibrate([10, 30, 20, 30, 30]);
@@ -3753,16 +3747,6 @@ document.addEventListener('click', e => {
   }
 }, { passive: true });
 
-// ── 4. 푸시 알림 — notifications.js 모듈로 이동됨 ──
-// 하위 호환성을 위한 래퍼 함수
-async function requestNotificationPermission() {
-  return window.Notifications?.requestPermission() || false;
-}
-
-function scheduleLocalNotification(hour, minute) {
-  return window.Notifications?.scheduleDailyNotification(hour, minute);
-}
-
 // ── 6. theme-color 메타 태그 동기화 ──
 function syncThemeColorMeta() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
@@ -4819,15 +4803,6 @@ async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
       // 오라클 연출로 이미 충분히 기다렸으므로 stagger:0(한 번에 페이드인)
       const bodyEl = document.getElementById(`detailBody-${category}`);
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: contEl, stagger: 0 });
-
-      // 상세 풀이 저장 (나중에 다시 보기 위해)
-      try {
-        const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
-        saved.unshift({ date, ohaeng, category, reading: data.reading, timestamp: Date.now() });
-        // 최근 10개만 보관
-        if (saved.length > 10) saved.splice(10);
-        localStorage.setItem('myan_detail_readings', JSON.stringify(saved));
-      } catch(e) { /* Ignore save error */ }
     } else if (data.error) {
       if (loadEl) { loadEl.style.display = ''; loadEl.textContent = data.error.message; }
     }
@@ -4835,83 +4810,6 @@ async function _openDetailReading(date, ohaeng, category, birthOverride, p2) {
     const loadEl = document.getElementById('detail-loading');
     if (loadEl) loadEl.textContent = '오류가 발생했습니다.';
   }
-}
-
-// ════════════════════════════════════════════
-//  저장된 상세 풀이 다시 보기
-// ════════════════════════════════════════════
-function showSavedDetailReading(index) {
-  const t = getT();
-  const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
-  const item = saved[index];
-  if (!item) return;
-
-  let bodyHtml;
-  if (item.category && item.reading) {
-    // 신규 포맷 — 카테고리 단독
-    const catMeta = DETAIL_CATS.find(c => c.key === item.category);
-    const label = t.detailCardTitle?.[item.category] || item.category;
-    bodyHtml = `<div class="detail-area-card"><div class="detail-area-title">${catMeta?.icon || '🔍'} ${label}</div><div class="detail-area-body">${item.reading}</div></div>`;
-  } else if (item.detail) {
-    // 구 포맷(4영역 통합) — 저장된 과거 기록 호환용
-    const legacyAreas = [
-      { key:'health',        icon:'🏥', label: t.detailCardTitle?.health || '건강' },
-      { key:'wealth',        icon:'💰', label: t.detailCardTitle?.wealth || '재물' },
-      { key:'relationships', icon:'💝', label: '관계' },
-      { key:'fortune',       icon:'🎯', label: '행운' }
-    ];
-    bodyHtml = legacyAreas.map(a => `
-      <div class="detail-area-card">
-        <div class="detail-area-title">${a.icon} ${a.label}</div>
-        <div class="detail-area-body">${item.detail[a.key]||''}</div>
-      </div>`).join('');
-  } else {
-    bodyHtml = '';
-  }
-
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay active';
-  overlay.style.zIndex = '1200';
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title">${t.detailTitle||'상세 풀이'} — ${item.ohaeng}</div>
-      <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:16px">${item.date}</div>
-      <div id="detail-content">${bodyHtml}</div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-}
-
-function showDetailReadingHistory() {
-  const t = getT();
-  const saved = JSON.parse(localStorage.getItem('myan_detail_readings') || '[]');
-
-  if (saved.length === 0) {
-    showToast('저장된 상세 풀이가 없습니다.');
-    return;
-  }
-
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay active';
-  overlay.style.zIndex = '1200';
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:420px;padding:28px 22px">
-      <div class="modal-title"><span class="ic-title">${icon('saju')}</span>상세 풀이 기록</div>
-      <div style="max-height:400px;overflow-y:auto;margin:16px 0">
-        ${saved.map((item, i) => {
-          const catMeta = DETAIL_CATS.find(c => c.key === item.category);
-          const label = catMeta ? `${catMeta.icon} ${t.detailCardTitle?.[item.category] || item.category}` : (t.detailTitle || '상세 풀이');
-          return `
-          <div onclick="showSavedDetailReading(${i}); this.closest('.modal-overlay').remove();"
-               style="padding:12px;margin-bottom:8px;border-radius:8px;background:var(--card);border:1px solid var(--border);cursor:pointer">
-            <div style="font-weight:600;color:var(--gold)">${label} · ${item.ohaeng}</div>
-            <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">${item.date}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      <button onclick="this.closest('.modal-overlay').remove()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">닫기</button>
-    </div>`;
-  document.body.appendChild(overlay);
 }
 
 // ════════════════════════════════════════════
@@ -7123,53 +7021,6 @@ function renderHomeSections() {
     </section>`).join('');
 }
 
-function openExperienceHub() {
-  const t = getT();
-  const items = [
-    { icon:'astro', label: t.astroTitle || '행성으로 보는 오늘', fn: openAstroTransit },
-    { icon:'tarot', label: t.tarotTitle || '오늘의 타로', fn: openTarotDraw },
-    { icon:'zodiac', label: t.zodiacTitle || '띠·별자리 운세', fn: openZodiacFortune },
-    { icon:'lucky', label: t.luckyTitle || '오늘의 행운 아이템', fn: openLuckyPicks },
-    { icon:'typecompat', label: t.typeTitle || '오행 유형·궁합', fn: openTypeTest },
-    { icon:'topic', label: t.fortuneModalTitle || '궁금한 것만 골라 보기', fn: openFortuneTopics },
-    { icon:'iching', label: t.ichingTitle || '주역으로 물어보기', fn: openIching },
-    { icon:'numerology', label: t.numerologyTitle || '수비학', fn: openNumerology },
-    { icon:'tojeong', label: t.tojeongTitle || '토정비결 신년운세', fn: openTojeong },
-    { icon:'photo', label: t.photoModalTitle || '관상·손금', fn: openPhotoReading },
-    { icon:'dream', label: t.dreamTitle || '꿈해몽', fn: openDreamInterpretation },
-    { icon:'lotto', label: t.lottoTitle || '오늘의 로또번호', fn: openLottoNumbers },
-    { icon:'rune', label: t.runeTitle || '룬 문자 점', fn: openRuneReading },
-    { icon:'takil', label: t.takilTitle || '이 일에 좋은 날', fn: openAuspiciousDays },
-    { icon:'daeun', label: t.daeunTitle || '지금 나는 어느 10년', fn: openDaeun },
-    { icon:'name', label: t.nameTitle || '내 이름에 담긴 기운', fn: openNameReading },
-    { icon:'compat', label: t.ctTitle || '이 사람과 좋은 때', fn: openCompatTiming },
-  ];
-  const overlay = document.createElement('div');
-  overlay.id = 'experienceHubOverlay';
-  overlay.className = 'modal-overlay active';
-  overlay.style.zIndex = '1200';
-  const itemsHtml = items.map((it, i) => `
-    <button class="fortune-topic-btn" onclick="_experienceHubPick(${i})">
-      <span class="fortune-topic-icon">${icon(it.icon)}</span>
-      <span class="fortune-topic-label">${it.label}</span>
-    </button>`).join('');
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:440px;padding:28px 22px">
-      <div class="modal-title"><span class="ic-title">${icon('secAsk')}</span>${t.experienceHubTitle || '재미로 보는 운세'}</div>
-      <div style="font-size:0.8rem;color:var(--text-dim);margin:6px 0 18px">${t.experienceHubSub || '궁금한 콘텐츠를 골라보세요'}</div>
-      <div class="fortune-topic-grid">${itemsHtml}</div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  _experienceHubItems = items;
-}
-let _experienceHubItems = [];
-function _experienceHubPick(i) {
-  document.getElementById('experienceHubOverlay')?.remove();
-  const fn = _experienceHubItems[i]?.fn;
-  if (typeof fn === 'function') fn();
-}
-
 // ════════════════════════════════════════════
 //  푸시 알림 토글
 // ════════════════════════════════════════════
@@ -7377,85 +7228,6 @@ function _restoreOhaengIndicator() {
   } catch {}
 }
 
-
-function _doShareSNS(type, date, ohaeng) {
-  document.querySelector('.share-sheet-overlay')?.remove();
-  const t   = getT();
-  const url = location.origin;
-  const text = (t.shareMsg || '오늘({d})의 오행 기운은 {o}입니다! M;Y 安에서 확인하세요.')
-    .replace('{d}', date).replace('{o}', ohaeng);
-  const fullText = text + '\n' + url;
-  const enc  = encodeURIComponent;
-
-  switch (type) {
-    case 'kakao':
-      // 카카오링크 공유 (앱/웹 모두 작동)
-      // kakaotalk://send 딥링크 → 설치된 경우 앱으로 직접 공유
-      // 미설치/데스크탑 → 링크 복사 후 안내
-      (function() {
-        const copied = navigator.clipboard
-          ? navigator.clipboard.writeText(fullText).then(() => true).catch(() => false)
-          : Promise.resolve(false);
-        copied.then(() => {
-          // 카카오톡 딥링크 시도 (모바일)
-          if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            const t1 = Date.now();
-            try { window.location.href = 'kakaotalk://msg/send?text=' + enc(fullText); } catch(e) {}
-            setTimeout(() => {
-              if (Date.now() - t1 < 2000) {
-                // 앱 없으면 스토어로
-                showToast('링크가 복사됐어요! 카카오톡 앱에서 붙여넣기 하세요 💬');
-              }
-            }, 1500);
-          } else {
-            // 데스크탑: 링크 복사 + 카카오 오픈채팅 안내
-            showToast('링크가 복사됐어요! 카카오톡에서 붙여넣기해 공유하세요 💬');
-          }
-        });
-      })();
-      break;
-
-    case 'instagram':
-      // Instagram Web Share API 미지원 → 텍스트 복사 + 앱/웹 유도
-      navigator.clipboard.writeText(fullText).then(() => {
-        showToast(t.instaToast || '텍스트가 복사되었습니다! Instagram 앱에서 새 게시물에 붙여넣기 하세요 📸');
-        // 모바일 앱 딥링크 시도
-        setTimeout(() => {
-          try {
-            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-              window.location.href = 'instagram://';
-            } else {
-              openExternal('https://www.instagram.com/');
-            }
-          } catch {}
-        }, 600);
-      }).catch(() => {
-        openExternal('https://www.instagram.com/');
-      });
-      break;
-
-    case 'facebook':
-      openExternal(`https://www.facebook.com/sharer/sharer.php?u=${enc(url)}&quote=${enc(text)}`);
-      break;
-
-    case 'twitter':
-      openExternal(`https://x.com/intent/tweet?text=${enc(text + ' ')}&url=${enc(url)}`);
-      break;
-
-    case 'copy':
-      navigator.clipboard.writeText(fullText)
-        .then(() => showToast(t.shareCopied || '링크가 복사되었습니다! 📋'))
-        .catch(() => showToast(url));
-      break;
-
-    default:
-      if (navigator.share) {
-        navigator.share({ title: 'M;Y 安', text, url }).catch(() => {});
-      } else {
-        navigator.clipboard.writeText(fullText).then(() => showToast(t.shareCopied || '복사되었습니다!')).catch(() => {});
-      }
-  }
-}
 
 // ════════════════════════════════════════════
 //  프로모 QR 코드 클레임
