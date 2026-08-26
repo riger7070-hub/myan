@@ -20,15 +20,20 @@ const appSrc = readFileSync(join(ROOT, 'js', 'app.js'), 'utf8');
 // _homeSections() 본문만 떼어낸다 — app.js 전체를 평가할 수는 없다(브라우저 전역 투성이).
 const body = appSrc.match(/function _homeSections\(\) \{[\s\S]*?\n\}/);
 assert.ok(body, '_homeSections 를 찾지 못했다 — 함수 이름이 바뀌었는지 확인할 것');
+// 타일의 값은 함수 밖 CONTENT_COST 표에서 읽으므로 그 표도 함께 떼어 온다.
+const costTable = appSrc.match(/const CONTENT_COST = \{[\s\S]*?\n\};/);
+assert.ok(costTable, 'CONTENT_COST 표를 찾지 못했다 — js/app.js 의 값표 이름이 바뀌었는가?');
 
 // t.someKey 를 그대로 돌려주는 스텁으로 평가하면 어떤 키를 참조하는지 그대로 드러난다.
 const usedKeys = new Set();
 const tStub = new Proxy({}, { get: (_o, p) => { usedKeys.add(String(p)); return undefined; } });
 const sections = runInNewContext(
-  `${body[0]}\n; __out = _homeSections();`,
+  `${costTable[0]}
+${body[0]}\n; __out = _homeSections();`,
   { getT: () => tStub, __out: null },
   { timeout: 2000 },
-) ?? runInNewContext(`${body[0]}\n_homeSections()`, { getT: () => tStub });
+) ?? runInNewContext(`${costTable[0]}
+${body[0]}\n_homeSections()`, { getT: () => tStub });
 
 // locales.js 의 ko 블록 (번역 4개국어 대조는 locales-parity 가 따로 본다)
 const localesSrc = ['constants.js', 'locales.js']
@@ -159,7 +164,8 @@ test('토큰 비용이 타일마다 붙어 있다', () => {
 //    실제로 폴백은 '오늘의 행운 아이템' 인데 ko 는 '오늘의 행운' 이라 화면에서만
 //    이름이 겹쳐 있었다. 아래 둘은 진짜 화면 값으로 본다.
 const koSections = runInNewContext(
-  `${body[0]}\n; __out = _homeSections();`,
+  `${costTable[0]}
+${body[0]}\n; __out = _homeSections();`,
   { getT: () => ko, __out: null },
   { timeout: 2000 },
 );

@@ -24,9 +24,14 @@ const miniSrc = readFileSync(join(ROOT, 'mini', 'src', 'contents.js'), 'utf8');
 // 문자열도 그 한국어라 이대로 맞대 볼 수 있다.
 const body = appSrc.match(/function _homeSections\(\) \{[\s\S]*?\n\}/);
 assert.ok(body, '_homeSections 를 찾지 못했다');
+
+// 타일의 값은 함수 밖 CONTENT_COST 표에서 읽으므로 그 표도 함께 떼어 온다.
+const costTable = appSrc.match(/const CONTENT_COST = \{[\s\S]*?\n\};/);
+assert.ok(costTable, 'CONTENT_COST 표를 찾지 못했다 — js/app.js 의 값표 이름이 바뀌었는가?');
 const tStub = new Proxy({}, { get: () => undefined });
 const web = runInNewContext(
-  `${body[0]}\n; __out = _homeSections();`,
+  `${costTable[0]}
+${body[0]}\n; __out = _homeSections();`,
   { getT: () => tStub, __out: null },
 );
 

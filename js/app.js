@@ -3560,6 +3560,33 @@ function _syncDrawerState() {
   _syncDrawerTheme();
 }
 
+// ════════════════════════════════════════════
+//  웹이 화면에 적는 엽전 값 — 여기 하나뿐이다
+//
+//  홈 타일과 서랍이 같은 콘텐츠를 두 곳에서 그리는데 값을 각자 적어 두었더니
+//  서랍만 옛 가격에 머물렀다 — 관상 2/실제 4, 토정비결 2/4, 라이프패스 1/2,
+//  유형 궁합 1/2. 화면에 적힌 것보다 더 빠져나가는 쪽이라 그냥 오타가 아니다.
+//
+//  게다가 값이 번역 파일 안에 "(엽전 N)" 으로 박혀 있어 네 언어에 흩어져 있었다.
+//  한 곳을 고치면 나머지 셋이 남는다. 그래서 번역에서 값을 빼고 여기서만 읽는다.
+//
+//  ⚠️ 서버가 진짜다. test/web-price-parity.test.mjs 가 이 표를 worker.js 의
+//     핸들러 COST 와 대조하므로, 서버 값을 바꾸고 여기를 안 고치면 검사가 잡는다.
+// ════════════════════════════════════════════
+const CONTENT_COST = {
+  wealth:4, sinsal:3, gwiin:4, vocation:4, daeun:6, pastlife:4,
+  compat:6, intimacy:5, relation:5, typecompat:2, spouse:3,
+  name:4, naming:4, photo:4, numerology:2,
+  takil:2, direction:3, yearluck:4, tojeong:4,
+  ttirank:1, zodiac:1, topic:1, lucky:1, astro:1, lotto:1,
+  tarot:1, iching:1, rune:1, dream:1,
+};
+
+/** 서랍 설명줄 끝에 붙이는 값. 홈 타일의 ✦N 과 같은 표기라 언어를 타지 않는다. */
+function _withCost(text, cost) {
+  return text && cost ? text + ' ✦' + cost : text;
+}
+
 function _syncDrawerLangs() {
   const t = TX[lang] || TX.ko;
 
@@ -3580,18 +3607,18 @@ function _syncDrawerLangs() {
   _t('drTxtCouple',  t.drCoupleTitle); _t('drSubCouple', t.drCoupleSub);
   _t('drTxtMypage',  t.drMypageTitle); _t('drSubMypage', t.drMypageSub);
   _t('drTxtCal',     t.drCalTitle);  _t('drSubCal',    t.drCalSub);
-  _t('drTxtTarot',   t.drTarotTitle); _t('drSubTarot', t.drTarotSub);
-  _t('drTxtZodiac',  t.drZodiacTitle); _t('drSubZodiac', t.drZodiacSub);
-  _t('drTxtLucky',   t.drLuckyTitle);  _t('drSubLucky', t.drLuckySub);
-  _t('drTxtType',    t.drTypeTitle);   _t('drSubType', t.drTypeSub);
-  _t('drTxtFortune', t.drFortuneTitle); _t('drSubFortune', t.drFortuneSub);
-  _t('drTxtIching',    t.drIchingTitle);    _t('drSubIching', t.drIchingSub);
-  _t('drTxtNumerology', t.drNumerologyTitle); _t('drSubNumerology', t.drNumerologySub);
-  _t('drTxtTojeong',   t.drTojeongTitle);   _t('drSubTojeong', t.drTojeongSub);
-  _t('drTxtPhoto',    t.drPhotoTitle);      _t('drSubPhoto', t.drPhotoSub);
-  _t('drTxtDream',    t.drDreamTitle);      _t('drSubDream', t.drDreamSub);
-  _t('drTxtLotto',    t.drLottoTitle);      _t('drSubLotto', t.drLottoSub);
-  _t('drTxtRune',     t.drRuneTitle);       _t('drSubRune', t.drRuneSub);
+  _t('drTxtTarot', t.tarotTitle); _t('drSubTarot', _withCost(t.drTarotSub, CONTENT_COST.tarot));
+  _t('drTxtZodiac', t.zodiacTitle); _t('drSubZodiac', _withCost(t.drZodiacSub, CONTENT_COST.zodiac));
+  _t('drTxtLucky', t.luckyTitle); _t('drSubLucky', _withCost(t.drLuckySub, CONTENT_COST.lucky));
+  _t('drTxtType', t.typeTitle); _t('drSubType', _withCost(t.drTypeSub, CONTENT_COST.typecompat));
+  _t('drTxtFortune', t.fortuneModalTitle); _t('drSubFortune', _withCost(t.drFortuneSub, CONTENT_COST.topic));
+  _t('drTxtIching', t.ichingTitle); _t('drSubIching', _withCost(t.drIchingSub, CONTENT_COST.iching));
+  _t('drTxtNumerology', t.numerologyTitle); _t('drSubNumerology', _withCost(t.drNumerologySub, CONTENT_COST.numerology));
+  _t('drTxtTojeong', t.tojeongTitle); _t('drSubTojeong', _withCost(t.drTojeongSub, CONTENT_COST.tojeong));
+  _t('drTxtPhoto', t.photoModalTitle); _t('drSubPhoto', _withCost(t.drPhotoSub, CONTENT_COST.photo));
+  _t('drTxtDream', t.dreamTitle); _t('drSubDream', _withCost(t.drDreamSub, CONTENT_COST.dream));
+  _t('drTxtLotto', t.lottoTitle); _t('drSubLotto', _withCost(t.drLottoSub, CONTENT_COST.lotto));
+  _t('drTxtRune', t.runeTitle); _t('drSubRune', _withCost(t.drRuneSub, CONTENT_COST.rune));
   _t('photoGalleryBtnText', t.photoGalleryTitle);
   _t('sajuHistoryBtnText', t.histTitle);
   _t('quickExperienceTitle', t.quickExperienceTitle); _t('quickExperienceDesc', t.quickExperienceDesc);
@@ -6932,46 +6959,46 @@ function _homeSections() {
     // icon 은 js/icons.js 의 이름이다(이모지가 아니다). 기기마다 모양·색이 갈리던 것을
     // 직접 그린 선화로 바꿨다 — currentColor 라 밝은 화면에서도 저절로 맞는다.
     { icon:'secMe', title: t.csMe || '사주로 보는 나', items: [
-      { icon:'wealth',     label: t.wealthTitle     || '돈이 모이는 자리',            cost:4, fn:'openWealth()' },
-      { icon:'sinsal',     label: t.sinsalTitle     || '내 사주에 앉은 살',         cost:3, fn:'openSinsal()' },
-      { icon:'gwiin',      label: t.gwiinTitle      || '누가 나를 도와줄까',         cost:4, fn:'openGwiin()' },
-      { icon:'vocation',   label: t.vocationTitle   || '이 길이 내 길이 맞을까',       cost:4, fn:'openVocation()' },
-      { icon:'daeun',      label: t.daeunTitle      || '지금 나는 어느 10년', cost:6, fn:'openDaeun()' },
-      { icon:'pastlife',   label: t.pastlifeTitle   || '전생에 나는 누구였나',       cost:4, fn:'openPastLife()' },
+      { icon:'wealth',     label: t.wealthTitle     || '돈이 모이는 자리',            cost:CONTENT_COST.wealth, fn:'openWealth()' },
+      { icon:'sinsal',     label: t.sinsalTitle     || '내 사주에 앉은 살',         cost:CONTENT_COST.sinsal, fn:'openSinsal()' },
+      { icon:'gwiin',      label: t.gwiinTitle      || '누가 나를 도와줄까',         cost:CONTENT_COST.gwiin, fn:'openGwiin()' },
+      { icon:'vocation',   label: t.vocationTitle   || '이 길이 내 길이 맞을까',       cost:CONTENT_COST.vocation, fn:'openVocation()' },
+      { icon:'daeun',      label: t.daeunTitle      || '지금 나는 어느 10년', cost:CONTENT_COST.daeun, fn:'openDaeun()' },
+      { icon:'pastlife',   label: t.pastlifeTitle   || '전생에 나는 누구였나',       cost:CONTENT_COST.pastlife, fn:'openPastLife()' },
     ]},
     { icon:'secLove', title: t.csLove || '궁합과 인연', items: [
-      { icon:'compat',     label: t.ctTitle         || '이 사람과 좋은 때',         cost:6, fn:'openCompatTiming()' },
-      { icon:'intimacy',   label: t.intimacyTitle   || '속궁합',            cost:5, fn:'openIntimacy()' },
-      { icon:'compat',     label: t.relationTitle   || '왜 자꾸 이 사람과 어긋날까',   cost:5, fn:'openRelation()' },
-      { icon:'typecompat', label: t.typeTitle       || '오행으로 보는 두 사람',   cost:2, fn:'openTypeTest()' },
-      { icon:'spouse',     label: t.spouseTitle     || '내 짝은 어떤 사람',      cost:3, fn:'openSpousePalace()' },
+      { icon:'compat',     label: t.ctTitle         || '이 사람과 좋은 때',         cost:CONTENT_COST.compat, fn:'openCompatTiming()' },
+      { icon:'intimacy',   label: t.intimacyTitle   || '속궁합',            cost:CONTENT_COST.intimacy, fn:'openIntimacy()' },
+      { icon:'compat',     label: t.relationTitle   || '왜 자꾸 이 사람과 어긋날까',   cost:CONTENT_COST.relation, fn:'openRelation()' },
+      { icon:'typecompat', label: t.typeTitle       || '오행으로 보는 두 사람',   cost:CONTENT_COST.typecompat, fn:'openTypeTest()' },
+      { icon:'spouse',     label: t.spouseTitle     || '내 짝은 어떤 사람',      cost:CONTENT_COST.spouse, fn:'openSpousePalace()' },
     ]},
     { icon:'secName', title: t.csName || '이름과 인상', items: [
-      { icon:'name',       label: t.nameTitle       || '내 이름에 담긴 기운',         cost:4, fn:'openNameReading()' },
-      { icon:'naming',     label: t.namingTitle     || '아이 이름 지을 때',   cost:4, fn:'openNaming()' },
-      { icon:'photo',      label: t.photoModalTitle || '관상·손금',         cost:4, fn:'openPhotoReading()' },
-      { icon:'numerology', label: t.numerologyTitle || '숫자로 보는 내 성향',    cost:2, fn:'openNumerology()' },
+      { icon:'name',       label: t.nameTitle       || '내 이름에 담긴 기운',         cost:CONTENT_COST.name, fn:'openNameReading()' },
+      { icon:'naming',     label: t.namingTitle     || '아이 이름 지을 때',   cost:CONTENT_COST.naming, fn:'openNaming()' },
+      { icon:'photo',      label: t.photoModalTitle || '관상·손금',         cost:CONTENT_COST.photo, fn:'openPhotoReading()' },
+      { icon:'numerology', label: t.numerologyTitle || '숫자로 보는 내 성향',    cost:CONTENT_COST.numerology, fn:'openNumerology()' },
     ]},
     { icon:'secTiming', title: t.csTiming || '때와 방위', items: [
-      { icon:'takil',      label: t.takilTitle      || '이 일에 좋은 날', cost:2, fn:'openAuspiciousDays()' },
-      { icon:'direction',  label: t.directionTitle  || '나에게 좋은 방향',         cost:3, fn:'openDirection()' },
-      { icon:'yearluck',   label: t.yearluckTitle   || '올해 나에게 오는 것',         cost:4, fn:'openYearLuck()' },
-      { icon:'tojeong',    label: t.tojeongTitle    || '토정비결 신년운세', cost:4, fn:'openTojeong()' },
+      { icon:'takil',      label: t.takilTitle      || '이 일에 좋은 날', cost:CONTENT_COST.takil, fn:'openAuspiciousDays()' },
+      { icon:'direction',  label: t.directionTitle  || '나에게 좋은 방향',         cost:CONTENT_COST.direction, fn:'openDirection()' },
+      { icon:'yearluck',   label: t.yearluckTitle   || '올해 나에게 오는 것',         cost:CONTENT_COST.yearluck, fn:'openYearLuck()' },
+      { icon:'tojeong',    label: t.tojeongTitle    || '토정비결 신년운세', cost:CONTENT_COST.tojeong, fn:'openTojeong()' },
     ]},
     { icon:'secDaily', title: t.csDaily || '오늘의 운세', items: [
-      { icon:'ttirank',      label: t.ttirankTitle      || '오늘의 띠 순위',   cost:1, fn:'openTtiRanking()' },
-      { icon:'zodiac',       label: t.zodiacTitle       || '띠·별자리 운세',    cost:1, fn:'openZodiacFortune()' },
-      { icon:'topic',        label: t.fortuneModalTitle || '궁금한 것만 골라 보기',  cost:1, fn:'openFortuneTopics()' },
-      { icon:'lucky',        label: t.luckyTitle        || '오늘의 행운 아이템', cost:1, fn:'openLuckyPicks()' },
-      { icon:'astro',        label: t.astroTitle        || '행성으로 보는 오늘',    cost:1, fn:'openAstroTransit()' },
-      { icon:'lotto',        label: t.lottoTitle        || '오늘의 로또번호',   cost:1, fn:'openLottoNumbers()' },
+      { icon:'ttirank',      label: t.ttirankTitle      || '오늘의 띠 순위',   cost:CONTENT_COST.ttirank, fn:'openTtiRanking()' },
+      { icon:'zodiac',       label: t.zodiacTitle       || '띠·별자리 운세',    cost:CONTENT_COST.zodiac, fn:'openZodiacFortune()' },
+      { icon:'topic',        label: t.fortuneModalTitle || '궁금한 것만 골라 보기',  cost:CONTENT_COST.topic, fn:'openFortuneTopics()' },
+      { icon:'lucky',        label: t.luckyTitle        || '오늘의 행운 아이템', cost:CONTENT_COST.lucky, fn:'openLuckyPicks()' },
+      { icon:'astro',        label: t.astroTitle        || '행성으로 보는 오늘',    cost:CONTENT_COST.astro, fn:'openAstroTransit()' },
+      { icon:'lotto',        label: t.lottoTitle        || '오늘의 로또번호',   cost:CONTENT_COST.lotto, fn:'openLottoNumbers()' },
       { icon:'quickFortune', label: t.quickFortuneTitle || '오늘의 행운',      cost:0, fn:'openFortuneModal()' },
     ]},
     { icon:'secAsk', title: t.csAsk || '물어보는 점', items: [
-      { icon:'tarot',  label: t.tarotTitle  || '오늘의 타로',   cost:1, fn:'openTarotDraw()' },
-      { icon:'iching', label: t.ichingTitle || '주역으로 물어보기',  cost:1, fn:'openIching()' },
-      { icon:'rune',   label: t.runeTitle   || '룬 문자 점',    cost:1, fn:'openRuneReading()' },
-      { icon:'dream',  label: t.dreamTitle  || '꿈해몽',        cost:1, fn:'openDreamInterpretation()' },
+      { icon:'tarot',  label: t.tarotTitle  || '오늘의 타로',   cost:CONTENT_COST.tarot, fn:'openTarotDraw()' },
+      { icon:'iching', label: t.ichingTitle || '주역으로 물어보기',  cost:CONTENT_COST.iching, fn:'openIching()' },
+      { icon:'rune',   label: t.runeTitle   || '룬 문자 점',    cost:CONTENT_COST.rune, fn:'openRuneReading()' },
+      { icon:'dream',  label: t.dreamTitle  || '꿈해몽',        cost:CONTENT_COST.dream, fn:'openDreamInterpretation()' },
     ]},
   ];
 }
@@ -7679,7 +7706,7 @@ async function showSajuHistory() {
       tarot:      { icon: 'tarot',      label: t.tarotTitle },
       zodiac:     { icon: 'zodiac',     label: t.zodiacTitle },
       lucky:      { icon: 'lucky',      label: t.luckyTitle },
-      typecompat: { icon: 'typecompat', label: t.drTypeTitle },
+      typecompat: { icon: 'typecompat', label: t.typeTitle },
       astro:      { icon: 'astro',      label: t.astroTitle },
       takil:      { icon: 'takil',      label: t.takilTitle },
       daeun:      { icon: 'daeun',      label: t.daeunTitle },
