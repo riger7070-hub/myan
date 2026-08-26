@@ -7712,6 +7712,33 @@ async function showSajuHistory() {
       daeun:      { icon: 'daeun',      label: t.daeunTitle },
       name:       { icon: 'name',       label: t.nameTitle },
       compat:     { icon: 'compat',     label: t.ctTitle },
+      // ⚠️ 서버가 feature_history 에 남기는 이름은 스물아홉인데 여기엔 열뿐이었다.
+      //    나머지 열아홉은 아래 forEach 의 폴백(label: h.feature)으로 떨어져
+      //    **"wealth · …" 처럼 영어 id 가 그대로 화면에 떴다.** 4엽전 주고 본
+      //    재물운을 다시 찾을 때 적힌 이름이 "wealth" 였다는 뜻이다. 그림도 전부
+      //    'saju' 하나로 뭉쳐 목록에서 서로 구분이 안 됐다.
+      //    (미니앱은 title 을 먼저 써서 멀쩡했다 — 웹만 그랬다.)
+      //    콘텐츠를 더하면 여기도 한 줄 더한다 — history-labels.test.mjs 가 대조한다.
+      wealth:     { icon: 'wealth',     label: t.wealthTitle },
+      sinsal:     { icon: 'sinsal',     label: t.sinsalTitle },
+      gwiin:      { icon: 'gwiin',      label: t.gwiinTitle },
+      vocation:   { icon: 'vocation',   label: t.vocationTitle },
+      pastlife:   { icon: 'pastlife',   label: t.pastlifeTitle },
+      spouse:     { icon: 'spouse',     label: t.spouseTitle },
+      intimacy:   { icon: 'intimacy',   label: t.intimacyTitle },
+      relation:   { icon: 'compat',     label: t.relationTitle },
+      naming:     { icon: 'naming',     label: t.namingTitle },
+      numerology: { icon: 'numerology', label: t.numerologyTitle },
+      direction:  { icon: 'direction',  label: t.directionTitle },
+      yearluck:   { icon: 'yearluck',   label: t.yearluckTitle },
+      tojeong:    { icon: 'tojeong',    label: t.tojeongTitle },
+      ttirank:    { icon: 'ttirank',    label: t.ttirankTitle },
+      // 서버가 남기는 이름은 'fortune' 인데 홈 타일 id 는 'topic' 이다 — 둘을 여기서 잇는다.
+      fortune:    { icon: 'topic',      label: t.fortuneModalTitle },
+      iching:     { icon: 'iching',     label: t.ichingTitle },
+      rune:       { icon: 'rune',       label: t.runeTitle },
+      dream:      { icon: 'dream',      label: t.dreamTitle },
+      lotto:      { icon: 'lotto',      label: t.lottoTitle },
     };
     (featureData.history || []).forEach(h => {
       const fm = FEATURE_META[h.feature] || { icon: 'saju', label: h.feature };
