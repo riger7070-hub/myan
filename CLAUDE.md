@@ -41,7 +41,7 @@ npx wrangler deploy
 npm run convert-webp
 ```
 
-`npm test` runs the suite (Node's built-in runner, no framework — `node --test "test/*.test.mjs"`; the quoted glob matters, `node --test test/` fails on Node 24). `npm run check` is the full pre-push pass: syntax check + tests + `wrangler deploy --dry-run`. It does **not** build the mini app — CI does, so if you changed anything under `mini/` run `npm run check:mini` too (that's `npm ci && npm run build` in `mini/`, the same thing CI runs) rather than finding out from a red run.
+`npm test` runs the suite (Node's built-in runner, no framework — `node --test "test/*.test.mjs"`; the quoted glob matters, `node --test test/` fails on Node 24; a `pretest` step empties `test/.tmp`, where the loader's `worker.js` copies used to pile up). `npm run check` is the full pre-push pass: syntax check + tests + `wrangler deploy --dry-run`. Two more that are not part of `check` because they answer questions a green run can't: `npm run dead` / `npm run dead:mini` list top-level declarations nothing references (deliberately blunt — a name seen in a string or comment counts as used, since missing one beats deleting a live one), and `npm run smoke` hits **production** and prints what the server currently knows, including the 엽전 sale prices to read side by side with the Toss console. It does **not** build the mini app — CI does, so if you changed anything under `mini/` run `npm run check:mini` too (that's `npm ci && npm run build` in `mini/`, the same thing CI runs) rather than finding out from a red run.
 
 Tests import internals through `test/load-worker.mjs`, which copies `worker.js` to `test/.tmp/*.mjs` and appends an `export {}` — **never leave test-only exports in the deployed `worker.js`**. `test/d1-sqlite.mjs` gives a handler a real D1-shaped database: it runs the actual DDL from `worker.js` under `node:sqlite` and yields a macrotask tick per query. That tick is the whole point — D1 is a network hop, and wrapping synchronous SQLite in `async` alone lets one request run to completion before another resumes, so concurrency bugs quietly pass. Use it whenever you touch a handler where two simultaneous requests would matter.
 
@@ -71,19 +71,24 @@ cd mini
 npm install
 npm run dev              # vite dev
 npm run build            # vite build && ait build
-npm run deploy           # ait deploy --profile myan  (프로필 이름 주의, 아래 참고)
+npm run deploy           # ait deploy  (프로필 이름 주의, 아래 참고)
 ```
 
-**`ait deploy` 의 프로필 이름은 `myan` 이지 `default` 가 아니다.** 배포 키는 `~/.ait/credentials`
-에 `{"myan": "..."}` 로 저장돼 있는데, CLI 는 `--profile` 이 없으면 `this.profile || this.workspace ||
-"default"` 로 `default` 를 찾는다. 없으니 **키가 멀쩡히 있는데도 API 키를 다시 입력하라고 묻고**,
+**`ait deploy` 는 `~/.ait/credentials` 의 `default` 프로필을 쓴다 — PC 마다 다르니 확인할 것.**
+CLI 는 `--profile` 이 없으면 `this.profile || this.workspace || "default"` 로 `default` 를 찾고,
+그 이름이 없으면 조용히 넘어가지 않고 **키가 멀쩡히 있어도 API 키를 다시 입력하라고 되묻는다.**
 거기서 멈추면 업로드는 일어나지 않는다 — 콘솔에 아무것도 안 올라온 채 성공한 줄 알기 쉽다.
-그래서 `package.json` 의 `deploy` 스크립트에 `--profile myan` 을 박아 뒀다. 다른 PC 에서 처음
-배포한다면 `npx ait token add myan` 으로 그 이름으로 등록할 것(이름을 안 주면 `default` 로 들어간다).
+
+한동안 `deploy` 스크립트에 `--profile myan` 이 박혀 있었는데(그 PC 에는 그 이름으로 등록돼 있었다),
+그쪽이 없는 PC 에서는 같은 이유로 되물었다. 2026-08-26 에 `default` 로 통일했다. 새 PC 에서
+처음 배포하거나 키를 재발급했다면 `cd mini && npx ait token add`(이름을 주지 말 것 — 그래야
+`default` 로 들어간다)로 넣는다. 이름을 준 프로필을 쓰고 싶다면 `npx ait token add <이름>` 뒤에
+스크립트에도 `--profile <이름>` 을 함께 붙여야 하며, **그 PC 에서만 되는 조합이라는 것을 기억할 것.**
+지금 어떤 이름이 들어 있는지는 `~/.ait/credentials` 의 키 이름으로 알 수 있다(값은 열지 말 것).
 
 **It is a separate service, not a second face of the web app.** Accounts and currency are deliberately unshared: a web user and a mini user are different people even if they're the same human, and 엽전 bought in the mini app do not exist on the web. The code states this as a contract rather than an accident (`_LEDGERS`, `test/mini-isolation.test.mjs`), so treat "the same person's balances don't add up across the two" as intended behaviour and don't "fix" it by joining them — if the separation ever should end, that's a product and payments decision, not a refactor.
 
-- **The currency is 엽전 in the mini app.** User-facing strings there say 엽전; the web still says 토큰. Same ledger mechanics, different name — check which client a string belongs to before translating it.
+- **Both clients now call the currency 엽전.** The mini app always did; the web was migrated too, so `js/locales.js` (ko) and `index.html` say 엽전 and never 토큰. The 74 remaining `토큰` in `worker.js` all mean *auth* token (`인증 토큰`) — a different word that happens to collide, so don't bulk-rename them. Same ledger mechanics on both sides; what still differs is the account and the ledger table, not the name.
 - **Two clients, two deploys, one Worker.** Pushing to `main` deploys the Worker — which is the mini app's backend — but *not* `mini/`, which only ships when you run `npm run deploy` (`ait deploy`) yourself. Publishing to a store surface is a decision about timing, not something to fire on every push, so CI deliberately stops at building. So a Worker change can go live while the mini client is still the old bundle: when you change a `/mini/api/*` contract, either keep it backward compatible or deploy the client in the same sitting. CI helps two ways — it **builds** `mini/` on every push (a broken client can't slip in unnoticed), and when a push touched `mini/` it writes a reminder into the run's summary with the deploy command. `mini/dist/` and `mini/*.ait` are build output and gitignored.
 - **`ait build` is a real check, not a repackaging step.** It validates `apps-in-toss.config.ts` against what Vite actually emitted — e.g. if `webBundleDir` and Vite's `outDir` drift apart, `vite build` still succeeds and only `ait build` fails. It needs no Toss credentials (only `ait deploy` does), which is why CI can run it.
 
@@ -110,6 +115,17 @@ Rewards attach to *actions*, not luck — 산가지 뽑기 is free entertainment
 
 #### IAP
 `MINI_PRODUCTS` maps SKU → `{ tokens, amount }` (`token_10` 4,290원 / `token_30` 9,900원 / `token_100` 27,500원 — 콘솔 공급가에 맞춘 값이라 코드가 아니라 콘솔이 기준이다). **`orderId` is the primary key of the grant**, so a client retry or a `getPendingOrders` recovery grants once. `PURCHASED` and `PAYMENT_COMPLETED` both count as paid; `ORDER_IN_PROGRESS` means ask again later, not failure. An SKU present in the Toss console but missing from `MINI_PRODUCTS` reaches a branch that **logs loudly and returns 500** — the money already arrived, so that case must never pass silently. `test/mini-price-parity.test.mjs` checks the app's displayed prices against what the server records, and that the amounts are values the console actually permits.
+
+**할인가는 코드에 없다 — `MINI_SALE` 시크릿에 있고, 진짜 주인은 앱인토스 콘솔이다.** 토스 SDK 는
+소모품 상품에 **할인 전 가격**만 준다(`offers` 는 구독 상품에만 붙는다). 그래서 화면에 할인가를
+적으려면 서버가 그 값을 따로 들고 있어야 하는데, 서버에서 콘솔 값을 읽을 길이 없다. 콘솔에서
+가격을 바꾸고 시크릿을 안 고치면 **화면과 결제창이 어긋난 채 아무 데서도 티가 나지 않는다** —
+이미 세 번 겪었다. 형식은 `{"token_30":{"amount":5940,"until":"2026-09-30"}}` 이고, `until`
+없거나 형식이 아니거나 지난 것, 정가보다 비싼 값은 **아예 없는 것으로 본다**(할인 끝난 뒤 시크릿
+지우는 것을 잊어도 표시가 저절로 사라진다). 검사로 만들지 않은 이유는 진짜 값이 콘솔에 있어
+여기서 읽을 수 없기 때문이다 — 대신 `npm run smoke` 가 서버가 아는 할인을 정가·할인율·만료일과
+함께 찍어 주니 콘솔 「인앱 상품」 화면과 나란히 놓고 보면 된다. 원장에 남는 `amount` 는 정가
+그대로라, 나중에 매출을 합산하는 화면을 만든다면 할인 기간이 부풀어 보인다는 것도 기억할 것.
 
 ## Architecture
 
@@ -152,11 +168,16 @@ Four rules hold this together:
 
 `warmFortuneCache` runs from a dedicated 04:00 KST cron, filling the emptiest buckets first; `purgeStaleFortunes` drops only the date-scoped buckets. Its pacing (`WARM_BUDGET` × `WARM_GAP_MS`) was originally set to stay under the free-tier RPM; on the paid key the limit is now **the Worker's subrequest cap per invocation**, since each entry costs one Gemini call plus two D1 queries (120 entries ≈ 362 subrequests, well under the paid plan's 1000). A run that gets cut short costs nothing — it fills empty slots first and skips filled ones, so the next night resumes.
 
-**Within one fill level, Korean buckets go first** (`WARM_LANG_ORDER`). Only 117 of the 468 permanent slots are `ko`; the other 351 are en/zh/ja, which on a Korean store are mostly rows nobody opens — free capacity on the old key, real money on the paid one. The order is *count first, language second* on purpose: language-first would let `ko` pile up second and third variants while English never gets a first one. Note the tiebreak looks redundant, because `permanentFortuneSpecs()` happens to emit `ko` first and `Array.sort` is stable — so a behavioural test of the ordering passes even with the comparison deleted. `test/fortune-warm.test.mjs` therefore checks `_warmLangRank` directly *and* asserts the comparator still consults it. Date-scoped content (576 zodiac combos/day) is deliberately left lazy — pre-warming a day's worth would mostly generate rows nobody opens, which on a paid key means paying for them. Per-user features (대운, 이름 풀이, 궁합 시기, 택일, 배우자궁, 토정비결, 상세 풀이, 관상, 꿈해몽, 주역, 천궁도, 운세 모음) call Gemini every time; they can't be cached (the prompt contains the user's chart) and are simply what the service costs.
+**Within one fill level, Korean buckets go first** (`WARM_LANG_ORDER`). Only 117 of the 468 permanent slots are `ko`; the other 351 are en/zh/ja, which on a Korean store are mostly rows nobody opens — free capacity on the old key, real money on the paid one. The order is *count first, language second* on purpose: language-first would let `ko` pile up second and third variants while English never gets a first one. Note the tiebreak looks redundant, because `permanentFortuneSpecs()` happens to emit `ko` first and `Array.sort` is stable — so a behavioural test of the ordering passes even with the comparison deleted. `test/fortune-warm.test.mjs` therefore checks `_warmLangRank` directly *and* asserts the comparator still consults it. Date-scoped content (576 zodiac combos/day) is deliberately left lazy — pre-warming a day's worth would mostly generate rows nobody opens, which on a paid key means paying for them. Per-user features (대운, 이름 풀이, 궁합 시기, 택일, 배우자궁, 상세 풀이, 관상, 꿈해몽, 주역, 천궁도 …) can't use `cachedFortune`, since its bucket is a fixed list of variants and the prompt here contains the user's own chart. Several now go through `cachedReading(env, key, ttl, produce)` instead, which shares one D1 row (`fortune_cache`) between requests that would produce the identical text. Two key shapes are in use, and picking the wrong one is how this feature hands one person another person's reading:
+
+- `_promptKey(prompt)` — a hash of the **whole** prompt (택일, 이름 짓기, 속궁합, 관계, 올해 운세, 방위, 재물운 …). Safe by construction: anything that changes the answer changes the key.
+- `_sajuKey(saju, gender)` — the four pillars plus gender, for features whose prompt contains **nothing else** that varies (신살, 귀인, 전생 …). Cheaper to reason about, but only correct while that stays true — if you add the user's name, question, or locale to one of those prompts, move it to `_promptKey` in the same edit.
+
+Same rule as `cachedFortune`: the deduction still happens per request, and a cache hit has no failure path so nothing is refunded.
 
 Gemini failures log via `geminiText` (`console.warn` with status / `finishReason` / `promptFeedback`, never the prompt). Before this, a failure left no trace anywhere in production, which is why "가끔 안 된다" was untraceable. **`geminiText` is not yet universal** — the cached features plus 택일/대운/이름 풀이/궁합 시기 go through it, but a number of handlers still inline their own `fetch` and log nothing on failure. `geminiText` also carries the `_ANDORYEONG_SI` system instruction, the `AbortSignal.timeout`, and `thinkingBudget: 0`, so an inline `fetch` has to repeat all three by hand and silently loses whichever it forgets. Prefer `geminiText` in anything new, and convert an inline site whenever you touch one — passing `maxOutputTokens` explicitly, since only `temperature`/`thinkingConfig` have defaults.
 
-**Every paid handler must refund on exception, not just on a bad response.** The 19 AI features deduct via `accountSpend`, call Gemini, then refund when `!resp.ok || !reading` (any handler that calls `geminiText` checks `!reading` alone, since it returns `''` on a bad response). That branch never runs if `fetch` itself throws (connection reset, timeout, subrequest limit) — control jumps to the outer `catch`, which used to just return 500 with the tokens already gone. They now build a `refund` closure right after the deduction (`refund = () => accountRefund(env, acct, '<feature>', <cost>)`) and call it from both the failure branch and the `catch`. This is also what keeps the charge and the refund using one value. Adding a new paid feature means wiring both sides; `test/refund-on-failure.test.mjs` checks all 19 structurally and will fail if a new one skips it (it asserts the exact count, so adding a paid feature means bumping that number deliberately). Seven of them are also covered at runtime — the test drives the handler with `fetch` throwing, with a 500, and with a 200 carrying an empty body, and asserts the balance is untouched.
+**Every paid handler must refund on exception, not just on a bad response.** The 30 paid features deduct via `accountSpend`, call Gemini, then refund when `!resp.ok || !reading` (any handler that calls `geminiText` checks `!reading` alone, since it returns `''` on a bad response). That branch never runs if `fetch` itself throws (connection reset, timeout, subrequest limit) — control jumps to the outer `catch`, which used to just return 500 with the tokens already gone. They now build a `refund` closure right after the deduction (`refund = () => accountRefund(env, acct, '<feature>', <cost>)`) and call it from both the failure branch and the `catch`. This is also what keeps the charge and the refund using one value. Adding a new paid feature means wiring both sides; `test/refund-on-failure.test.mjs` checks all 30 structurally and will fail if a new one skips it (it asserts the exact count, so adding a paid feature means bumping that number deliberately). Seven of them are also covered at runtime — the test drives the handler with `fetch` throwing, with a 500, and with a 200 carrying an empty body, and asserts the balance is untouched.
 
 ### Auth: two token types flow through one verifier — every authenticated handler must use it
 - Google ID tokens (from Google Sign-In) are verified against `oauth2.googleapis.com/tokeninfo`.
@@ -181,6 +202,21 @@ Solo reading = 1, Duo (compatibility) = 2, detail/상세 풀이 = 2, 택일 = 2,
 
 **The mini app calls the currency 엽전, but the prices are no longer different.** They used to be (the web was cheaper); the web was later raised to match, so today a single `const COST` in each handler serves both clients and nothing branches on `acct.kind` for price. The rule the numbers encode is that a reading you look at once costs more, while one you come back to daily stays cheap — 대운 6, 궁합 시기 6, 이름 풀이 4, 관상 4, 토정비결 4, 배우자궁 3, 택일 2, 타로/주역/룬/꿈해몽/오늘의 운세 1 — against a 3-엽전 signup grant plus daily earning. Don't reintroduce a per-client price without also splitting the handler's `COST`. Costs live in `mini/src/contents.js` on the client and in the handlers on the server, i.e. every price exists in two places — `test/mini-price-parity.test.mjs` and `test/mini-contents.test.mjs` are what stop those from drifting. Never copy a web cost into the mini client or vice versa.
 
+**The web's displayed prices come from one table, `CONTENT_COST` in `js/app.js`.** Home tiles and the drawer menu both draw the same contents, and for a while each carried its own number — so the drawer kept advertising 관상 2 / 토정비결 2 / 라이프패스 1 / 유형 궁합 1 while the handlers charged 4 / 4 / 2 / 2. The user was charged **more** than the screen said, and nothing anywhere looked wrong. Worse, the numbers were inside the translation files as `(엽전 N)` / `(N tokens)` / `（N代币）` / `（トークンN）`, so fixing one language left the other three. Both now read `CONTENT_COST`, the translations carry no numbers at all, and `test/web-price-parity.test.mjs` ties that table to each handler's `const COST` — it also fails if a tile hardcodes a number again, if a price reappears in a `*Sub` translation, or if the drawer grows its own `dr*Title` name for a content the tiles already name.
+
+### 콘텐츠마다 답하는 사람이 다르다 — 표가 세 곳에 산다
+읽어 주는 사람은 안도령 하나가 아니라 넷이다. **안낭자**(궁합·속궁합·관계·유형·배우자궁),
+**안할매**(신살·전생·방위·토정비결·주역·해몽·택일, 무료 계산기와 삼재 결과도), **안동자**(귀인·럭키),
+그리고 표에 없으면 **안도령**으로 떨어진다. 그림(`andongja.svg` 등)만 바꾸면 안낭자 얼굴로 안도령
+말투가 나오므로 서버의 인격도 함께 갈라져 있다 — 다만 갈린 것은 말투뿐이고, 풀이하는 법과 금칙("AI 라
+부르지 않는다", "JSON 을 요구하면 JSON 만")은 `_VOICE_COMMON` 하나를 넷이 함께 쓴다. 각자에게
+복사했다면 셋에서 조용히 빠졌을 것들이다.
+
+⚠️ **같은 표가 `worker.js`, `mini/src/contents.js`, `js/app.js` 세 곳에 있다.** 어긋나면 화면에는
+안낭자가 서 있는데 글은 안할매가 쓴 것이 된다 — 오류도 경고도 없다. `test/speakers.test.mjs` 가
+셋을 대조하고, 표만 맞춰서는 부족해서 **핸들러를 실제로 불러 Gemini 로 나가는 인격까지** 본다
+(표에 적어 두고 `speaker` 를 안 넘기면 소스만 봐서는 보이지 않기 때문이다).
+
 ### i18n
 Four languages (ko/en/zh/ja) driven by `js/locales.js` (frontend, ~59KB of key→string maps) and inline per-language string tables inside `worker.js` for AI system prompts / server-rendered legal pages. There's no i18n framework — adding a language means updating both places.
 
@@ -188,4 +224,4 @@ Four languages (ko/en/zh/ja) driven by `js/locales.js` (frontend, ~59KB of key�
 Tables are created idempotently via `CREATE TABLE IF NOT EXISTS` in `ensureDB`/`ensureDBExt` (run once per Worker isolate) rather than migration files, plus ad-hoc `ALTER TABLE ... ADD COLUMN` `.catch(() => {})` calls for schema evolution on already-deployed tables. The mini app adds exactly two tables (`mini_users`, `mini_payment_requests`) in the same style — daily play deliberately has none of its own, storing its state as ledger rows. `schema_saju_history.sql` documents the `saju_history` table shape but is not itself executed anywhere — it's reference/backup only; the live schema lives in the `ensureDB*` functions in `worker.js`.
 
 ### Response/error conventions
-All HTTP responses go through the `cors()` helper (sets CORS + security headers) — don't construct `new Response(...)` directly in a route handler. **`/mini/api/*` handlers use `miniCors(request, …)` instead**, which wraps `cors()` and relaxes the allowed origin to the calling `*.tossmini.com` — a mini handler that returns plain `cors()` will fail in the app as an opaque `Failed to fetch`. Error messages returned to clients are user-facing Korean strings; don't leak stack traces or raw D1 error text into responses.
+All HTTP responses go through the `cors()` helper (sets CORS + security headers) — don't construct `new Response(...)` directly in a route handler. **`/mini/api/*` handlers use `miniCors(request, …)` instead**, which wraps `cors()` and relaxes the allowed origin to the calling `*.tossmini.com` — a mini handler that returns plain `cors()` will fail in the app as an opaque `Failed to fetch`. Error messages returned to clients are user-facing Korean strings; don't leak stack traces or raw D1 error text into responses. **`cors()` sets `Cache-Control: no-store`** — it had no cache header at all, and the Toss webview cached a GET, so `/mini/api/me` kept returning the old profile right after a save (the fix also stops one person's balance or history from sitting in a shared cache). Anything that *should* be cached — legal pages, sitemap, share cards — builds its own `Response` with its own `Cache-Control` and doesn't go through `cors()`.
