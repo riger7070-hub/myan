@@ -63,6 +63,29 @@ async function fetchRanking() {
   return { rows, month: date?.[1], day: date?.[2], ji };
 }
 
+/**
+ * 띠 궁합표를 **살아 있는 페이지에서 그대로** 읽어 온다.
+ *
+ * 왜 다시 계산하지 않는가: 여기서 지지 관계를 또 적으면 페이지와 카드가 갈라진다.
+ * 한쪽을 고치고 다른 쪽을 잊는 것은 시간 문제다. 페이지가 원본이고 카드는 사본이다.
+ *
+ * ⚠️ 이 카드는 **광고가 아니라 표 자체**다. 사람들이 스크린샷으로 가져가는 것은
+ *    "좋은 표" 이지 "좋은 표가 있다는 안내" 가 아니다.
+ */
+async function fetchGunghap() {
+  const html = await (await fetch(`${SITE}/gunghap`)).text();
+  const head = [...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((m) => m[1]);
+  const rows = [...html.matchAll(/<th scope="row">([^<]*)<\/th>((?:<td class="[a-z]*">[^<]*<\/td>)+)/g)]
+    .map((m) => ({
+      name: m[1],
+      cells: [...m[2].matchAll(/<td class="([a-z]*)">([^<]*)<\/td>/g)].map((c) => ({ cls: c[1], text: c[2] })),
+    }));
+  if (head.length !== 12 || rows.length !== 12 || rows.some((r) => r.cells.length !== 12)) {
+    throw new Error(`표가 12x12 가 아니다 — /gunghap 이 바뀌었는지 볼 것 (${head.length}x${rows.length})`);
+  }
+  return { head, rows };
+}
+
 // 카드에 세울 사람. 그 풀이를 맡은 인물을 넣는다 — 궁합이면 안낭자, 액막이면 안할매.
 //
 // ⚠️ 글만 있는 카드는 밋밋해서 넘겨진다. 사람이 한 명 서 있으면 그 자리에 눈이 멎고,
@@ -209,7 +232,55 @@ const CARDS = [
 
 // ── 오늘의 띠 순위 ──
 // 하나뿐인 "날마다 새로 그리는" 카드다. 서버가 안 잡히면 이 장만 빼고 간다.
+// ── 띠 궁합표 ──
+//
+// 이 한 장만 성격이 다르다. 나머지는 "이런 게 있습니다" 하는 안내인데, 이건 **쓸 것
+// 자체**다. 사람들이 스크린샷으로 가져가는 것은 좋은 표이지 좋은 표가 있다는 안내가
+// 아니다. 그래서 안내를 지우고 표를 통째로 넣었다.
 if (!process.argv.includes('--offline')) {
+  try {
+    const g = await fetchGunghap();
+    CARDS.push({
+      name: 'gunghap',
+      html: shell(`
+        <div class="eyebrow">안낭자가 짚어 드립니다</div>
+        <div class="title gold">띠 궁합표</div>
+        <table class="gh">
+          <tr><td class="hd"></td>${g.head.map((h) => `<td class="hd">${h}</td>`).join('')}</tr>
+          ${g.rows.map((r) => `
+            <tr><td class="hd rw">${r.name}</td>${r.cells.map((c) =>
+              `<td class="${c.cls}">${c.text.replace('같은 띠', '동')}</td>`).join('')}</tr>`).join('')}
+        </table>
+        <div class="key">
+          <span class="k good">삼합 육합</span> 잘 맞는 짝
+          <span class="k bad">충 형</span> 부딪히는 자리
+          <span class="k same">동</span> 같은 띠
+        </div>`, `
+        ${/* 표가 카드 폭을 다 써야 하므로, 사람이 서 있어도 본문을 좁히지 않는다.
+             대신 제목 두 줄만 비켜 준다. */''}
+        body:has(.who) .mid { padding-right: 0; }
+        .eyebrow, .title { padding-right: 250px; }
+        .title { font-size: 76px; font-weight: 600; line-height: 1.24; margin: 20px 0 34px; }
+        table.gh { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        table.gh td { border: 1px solid rgba(201,169,110,0.16); text-align: center;
+                      padding: 9px 0; font-size: 22px; line-height: 1.2; }
+        td.hd { color: #c9a96e; font-size: 21px; background: rgba(201,169,110,0.08); }
+        td.hd.rw { color: #e9e4da; }
+        td.good { color: #e8c98a; background: rgba(201,169,110,0.11); }
+        td.bad  { color: #e08b7a; background: rgba(224,139,122,0.09); }
+        td.same { color: #9a948a; }
+        td.none { color: #3a372f; }
+        .key { margin-top: 34px; font-size: 25px; color: rgba(233,228,218,0.55); line-height: 2 }
+        .k { display: inline-block; padding: 2px 14px; border-radius: 99px; margin-right: 8px; }
+        .k.good { color: #e8c98a; background: rgba(201,169,110,0.16); }
+        .k.bad  { color: #e08b7a; background: rgba(224,139,122,0.14); margin-left: 20px; }
+        .k.same { color: #9a948a; background: rgba(154,148,138,0.14); margin-left: 20px; }`,
+        사람('annangja')),
+    });
+  } catch (e) {
+    console.warn(`띠 궁합표는 건너뛴다: ${e.message}`);
+  }
+
   try {
     const r = await fetchRanking();
     CARDS.push({
