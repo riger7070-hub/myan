@@ -100,8 +100,9 @@ const AD_TOKENS = 1;
 // ⚠️ 앱인토스 콘솔에서 발급받은 광고 단위 ID. 등록 전에는 광고가 열리지 않는다.
 // 값이 비어 있으면 버튼 자체를 숨긴다 — 눌러도 실패하는 버튼을 보여주지 않는다.
 const AD_UNIT_ID = 'ait.v2.live.6687c3d6badb4d70';
-// 무료 엽전을 받은 뒤 조용히 한 번 트는 광고. 사용자가 요청한 것이 아니므로
-// 축하 화면을 덮지 않고, 하루 한 번까지만 튼다(runAutoAdIfDue 참고).
+// 전면 광고. 사용자가 요청한 것이 아니라 앱이 트는 것이므로, 무엇을 보고 난
+// **뒤에** 튼다(runAutoAdIfDue 참고). 무료로 받은 자리 — 엽전을 받았을 때와
+// 무료 풀이를 봤을 때 — 마다 예약되고, 하루 몫(AD_DAILY_MAX)을 보상형과 나눠 쓴다.
 const AD_AUTO_UNIT_ID = 'ait.v2.live.14d0826ccdad4c8d';
 
 const state = {
@@ -489,6 +490,12 @@ async function runItem(item) {
     // 카드를 뽑는 콘텐츠는 결과를 곧장 들이밀지 않는다. 뒤집는 순간이 재미의 절반이다.
     state.reveal = !!data.card;
     go('result');
+    // 무료 풀이를 봤으면 전면 광고를 예약한다. 엽전을 낸 풀이에는 걸지 않는다 —
+    // 돈을 낸 자리에까지 광고를 붙이면 낸 값이 무색해진다.
+    //
+    // ⚠️ go() **다음에** 세운다. go() 안에 광고를 트는 자리가 있어서, 먼저 세우면
+    //    방금 띄운 결과를 광고가 덮는다. 결과 화면을 떠날 때 뜬다.
+    if (item.free) state.autoAdPending = true;
   } catch (e) {
     if (seq !== _runSeq || state.screen !== 'loading') return;
     if (e.status === 402) { state.error = '엽전이 부족해요.'; go('charge'); return; }
@@ -921,6 +928,10 @@ function drawStick() {
   const s = SANGAJI[Math.floor(Math.random() * SANGAJI.length)];
   state.stick = s;
   go('stick');
+  // 무료 풀이와 같은 규칙. go() 다음에 세워야 방금 뽑은 산가지를 광고가 덮지 않는다.
+  // ⚠️ '다시 뽑기' 도 이 함수를 다시 부른다. 그래서 산가지 화면 자체가
+  //    AD_QUIET_SCREENS 에 들어 있어야 뽑을 때마다 광고가 튀어나오지 않는다.
+  state.autoAdPending = true;
 }
 
 // ── 엽전이 쏟아지는 효과 ────────────────────────────────────
@@ -971,11 +982,19 @@ function gainCoins(balance, { ad = true } = {}) {
 // 보낼 때만 준다 — 닫기만 한 경우(dismissed)에 주면 띄우고 바로 닫아도 엽전이 나온다.
 // 하루 상한은 서버가 쥐고 있어 클라이언트를 고쳐도 넘길 수 없다.
 //
-// 자동(AD_AUTO_UNIT_ID): 무료 엽전을 받은 뒤에 조용히 한 번 튼다. 아래를 지킨다.
-//   · 보상을 **받은 화면을 떠날 때** 튼다 — 축하 화면을 광고로 덮지 않는다
-//   · 하루 한 번까지. 무료 콘텐츠가 셋이라 그때마다 틀면 하루 세 번이 된다
-//   · 방금 보상형 광고를 본 사람에게는 틀지 않는다(연달아 두 번은 최악이다)
+// 전면(AD_AUTO_UNIT_ID): 앱이 튼다. **무료로 받은 자리마다** 예약된다 —
+// 무료 엽전을 받았을 때, 그리고 무료 풀이(내 사주 풀이·산가지)를 봤을 때.
+// 아래를 지킨다.
+//   · 보고 난 **화면을 떠날 때** 튼다 — 방금 받은 것을 광고로 덮지 않는다
+//   · 하루 몫을 보상형과 **나눠 쓴다**(AD_DAILY_MAX). 따로 세면 합쳐서 대여섯 번이
+//     되고, 그쯤이면 앱을 지운다. 예약되는 자리는 다섯이지만 실제로 뜨는 것은 셋까지다
+//   · 방금 다른 광고를 본 사람에게는 틀지 않는다(연달아 두 번은 최악이다)
+//   · 돈을 낸 사람에게는 틀지 않는다
 //   · 실패하면 아무 말 없이 넘어간다. 사용자가 요청한 일이 아니다
+//
+// ⚠️ 예전에는 여기에 "하루 한 번" 제한이 따로 있었다(AUTO_AD_DAY_KEY). 무료 풀이마다
+//    틀라는 요청으로 그 제한만 걷어냈다. **하루 세 번 상한은 그대로 둔다** — 그것이
+//    실제 안전판이고, 이것까지 풀면 하루에 다섯 번이 뜬다.
 
 /**
  * 광고 하나를 띄운다. 보상 여부를 돌려준다.
@@ -1040,7 +1059,16 @@ function showAd(groupId) {
 // 서버도 같은 수로 보상을 막는다(worker.js 의 MINI_AD_DAILY_MAX).
 const AD_DAILY_MAX = 3;
 const AD_DAY_KEY = 'myan_mini_ad_day';        // '2026-08-12:2' — 날짜와 본 횟수
-const AUTO_AD_DAY_KEY = 'myan_mini_autoad_day';
+// 광고와 광고 사이의 최소 간격. 무료 자리마다 예약되므로, 이것이 없으면
+// 한 화면에서 다음 화면으로 넘어가는 사이에 두 편이 잇따라 뜬다.
+const AD_GAP_MS = 3 * 60 * 1000;
+
+// 광고를 틀지 않고 지나가는 화면.
+//   loading  풀이를 기다리는 중이다. 여기서 틀면 무엇을 기다리는지도 모른 채 광고를 본다
+//   result   방금 나온 풀이를 덮는다
+//   stick    산가지도 결과 화면이다. '다시 뽑기' 가 같은 화면으로 다시 들어오므로
+//            여기를 빼 두지 않으면 뽑을 때마다 광고가 튀어나온다
+const AD_QUIET_SCREENS = new Set(['loading', 'result', 'stick']);
 let _lastAdAt = 0;
 
 const _kstDay = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
@@ -1066,13 +1094,8 @@ async function runAutoAdIfDue() {
   state.autoAdPending = false;
   if (!AD_AUTO_UNIT_ID) return;
   if (state.noAds) return;                                  // 결제하신 분께는 틀지 않는다
-  if (Date.now() - _lastAdAt < 3 * 60 * 1000) return;      // 방금 광고를 봤다
+  if (Date.now() - _lastAdAt < AD_GAP_MS) return;           // 방금 광고를 봤다
   if (!adsLeftToday()) return;                              // 오늘 몫을 다 썼다
-  const today = _kstDay();
-  try {
-    if (localStorage.getItem(AUTO_AD_DAY_KEY) === today) return;
-    localStorage.setItem(AUTO_AD_DAY_KEY, today);
-  } catch { return; }                                       // 저장을 못 하면 아예 안 튼다
   try {
     await showAd(AD_AUTO_UNIT_ID);
     markAdSeen();                                           // 실제로 뜬 것만 센다
@@ -1249,10 +1272,11 @@ function go(screen, { fromBack = false } = {}) {
   state.screen = screen;
   render();
 
-  // 무료 엽전을 받았다면 그 화면을 **떠날 때** 광고를 튼다. 받은 자리에서 바로 틀면
-  // 축하 화면을 덮어 버려서, 무엇을 받았는지 보지도 못한 채 광고부터 보게 된다.
-  // 유료 풀이를 보러 가는 길목은 비켜 준다 — 돈을 쓰려는 사람을 막을 이유가 없다.
-  if (screen !== 'loading' && screen !== 'result') runAutoAdIfDue();
+  // 무료로 무언가를 받았다면 그 화면을 **떠날 때** 광고를 튼다. 받은 자리에서 바로
+  // 틀면 축하 화면이나 풀이를 덮어 버려서, 무엇을 받았는지 보지도 못한 채 광고부터
+  // 보게 된다. 유료 풀이를 보러 가는 길목도 비켜 준다 — 돈을 쓰려는 사람을 막을
+  // 이유가 없다.
+  if (!AD_QUIET_SCREENS.has(screen)) runAutoAdIfDue();
 }
 
 function goBack() {

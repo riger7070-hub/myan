@@ -21,7 +21,7 @@
 // 올릴 것이 떨어져서다. 서버가 안 잡히면 그 한 장만 건너뛰고 나머지는 그린다.
 
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -63,7 +63,19 @@ async function fetchRanking() {
   return { rows, month: date?.[1], day: date?.[2], ji };
 }
 
-const shell = (body, extraCss = '') => `<!doctype html><html><head><meta charset="utf-8">
+// 카드에 세울 사람. 그 풀이를 맡은 인물을 넣는다 — 궁합이면 안낭자, 액막이면 안할매.
+//
+// ⚠️ 글만 있는 카드는 밋밋해서 넘겨진다. 사람이 한 명 서 있으면 그 자리에 눈이 멎고,
+//    앱을 열었을 때 같은 얼굴이 답하므로 카드와 앱이 이어진다.
+// ⚠️ SVG 를 그대로 심는다. <img src> 로 걸면 파일 URL 이라 스크린샷에 안 잡힌다.
+const 사람 = (이름) => {
+  const svg = readFileSync(join(ROOT, `${이름}.svg`), 'utf8')
+    .replace(/<\?xml[^>]*\?>/, '')
+    .replace('<svg ', '<svg preserveAspectRatio="xMidYMax meet" ');
+  return `<div class="who">${svg}</div>`;
+};
+
+const shell = (body, extraCss = '', who = '') => `<!doctype html><html><head><meta charset="utf-8">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;600&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -97,6 +109,17 @@ const shell = (body, extraCss = '') => `<!doctype html><html><head><meta charset
     background: linear-gradient(90deg, rgba(201,169,110,0.55), rgba(201,169,110,0.06));
   }
   .foot { position: absolute; left: 84px; bottom: 62px; font-size: 27px; color: rgba(233,228,218,0.5); }
+  .foot b { font-weight: 600; color: rgba(233,228,218,0.72); margin-right: 22px; }
+  ${/* 사람은 오른쪽 **위**, 달 아래에 세운다.
+       ⚠️ 아래쪽에 두면 본문 끝줄과 겹친다. 카드마다 글 길이가 달라서 한 장을 맞추면
+          다른 장이 어긋난다. 위쪽은 브랜드와 제목 첫 줄뿐이라 어느 카드든 비어 있다. */''}
+  .who { position: absolute; right: 52px; top: 150px; width: 232px; }
+  .who svg { width: 100%; height: auto; display: block;
+             filter: drop-shadow(0 0 46px rgba(232,212,168,0.16)); }
+  ${/* 사람이 서면 달을 위로 올려 머리 위에 걸리게 하고, 제목은 왼쪽으로 좁힌다. */''}
+  .who ~ .rule { display: block; }
+  body:has(.who) .moon { right: 132px; top: 74px; width: 92px; height: 92px; }
+  body:has(.who) .mid { padding-right: 256px; }
   ${extraCss}
 </style></head><body>
   <div class="moon"></div>
@@ -104,8 +127,11 @@ const shell = (body, extraCss = '') => `<!doctype html><html><head><meta charset
   ${/* 브랜드와 금선 사이를 다 차지하고 그 안에서 가운데로 앉는다.
        안 그러면 글이 위로 쏠리고 아래 3분의 1이 허옇게 빈다. */''}
   <div class="mid">${body}</div>
+  ${who}
   <div class="rule"></div>
-  <div class="foot">오늘운빨 · ${SHARE}</div>
+  ${/* ⚠️ 가운뎃점을 쓰지 않는다. 이런 기호가 늘어날수록 사람이 쓴 글로 안 보인다.
+       띄어쓰기와 굵기로 가른다. */''}
+  <div class="foot"><b>오늘운빨</b>${SHARE}</div>
 </body></html>`;
 
 const CARDS = [
@@ -114,17 +140,17 @@ const CARDS = [
     html: shell(`
       <div class="eyebrow">${SAMJAE.now}년 삼재</div>
       <div class="title gold">올해 삼재인 띠,<br>셋입니다</div>
-      <div class="tti">${SAMJAE.tti.join(' · ')}</div>
+      <div class="tti">${SAMJAE.tti.join('   ')}</div>
       <div class="years">
         ${SAMJAE.years.map(([y, k]) => `
           <div class="yr${y === SAMJAE.now ? ' on' : ''}"><b>${y}</b><span>${k}</span></div>`).join('')}
       </div>`, `
-      .title { font-size: 92px; font-weight: 600; line-height: 1.26; margin-top: 26px; word-break: keep-all; }
+      .title { font-size: 74px; font-weight: 600; line-height: 1.3; margin-top: 26px; word-break: keep-all; }
       .tti { margin-top: 54px; font-size: 76px; font-weight: 600; color: #e9e4da; letter-spacing: 6px; }
       .years { margin-top: 66px; display: flex; flex-direction: column; gap: 22px; }
       .yr { display: flex; align-items: baseline; gap: 26px; font-size: 40px; color: rgba(233,228,218,0.45); }
       .yr b { font-weight: 600; min-width: 150px; }
-      .yr.on { color: #e8c98a; }`),
+      .yr.on { color: #e8c98a; }`, 사람('anhalmae')),
   },
   {
     name: 'ipchun',
@@ -132,8 +158,8 @@ const CARDS = [
       <div class="eyebrow">입춘</div>
       <div class="title gold">2월 초에 태어났다면<br>사주로는<br>아직 작년생입니다</div>
       <div class="body">해가 바뀌는 자리가<br>1월 1일이 아니라 입춘이라서요.<br><br>생일이 며칠 차이인데<br>사주가 통째로 달라집니다.</div>`, `
-      .title { font-size: 82px; font-weight: 600; line-height: 1.3; margin-top: 26px; word-break: keep-all; }
-      .body { margin-top: 72px; font-size: 42px; line-height: 1.62; color: rgba(233,228,218,0.62); word-break: keep-all; }`),
+      .title { font-size: 66px; font-weight: 600; line-height: 1.34; margin-top: 26px; word-break: keep-all; }
+      .body { margin-top: 72px; font-size: 42px; line-height: 1.62; color: rgba(233,228,218,0.62); word-break: keep-all; }`, 사람('andoryeong')),
   },
   {
     // 계정에 처음 온 사람이 보는 자리. 무엇을 하는 곳인지 한 장으로 말한다.
@@ -143,13 +169,13 @@ const CARDS = [
       <div class="title gold">안도령이<br>오늘의 기운을<br>풀어 드려요</div>
       <div class="li"><i>一</i><span>그날 일진과 내 사주를 함께 봅니다</span></div>
       <div class="li"><i>二</i><span>궁합, 택일, 신살, 귀인까지 스무 가지</span></div>
-      <div class="li"><i>三</i><span>띠 순위와 삼재 계산기는 가입 없이 무료</span></div>
+      <div class="li"><i>三</i><span>띠 순위와 삼재 풀이는 무료</span></div>
       <div class="note">뽑기가 아니라 계산입니다.<br>같은 날에는 누가 보든 같은 답이 나옵니다.</div>`, `
-      .title { font-size: 82px; font-weight: 600; line-height: 1.3; margin-top: 26px; word-break: keep-all; }
+      .title { font-size: 70px; font-weight: 600; line-height: 1.32; margin-top: 26px; word-break: keep-all; }
       .li { display: flex; gap: 20px; align-items: baseline; margin-top: 26px; font-size: 36px;
             line-height: 1.5; color: rgba(233,228,218,0.82); word-break: keep-all; }
       .li i { color: #c9a96e; font-style: normal; font-size: 28px; }
-      .note { margin-top: 46px; font-size: 30px; line-height: 1.66; color: rgba(233,228,218,0.5); }`),
+      .note { margin-top: 46px; font-size: 30px; line-height: 1.66; color: rgba(233,228,218,0.5); }`, 사람('andoryeong')),
   },
   {
     // 새 풀이를 알리는 자리.
@@ -159,21 +185,25 @@ const CARDS = [
     //    적으면 기대와 다른 답이 나가서, 돈을 낸 사람이 속았다고 느낀다.
     name: 'relation',
     html: shell(`
-      <div class="eyebrow">새 풀이 · 안낭자</div>
+      <div class="eyebrow">안낭자가 봐 드립니다</div>
       <div class="title gold">왜 자꾸<br>이 사람과<br>어긋날까</div>
-      <div class="lead">궁합이 “둘이 맞나”를 본다면<br>이건 “어디서 부딪히나”를 봅니다.</div>
+      <div class="lead">궁합은 둘이 맞는지를 봅니다.<br>이건 어디서 부딪히는지를 봅니다.</div>
       <div class="li"><i>年</i><span>자란 집안과 뿌리</span></div>
       <div class="li"><i>月</i><span>성향과 일하는 결</span></div>
       <div class="li"><i>日</i><span>가장 가까운 자리</span></div>
       <div class="li"><i>時</i><span>함께 갈 앞날</span></div>
       <div class="note">네 기둥을 하나씩 견주어<br>맞물리는 자리와 어긋나는 자리를 따로 짚습니다.</div>`, `
       .title { font-size: 84px; font-weight: 600; line-height: 1.28; margin-top: 24px; word-break: keep-all; }
-      .lead { margin-top: 44px; font-size: 36px; line-height: 1.6;
+      .lead { margin-top: 44px; font-size: 34px; line-height: 1.6;
               color: rgba(233,228,218,0.72); word-break: keep-all; }
       .li { display: flex; gap: 24px; align-items: baseline; margin-top: 22px; font-size: 36px;
             line-height: 1.5; color: rgba(233,228,218,0.82); word-break: keep-all; }
       .li i { color: #c9a96e; font-style: normal; font-size: 32px; min-width: 40px; }
-      .note { margin-top: 44px; font-size: 29px; line-height: 1.66; color: rgba(233,228,218,0.5); }`),
+      .note { margin-top: 44px; font-size: 29px; line-height: 1.66; color: rgba(233,228,218,0.5); }
+      ${/* 사람이 서 있는 곳은 제목 오른쪽뿐이다. 그 아래 글은 폭을 되찾는다 —
+           안 그러면 두 줄짜리가 넉 줄이 되어 카드를 넘긴다. */''}
+      body:has(.who) .lead, body:has(.who) .li,
+      body:has(.who) .note { margin-right: -280px; }`, 사람('annangja')),
   },
 ];
 
@@ -185,7 +215,7 @@ if (!process.argv.includes('--offline')) {
     CARDS.push({
       name: `tti-${String(r.month).padStart(2, '0')}-${String(r.day).padStart(2, '0')}`,
       html: shell(`
-        <div class="eyebrow">${r.month}월 ${r.day}일 · 일진 ${r.ji}</div>
+        <div class="eyebrow">${r.month}월 ${r.day}일   일진 ${r.ji}</div>
         <div class="title gold">오늘 1위는<br>${r.rows[0].name}입니다</div>
         <table><tbody>${r.rows.map((x) => `
           <tr${x.rank <= 3 ? ' class="top"' : ''}>

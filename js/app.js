@@ -297,9 +297,38 @@ function _goCharge() {
   openTokenModal();
 }
 
+/**
+ * 공유 카드에 세울 사람을 그림으로 읽어 온다. 못 읽으면 null 을 주고, 부르는 쪽은
+ * 사람 없이 그린다 — 공유가 실패하는 것보다 사람이 빠지는 편이 훨씬 낫다.
+ *
+ * ⚠️ <img src="/annangja.svg"> 를 그대로 그리면 안 된다. 크기가 없는 SVG 는
+ *    drawImage 에서 브라우저마다 다르게 나온다(0으로 그리거나 아예 실패한다).
+ *    viewBox 만 있고 width/height 가 없어서다. 그래서 글로 읽어 크기를 박은 뒤
+ *    data: 주소로 만든다. data: 는 캔버스를 오염시키지 않아 toBlob 도 그대로 된다.
+ */
+async function _speakerImage(file) {
+  try {
+    const svg = (await (await fetch(file)).text())
+      .replace('<svg ', '<svg width="680" height="800" ');
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    return await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  } catch (e) {
+    console.warn('[share:speaker]', e?.message);
+    return null;
+  }
+}
+
 // 범용 결과 공유 카드 — 타로/주역/수비학/토정비결/룬/꿈해몽/로또 등 모든 재미 콘텐츠 결과에서 재사용.
 // shareOhaengCard()와 같은 톤(어두운 배경+골드 글로우)이지만 임의의 아이콘·제목·부제를 그린다.
-async function shareResultCard({ icon, title, subtitle, filename }) {
+//
+// path 를 주면 그 풀이를 맡은 사람이 카드 오른쪽에 선다(안 주면 안도령).
+// 퍼져 나가는 그림에 같은 얼굴이 계속 실려야 앱을 열었을 때 낯이 익다.
+async function shareResultCard({ icon, title, subtitle, filename, path }) {
   const lang = getLang();
   const t = TX[lang];
   const today = new Date().toLocaleDateString(lang === 'ko' ? 'ko-KR' : lang === 'ja' ? 'ja-JP' : lang === 'zh' ? 'zh-CN' : 'en-US');
@@ -341,6 +370,22 @@ async function shareResultCard({ icon, title, subtitle, filename }) {
     ctx.fillStyle = '#a89a80';
     ctx.font = '26px sans-serif';
     ctx.fillText(subtitle.slice(0, 34), 600, 470);
+  }
+
+  // 맡은 사람을 오른쪽 아래에 세운다.
+  //
+  // ⚠️ 글자를 다 그린 **뒤에** 그린다. 먼저 그리면 가운데 정렬된 제목이 사람 위로
+  //    지나가며 겹친다. 자리는 x 940 부터라, 가운데에 놓인 글과 부딪히지 않는다.
+  // ⚠️ 못 읽으면 그냥 건너뛴다. 사람 하나 때문에 공유가 통째로 실패하면 안 된다.
+  const sp = _speakerOf(path);
+  const who = await _speakerImage(sp.file);
+  if (who) {
+    const h = 250, w = h * (680 / 800);
+    const cx = 1200 - 56 - w / 2;              // 사람의 가운데
+    ctx.drawImage(who, cx - w / 2, 630 - h - 52, w, h);
+    ctx.fillStyle = '#8a8479';
+    ctx.font = '22px sans-serif';
+    ctx.fillText(sp.name, cx, 630 - 26);       // 이름은 발밑에, 가운데로
   }
 
   ctx.fillStyle = '#6a6a5a';
@@ -5199,7 +5244,7 @@ async function openAuspiciousDays() {
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
       const shareBtn = overlay.querySelector('#takilShare');
       if (shareBtn) shareBtn.addEventListener('click', () => shareResultCard({
-        icon: '📅',
+        icon: '📅', path: '/api/auspicious-days',
         title: `${t.takilTitle} · ${data.purposeLabel} · ${best.ymd}`,
         filename: 'myan-takil',
       }));
@@ -5617,7 +5662,7 @@ async function openCompatTiming() {
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
       const shareBtn = overlay.querySelector('#ctShare');
       if (shareBtn) shareBtn.addEventListener('click', () => shareResultCard({
-        icon: '💞',
+        icon: '💞', path: '/api/compat-timing',
         title: `${t.ctTitle} · ${(data.best || []).map(b => b.year).join(', ')}`,
         filename: 'myan-compat-timing',
       }));
@@ -5749,7 +5794,7 @@ async function openLuckyPicks() {
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🍽️ ${t.luckyFood||'럭키 음식'}${p.food?.name ? ' · ' + p.food.name : ''}</div><div class="detail-area-body">${p.food?.reason||''}</div></div>
         <div class="detail-area-card" style="margin-top:10px"><div class="detail-area-title">🎵 ${t.luckySong||'럭키 무드'}${p.song?.name ? ' · ' + p.song.name : ''}</div><div class="detail-area-body">${p.song?.reason||''}</div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
-        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🍀",title:${JSON.stringify(t.luckyTitle || "오늘의 럭키 아이템")},subtitle:${JSON.stringify([p.color?.name,p.food?.name,p.song?.name].filter(Boolean).join(" · ").replace(/'/g, "’"))},filename:"myan-lucky"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({path:'/api/lucky-picks',icon:"🍀",title:${JSON.stringify(t.luckyTitle || "오늘의 럭키 아이템")},subtitle:${JSON.stringify([p.color?.name,p.food?.name,p.song?.name].filter(Boolean).join(" · ").replace(/'/g, "’"))},filename:"myan-lucky"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
     }
   } catch (e) {
@@ -5865,7 +5910,7 @@ async function _typeTestPickPartner(partnerType) {
     areaEl.innerHTML = `
       <div class="detail-area-card"><div class="detail-area-body" id="typeCompatBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
-      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🔯",title:${JSON.stringify((ON_KR[s.myType]||s.myType) + " × " + (ON_KR[partnerType]||partnerType))},filename:"myan-typecompat"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({path:'/api/type-compat',icon:"🔯",title:${JSON.stringify((ON_KR[s.myType]||s.myType) + " × " + (ON_KR[partnerType]||partnerType))},filename:"myan-typecompat"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('typeCompatBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: areaEl, stagger: 0 });
@@ -6041,7 +6086,7 @@ async function _ichingCast() {
       <div style="margin-bottom:14px">${barsHtml}</div>
       <div class="detail-area-card"><div class="detail-area-body" id="ichingReadingBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
-      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🀄",title:${JSON.stringify(t.ichingTitle || "주역 괘 풀이")},filename:"myan-iching"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({path:'/api/iching',icon:"🀄",title:${JSON.stringify(t.ichingTitle || "주역 괘 풀이")},filename:"myan-iching"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('ichingReadingBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -6175,7 +6220,7 @@ async function openTojeong() {
       resultEl.innerHTML = `
         <div class="detail-area-card"><div class="detail-area-body" id="tojeongReadingBody"></div></div>
         ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
-        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🧧",title:${JSON.stringify((data.year || "") + " " + (t.tojeongTitle || "토정비결풍 신년운세"))},filename:"myan-tojeong"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+        <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({path:'/api/tojeong',icon:"🧧",title:${JSON.stringify((data.year || "") + " " + (t.tojeongTitle || "토정비결풍 신년운세"))},filename:"myan-tojeong"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
       `;
       const bodyEl = document.getElementById('tojeongReadingBody');
       if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });
@@ -6780,7 +6825,7 @@ async function _dreamSubmit() {
     resultEl.innerHTML = `
       <div class="detail-area-card"><div class="detail-area-body" id="dreamReadingBody"></div></div>
       ${data.remaining !== undefined ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:right;margin-top:4px">${t.tokenUnit||'잔여 엽전'}: ${data.remaining}</div>` : ''}
-      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({icon:"🌙",title:${JSON.stringify(t.dreamTitle || "꿈해몽")},filename:"myan-dream"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
+      <button class="oracle-skip-btn" style="width:100%;margin-top:10px" onclick='shareResultCard({path:'/api/dream-interpretation',icon:"🌙",title:${JSON.stringify(t.dreamTitle || "꿈해몽")},filename:"myan-dream"})'>📤 ${{ko:"공유하기",en:"Share",zh:"分享",ja:"共有"}[lang] || "공유하기"}</button>
     `;
     const bodyEl = document.getElementById('dreamReadingBody');
     if (bodyEl) revealSentences(bodyEl, data.reading, lang, { scrollEl: resultEl, stagger: 0 });

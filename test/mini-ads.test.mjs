@@ -3,11 +3,14 @@
 // 광고는 조금만 잘못 놓아도 앱을 끄게 만든다. 특히 자동 광고(사용자가 요청하지 않은
 // 광고)는 규칙을 코드에 적어 두는 것만으로는 부족해서, 여기에 못박아 둔다.
 //
-//   1) 보상을 받은 화면을 **떠날 때** 튼다 — 축하 화면을 광고로 덮지 않는다
-//   2) 하루 한 번까지 — 무료 콘텐츠가 셋이라 그때마다 틀면 하루 세 번이 된다
-//   3) 방금 보상형 광고를 본 사람에게는 틀지 않는다 — 연달아 두 번은 최악이다
-//   4) 돈을 낸 사람에게는 틀지 않는다
+//   1) 무료로 받은 자리를 **떠날 때** 튼다 — 방금 받은 것을 광고로 덮지 않는다
+//   2) 하루 셋까지, 보상형과 몫을 나눠 쓴다 — 예약되는 자리는 다섯이지만 뜨는 것은 셋
+//   3) 방금 다른 광고를 본 사람에게는 틀지 않는다 — 연달아 두 번은 최악이다
+//   4) 돈을 낸 사람에게는 틀지 않는다. 엽전을 낸 풀이에도 붙이지 않는다
 //   5) 실패하면 아무 말 없이 넘어간다 — 사용자가 요청한 일이 아니다
+//
+// ⚠️ 2) 가 유일한 안전판이다. 예전에는 "하루 한 번" 제한이 하나 더 있었는데
+//    무료 콘텐츠마다 틀라는 요청으로 걷어냈다. 이것까지 풀면 하루 다섯 번이 된다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,13 +60,44 @@ test('광고 단위 두 가지가 모두 꽂혀 있다', () => {
   assert.notEqual(a, b, '두 광고가 같은 단위를 쓰고 있다');
 });
 
-test('자동 광고는 하루 한 번까지', () => {
+test('⚠️ 전면 광고를 막는 것은 이제 하루 몫과 간격뿐이다', () => {
+  // 예전에는 "하루 한 번"(AUTO_AD_DAY_KEY) 제한이 따로 있었다. 무료 콘텐츠마다
+  // 틀라는 요청으로 그것만 걷어냈다. 그래서 **남은 둘이 유일한 안전판**이다 —
+  // 이것까지 풀면 예약되는 자리 다섯 곳에서 하루 다섯 번이 뜨고, 그쯤이면 앱을 지운다.
   const f = fnOf('runAutoAdIfDue');
-  assert.match(f, /localStorage\.getItem\(AUTO_AD_DAY_KEY\) === today/, '오늘 튼 적이 있는지 안 본다');
-  assert.match(f, /localStorage\.setItem\(AUTO_AD_DAY_KEY, today\)/, '튼 날을 기록하지 않는다');
-  assert.match(f, /_kstDay\(\)/, '날짜 기준을 _kstDay 로 잡지 않는다');
-  // 기준일은 KST. UTC 로 잡으면 09:00 에 하루가 넘어가 아침마다 한 번 더 튼다.
+  assert.match(f, /adsLeftToday\(\)/, '하루 몫을 보지 않는다 — 무료 자리마다 광고가 뜬다');
+  assert.match(f, /_lastAdAt < AD_GAP_MS/, '광고 사이 간격을 두지 않는다');
+  assert.match(SRC, /const AD_GAP_MS = 3 \* 60 \* 1000;/, '간격이 3분이 아니다');
+  // 날짜 기준은 KST. UTC 로 잡으면 09:00 에 하루가 넘어가 아침마다 몫이 되살아난다.
   assert.match(SRC, /_kstDay = \(\) =>[^\n]*9 \* 3600000/, '_kstDay 가 KST 가 아니다');
+});
+
+test('⚠️ 무료 풀이를 본 뒤에 전면 광고를 예약한다', () => {
+  const i = SRC.indexOf("go('result');");
+  assert.ok(i > 0, "go('result') 를 못 찾았다");
+  assert.match(SRC.slice(i, i + 600), /if \(item\.free\) state\.autoAdPending = true;/,
+    '무료 풀이가 전면 광고를 예약하지 않는다');
+  // 산가지는 서버를 타지 않는 별도 경로라 따로 걸어야 한다.
+  assert.match(fnOf('drawStick'), /state\.autoAdPending = true;/,
+    '산가지가 전면 광고를 예약하지 않는다');
+});
+
+test('⚠️ 엽전을 낸 풀이에는 전면 광고를 붙이지 않는다', () => {
+  // 돈을 낸 자리에까지 광고를 붙이면 낸 값이 무색해진다.
+  const i = SRC.indexOf("go('result');");
+  assert.doesNotMatch(SRC.slice(i, i + 600), /^\s*state\.autoAdPending = true;/m,
+    '무료 여부를 안 보고 예약한다 — 유료 풀이에도 광고가 붙는다');
+});
+
+test('⚠️ 예약은 go() 다음에 세우고, 결과 화면에서는 틀지 않는다', () => {
+  // go() 안에 광고를 트는 자리가 있다. 먼저 세우면 방금 띄운 것을 광고가 덮는다.
+  const f = fnOf('drawStick');
+  assert.ok(f.indexOf('state.autoAdPending') > f.indexOf('go('),
+    '산가지: 예약이 go() 앞에 있다 — 방금 뽑은 것이 광고에 덮인다');
+  // ⚠️ '다시 뽑기' 가 같은 화면으로 다시 들어온다. stick 을 조용한 화면에 넣어 두지
+  //    않으면 뽑을 때마다 광고가 튀어나온다.
+  assert.match(SRC, /const AD_QUIET_SCREENS = new Set\(\['loading', 'result', 'stick'\]\);/,
+    '광고를 참는 화면 목록이 loading·result·stick 이 아니다');
 });
 
 test('광고는 종류를 합쳐 하루 세 번까지', () => {
@@ -117,8 +151,8 @@ test('방금 광고를 본 사람에게는 자동 광고를 틀지 않는다', (
 test('자동 광고는 화면을 떠날 때 튼다', () => {
   const f = fnOf('go');
   assert.match(f, /runAutoAdIfDue\(\)/, 'go() 에서 자동 광고를 부르지 않는다');
-  // 결과 화면과 로딩은 비켜 준다.
-  assert.match(f, /screen !== 'loading' && screen !== 'result'/,
+  // 로딩과 결과 화면(산가지 포함)은 비켜 준다.
+  assert.match(f, /!AD_QUIET_SCREENS\.has\(screen\)/,
     '풀이를 보러 가는 길목에서도 광고를 튼다');
 });
 
