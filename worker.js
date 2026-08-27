@@ -1826,6 +1826,7 @@ export default {
     if (path === '/api/hit' && (method === 'POST' || method === 'GET')) { await ensureDBExt(env); return handleHit(request, env); }
     if (path === '/admin/hits' && method === 'GET') { await ensureDBExt(env); return handleHitsReport(request, env); }
     if (path === '/tti' && (method === 'GET' || method === 'HEAD')) return handleTtiPage();
+    if (path === '/gunghap' && (method === 'GET' || method === 'HEAD')) return handleGunghapPage();
     if (path === '/calc' && (method === 'GET' || method === 'HEAD')) return handleCalcHub();
     if (path.startsWith('/calc/') && (method === 'GET' || method === 'HEAD')) {
       const rest = path.slice('/calc/'.length);
@@ -5997,6 +5998,10 @@ const FREE_PAGES = [
   { path: '/calc/samjae', label: '삼재 계산기', freq: 'monthly', pri: '0.8' },
   { path: '/calc/sinsal', label: '내 사주의 신살 보기', freq: 'monthly', pri: '0.8' },
   { path: '/calc/bonmyeong', label: '본명궁 · 좋은 방위 찾기', freq: 'monthly', pri: '0.8' },
+  { path: '/calc/manseryeok', label: '만세력 · 내 사주 네 기둥', freq: 'monthly', pri: '0.9' },
+  { path: '/gunghap', label: '띠 궁합표', freq: 'monthly', pri: '0.9' },
+  // 답이 달마다 달라지므로 로봇에게 자주 와 보라고 한다.
+  { path: '/calc/sonnal', label: '이 달의 손 없는 날', freq: 'weekly', pri: '0.9' },
   { path: '/calc', label: '무료 사주 계산기', freq: 'monthly', pri: '0.7' },
 ];
 
@@ -6084,7 +6089,7 @@ function _ogImage(path, card) {
   return name ? `${SITE}/og/${encodeURIComponent(name)}.png` : `${SITE}/icon-og-512-512.png`;
 }
 
-function _freePage({ title, desc, path, h1, lead, body, script = '', ogCard, speaker }) {
+function _freePage({ title, desc, path, h1, lead, body, script = '', ogCard, speaker, extraCss = '' }) {
   const ogImage = _ogImage(path, ogCard);
   return new Response(`<!doctype html>
 <html lang="ko">
@@ -6194,6 +6199,8 @@ ${/* ⚠️ 미리보기 그림이 없으면 카톡·디스콰이엇·트위터�
   .who span{display:flex;flex-direction:column;gap:2px;min-width:0}
   .who b{font-size:.86rem;font-weight:600;letter-spacing:.03em;color:#c9a96e}
   .who i{font-style:normal;font-size:.74rem;line-height:1.45;color:#8d8880;word-break:keep-all}
+  ${/* 페이지마다 다른 모양. 맨 뒤에 두어 위의 공통 규칙을 덮을 수 있게 한다. */''}
+  ${extraCss}
 </style>
 </head>
 <body>
@@ -6230,8 +6237,43 @@ ${script}
   });
 }
 
-/** 계산기 세 개가 공유하는 자바스크립트. 값을 모아 보내고 카드로 그린다. */
-const _CALC_JS = (kind, fields) => `
+/**
+ * 그 달의 손 없는 날을 양력으로 돌려준다.
+ *
+ * 손(損)은 날을 따라 옮겨 다니며 훼방을 놓는다는 귀신이고, 음력 끝자리가 9와 0인
+ * 날에는 하늘로 올라가 자리를 비운다고 본다. 그래서 음력 9·10·19·20·29·30일이다.
+ *
+ * ⚠️ 음력을 세는 것이지 양력을 세는 것이 아니다. 양력 9일·10일을 세면 통째로 틀린다.
+ *    양력으로 옮기면 달마다 날짜가 흩어지고, 음력 큰달·작은달 때문에 개수도 달라진다
+ *    (30일이 없는 달이 있어 다섯 개만 나오기도 한다).
+ * ⚠️ AI 를 부르지 않는다. 표 계산이라 사람이 몰려도 요금이 들지 않는다.
+ */
+function _sonNalsOf(year, month) {
+  const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+  const out = [];
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  for (let d = 1; d <= last; d++) {
+    let lunar;
+    try { lunar = Solar.fromYmd(year, month, d).getLunar(); } catch { continue; }
+    const ld = lunar.getDay();
+    if (ld % 10 !== 9 && ld % 10 !== 0) continue;
+    out.push({
+      month, day: d,
+      weekday: WEEK[new Date(Date.UTC(year, month - 1, d)).getUTCDay()],
+      lunarMonth: lunar.getMonth(), lunarDay: ld,
+    });
+  }
+  return out;
+}
+
+
+/**
+ * 계산기들이 공유하는 자바스크립트. 값을 모아 보내고 카드로 그린다.
+ *
+ * cta 는 페이지마다 다르다. 안할매가 계산해 준 자리에서 안도령에게 물어보라고 하면
+ * 넷으로 나눈 뜻이 없어진다 — 그 페이지를 맡은 사람의 이름을 넣는다.
+ */
+const _CALC_JS = (kind, fields, cta = '이게 나에게 어떻게 나타나는지 안할매에게 물어보기') => `
 (function () {
   var f = document.getElementById('f'), go = document.getElementById('go'),
       err = document.getElementById('err'), out = document.getElementById('out');
@@ -6248,7 +6290,7 @@ const _CALC_JS = (kind, fields) => `
         if (!res.ok) throw new Error((res.j.error && res.j.error.message) || '잠시 후 다시 시도해 주세요.');
         out.innerHTML = (res.j.cards || []).map(function (c) {
           return '<div class="card"><b>' + esc(c.label) + '</b><p>' + esc(c.text) + '</p></div>';
-        }).join('') + '<a class="cta" href="/app?ref=calc-${kind}">이게 나에게 어떻게 나타나는지 안할매에게 물어보기</a>'
+        }).join('') + '<a class="cta" href="/app?ref=calc-${kind}">${cta}</a>'
           + '${BETA_NOTE}';
         out.classList.remove('hide');
         out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -6285,6 +6327,25 @@ const _SIJI_HOURS = [
 ];
 
 /**
+ * 생년월일시를 받는 칸. 신살과 만세력이 함께 쓴다.
+ *
+ * ⚠️ 시진 이름만 적어 두면 자기가 몇 시에 태어났는지 아는 사람도 못 고른다.
+ *    "자시" 가 몇 시인지 아는 사람은 드물다 — 시각을 함께 적는다.
+ *    값(value)은 서버가 읽는 시진 이름 그대로 두어야 한다. 화면 글자를 보내면 사주가 틀어진다.
+ */
+const _BIRTH_FORM = `<label>생년월일</label>
+        <div class="row">
+          <input id="f-year" type="number" inputmode="numeric" placeholder="1990" min="1900" max="${_kstYear()}" required>
+          <input id="f-month" type="number" inputmode="numeric" placeholder="5" min="1" max="12" required>
+          <input id="f-day" type="number" inputmode="numeric" placeholder="15" min="1" max="31" required>
+        </div>
+        <label>태어난 시 (모르면 비워 두세요)</label>
+        <select id="f-hour">
+          <option value="">모름</option>
+          ${_SIJI_HOURS.map(([v, h]) => `<option value="${v}">${v} (${h})</option>`).join('')}
+        </select>`;
+
+/**
  * 삼재만 다르게 낸다 — 결과가 제 주소를 갖기 때문이다(/calc/samjae/1990).
  * 폼 안에서 답을 그리지 않고 그 주소로 보낸다.
  */
@@ -6310,18 +6371,30 @@ const _YEAR_ROW = (id, ph) => `<label>태어난 해</label>
 
 function handleCalcHub() {
   return _freePage({
-    title: '무료 사주 계산기 · 삼재 · 신살 · 본명궁 | 오늘운빨',
-    desc: '가입 없이 바로 씁니다. 태어난 해만 넣으면 삼재가 언제 드는지, 내 사주에 어떤 신살이 있는지, 본명궁과 좋은 방위가 어디인지 계산해 드립니다.',
+    title: '무료 사주 계산기 · 만세력 · 띠 궁합표 · 손 없는 날 | 오늘운빨',
+    desc: '가입 없이 바로 씁니다. 내 사주 네 기둥을 뽑는 만세력, 열두 띠 궁합표, 이 달의 손 없는 날, 삼재와 신살과 본명궁까지 계산해 드립니다.',
     path: '/calc',
     h1: '무료 사주 계산기',
     lead: '가입도 설치도 필요 없습니다. 명리 표 그대로 계산합니다.',
+    // ⚠️ 예전에는 카드에 설명만 적고 **링크를 안 걸어 뒀다.** 여기까지 들어온 사람이
+    //    무엇이 있는지 읽고는 갈 곳이 없어 그냥 나갔다. 카드 자체를 링크로 만든다.
     body: `
     <h2>무엇을 계산해 드릴까요</h2>
-    <div class="card"><b>삼재 계산기</b><p>내 띠에 삼재가 드는 세 해가 언제인지, 지금이 그 안인지 봅니다.</p></div>
-    <div class="card"><b>신살 풀이</b><p>도화살 · 역마살 · 화개살 · 백호살 · 괴강살 · 양인살 · 천을귀인을 찾습니다.</p></div>
-    <div class="card"><b>본명궁과 방위</b><p>태어난 해와 성별로 본명궁을 내고, 어느 쪽이 나에게 좋은 방위인지 봅니다.</p></div>
+    ${[
+      ['/calc/manseryeok', '만세력', '생년월일시를 넣으면 사주 네 기둥과 오행 분포가 바로 나옵니다.'],
+      ['/gunghap', '띠 궁합표', '열두 띠를 전부 맞대어 한 장에 담았습니다. 삼합 · 육합 · 충 · 형.'],
+      ['/calc/sonnal', '손 없는 날', '이사와 개업 날짜를 잡을 때 봅니다. 달마다 음력으로 계산합니다.'],
+      ['/calc/samjae', '삼재 계산기', '내 띠에 삼재가 드는 세 해가 언제인지, 지금이 그 안인지 봅니다.'],
+      ['/calc/sinsal', '신살 풀이', '도화살 · 역마살 · 화개살 · 백호살 · 괴강살 · 양인살 · 천을귀인을 찾습니다.'],
+      ['/calc/bonmyeong', '본명궁과 방위', '태어난 해와 성별로 본명궁을 내고, 어느 쪽이 나에게 좋은 방위인지 봅니다.'],
+      ['/tti', '오늘의 띠 순위', '그날 일진과 열두 띠를 맞대어 순위를 냅니다. 날마다 바뀝니다.'],
+    ].map(([href, name, desc]) =>
+      `<a class="card link" href="${href}"><b>${name}</b><p>${desc}</p></a>`).join('')}
     <p class="muted">계산은 명리 표를 그대로 따릅니다. 다만 표는 무엇이 있는지만 알려 줄 뿐,
       그게 내 삶에서 어떻게 나타나는지는 사주 전체를 함께 봐야 합니다.</p>`,
+    extraCss: `
+      a.card.link{display:block;text-decoration:none;color:inherit}
+      a.card.link:hover{border-color:rgba(201,169,110,0.42)}`,
   });
 }
 
@@ -6342,20 +6415,7 @@ function handleCalcPage(kind) {
       desc: '생년월일시를 넣으면 사주에 든 신살을 찾아 드립니다. 도화살, 역마살, 화개살, 백호살, 괴강살, 양인살, 천을귀인. 가입 없이 무료입니다.',
       h1: '내 사주의 신살',
       lead: '생년월일을 넣으면 사주 네 기둥에 어떤 신살이 앉아 있는지 찾아 드립니다.',
-      form: `<label>생년월일</label>
-        <div class="row">
-          <input id="f-year" type="number" inputmode="numeric" placeholder="1990" min="1900" max="${_kstYear()}" required>
-          <input id="f-month" type="number" inputmode="numeric" placeholder="5" min="1" max="12" required>
-          <input id="f-day" type="number" inputmode="numeric" placeholder="15" min="1" max="31" required>
-        </div>
-        <label>태어난 시 (모르면 비워 두세요)</label>
-        ${/* ⚠️ 시진 이름만 적어 두면 자기가 몇 시에 태어났는지 아는 사람도 못 고른다.
-              "자시" 가 몇 시인지 아는 사람은 드물다 — 시각을 함께 적는다.
-              값(value)은 서버가 읽는 시진 이름 그대로 두어야 한다. */''}
-        <select id="f-hour">
-          <option value="">모름</option>
-          ${_SIJI_HOURS.map(([v, h]) => `<option value="${v}">${v} (${h})</option>`).join('')}
-        </select>`,
+      form: _BIRTH_FORM,
       fields: ['year', 'month', 'day', 'hour'],
       speaker: 'halmae',
       note: '신살은 사주에서 눈에 띄는 자리를 짚어 주는 이름표입니다. 살(殺)이라는 글자 때문에 나쁜 것으로만 읽히지만, 도화는 사람을 끄는 힘이고 역마는 움직여야 풀리는 결입니다. 좋고 나쁨보다 어떻게 쓰느냐의 문제입니다.',
@@ -6371,6 +6431,44 @@ function handleCalcPage(kind) {
       fields: ['year', 'gender'],
       speaker: 'halmae',
       note: '본명궁은 태어난 해로 정해지는 아홉 자리 중 하나이고, 팔택(八宅)은 그 자리에서 본 여덟 방위의 뜻입니다. 동사택과 서사택은 집을 고를 때 흔히 쓰는 구분입니다.',
+    },
+    // ── 만세력 ──
+    //
+    // 커뮤니티에 내놓을 도구다. 사주 이야기를 하려면 먼저 제 사주 네 글자를 알아야
+    // 하는데, 그걸 뽑아 주는 자리가 마땅치 않아 사람들이 서로 물어본다.
+    //
+    // ⚠️ 여기서 **풀이는 하지 않는다.** 네 기둥과 오행 분포까지만 내준다.
+    //    읽어 주는 것이 파는 것이므로, 여기서 다 해 주면 앱에 갈 이유가 없다.
+    //    반대로 뽑아 주지도 않으면 커뮤니티에서 쓸 도구가 되지 못한다. 그 사이다.
+    manseryeok: {
+      title: '만세력 · 내 사주 네 기둥 바로 뽑기 | 오늘운빨',
+      desc: '생년월일시를 넣으면 사주 네 기둥(년주 월주 일주 시주)과 오행 분포를 바로 뽑아 드립니다. 가입 없이 무료입니다.',
+      h1: '내 사주 네 기둥',
+      lead: '생년월일을 넣으면 사주 네 글자와 오행이 어떻게 치우쳐 있는지 바로 나옵니다. 풀이 없이 표만 보여 드립니다.',
+      form: _BIRTH_FORM,
+      fields: ['year', 'month', 'day', 'hour'],
+      speaker: 'doryeong',
+      cta: '이 네 글자가 무슨 뜻인지 안도령에게 물어보기',
+      note: '사주는 태어난 해·달·날·시를 각각 두 글자로 적은 것입니다. 여덟 글자라 팔자(八字)라고도 합니다. 시를 모르면 세 기둥만으로도 보지만, 시주가 빠지면 앞날을 보는 자리가 하나 없는 셈입니다. 달이 바뀌는 기준은 1일이 아니라 절기이고, 해가 바뀌는 기준은 1월 1일이 아니라 입춘입니다.',
+    },
+    // ── 손 없는 날 ──
+    //
+    // 이사·개업 날짜를 잡을 때 실제로 찾아보는 말이다. 계산이 간단해서(음력 끝자리)
+    // 서버가 표만 내주면 되고, AI 요금이 들지 않는다.
+    sonnal: {
+      title: '손 없는 날 · 이사 날짜 바로 보기 | 오늘운빨',
+      desc: '이사와 개업에 좋다는 손 없는 날을 달마다 바로 찾아 드립니다. 음력 기준으로 계산합니다. 가입 없이 무료입니다.',
+      h1: '이 달의 손 없는 날',
+      lead: '이사나 개업 날짜를 잡을 때 봅니다. 연도와 달만 고르시면 됩니다.',
+      form: `<label>언제</label>
+        <div class="row">
+          <input id="f-year" type="number" inputmode="numeric" placeholder="${_kstYear()}" min="1900" max="${_kstYear() + 5}" required>
+          <input id="f-month" type="number" inputmode="numeric" placeholder="3" min="1" max="12" required>
+        </div>`,
+      fields: ['year', 'month'],
+      speaker: 'halmae',
+      cta: '이사할 날을 제 사주에 맞춰 안할매에게 물어보기',
+      note: '손(損)은 날을 따라 돌아다니며 훼방을 놓는다는 귀신입니다. 음력 끝자리가 9와 0인 날에는 그 손이 하늘로 올라가 자리를 비운다고 보아 손 없는 날이라 부릅니다. 그래서 음력 9·10·19·20·29·30일이며, 양력으로 옮기면 달마다 날짜가 달라집니다. 이사와 개업에 흔히 쓰지만, 정작 제 사주와 맞는 날인지는 따로 봅니다.',
     },
   }[kind];
   if (!P) return null;
@@ -6390,8 +6488,8 @@ function handleCalcPage(kind) {
     <div id="out" class="hide"></div>
     <h2>알아 두면 좋은 것</h2>
     <p class="muted">${P.note}</p>`,
-    // 삼재는 답이 제 주소를 갖는다(/calc/samjae/1990). 나머지 둘은 폼 안에서 끝난다.
-    script: kind === 'samjae' ? _CALC_GO_JS('/calc/samjae/') : _CALC_JS(kind, P.fields),
+    // 삼재는 답이 제 주소를 갖는다(/calc/samjae/1990). 나머지는 폼 안에서 끝난다.
+    script: kind === 'samjae' ? _CALC_GO_JS('/calc/samjae/') : _CALC_JS(kind, P.fields, P.cta),
   });
 }
 
@@ -6485,7 +6583,67 @@ async function handleCalcApi(request, kind) {
   const b = await request.json().catch(() => ({}));
   const year = parseInt(b.year, 10);
   const bad = (m) => cors(JSON.stringify({ error: { message: m } }), 400);
+
+  // ── 손 없는 날 ──
+  //
+  // ⚠️ 아래 공통 검사보다 **먼저** 온다. 나머지는 전부 "태어난 해" 라 올해까지만
+  //    받지만, 이쪽은 앞으로 이사할 달을 묻는 것이라 다음 해도 받아야 한다.
+  if (kind === 'sonnal') {
+    const month = parseInt(b.month, 10);
+    const now = _kstYear();
+    if (!(year >= 1900 && year <= now + 5)) return bad('연도를 다시 확인해 주세요.');
+    if (!(month >= 1 && month <= 12)) return bad('달을 다시 확인해 주세요.');
+    const days = _sonNalsOf(year, month);
+    if (!days.length) {
+      return cors(JSON.stringify({ ok: true, cards: [{
+        label: `${year}년 ${month}월`,
+        text: '이 달에는 손 없는 날이 없습니다. 앞뒤 달을 보시면 있습니다.',
+      }] }), 200);
+    }
+    const cards = days.map((d) => ({
+      label: `${d.month}월 ${d.day}일 ${d.weekday}요일`,
+      text: `음력 ${d.lunarMonth}월 ${d.lunarDay}일입니다.`,
+    }));
+    cards.unshift({
+      label: `${year}년 ${month}월에는 ${days.length}일 있습니다`,
+      text: '음력 끝자리가 9와 0인 날입니다. 이사와 개업에 흔히 씁니다.',
+    });
+    return cors(JSON.stringify({ ok: true, cards }), 200);
+  }
+
   if (!(year >= 1900 && year <= _kstYear())) return bad('태어난 해를 다시 확인해 주세요.');
+
+  // ── 만세력 ──
+  // 네 기둥과 오행 분포까지만 준다. 읽어 주는 것은 앱이 한다.
+  if (kind === 'manseryeok') {
+    const month = parseInt(b.month, 10), day = parseInt(b.day, 10);
+    if (!(month >= 1 && month <= 12) || !(day >= 1 && day <= 31)) {
+      return bad('생년월일을 다시 확인해 주세요.');
+    }
+    const hour = String(b.hour || '').slice(0, 12);
+    const saju = computeSaju(year, month, day, hour);
+    if (!saju) return bad('계산하지 못했습니다.');
+
+    const 기둥 = [['년주', saju.yp, '자란 집안과 뿌리'], ['월주', saju.mp, '성향과 일하는 결'],
+                  ['일주', saju.dp, '나 자신과 배우자 자리'], ['시주', saju.hp, '앞날과 자식 자리']];
+    const cards = 기둥
+      .filter(([, v]) => v)
+      .map(([name, v, mean]) => ({ label: `${name} ${v}`, text: mean }));
+    if (!hour) {
+      cards.push({ label: '시주는 비어 있습니다',
+        text: '태어난 시를 모르시면 세 기둥으로 봅니다. 앞날을 보는 자리 하나가 빠진 셈입니다.' });
+    }
+    const pct = _ohaengPct(saju.elem || {});
+    cards.push({
+      label: '오행',
+      text: _OHAENG_ORDER.map((k) => `${k} ${pct[k]}%`).join('   '),
+    });
+    cards.push({
+      label: `가장 강한 기운은 ${_strongElem(saju.elem || {})}`,
+      text: `부족한 것은 ${_needElem(saju.elem || {})}입니다. 어느 하나로 치우치면 그 기운을 채우는 쪽이 편합니다.`,
+    });
+    return cors(JSON.stringify({ ok: true, cards }), 200);
+  }
 
   if (kind === 'samjae') {
     // ⚠️ 6월 1일로 세운다. 명리의 해는 1월 1일이 아니라 입춘(2월 4일 무렵)에 바뀌므로,
@@ -6546,6 +6704,80 @@ async function handleCalcApi(request, kind) {
  *
  * 태어난 해로 내 띠를 찾는 것은 (해 - 4) % 12 라 계산이 필요 없다. 앱 안에서 끝낸다.
  */
+/**
+ * 띠 궁합표 — 열두 띠를 전부 맞대어 한 장으로 보여준다.
+ *
+ * 왜 표 한 장인가:
+ *   커뮤니티에 내놓을 도구다. 사람들이 궁합 이야기를 할 때 필요한 것은 "내 것 하나"가
+ *   아니라 **다 같이 보고 가리킬 표**다. 폼에 넣어야 하나씩 나오는 화면은 스크린샷으로
+ *   퍼지지 않는다. 표는 한 장으로 찍혀 돌아다닌다.
+ *
+ * ⚠️ AI 를 부르지 않는다. 지지 관계는 표 계산이라 사람이 몰려도 요금이 들지 않는다.
+ * ⚠️ 이 표는 **띠(지지)끼리만** 본 것이다. 실제 궁합은 네 기둥을 다 봐야 하므로
+ *    "이것이 전부는 아니다" 를 페이지에 적어 둔다. 안 적으면 띠만 보고 사람을
+ *    가르게 되고, 그건 이 서비스가 하지 않기로 한 일이다.
+ */
+function handleGunghapPage() {
+  const 뜻 = {
+    삼합: ['삼합', 'good', '가장 잘 맞는 짝입니다'],
+    육합: ['육합', 'good', '서로 끌어당기는 짝입니다'],
+    같음: ['같은 띠', 'same', '닮아서 편하지만 부딪히면 똑같습니다'],
+    충: ['충', 'bad', '부딪히기 쉬운 자리입니다'],
+    형: ['형', 'bad', '가까울수록 서로 긁는 자리입니다'],
+    무관: ['', 'none', ''],
+  };
+  // 한 칸에 여럿이 겹치면 센 것 하나만 적는다. 세 글자가 겹쳐 들어가면 표가 안 읽힌다.
+  const 순서 = ['충', '형', '삼합', '육합', '같음', '무관'];
+  const 고르기 = (kinds) => 순서.find((k) => kinds.includes(k)) || '무관';
+
+  const rows = JJ.map((a) => `
+    <tr><th scope="row">${TTI_NAME[a]}</th>${JJ.map((b) => {
+      const [label, cls] = 뜻[고르기(_jijiKinds(a, b))];
+      return `<td class="${cls}">${label}</td>`;
+    }).join('')}</tr>`).join('');
+
+  return _freePage({
+    title: '띠 궁합표 · 열두 띠 궁합 한눈에 보기 | 오늘운빨',
+    desc: '쥐 소 호랑이 토끼 용 뱀 말 양 원숭이 닭 개 돼지, 열두 띠의 궁합을 표 한 장으로 봅니다. 삼합 육합 충 형을 모두 계산했습니다. 가입 없이 무료입니다.',
+    path: '/gunghap',
+    h1: '띠 궁합표',
+    lead: '열두 띠를 전부 맞대어 봤습니다. 왼쪽에서 내 띠를 찾고, 위에서 상대 띠를 찾으면 됩니다.',
+    speaker: 'nangja',
+    body: `
+    <div class="scroll">
+      <table class="gh">
+        <thead><tr><th></th>${JJ.map((b) => `<th scope="col">${TTI_NAME[b]}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <h2>표 읽는 법</h2>
+    ${Object.values(뜻).filter((v) => v[0]).map(([label, cls, mean]) =>
+      `<div class="card"><b><span class="chip ${cls}">${label}</span></b><p>${mean}</p></div>`).join('')}
+    <p class="muted">빈 칸은 특별한 관계가 없다는 뜻입니다. 나쁘다는 말이 아니라 서로 끌지도 밀지도 않는 사이입니다.</p>
+    <a class="cta" href="/app?ref=gunghap">두 사람 생년월일로 안낭자에게 제대로 물어보기</a>
+    ${BETA_NOTE}
+    <h2>알아 두면 좋은 것</h2>
+    <p class="muted">삼합(三合)은 셋이 모여 한 기운을 이루는 짝이고, 육합(六合)은 둘이 마주 보며 맞물리는 짝입니다. 충(沖)은 정면으로 부딪히는 자리, 형(刑)은 가까이 있을수록 서로를 긁는 자리입니다.<br><br>
+    다만 이 표는 <b>띠끼리만</b> 본 것입니다. 띠는 태어난 해 하나뿐이고 사주에는 해·달·날·시 네 기둥이 있습니다. 충이 있어도 다른 자리에서 풀리고, 삼합이어도 다른 자리에서 부딪힙니다. 띠만 보고 사람을 가르지 마세요.</p>`,
+    extraCss: `
+      .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -20px;padding:0 20px}
+      table.gh{border-collapse:collapse;font-size:0.72rem;white-space:nowrap;margin-top:8px}
+      table.gh th,table.gh td{border:1px solid rgba(201,169,110,0.14);padding:7px 6px;text-align:center}
+      table.gh thead th{color:#c9a96e;font-weight:600;background:rgba(201,169,110,0.07)}
+      ${/* ⚠️ 첫 칸을 붙여 두지 않으면 오른쪽으로 밀었을 때 지금 보는 줄이 어느 띠인지
+            알 수 없다. 열두 칸짜리 표에서는 이게 없으면 표를 못 읽는다. */''}
+      table.gh th[scope=row]{position:sticky;left:0;background:#16161a;color:#e8e4dc;font-weight:600}
+      td.good{color:#e8c98a;background:rgba(201,169,110,0.10)}
+      td.bad{color:#e08b7a;background:rgba(224,139,122,0.08)}
+      td.same{color:#9a948a}
+      td.none{color:#4a463f}
+      .chip{display:inline-block;padding:1px 9px;border-radius:99px;font-size:0.82rem}
+      .chip.good{color:#e8c98a;background:rgba(201,169,110,0.16)}
+      .chip.bad{color:#e08b7a;background:rgba(224,139,122,0.14)}
+      .chip.same{color:#9a948a;background:rgba(154,148,138,0.14)}`,
+  });
+}
+
 function handleTtiPage() {
   const today = _kstToday();
   const r = computeTtiRanking(today);

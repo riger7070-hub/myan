@@ -159,15 +159,22 @@ test('무료 페이지도 있는 사람을 세운다', () => {
   // 화면에 빈 칸만 남는다.
   const at = WORKER.indexOf('function handleCalcPage(');
   assert.notEqual(at, -1, 'handleCalcPage 가 없다');
-  const body = WORKER.slice(at, at + 6000);
+  const body = WORKER.slice(at, at + 9000);
   const used = [...body.matchAll(/^\s+speaker: '([a-z]+)',$/gm)].map((m) => m[1]);
-  assert.ok(used.length >= 3, `계산기 ${used.length}개에만 화자가 있다 — 셋 다 있어야 한다`);
+  assert.ok(used.length >= 5, `계산기 ${used.length}개에만 화자가 있다`);
   for (const id of used) assert.ok(W_SPK[id], `무료 페이지가 없는 화자 '${id}' 를 세운다`);
 
-  // 삼재·신살·본명궁은 액막이와 방위라 안할매 몫이다. 여기가 안도령으로 돌아가면
-  // 캐릭터를 나눈 뜻이 없어진다.
-  assert.deepEqual([...new Set(used)], ['halmae'],
-    `계산기 화자가 ${[...new Set(used)].join(', ')} 다 — 셋 다 안할매여야 한다`);
+  // ⚠️ 계산기마다 맡은 사람이 다르다. 예전에는 셋뿐이라 "전부 안할매" 로 못박아
+  //    뒀는데, 만세력이 생기면서 그 규칙이 깨졌다 — 만세력은 액막이가 아니라 사주
+  //    그 자체라 안도령 몫이다. 이제 페이지별로 본다.
+  const 배정 = { samjae: 'halmae', sinsal: 'halmae', bonmyeong: 'halmae',
+                 sonnal: 'halmae', manseryeok: 'doryeong' };
+  for (const [kind, 누구] of Object.entries(배정)) {
+    const i = body.indexOf(`\n    ${kind}: {`);
+    assert.notEqual(i, -1, `${kind} 계산기가 없다`);
+    const spk = /speaker: '([a-z]+)'/.exec(body.slice(i, i + 2500))?.[1];
+    assert.equal(spk, 누구, `${kind} 를 ${spk} 가 맡고 있다 — ${누구} 여야 한다`);
+  }
 
   // 그리고 화면에 실제로 그려지는지. 스펙에만 적고 템플릿에서 안 쓰면 조용히 사라진다.
   assert.match(WORKER, /\$\{speaker && SPEAKERS\[speaker\]/,
