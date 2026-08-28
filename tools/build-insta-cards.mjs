@@ -228,6 +228,51 @@ const CARDS = [
       body:has(.who) .lead, body:has(.who) .li,
       body:has(.who) .note { margin-right: -280px; }`, 사람('annangja')),
   },
+  {
+    // 손 없는 날.
+    //
+    // ⚠️ 그 달의 날짜를 박지 않는다. 박으면 다음 달에 못 쓰는 한 장이 되고, 블로그에
+    //    붙여 둔 그림이 시간이 지나면 틀린 말을 하게 된다. 규칙만 담는다.
+    name: 'sonnal',
+    html: shell(`
+      <div class="eyebrow">안할매가 짚어 드립니다</div>
+      <div class="title gold">손 없는 날은<br>음력으로 셉니다</div>
+      <div class="lead">양력 9일과 10일이 아닙니다.<br>음력 끝자리가 9와 0인 날입니다.</div>
+      <div class="days">음력 9 10 19 20 29 30</div>
+      <div class="note">손이라는 귀신이 방위를 이틀씩 돌다가<br>
+        이 이틀에는 하늘로 올라가 자리를 비운다고 보았습니다.<br><br>
+        음력을 양력으로 옮기면 달마다 날짜가 흩어지고,<br>
+        30일이 없는 달에는 다섯 날만 나옵니다.</div>`, `
+      .title { font-size: 74px; font-weight: 600; line-height: 1.3; margin-top: 24px; word-break: keep-all; }
+      .lead { margin-top: 42px; font-size: 34px; line-height: 1.62;
+              color: rgba(233,228,218,0.74); word-break: keep-all; }
+      .days { margin-top: 44px; font-size: 46px; font-weight: 600;
+              color: #e8c98a; letter-spacing: 3px; }
+      .note { margin-top: 46px; font-size: 28px; line-height: 1.72; color: rgba(233,228,218,0.5); }
+      body:has(.who) .lead, body:has(.who) .days,
+      body:has(.who) .note { margin-right: -250px; }`, 사람('anhalmae')),
+  },
+  {
+    // 만세력. 사람들이 가장 자주 틀리는 자리를 짚는다.
+    name: 'manseryeok',
+    html: shell(`
+      <div class="eyebrow">안도령이 뽑아 드립니다</div>
+      <div class="title gold">사주 네 글자,<br>뽑아는 보셨나요</div>
+      <div class="li"><i>年</i><span>자란 집안과 뿌리</span></div>
+      <div class="li"><i>月</i><span>성향과 일하는 결</span></div>
+      <div class="li"><i>日</i><span>나 자신과 배우자 자리</span></div>
+      <div class="li"><i>時</i><span>앞날과 자식 자리</span></div>
+      <div class="note">기둥이 넷이고 글자가 둘씩이라 여덟 글자입니다.<br>
+        팔자 사납다 할 때의 그 팔자입니다.<br><br>
+        해가 바뀌는 자리는 1월 1일이 아니라 입춘입니다.<br>
+        2월 초에 나셨다면 사주로는 아직 작년생일 수 있습니다.</div>`, `
+      .title { font-size: 70px; font-weight: 600; line-height: 1.32; margin-top: 24px; word-break: keep-all; }
+      .li { display: flex; gap: 24px; align-items: baseline; margin-top: 24px; font-size: 36px;
+            line-height: 1.5; color: rgba(233,228,218,0.82); word-break: keep-all; }
+      .li i { color: #c9a96e; font-style: normal; font-size: 32px; min-width: 40px; }
+      .note { margin-top: 46px; font-size: 28px; line-height: 1.72; color: rgba(233,228,218,0.5); }
+      body:has(.who) .li, body:has(.who) .note { margin-right: -250px; }`, 사람('andoryeong')),
+  },
 ];
 
 // ── 오늘의 띠 순위 ──
