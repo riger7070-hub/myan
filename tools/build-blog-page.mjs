@@ -10,7 +10,7 @@
 // ⚠️ 사진은 data 주소로 심는다. 아티팩트는 바깥 주소를 막으므로 파일 경로로 걸면
 //    빈 칸만 나온다. 심어 두면 오른쪽 눌러 복사도 된다.
 
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -102,17 +102,92 @@ function 조각내기(text, post) {
   return { 제목, 태그, 조각: out, 태그수: (태그.match(/#/g) || []).length };
 }
 
-const 글들 = POSTS.map((p) => ({
-  ...p,
-  ...조각내기(readFileSync(join(ROOT, 'blog', p.file), 'utf8'), p),
-  원문: readFileSync(join(ROOT, 'blog', p.file), 'utf8').replace(/\r\n/g, '\n').trimEnd(),
-  이름: p.file.replace('.txt', ''),
-  카드: 'data:image/png;base64,' + b64(p.card),
-  화면: 'data:image/png;base64,' + b64(p.shot),
-}));
+/**
+ * 조각을 **사진 자리에서 끊어** 토막으로 묶는다.
+ *
+ * ⚠️ 왜 끊는가: 네이버 편집기는 붙여 넣은 글에 사진을 안 실어 준다. 사진은 손으로
+ *    올려야 한다. 그런데 글을 통째로 붙이면 "사진 넣는 자리 하나" 라는 글자가
+ *    본문에 그대로 박히고, 그걸 지운 다음 그 자리에 사진을 올려야 한다.
+ *    글 한 편에 두 번, 네 편이면 여덟 번이다.
+ *
+ *    그래서 사진 자리에서 끊어 둔다. 토막을 붙이고, 사진을 올리고, 다음 토막을
+ *    붙인다. **지울 글자가 없다.**
+ *
+ * 태그는 마지막 토막에 붙인다. 따로 떼면 한 번 더 복사해야 한다.
+ */
+function 마디나누기(조각, 태그) {
+  const 마디 = [[]];
+  for (const c of 조각) {
+    if (c.종류 === '사진') { 마디.push([]); continue; }
+    마디[마디.length - 1].push(c);
+  }
+  마디[마디.length - 1].push({ 종류: '글', 값: 태그 });
+  return 마디;
+}
+
+/** 토막을 글자로만 편다. 클립보드가 막혔을 때 쓰는 뒷길이다. */
+const 마디글 = (조각들) => 조각들.map((c) => c.종류 === '표'
+  ? c.행.map((r) => '  ' + r.join('   ')).join('\n')
+  : c.값).join('\n\n');
+
+const 글들 = POSTS.map((p) => {
+  const 쪼갠것 = 조각내기(readFileSync(join(ROOT, 'blog', p.file), 'utf8'), p);
+  return {
+    ...p,
+    ...쪼갠것,
+    마디: 마디나누기(쪼갠것.조각, 쪼갠것.태그),
+    이름: p.file.replace('.txt', ''),
+    카드: 'data:image/png;base64,' + b64(p.card),
+    화면: 'data:image/png;base64,' + b64(p.shot),
+  };
+});
+
+/**
+ * 사진 폴더 이름을 **디스크에서 읽어 온다.**
+ *
+ * ⚠️ 여기에 폴더 이름을 다시 적지 않는다. build-blog-photos.mjs 가 만드는 이름에는
+ *    올린 글번호가 붙는데(1-손없는날-224392909113), 그 번호는 글을 올려야 생긴다.
+ *    두 곳에 적어 두면 한쪽만 고치고 넘어가 안내가 틀린 폴더를 가리키게 된다.
+ *    실제로 있는 폴더를 찾아 그 이름을 쓴다.
+ */
+function 사진폴더(순서, 이름) {
+  const 밑 = join(ROOT, 'blog', '사진');
+  const 앞 = `${순서}-${이름}`;
+  if (existsSync(밑)) {
+    const 찾음 = readdirSync(밑).find((d) => d === 앞 || d.startsWith(앞 + '-'));
+    if (찾음) return 찾음;
+  }
+  return 앞;                                  // 아직 안 만들었으면 짐작한 이름
+}
 
 // 표마다 제 번호를 준다. 아래 스크립트가 이 번호로 클립보드에 실을 표를 고른다.
 const 표들 = [];
+// 토막마다 글자만 편 것. 클립보드가 막혔을 때 쓴다.
+const 평문들 = [];
+
+/** 토막 하나를 숨은 덩어리(복사되는 것)로 그린다. */
+const 깨끗하게 = (조각들, 이름) => 조각들.map((c) => c.종류 === '표'
+  ? `<table border="1" style="border-collapse:collapse">${c.행.map((r) =>
+      `<tr>${r.map((cell) => `<td style="padding:6px 10px">${esc(cell)}</td>`).join('')}</tr>`
+    ).join('')}</table><p></p>`
+  : esc(c.값).split('\n\n').map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('')
+).join('');
+
+/** 토막 하나를 눈에 보이게 그린다. */
+const 보이게 = (조각들) => 조각들.map((c) => c.종류 === '표'
+  ? `<figure class="tbl">
+       <table>
+         ${c.행.map((r) => `<tr>${r.map((cell, k) =>
+           k === 0 ? `<th scope="row">${esc(cell)}</th>` : `<td>${esc(cell)}</td>`
+         ).join('')}</tr>`).join('\n         ')}
+       </table>
+       <button class="copy small" type="button" data-table="${표들.push(c.행) - 1}">
+         <span class="copy-label">이 표만 복사</span>
+       </button>
+       <figcaption>이 표는 위 토막 복사에 이미 들어 있습니다.
+         표 하나만 따로 쓰실 때 누르세요.</figcaption>
+     </figure>`
+  : `<pre class="text">${esc(c.값)}</pre>`).join('\n      ');
 
 const 본문HTML = 글들.map((g, i) => `
   <article class="post" id="post-${i + 1}">
@@ -123,60 +198,54 @@ const 본문HTML = 글들.map((g, i) => `
         <div><dt>보내는 곳</dt><dd><code>myan.riger7070.workers.dev${esc(g.보낼곳)}</code></dd></div>
         <div><dt>태그</dt><dd>${g.태그수}개, 글 끝에 붙어 있음</dd></div>
       </dl>
-      <button class="copy" type="button" data-post="${i}" data-clean="clean-${i}">
-        <span class="copy-label">본문 전체 복사 (표와 사진까지)</span>
-      </button>
+      <p class="how">사진은 편집기가 안 받아 주니 <b>손으로 올리셔야 합니다.</b>
+        그래서 사진 자리에서 글을 끊어 뒀어요. 아래 차례대로
+        <b>토막 복사 → 붙여넣기 → 사진 올리기</b>만 되풀이하시면 됩니다.
+        지우실 글자는 없습니다.</p>
+      <p class="how fine">사진은 <code>blog/사진/${esc(사진폴더(i + 1, g.이름))}/</code>
+        폴더에 순서대로 들어 있습니다.</p>
     </header>
 
     ${/* ⚠️ 복사되는 것은 아래 화면이 아니라 이 숨은 덩어리다.
           화면에 보이는 쪽에는 "여기에 이 사진" 같은 안내가 붙어 있어서, 그대로
-          복사하면 그 안내까지 블로그에 들어간다. 그래서 글·표·사진만 담은
-          깨끗한 것을 따로 만들어 두고 그것을 복사한다.
+          복사하면 그 안내까지 블로그에 들어간다. 그래서 글과 표만 담은
+          깨끗한 것을 토막마다 따로 만들어 두고 그것을 복사한다.
           display:none 으로 숨기면 안 된다 — 안 그려진 것은 골라 담을 수 없다.
           화면 밖으로 밀어 둔다. */''}
-    <div class="clean" id="clean-${i}" aria-hidden="true">
-      ${g.조각.map((c) => c.종류 === '글'
-        ? esc(c.값).split('\n\n').map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('')
-        : c.종류 === '표'
-        ? `<table border="1" style="border-collapse:collapse">${c.행.map((r) =>
-            `<tr>${r.map((cell) => `<td style="padding:6px 10px">${esc(cell)}</td>`).join('')}</tr>`
-          ).join('')}</table><p></p>`
-        /* ⚠️ 사진 자료를 여기에 또 적지 않는다. 같은 base64 를 두 벌 넣으면 페이지가
-              두 배가 된다(3.2MB 가 5.7MB 로 늘었다). 보이는 쪽 사진을 가리키기만 하고,
-              화면이 뜬 뒤에 스크립트가 그 주소를 옮겨 담는다. */
-        : `<p><img data-from="${g.이름}-${c.첫째 ? 'card' : 'shot'}" alt="${esc(c.첫째 ? g.제목 : g.둘째)}"></p>`
-      ).join('')}
-      <p>${esc(g.태그)}</p>
-    </div>
+    ${g.마디.map((조각들, j) => `<div class="clean" id="clean-${i}-${j}" aria-hidden="true">${
+      깨끗하게(조각들, g.이름)}</div>`).join('\n    ')}
 
     <div class="body">
-      ${g.조각.map((c) => c.종류 === '글'
-        ? `<pre class="text">${esc(c.값)}</pre>`
-        : c.종류 === '표'
-        ? `<figure class="tbl">
-             <table>
-               ${c.행.map((r) => `<tr>${r.map((cell, i) =>
-                 i === 0 ? `<th scope="row">${esc(cell)}</th>` : `<td>${esc(cell)}</td>`
-               ).join('')}</tr>`).join('\n               ')}
-             </table>
-             <button class="copy small" type="button" data-table="${표들.push(c.행) - 1}">
-               <span class="copy-label">이 표만 복사</span>
-             </button>
-             <figcaption>위 <b>본문 전체 복사</b>에 이 표도 함께 들어갑니다.
-               표 하나만 따로 쓰실 때 이 단추를 누르세요.</figcaption>
-           </figure>`
-        : c.첫째
+      ${g.마디.map((조각들, j) => {
+        const 사진 = j > 0 ? g.조각.filter((c) => c.종류 === '사진')[j - 1] : null;
+        const 사진칸 = !사진 ? '' : (사진.첫째
           ? `<figure class="shot">
                <img id="${g.이름}-card" src="${g.카드}" alt="${esc(g.제목)} 카드">
-               <figcaption><b>여기에 이 사진이 들어갑니다.</b> 본문 전체 복사에 함께 실려요. 따로 쓰실 땐 오른쪽 눌러 이미지 복사하시면 됩니다.</figcaption>
+               <figcaption><b>여기서 사진 하나를 올리세요.</b>
+                 카드 그림입니다. 편집기의 사진 단추로 올리시면 돼요.</figcaption>
              </figure>`
           : `<figure class="shot real">
                <img id="${g.이름}-shot" src="${g.화면}" alt="${esc(g.둘째)}">
-               <figcaption><b>${esc(g.둘째)}</b>입니다. 이것도 함께 실려요.
+               <figcaption><b>여기서 사진 둘을 올리세요.</b>
+                 ${esc(g.둘째)}입니다.
                  카드만 두 장이면 광고로 보입니다. 진짜 돌아가는 화면이 한 장 있어야
                  쓸 수 있는 것으로 읽힙니다.</figcaption>
-             </figure>`).join('\n      ')}
-      <pre class="text tags">${esc(g.태그)}</pre>
+             </figure>`);
+        const 마지막 = j === g.마디.length - 1;
+        return `${사진칸}
+      <section class="seg">
+        <div class="seg-head">
+          <span class="seg-no">${j + 1}</span>
+          <span class="seg-name">${마지막 ? '마지막 토막 (태그까지)' : `${j + 1}번째 토막`}</span>
+          <button class="copy" type="button"
+                  data-clean="clean-${i}-${j}"
+                  data-plain="${평문들.push(마디글(조각들)) - 1}">
+            <span class="copy-label">이 토막 복사</span>
+          </button>
+        </div>
+        ${보이게(조각들)}
+      </section>`;
+      }).join('\n      ')}
     </div>
   </article>`).join('\n');
 
@@ -359,15 +428,55 @@ const html = `<title>블로그 붙여넣기 대장</title>
   .rules li { margin-bottom: 9px; }
   .rules b { color: var(--ink); font-weight: 500; }
 
+  /* ── 토막 ──
+     사진 자리에서 끊은 덩어리. 어디까지가 한 번에 복사되는 것인지 눈으로 보여야
+     한다. 왼쪽에 금색 띠를 세워 "여기부터 여기까지" 를 긋는다. */
+  .seg {
+    border-left: 3px solid var(--gold);
+    padding-left: 16px;
+    margin: 18px 0 22px;
+  }
+  .seg-head {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .seg-no {
+    display: grid; place-items: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--gold); color: #fff;
+    font-size: 13px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .seg-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .seg-head .copy { margin: 0 0 0 auto; }
+  .seg .text:first-of-type { margin-top: 0; }
+
+  .how {
+    margin: 12px 0 0; font-size: 14px; line-height: 1.7;
+    color: var(--muted); max-width: 62ch;
+  }
+  .how b { color: var(--ink); font-weight: 600; }
+  .how.fine { margin-top: 6px; font-size: 13px; }
+  .how code {
+    background: rgba(0,0,0,0.05); padding: 1px 5px;
+    border-radius: 4px; font-size: 12px;
+  }
+
+  @media (max-width: 620px) {
+    .seg { padding-left: 12px; }
+    .seg-head .copy { margin-left: 0; width: 100%; }
+  }
+
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="wrap">
   <header class="top">
     <div class="kicker">네이버 블로그</div>
-    <h1>글과 사진을 한자리에 두었습니다</h1>
-    <p class="lede">단추 하나면 글과 표와 사진이 <b>한꺼번에</b> 복사됩니다.
-      편집기에 그대로 붙여 넣으시면 돼요.</p>
+    <h1>붙여넣기만 하시면 됩니다</h1>
+    <p class="lede">사진 자리에서 글을 <b>토막으로 끊어</b> 뒀습니다.
+      토막을 복사해 붙이고, 사진을 올리고, 다음 토막을 붙이시면 돼요.
+      지우실 글자는 없습니다. 표는 토막에 같이 실려 갑니다.</p>
     <div class="legend">
       <div><i>◈</i><span><b>소제목</b> 문단이 바뀌는 자리</span></div>
       <div><i>※</i><span><b>주의</b> 오해하기 쉬운 대목</span></div>
@@ -404,15 +513,8 @@ ${본문HTML}
 </div>
 
 <script>
-  const 원문 = ${JSON.stringify(글들.map((g) => g.원문))};
+  const 평문들 = ${JSON.stringify(평문들)};
   const 표들 = ${JSON.stringify(표들)};
-
-  // 숨은 덩어리의 사진에 보이는 쪽 주소를 옮겨 담는다.
-  // 같은 자료를 두 벌 적지 않으려고 이렇게 한다(위 ⚠️ 참고).
-  for (const img of document.querySelectorAll('.clean img[data-from]')) {
-    const 원본 = document.getElementById(img.dataset.from);
-    if (원본) img.src = 원본.src;
-  }
 
   /** 글만 싣는다. 막아 둔 곳을 위해 옛 방법도 남겨 둔다. */
   async function 글복사(t) {
@@ -486,7 +588,7 @@ ${본문HTML}
       const 표번호 = btn.dataset.table;
       const ok = 표번호 !== undefined
         ? await 표복사(표들[+표번호])
-        : 통째로복사(document.getElementById(btn.dataset.clean), 원문[+btn.dataset.post]);
+        : 통째로복사(document.getElementById(btn.dataset.clean), 평문들[+btn.dataset.plain]);
       const label = btn.querySelector('.copy-label');
       label.textContent = ok ? '복사했습니다' : '복사가 막혔어요. 직접 긁어 주세요';
       btn.classList.toggle('done', ok);
