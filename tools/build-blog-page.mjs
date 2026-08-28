@@ -106,6 +106,7 @@ const 글들 = POSTS.map((p) => ({
   ...p,
   ...조각내기(readFileSync(join(ROOT, 'blog', p.file), 'utf8'), p),
   원문: readFileSync(join(ROOT, 'blog', p.file), 'utf8').replace(/\r\n/g, '\n').trimEnd(),
+  이름: p.file.replace('.txt', ''),
   카드: 'data:image/png;base64,' + b64(p.card),
   화면: 'data:image/png;base64,' + b64(p.shot),
 }));
@@ -122,10 +123,31 @@ const 본문HTML = 글들.map((g, i) => `
         <div><dt>보내는 곳</dt><dd><code>myan.riger7070.workers.dev${esc(g.보낼곳)}</code></dd></div>
         <div><dt>태그</dt><dd>${g.태그수}개, 글 끝에 붙어 있음</dd></div>
       </dl>
-      <button class="copy" type="button" data-post="${i}">
-        <span class="copy-label">본문 전체 복사</span>
+      <button class="copy" type="button" data-post="${i}" data-clean="clean-${i}">
+        <span class="copy-label">본문 전체 복사 (표와 사진까지)</span>
       </button>
     </header>
+
+    ${/* ⚠️ 복사되는 것은 아래 화면이 아니라 이 숨은 덩어리다.
+          화면에 보이는 쪽에는 "여기에 이 사진" 같은 안내가 붙어 있어서, 그대로
+          복사하면 그 안내까지 블로그에 들어간다. 그래서 글·표·사진만 담은
+          깨끗한 것을 따로 만들어 두고 그것을 복사한다.
+          display:none 으로 숨기면 안 된다 — 안 그려진 것은 골라 담을 수 없다.
+          화면 밖으로 밀어 둔다. */''}
+    <div class="clean" id="clean-${i}" aria-hidden="true">
+      ${g.조각.map((c) => c.종류 === '글'
+        ? esc(c.값).split('\n\n').map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('')
+        : c.종류 === '표'
+        ? `<table border="1" style="border-collapse:collapse">${c.행.map((r) =>
+            `<tr>${r.map((cell) => `<td style="padding:6px 10px">${esc(cell)}</td>`).join('')}</tr>`
+          ).join('')}</table><p></p>`
+        /* ⚠️ 사진 자료를 여기에 또 적지 않는다. 같은 base64 를 두 벌 넣으면 페이지가
+              두 배가 된다(3.2MB 가 5.7MB 로 늘었다). 보이는 쪽 사진을 가리키기만 하고,
+              화면이 뜬 뒤에 스크립트가 그 주소를 옮겨 담는다. */
+        : `<p><img data-from="${g.이름}-${c.첫째 ? 'card' : 'shot'}" alt="${esc(c.첫째 ? g.제목 : g.둘째)}"></p>`
+      ).join('')}
+      <p>${esc(g.태그)}</p>
+    </div>
 
     <div class="body">
       ${g.조각.map((c) => c.종류 === '글'
@@ -140,18 +162,17 @@ const 본문HTML = 글들.map((g, i) => `
              <button class="copy small" type="button" data-table="${표들.push(c.행) - 1}">
                <span class="copy-label">이 표만 복사</span>
              </button>
-             <figcaption>본문을 통째로 복사하면 이 표는 <b>띄어쓰기로 맞춘 글</b>로 들어갑니다.
-               네이버 편집기는 글꼴 폭이 달라서 줄이 어긋나요.
-               <b>표는 이 단추로 따로 복사</b>하시면 진짜 표로 붙습니다.</figcaption>
+             <figcaption>위 <b>본문 전체 복사</b>에 이 표도 함께 들어갑니다.
+               표 하나만 따로 쓰실 때 이 단추를 누르세요.</figcaption>
            </figure>`
         : c.첫째
           ? `<figure class="shot">
-               <img src="${g.카드}" alt="${esc(g.제목)} 카드">
-               <figcaption><b>여기에 이 사진.</b> 오른쪽 눌러 이미지 복사하신 뒤 편집기에 붙이시면 됩니다.</figcaption>
+               <img id="${g.이름}-card" src="${g.카드}" alt="${esc(g.제목)} 카드">
+               <figcaption><b>여기에 이 사진이 들어갑니다.</b> 본문 전체 복사에 함께 실려요. 따로 쓰실 땐 오른쪽 눌러 이미지 복사하시면 됩니다.</figcaption>
              </figure>`
           : `<figure class="shot real">
-               <img src="${g.화면}" alt="${esc(g.둘째)}">
-               <figcaption><b>${esc(g.둘째)}</b>입니다. 이것도 오른쪽 눌러 가져가시면 됩니다.
+               <img id="${g.이름}-shot" src="${g.화면}" alt="${esc(g.둘째)}">
+               <figcaption><b>${esc(g.둘째)}</b>입니다. 이것도 함께 실려요.
                  카드만 두 장이면 광고로 보입니다. 진짜 돌아가는 화면이 한 장 있어야
                  쓸 수 있는 것으로 읽힙니다.</figcaption>
              </figure>`).join('\n      ')}
@@ -322,6 +343,15 @@ const html = `<title>블로그 붙여넣기 대장</title>
   .tbl figcaption b { color: var(--ink); font-weight: 500; }
   .copy.small { margin-top: 12px; padding: 7px 15px; font-size: .8rem; }
 
+  /* 복사만 되고 보이지는 않는 덩어리.
+     ⚠️ display:none 이나 visibility:hidden 이면 골라 담을 수 없다. 그려는 두되
+        화면 밖으로 밀어 둔다. 폭을 정해 두어야 표가 한 줄로 늘어지지 않는다. */
+  .clean {
+    position: fixed; left: -200vw; top: 0; width: 700px;
+    pointer-events: none; user-select: text;
+  }
+  .clean img { max-width: 100%; height: auto; }
+
   /* ── 맺음 ── */
   .rules { margin-top: 72px; padding-top: 30px; border-top: 1px solid var(--rule); }
   .rules h3 { font-family: 'Noto Serif KR', serif; font-size: 1.05rem; font-weight: 600; margin: 0 0 14px; }
@@ -336,8 +366,8 @@ const html = `<title>블로그 붙여넣기 대장</title>
   <header class="top">
     <div class="kicker">네이버 블로그</div>
     <h1>글과 사진을 한자리에 두었습니다</h1>
-    <p class="lede">테두리 안이 통째로 붙여 넣을 것입니다. 사진은 들어갈 자리에 그대로 앉혀 두었으니,
-      오른쪽 눌러 이미지를 복사해 편집기에 붙이시면 됩니다.</p>
+    <p class="lede">단추 하나면 글과 표와 사진이 <b>한꺼번에</b> 복사됩니다.
+      편집기에 그대로 붙여 넣으시면 돼요.</p>
     <div class="legend">
       <div><i>◈</i><span><b>소제목</b> 문단이 바뀌는 자리</span></div>
       <div><i>※</i><span><b>주의</b> 오해하기 쉬운 대목</span></div>
@@ -377,6 +407,13 @@ ${본문HTML}
   const 원문 = ${JSON.stringify(글들.map((g) => g.원문))};
   const 표들 = ${JSON.stringify(표들)};
 
+  // 숨은 덩어리의 사진에 보이는 쪽 주소를 옮겨 담는다.
+  // 같은 자료를 두 벌 적지 않으려고 이렇게 한다(위 ⚠️ 참고).
+  for (const img of document.querySelectorAll('.clean img[data-from]')) {
+    const 원본 = document.getElementById(img.dataset.from);
+    if (원본) img.src = 원본.src;
+  }
+
   /** 글만 싣는다. 막아 둔 곳을 위해 옛 방법도 남겨 둔다. */
   async function 글복사(t) {
     try { await navigator.clipboard.writeText(t); return true; } catch { /* 아래로 */ }
@@ -415,13 +452,41 @@ ${본문HTML}
     }
   }
 
+  /**
+   * 글과 표와 사진을 **한 번에** 싣는다.
+   *
+   * ⚠️ 클립보드에 HTML 을 글자로 써 넣는 방법(ClipboardItem)으로는 사진이 잘 안 간다.
+   *    받는 편집기가 data 주소를 그림으로 안 받아 주는 곳이 많다.
+   *
+   *    그래서 **사람이 드래그해서 복사하는 것과 똑같이** 한다. 숨겨 둔 덩어리를
+   *    골라 담고 복사 명령을 준다. 브라우저가 만들어 주는 클립보드라 표도 사진도
+   *    사람이 직접 복사했을 때와 같은 것이 실린다.
+   *
+   * 안 되면 글만이라도 실어 준다. 아무것도 안 되는 것보다 낫다.
+   */
+  function 통째로복사(el, 글) {
+    const sel = window.getSelection();
+    const 되돌릴것 = sel.rangeCount ? sel.getRangeAt(0) : null;
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      const ok = document.execCommand('copy');
+      sel.removeAllRanges();
+      if (되돌릴것) sel.addRange(되돌릴것);
+      if (ok) return true;
+    } catch { /* 아래로 */ }
+    return 글복사(글);
+  }
+
   for (const btn of document.querySelectorAll('.copy')) {
     const 원래글 = btn.querySelector('.copy-label').textContent;
     btn.addEventListener('click', async () => {
       const 표번호 = btn.dataset.table;
-      const ok = 표번호 === undefined
-        ? await 글복사(원문[+btn.dataset.post])
-        : await 표복사(표들[+표번호]);
+      const ok = 표번호 !== undefined
+        ? await 표복사(표들[+표번호])
+        : 통째로복사(document.getElementById(btn.dataset.clean), 원문[+btn.dataset.post]);
       const label = btn.querySelector('.copy-label');
       label.textContent = ok ? '복사했습니다' : '복사가 막혔어요. 직접 긁어 주세요';
       btn.classList.toggle('done', ok);
