@@ -9,11 +9,7 @@
 
 ## 프로필 사진
 
- 는 **
-> myan-web@1.0.0 blog
-> node tools/build-blog-page.mjs
-
-blog/blog-page.html  2231KB  (글 3편) 이 insta/profile.png 에서 복사해 온다.**
+`blog/profile.png` 는 **`npm run blog` 이 `insta/profile.png` 에서 복사해 온다.**
 손으로 옮겨 두지 않는다 — 두 벌을 손으로 관리하면 원본을 고치고 이쪽을 잊는다.
 그래서 커밋하지 않는다(.gitignore).
 
