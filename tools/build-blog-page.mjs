@@ -47,6 +47,21 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
 const b64 = (p) => readFileSync(join(ROOT, p)).toString('base64');
 
 /**
+ * 글에 적힌 주소를 **누를 수 있는 링크**로 바꾼다.
+ *
+ * ⚠️ 글 파일(blog/*.txt)에는 링크 문법을 넣지 않는다. 대괄호를 쓰면 붙여 넣었을 때
+ *    그 기호가 그대로 찍히고, 그게 싫어서 애초에 기호를 다 뺐다. 그래서 문법 대신
+ *    **주소 생김새로 찾는다.** 글 파일은 계속 맨 글자로 남는다.
+ *
+ * ⚠️ 보이는 글자는 주소 그대로 둔다. 네이버가 링크를 떼어 내더라도 주소는 남아야
+ *    손으로 치기라도 한다. "여기를 누르세요" 로 바꾸면 떼이는 순간 아무 데도 못 간다.
+ *
+ * 아무 주소나 걸지 않는다. 우리 것과 크몽 하나뿐이다.
+ */
+const 주소찾기 = /(myan\.riger7070\.workers\.dev\/[\w/-]*|kmong\.com\/gig\/\d+)/g;
+const 링크걸기 = (s) => s.replace(주소찾기, '<a href="https://$1">$1</a>');
+
+/**
  * 표로 만들 줄인가.
  *
  * 글에서 표는 "들여쓰고 칸 사이를 두 칸 넘게 띄운 줄" 로 적혀 있다.
@@ -160,6 +175,20 @@ function 사진폴더(순서, 이름) {
   return 앞;                                  // 아직 안 만들었으면 짐작한 이름
 }
 
+/**
+ * 그 폴더에 든 사진 파일 이름. [카드, 실제화면] 차례로.
+ *
+ * ⚠️ 이름 규칙(카드는 "띠.png", 실제 화면은 "띠 예시.png")을 여기 다시 적지 않는다.
+ *    실제로 있는 파일을 보고, "예시" 가 붙은 쪽이 실제 화면이다. 규칙을 두 곳에
+ *    적으면 build-blog-photos.mjs 만 고치고 여기를 잊는다.
+ */
+function 사진이름들(순서, 이름) {
+  const 폴더 = join(ROOT, 'blog', '사진', 사진폴더(순서, 이름));
+  if (!existsSync(폴더)) return ['', ''];
+  const png = readdirSync(폴더).filter((f) => f.endsWith('.png'));
+  return [png.find((f) => !f.includes('예시')) || '', png.find((f) => f.includes('예시')) || ''];
+}
+
 // 표마다 제 번호를 준다. 아래 스크립트가 이 번호로 클립보드에 실을 표를 고른다.
 const 표들 = [];
 // 토막마다 글자만 편 것. 클립보드가 막혔을 때 쓴다.
@@ -170,7 +199,7 @@ const 깨끗하게 = (조각들, 이름) => 조각들.map((c) => c.종류 === '�
   ? `<table border="1" style="border-collapse:collapse">${c.행.map((r) =>
       `<tr>${r.map((cell) => `<td style="padding:6px 10px">${esc(cell)}</td>`).join('')}</tr>`
     ).join('')}</table><p></p>`
-  : esc(c.값).split('\n\n').map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('')
+  : 링크걸기(esc(c.값)).split('\n\n').map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('')
 ).join('');
 
 /** 토막 하나를 눈에 보이게 그린다. */
@@ -187,7 +216,7 @@ const 보이게 = (조각들) => 조각들.map((c) => c.종류 === '표'
        <figcaption>이 표는 위 토막 복사에 이미 들어 있습니다.
          표 하나만 따로 쓰실 때 누르세요.</figcaption>
      </figure>`
-  : `<pre class="text">${esc(c.값)}</pre>`).join('\n      ');
+  : `<pre class="text">${링크걸기(esc(c.값))}</pre>`).join('\n      ');
 
 const 본문HTML = 글들.map((g, i) => `
   <article class="post" id="post-${i + 1}">
@@ -198,52 +227,45 @@ const 본문HTML = 글들.map((g, i) => `
         <div><dt>보내는 곳</dt><dd><code>myan.riger7070.workers.dev${esc(g.보낼곳)}</code></dd></div>
         <div><dt>태그</dt><dd>${g.태그수}개, 글 끝에 붙어 있음</dd></div>
       </dl>
-      <p class="how">사진은 편집기가 안 받아 주니 <b>손으로 올리셔야 합니다.</b>
-        그래서 사진 자리에서 글을 끊어 뒀어요. 아래 차례대로
-        <b>토막 복사 → 붙여넣기 → 사진 올리기</b>만 되풀이하시면 됩니다.
-        지우실 글자는 없습니다.</p>
-      <p class="how fine">사진은 <code>blog/사진/${esc(사진폴더(i + 1, g.이름))}/</code>
-        폴더에 순서대로 들어 있습니다.</p>
+      <button class="copy" type="button"
+              data-clean="clean-${i}"
+              data-plain="${평문들.push(g.마디.map(마디글).join('\n\n')) - 1}">
+        <span class="copy-label">본문 전체 복사 (표와 링크까지, 사진은 빼고)</span>
+      </button>
+      <p class="how"><b>한 번에 다 붙여 넣으시면 됩니다.</b> 사진은 안 실립니다.
+        붙여 넣으신 뒤 아래 표시된 자리에 사진만 올리세요.
+        사진은 <code>blog/사진/${esc(사진폴더(i + 1, g.이름))}/</code> 폴더에 있습니다.</p>
     </header>
 
     ${/* ⚠️ 복사되는 것은 아래 화면이 아니라 이 숨은 덩어리다.
           화면에 보이는 쪽에는 "여기에 이 사진" 같은 안내가 붙어 있어서, 그대로
-          복사하면 그 안내까지 블로그에 들어간다. 그래서 글과 표만 담은
-          깨끗한 것을 토막마다 따로 만들어 두고 그것을 복사한다.
+          복사하면 그 안내까지 블로그에 들어간다. 그래서 글과 표와 링크만 담은
+          깨끗한 것을 따로 만들어 두고 그것을 복사한다.
           display:none 으로 숨기면 안 된다 — 안 그려진 것은 골라 담을 수 없다.
-          화면 밖으로 밀어 둔다. */''}
-    ${g.마디.map((조각들, j) => `<div class="clean" id="clean-${i}-${j}" aria-hidden="true">${
-      깨끗하게(조각들, g.이름)}</div>`).join('\n    ')}
+          화면 밖으로 밀어 둔다.
+          ⚠️ 사진은 여기 안 넣는다. 네이버가 어차피 안 받아 주고, 폴더에 따로
+             빼 두었다. 넣어 봐야 클립보드만 무거워진다. */''}
+    <div class="clean" id="clean-${i}" aria-hidden="true">${
+      g.마디.map((조각들) => 깨끗하게(조각들, g.이름)).join('')}</div>
 
     <div class="body">
       ${g.마디.map((조각들, j) => {
         const 사진 = j > 0 ? g.조각.filter((c) => c.종류 === '사진')[j - 1] : null;
         const 사진칸 = !사진 ? '' : (사진.첫째
           ? `<figure class="shot">
-               <img id="${g.이름}-card" src="${g.카드}" alt="${esc(g.제목)} 카드">
-               <figcaption><b>여기서 사진 하나를 올리세요.</b>
-                 카드 그림입니다. 편집기의 사진 단추로 올리시면 돼요.</figcaption>
+               <img src="${g.카드}" alt="${esc(g.제목)} 카드">
+               <figcaption><b>여기에 사진 하나를 올리세요.</b>
+                 폴더의 <code>${esc(사진이름들(i + 1, g.이름)[0])}</code> 입니다.</figcaption>
              </figure>`
           : `<figure class="shot real">
-               <img id="${g.이름}-shot" src="${g.화면}" alt="${esc(g.둘째)}">
-               <figcaption><b>여기서 사진 둘을 올리세요.</b>
-                 ${esc(g.둘째)}입니다.
+               <img src="${g.화면}" alt="${esc(g.둘째)}">
+               <figcaption><b>여기에 사진 둘을 올리세요.</b>
+                 폴더의 <code>${esc(사진이름들(i + 1, g.이름)[1])}</code>, ${esc(g.둘째)}입니다.
                  카드만 두 장이면 광고로 보입니다. 진짜 돌아가는 화면이 한 장 있어야
                  쓸 수 있는 것으로 읽힙니다.</figcaption>
              </figure>`);
-        const 마지막 = j === g.마디.length - 1;
         return `${사진칸}
-      <section class="seg">
-        <div class="seg-head">
-          <span class="seg-no">${j + 1}</span>
-          <span class="seg-name">${마지막 ? '마지막 토막 (태그까지)' : `${j + 1}번째 토막`}</span>
-          <button class="copy" type="button"
-                  data-clean="clean-${i}-${j}"
-                  data-plain="${평문들.push(마디글(조각들)) - 1}">
-            <span class="copy-label">이 토막 복사</span>
-          </button>
-        </div>
-        ${보이게(조각들)}
+      <section class="seg">${보이게(조각들)}
       </section>`;
       }).join('\n      ')}
     </div>
@@ -428,28 +450,12 @@ const html = `<title>블로그 붙여넣기 대장</title>
   .rules li { margin-bottom: 9px; }
   .rules b { color: var(--ink); font-weight: 500; }
 
-  /* ── 토막 ──
-     사진 자리에서 끊은 덩어리. 어디까지가 한 번에 복사되는 것인지 눈으로 보여야
-     한다. 왼쪽에 금색 띠를 세워 "여기부터 여기까지" 를 긋는다. */
-  .seg {
-    border-left: 3px solid var(--gold);
-    padding-left: 16px;
-    margin: 18px 0 22px;
-  }
-  .seg-head {
-    display: flex; align-items: center; gap: 10px;
-    flex-wrap: wrap; margin-bottom: 10px;
-  }
-  .seg-no {
-    display: grid; place-items: center;
-    width: 26px; height: 26px; border-radius: 50%;
-    background: var(--gold); color: #fff;
-    font-size: 13px; font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-  .seg-name { font-size: 14px; font-weight: 600; color: var(--ink); }
-  .seg-head .copy { margin: 0 0 0 auto; }
-  .seg .text:first-of-type { margin-top: 0; }
+  /* 사진 자리로 갈린 덩어리. 복사는 통째로 하지만, 사진을 어디에 넣을지는
+     눈으로 보여야 한다. */
+  .seg { margin: 0; }
+
+  /* 복사되는 글 안의 링크. 붙여 넣으면 네이버에서도 링크로 남는다. */
+  .text a, .clean a { color: var(--gold); text-underline-offset: 3px; }
 
   .how {
     margin: 12px 0 0; font-size: 14px; line-height: 1.7;
@@ -462,10 +468,6 @@ const html = `<title>블로그 붙여넣기 대장</title>
     border-radius: 4px; font-size: 12px;
   }
 
-  @media (max-width: 620px) {
-    .seg { padding-left: 12px; }
-    .seg-head .copy { margin-left: 0; width: 100%; }
-  }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -474,9 +476,10 @@ const html = `<title>블로그 붙여넣기 대장</title>
   <header class="top">
     <div class="kicker">네이버 블로그</div>
     <h1>붙여넣기만 하시면 됩니다</h1>
-    <p class="lede">사진 자리에서 글을 <b>토막으로 끊어</b> 뒀습니다.
-      토막을 복사해 붙이고, 사진을 올리고, 다음 토막을 붙이시면 돼요.
-      지우실 글자는 없습니다. 표는 토막에 같이 실려 갑니다.</p>
+    <p class="lede">단추 하나로 <b>글과 표와 링크가 한 번에</b> 복사됩니다.
+      주소는 누를 수 있는 링크로 실려 가고, 사진은 빠집니다.
+      붙여 넣으신 뒤 표시된 자리에 사진만 올리세요.
+      사진은 글마다 <code>blog/사진/</code> 밑에 폴더로 갈라 뒀습니다.</p>
     <div class="legend">
       <div><i>◈</i><span><b>소제목</b> 문단이 바뀌는 자리</span></div>
       <div><i>※</i><span><b>주의</b> 오해하기 쉬운 대목</span></div>
