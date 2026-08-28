@@ -5799,6 +5799,15 @@ function computeGwiin(saju, fromYear) {
 const TTI_NAME = { 子: '쥐', 丑: '소', 寅: '호랑이', 卯: '토끼', 辰: '용', 巳: '뱀',
                    午: '말', 未: '양', 申: '원숭이', 酉: '닭', 戌: '개', 亥: '돼지' };
 
+// 띠 그림. 열두 자리를 빠짐없이 채운다.
+//
+// ⚠️ 몇 개만 넣으면 안 넣느니만 못하다. 빠진 자리가 실수처럼 보이고, 표를 훑는
+//    눈이 거기서 걸린다. 열둘이 다 있어야 그림으로 자리를 찾을 수 있다.
+// ⚠️ 용은 🐉 가 아니라 🐲 를 쓴다. 얼굴만 있는 쪽이라야 나머지 열하나(다 얼굴)와
+//    크기가 맞는다. 🐉 는 몸통까지 있어 혼자 커 보인다.
+const TTI_EMOJI = { 子: '🐭', 丑: '🐮', 寅: '🐯', 卯: '🐰', 辰: '🐲', 巳: '🐍',
+                    午: '🐴', 未: '🐑', 申: '🐵', 酉: '🐔', 戌: '🐶', 亥: '🐷' };
+
 function computeTtiRanking(ymd) {
   const [y, m, d] = String(ymd).split('-').map(n => parseInt(n, 10));
   if (!y || !m || !d) return null;
@@ -6743,7 +6752,7 @@ function handleGunghapPage() {
   const 고르기 = (kinds) => 순서.find((k) => kinds.includes(k)) || '무관';
 
   const rows = JJ.map((a) => `
-    <tr><th scope="row">${TTI_NAME[a]}</th>${JJ.map((b) => {
+    <tr><th scope="row"><i>${TTI_EMOJI[a]}</i>${TTI_NAME[a]}</th>${JJ.map((b) => {
       const [label, cls] = 뜻[고르기(_jijiKinds(a, b))];
       return `<td class="${cls}">${label}</td>`;
     }).join('')}</tr>`).join('');
@@ -6758,7 +6767,8 @@ function handleGunghapPage() {
     body: `
     <div class="scroll">
       <table class="gh">
-        <thead><tr><th></th>${JJ.map((b) => `<th scope="col">${TTI_NAME[b]}</th>`).join('')}</tr></thead>
+        <thead><tr><th></th>${JJ.map((b) =>
+          `<th scope="col"><i>${TTI_EMOJI[b]}</i><br>${TTI_NAME[b]}</th>`).join('')}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -6775,10 +6785,21 @@ function handleGunghapPage() {
       .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -20px;padding:0 20px}
       table.gh{border-collapse:collapse;font-size:0.72rem;white-space:nowrap;margin-top:8px}
       table.gh th,table.gh td{border:1px solid rgba(201,169,110,0.14);padding:7px 6px;text-align:center}
-      table.gh thead th{color:#c9a96e;font-weight:600;background:rgba(201,169,110,0.07)}
+      table.gh thead th{color:#c9a96e;font-weight:600;background:rgba(201,169,110,0.07);line-height:1.3}
+      ${/* 그림은 글자보다 크게 둔다. 표를 훑을 때 눈이 글자가 아니라 그림으로
+            자리를 찾는다. 열두 칸짜리 표에서는 이 차이가 크다. */''}
+      table.gh th i{font-style:normal;font-size:1.45em;line-height:1.1}
+      table.gh th[scope=row] i{margin-right:5px;vertical-align:-2px}
       ${/* ⚠️ 첫 칸을 붙여 두지 않으면 오른쪽으로 밀었을 때 지금 보는 줄이 어느 띠인지
             알 수 없다. 열두 칸짜리 표에서는 이게 없으면 표를 못 읽는다. */''}
-      table.gh th[scope=row]{position:sticky;left:0;background:#16161a;color:#e8e4dc;font-weight:600}
+      ${/* ⚠️ 붙여 둔 칸에는 폭을 정해 준다. width:1% 로 두었더니 그림이 들어가
+            넓어지면서 글자가 옆 칸 위로 넘쳐, 다음 칸의 "같은 띠" 가 "은 띠" 로
+            잘려 보였다. 붙은 칸은 제 폭을 스스로 못 재므로 손으로 준다. */''}
+      ${/* 첫 칸은 왼쪽에 붙여 둔다(위 ⚠️ 참고). 그림이 들어가면서 넓어지므로
+            폭은 표가 스스로 재게 두고, 글은 왼쪽으로 붙인다. */''}
+      table.gh th[scope=row]{position:sticky;left:0;z-index:1;
+        background:#16161a;color:#e8e4dc;font-weight:600;
+        text-align:left;padding-left:8px;padding-right:10px}
       td.good{color:#e8c98a;background:rgba(201,169,110,0.10)}
       td.bad{color:#e08b7a;background:rgba(224,139,122,0.08)}
       td.same{color:#9a948a}

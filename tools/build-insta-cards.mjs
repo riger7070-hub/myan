@@ -74,10 +74,21 @@ async function fetchRanking() {
  */
 async function fetchGunghap() {
   const html = await (await fetch(`${SITE}/gunghap`)).text();
-  const head = [...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((m) => m[1]);
-  const rows = [...html.matchAll(/<th scope="row">([^<]*)<\/th>((?:<td class="[a-z]*">[^<]*<\/td>)+)/g)]
+
+  // ⚠️ 칸 안에 <i>🐭</i> 처럼 그림이 들어 있다. [^<]* 로 읽으면 하나도 안 잡혀서
+  //    "표가 12x12 가 아니다" 로 그냥 건너뛴다 — 실제로 그렇게 조용히 빠졌다.
+  //    태그를 걷어내되 그림은 살려서 읽는다.
+  const 속 = (s) => s.replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '').trim();
+  const 갈라읽기 = (s) => {
+    const t = 속(s);
+    const m = /^(\P{L}*)\s*(.*)$/u.exec(t);           // 앞에 붙은 그림과 이름을 가른다
+    return { emoji: (m?.[1] || '').trim(), name: (m?.[2] || t).trim() };
+  };
+
+  const head = [...html.matchAll(/<th scope="col">([\s\S]*?)<\/th>/g)].map((m) => 갈라읽기(m[1]));
+  const rows = [...html.matchAll(/<th scope="row">([\s\S]*?)<\/th>((?:<td class="[a-z]*">[^<]*<\/td>)+)/g)]
     .map((m) => ({
-      name: m[1],
+      ...갈라읽기(m[1]),
       cells: [...m[2].matchAll(/<td class="([a-z]*)">([^<]*)<\/td>/g)].map((c) => ({ cls: c[1], text: c[2] })),
     }));
   if (head.length !== 12 || rows.length !== 12 || rows.some((r) => r.cells.length !== 12)) {
@@ -323,9 +334,10 @@ if (!process.argv.includes('--offline')) {
         <div class="eyebrow">안낭자가 짚어 드립니다</div>
         <div class="title gold">띠 궁합표</div>
         <table class="gh">
-          <tr><td class="hd"></td>${g.head.map((h) => `<td class="hd">${h}</td>`).join('')}</tr>
+          <tr><td class="hd"></td>${g.head.map((h) =>
+            `<td class="hd"><i>${h.emoji}</i>${h.name}</td>`).join('')}</tr>
           ${g.rows.map((r) => `
-            <tr><td class="hd rw">${r.name}</td>${r.cells.map((c) =>
+            <tr><td class="hd rw"><i>${r.emoji}</i>${r.name}</td>${r.cells.map((c) =>
               `<td class="${c.cls}">${c.text.replace('같은 띠', '동')}</td>`).join('')}</tr>`).join('')}
         </table>
         <div class="key">
@@ -334,15 +346,27 @@ if (!process.argv.includes('--offline')) {
           <span class="k same">동</span> 같은 띠
         </div>`, `
         ${/* 표가 카드 폭을 다 써야 하므로, 사람이 서 있어도 본문을 좁히지 않는다.
-             대신 제목 두 줄만 비켜 준다. */''}
+             대신 제목 줄만 비켜 준다.
+             ⚠️ 머리줄에 그림이 들어가면서 표가 높아졌다. 사람을 원래 자리에 두면
+                표 오른쪽 세 칸(닭·개·돼지)을 덮는다. 제목 옆으로 올리고 줄인다. */''}
         body:has(.who) .mid { padding-right: 0; }
-        .eyebrow, .title { padding-right: 250px; }
-        .title { font-size: 76px; font-weight: 600; line-height: 1.24; margin: 20px 0 34px; }
+        body:has(.who) .who { top: 84px; width: 186px; right: 58px; }
+        body:has(.who) .moon { right: 118px; top: 46px; width: 74px; height: 74px; }
+        .eyebrow, .title { padding-right: 230px; }
+        .title { font-size: 72px; font-weight: 600; line-height: 1.24; margin: 16px 0 26px; }
         table.gh { border-collapse: collapse; width: 100%; table-layout: fixed; }
         table.gh td { border: 1px solid rgba(201,169,110,0.16); text-align: center;
                       padding: 9px 0; font-size: 22px; line-height: 1.2; }
-        td.hd { color: #c9a96e; font-size: 21px; background: rgba(201,169,110,0.08); }
-        td.hd.rw { color: #e9e4da; }
+        td.hd { color: #c9a96e; font-size: 18px; letter-spacing: -0.6px; white-space: nowrap;
+               background: rgba(201,169,110,0.08); line-height: 1.25; }
+        td.hd i { font-style: normal; font-size: 30px; display: block; }
+        ${/* ⚠️ 첫 칸에 nowrap 과 폭을 준다. 그림이 들어가면서 좁아져 "호랑이" 가
+              "호 / 랑이" 로 접혔다. 표는 칸 폭을 고르게 나누므로 첫 칸만 따로 잡아 준다. */''}
+        td.hd.rw { color: #e9e4da; white-space: nowrap; text-align: left; padding-left: 12px; }
+        /* table-layout:fixed 는 **첫 줄** 로 칸 폭을 나눈다. 그래서 폭은 머리줄
+           첫 칸에 줘야 한다. 아래 줄에만 주면 무시되고 글자가 옆 칸을 덮는다. */
+        table.gh tr > td:first-child { width: 150px; }
+        td.hd.rw i { display: inline; font-size: 26px; margin-right: 5px; vertical-align: -3px; }
         td.good { color: #e8c98a; background: rgba(201,169,110,0.11); }
         td.bad  { color: #e08b7a; background: rgba(224,139,122,0.09); }
         td.same { color: #9a948a; }
