@@ -10,12 +10,21 @@
 // ⚠️ 사진은 data 주소로 심는다. 아티팩트는 바깥 주소를 막으므로 파일 경로로 걸면
 //    빈 칸만 나온다. 심어 두면 오른쪽 눌러 복사도 된다.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'blog', 'blog-page.html');
+
+// 프로필 사진은 인스타·X 에 쓴 것을 그대로 쓴다.
+//
+// ⚠️ 손으로 복사해 두지 않고 **여기서 복사한다.** 두 벌을 손으로 관리하면 원본을
+//    고치고 이쪽을 잊는 것은 시간 문제다. 원본은 insta/profile.png 하나뿐이다.
+// ⚠️ 계정마다 다른 얼굴을 쓰면 같은 곳이라는 것을 알아보지 못한다. 블로그에서 보고
+//    인스타에 와도 같은 그림이어야 한다.
+const PROFILE = 'insta/profile.png';
+copyFileSync(join(ROOT, PROFILE), join(ROOT, 'blog', 'profile.png'));
 
 // 올리는 순서대로. 사진 둘째 자리는 직접 캡처하는 자리라 비워 둔다.
 const POSTS = [
@@ -165,6 +174,26 @@ const html = `<title>블로그 붙여넣기 대장</title>
   .legend span { font-size: .82rem; color: var(--dim); }
   .legend b { color: var(--ink); font-weight: 500; }
 
+  /* ── 프로필 ── */
+  .profile {
+    display: flex; gap: 20px; align-items: flex-start; margin-top: 34px;
+    border: 1px solid var(--hair); border-radius: 4px; background: var(--raise); padding: 20px;
+  }
+  .profile img {
+    width: 96px; height: 96px; flex: none; border-radius: 50%;
+    border: 1px solid var(--hair); object-fit: cover;
+  }
+  .profile h3 { font-family: 'Noto Serif KR', serif; font-size: 1rem; font-weight: 600; margin: 0 0 8px; }
+  .profile p { margin: 0 0 8px; font-size: .85rem; color: var(--dim); max-width: 52ch; }
+  .profile p:last-child { margin-bottom: 0; }
+  .profile b { color: var(--ink); font-weight: 500; }
+  .profile .fine { font-size: .79rem; }
+  .profile code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .76rem; color: var(--gold);
+  }
+  @media (max-width: 520px) { .profile { flex-direction: column; } }
+
   /* ── 글 하나 ── */
   .post { margin-top: 62px; }
   .post-head { margin-bottom: 22px; }
@@ -248,6 +277,18 @@ const html = `<title>블로그 붙여넣기 대장</title>
       <div><i>★</i><span><b>핵심</b> 한 줄만 가져간다면</span></div>
     </div>
   </header>
+
+  <section class="profile">
+    <img src="data:image/png;base64,${b64(PROFILE)}" alt="오늘운빨 프로필 사진">
+    <div>
+      <h3>블로그 프로필 사진</h3>
+      <p>인스타와 X 에 쓴 것과 <b>같은 그림</b>입니다. 계정마다 얼굴이 다르면
+        같은 곳이라는 것을 알아보지 못합니다. 블로그에서 보고 인스타에 와도 같아야 합니다.</p>
+      <p class="fine">동그랗게 잘리는 것을 셈해 글씨를 넣지 않았고, 모서리에도 아무것도 두지
+        않았습니다. 1080 정사각형이라 그대로 올리시면 됩니다.
+        파일은 <code>blog/profile.png</code> 에도 넣어 두었습니다.</p>
+    </div>
+  </section>
 ${본문HTML}
 
   <section class="rules">
