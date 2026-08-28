@@ -47,10 +47,25 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
 const b64 = (p) => readFileSync(join(ROOT, p)).toString('base64');
 
 /**
+ * 표로 만들 줄인가.
+ *
+ * 글에서 표는 "들여쓰고 칸 사이를 두 칸 넘게 띄운 줄" 로 적혀 있다.
+ * 글 파일 하나만 놓고 봐도 표처럼 읽히고, 여기서는 진짜 표로 세울 수 있다.
+ *
+ *     1월   7(수) 8(목) 17(토)
+ *     목    간과 담    푸른색, 신맛
+ *
+ * ⚠️ 글 파일에 따로 문법을 넣지 않았다. 대괄호나 파이프 같은 기호를 넣으면 붙여
+ *    넣었을 때 그 기호가 그대로 찍힌다. 지금 모양은 기호 없이도 표로 읽힌다.
+ */
+const 표줄인가 = (line) => /^\s{2,}\S/.test(line) && /\S {2,}\S/.test(line);
+const 칸나누기 = (line) => line.trim().split(/ {2,}/);
+
+/**
  * 글 한 편을 화면에 올릴 조각으로 바꾼다.
  *
  * 첫 줄은 제목, 마지막 줄은 태그다. 그 사이가 본문이고, 본문 안의 "사진 넣는 자리"
- * 줄은 사진으로 바꿔 끼운다.
+ * 줄은 사진으로, 표처럼 적힌 줄 묶음은 진짜 표로 바꿔 끼운다.
  */
 function 조각내기(text, post) {
   const lines = text.replace(/\r\n/g, '\n').trimEnd().split('\n');
@@ -60,19 +75,30 @@ function 조각내기(text, post) {
 
   const out = [];
   let 묶음 = [];
-  const 쏟기 = () => {
+  let 표 = [];
+
+  const 글쏟기 = () => {
     const t = 묶음.join('\n').trim();
     if (t) out.push({ 종류: '글', 값: t });
     묶음 = [];
   };
+  const 표쏟기 = () => {
+    // 한 줄짜리는 표가 아니다. 그냥 들여 쓴 문장일 뿐이다.
+    if (표.length >= 2) out.push({ 종류: '표', 행: 표.map(칸나누기) });
+    else 묶음.push(...표);
+    표 = [];
+  };
 
   for (const line of 본문) {
+    if (표줄인가(line)) { 글쏟기(); 표.push(line); continue; }
+    표쏟기();
     const m = /^사진 넣는 자리 (하나|둘)$/.exec(line.trim());
     if (!m) { 묶음.push(line); continue; }
-    쏟기();
+    글쏟기();
     out.push({ 종류: '사진', 첫째: m[1] === '하나' });
   }
-  쏟기();
+  표쏟기();
+  글쏟기();
   return { 제목, 태그, 조각: out, 태그수: (태그.match(/#/g) || []).length };
 }
 
@@ -83,6 +109,9 @@ const 글들 = POSTS.map((p) => ({
   카드: 'data:image/png;base64,' + b64(p.card),
   화면: 'data:image/png;base64,' + b64(p.shot),
 }));
+
+// 표마다 제 번호를 준다. 아래 스크립트가 이 번호로 클립보드에 실을 표를 고른다.
+const 표들 = [];
 
 const 본문HTML = 글들.map((g, i) => `
   <article class="post" id="post-${i + 1}">
@@ -101,6 +130,20 @@ const 본문HTML = 글들.map((g, i) => `
     <div class="body">
       ${g.조각.map((c) => c.종류 === '글'
         ? `<pre class="text">${esc(c.값)}</pre>`
+        : c.종류 === '표'
+        ? `<figure class="tbl">
+             <table>
+               ${c.행.map((r) => `<tr>${r.map((cell, i) =>
+                 i === 0 ? `<th scope="row">${esc(cell)}</th>` : `<td>${esc(cell)}</td>`
+               ).join('')}</tr>`).join('\n               ')}
+             </table>
+             <button class="copy small" type="button" data-table="${표들.push(c.행) - 1}">
+               <span class="copy-label">이 표만 복사</span>
+             </button>
+             <figcaption>본문을 통째로 복사하면 이 표는 <b>띄어쓰기로 맞춘 글</b>로 들어갑니다.
+               네이버 편집기는 글꼴 폭이 달라서 줄이 어긋나요.
+               <b>표는 이 단추로 따로 복사</b>하시면 진짜 표로 붙습니다.</figcaption>
+           </figure>`
         : c.첫째
           ? `<figure class="shot">
                <img src="${g.카드}" alt="${esc(g.제목)} 카드">
@@ -261,6 +304,24 @@ const html = `<title>블로그 붙여넣기 대장</title>
   /* 실제 화면은 폰 캡처라 세로로 길다. 카드보다 좁게 두어 카드와 구별되게 한다. */
   .shot.real img { max-width: 280px; }
 
+  /* ── 표 ── */
+  .tbl { margin: 0; }
+  .tbl .scroll { overflow-x: auto; }
+  .tbl table {
+    border-collapse: collapse; font-size: .87rem; width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  .tbl th, .tbl td {
+    border: 1px solid var(--hair); padding: 8px 12px; text-align: left; vertical-align: baseline;
+  }
+  .tbl th[scope=row] {
+    background: var(--paper); color: var(--gold); font-weight: 600;
+    white-space: nowrap; width: 1%;
+  }
+  .tbl figcaption { margin-top: 10px; font-size: .78rem; color: var(--dim); max-width: 54ch; }
+  .tbl figcaption b { color: var(--ink); font-weight: 500; }
+  .copy.small { margin-top: 12px; padding: 7px 15px; font-size: .8rem; }
+
   /* ── 맺음 ── */
   .rules { margin-top: 72px; padding-top: 30px; border-top: 1px solid var(--rule); }
   .rules h3 { font-family: 'Noto Serif KR', serif; font-size: 1.05rem; font-weight: 600; margin: 0 0 14px; }
@@ -314,23 +375,57 @@ ${본문HTML}
 
 <script>
   const 원문 = ${JSON.stringify(글들.map((g) => g.원문))};
+  const 표들 = ${JSON.stringify(표들)};
+
+  /** 글만 싣는다. 막아 둔 곳을 위해 옛 방법도 남겨 둔다. */
+  async function 글복사(t) {
+    try { await navigator.clipboard.writeText(t); return true; } catch { /* 아래로 */ }
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  /**
+   * 표를 클립보드에 **표로** 싣는다.
+   *
+   * ⚠️ 글로만 실으면 네이버에서 칸이 무너진다. 편집기 글꼴은 글자마다 폭이 달라서
+   *    띄어쓰기로 맞춘 줄이 어긋난다. text/html 로 실어야 편집기가 표로 받는다.
+   *    글로만 받는 곳을 위해 text/plain 도 같이 싣는다(탭으로 나눈다).
+   */
+  async function 표복사(rows) {
+    const 안전 = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = '<table border="1" style="border-collapse:collapse">'
+      + rows.map((r) => '<tr>'
+        + r.map((c) => '<td style="padding:6px 10px">' + 안전(c) + '</td>').join('')
+        + '</tr>').join('')
+      + '</table>';
+    const plain = rows.map((r) => r.join('\\t')).join('\\n');
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+      })]);
+      return true;
+    } catch {
+      return 글복사(plain);
+    }
+  }
+
   for (const btn of document.querySelectorAll('.copy')) {
+    const 원래글 = btn.querySelector('.copy-label').textContent;
     btn.addEventListener('click', async () => {
-      const t = 원문[+btn.dataset.post];
-      let ok = false;
-      try { await navigator.clipboard.writeText(t); ok = true; } catch { /* 아래로 */ }
-      if (!ok) {
-        // 클립보드를 막아 둔 곳이 있다. 옛 방법으로 한 번 더 해 본다.
-        const ta = document.createElement('textarea');
-        ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
-        try { ok = document.execCommand('copy'); } catch { ok = false; }
-        ta.remove();
-      }
+      const 표번호 = btn.dataset.table;
+      const ok = 표번호 === undefined
+        ? await 글복사(원문[+btn.dataset.post])
+        : await 표복사(표들[+표번호]);
       const label = btn.querySelector('.copy-label');
-      label.textContent = ok ? '복사했습니다' : '복사가 막혔어요. 글을 직접 긁어 주세요';
+      label.textContent = ok ? '복사했습니다' : '복사가 막혔어요. 직접 긁어 주세요';
       btn.classList.toggle('done', ok);
-      setTimeout(() => { label.textContent = '본문 전체 복사'; btn.classList.remove('done'); }, 2600);
+      setTimeout(() => { label.textContent = 원래글; btn.classList.remove('done'); }, 2600);
     });
   }
 </script>
