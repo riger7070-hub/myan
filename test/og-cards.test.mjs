@@ -19,7 +19,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OG = join(ROOT, 'og');
 const SRC = readFileSync(join(ROOT, 'worker.js'), 'utf8');
 
-const H = await loadWorker(['handleTtiPage', 'handleCalcHub', 'handleCalcPage', 'computeTtiRanking']);
+const H = await loadWorker(['handleTtiPage', 'handleCalcHub', 'handleCalcPage',
+  'handleGunghapPage', 'computeTtiRanking', 'FREE_PAGES']);
 
 /** 페이지가 실제로 내보낸 og:image 주소에서 파일 이름만 뽑는다. */
 function ogNameOf(html) {
@@ -47,13 +48,37 @@ test('⚠️ 페이지가 가리키는 카드가 실제로 있다', async () => 
   const pages = [
     ['/tti', H.handleTtiPage()],
     ['/calc', H.handleCalcHub()],
-    ...['samjae', 'sinsal', 'bonmyeong'].map(k => ['/calc/' + k, H.handleCalcPage(k)]),
+    ['/gunghap', H.handleGunghapPage()],
+    ...['samjae', 'sinsal', 'bonmyeong', 'manseryeok', 'sonnal']
+      .map(k => ['/calc/' + k, H.handleCalcPage(k)]),
   ];
   for (const [path, res] of pages) {
     const name = ogNameOf(await res.text());
     assert.ok(name, `${path}: 전용 카드가 아니라 기본 아이콘을 쓴다`);
     assert.ok(existsSync(join(OG, `${name}.png`)),
       `${path}: og/${name}.png 가 없다 — 링크에 빈 칸이 뜬다`);
+  }
+});
+
+test('⚠️ 사이트맵에 올린 페이지는 빠짐없이 카드를 가진다', async () => {
+  // ⚠️ 위 검사는 **목록을 손으로 적는다.** 그래서 새 페이지를 만들고 여기에 더하는
+  //    것을 잊으면 그냥 지나간다. 실제로 그랬다 — 만세력·띠 궁합표·손 없는 날 셋이
+  //    512 아이콘으로 떨어지는데도 이 파일은 초록이었다.
+  //
+  //    그래서 사람이 적는 목록이 아니라 **사이트맵에 올린 것**을 기준으로 다시 본다.
+  //    검색에 올릴 만한 페이지면 남이 링크로 보낼 만한 페이지이기도 하다.
+  for (const p of H.FREE_PAGES) {
+    if (p.path === '/app') continue;              // 앱을 여는 자리. 홈 카드를 쓴다
+    const res = p.path === '/tti' ? H.handleTtiPage()
+      : p.path === '/calc' ? H.handleCalcHub()
+        : p.path === '/gunghap' ? H.handleGunghapPage()
+          : H.handleCalcPage(p.path.replace('/calc/', ''));
+    assert.ok(res, `${p.path} 를 열지 못했다`);
+    const name = ogNameOf(await res.text());
+    assert.ok(name,
+      `${p.path}: 512 아이콘으로 떨어진다. 페이지는 1200x630 이라고 알리는데 정사각형이 나가서 `
+      + `미리보기가 찌그러진다 — OG_CARD 에 넣고 tools/build-og-cards.mjs 로 카드를 만들 것`);
+    assert.ok(existsSync(join(OG, `${name}.png`)), `${p.path}: og/${name}.png 가 없다`);
   }
 });
 

@@ -12,6 +12,7 @@
     "shots": "node tools/build-blog-shots.mjs",
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run",
     "smoke": "node tools/smoke.mjs",
+    "smoke:web": "node tools/smoke-browser.mjs",
     "check:mini": "npm ci --prefix mini && npm run build --prefix mini"
   },
   "devDependencies": {

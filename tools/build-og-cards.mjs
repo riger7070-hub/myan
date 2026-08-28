@@ -87,7 +87,14 @@ const CARDS = [
   { name: 'tti', eyebrow: '오늘의 띠 순위', title: '오늘 내 띠는<br>몇 위일까',
     sub: '뽑기가 아니라 계산입니다' },
   { name: 'calc', eyebrow: '무료 사주 계산기', title: '가입 없이<br>바로 봅니다',
-    sub: '삼재 · 신살 · 본명궁' },
+    sub: '만세력 · 띠 궁합 · 손 없는 날 · 삼재 · 신살' },
+  // 커뮤니티에 내놓는 셋. 링크가 카톡으로 퍼질 때 회색 빈 칸이 뜨지 않게 한다.
+  { name: 'gunghap', eyebrow: '띠 궁합표', title: '열두 띠 궁합을<br>한 장으로',
+    sub: '삼합 · 육합 · 충 · 형을 다 계산했습니다' },
+  { name: 'calc-manseryeok', eyebrow: '만세력', title: '내 사주<br>네 기둥 뽑기',
+    sub: '년주 · 월주 · 일주 · 시주와 오행 분포' },
+  { name: 'calc-sonnal', eyebrow: '손 없는 날', title: '이사 날짜<br>바로 찾기',
+    sub: '음력으로 계산합니다' },
   { name: 'calc-samjae', eyebrow: '삼재 계산기', title: '내 삼재는<br>언제인가',
     sub: '태어난 해만 넣으면 됩니다' },
   // 삼재 결과 카드. /calc/samjae/<해> 가 자기 결과를 미리보기에 박아 내보낸다.

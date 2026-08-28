@@ -6082,6 +6082,9 @@ const OG_CARD = {
   '/calc/samjae': 'calc-samjae',
   '/calc/sinsal': 'calc-sinsal',
   '/calc/bonmyeong': 'calc-bonmyeong',
+  '/gunghap': 'gunghap',
+  '/calc/manseryeok': 'calc-manseryeok',
+  '/calc/sonnal': 'calc-sonnal',
 };
 
 function _ogImage(path, card) {
