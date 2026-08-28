@@ -6329,11 +6329,20 @@ const _SIJI_HOURS = [
 /**
  * 생년월일시를 받는 칸. 신살과 만세력이 함께 쓴다.
  *
+ * ⚠️ **함수여야 한다. 상수로 두면 안 된다.**
+ *    워커는 모듈을 처음 읽을 때 Date.now() 로 **0** 을 준다(시간으로 무언가를
+ *    알아내는 것을 막으려는 장치다). 그래서 최상위 상수 안에서 _kstYear() 를 부르면
+ *    올해가 아니라 1970 이 박힌다.
+ *
+ *    실제로 그렇게 나갔다. max="1970" 이 박혀서 1970년 뒤에 태어난 사람은 브라우저가
+ *    폼 제출을 막았고, **오류 한 줄 없이 단추만 안 먹었다.** 화면에는 아무 말도 안 뜬다.
+ *    요청이 들어온 뒤에 만들어야 그때의 시각을 쓴다.
+ *
  * ⚠️ 시진 이름만 적어 두면 자기가 몇 시에 태어났는지 아는 사람도 못 고른다.
  *    "자시" 가 몇 시인지 아는 사람은 드물다 — 시각을 함께 적는다.
  *    값(value)은 서버가 읽는 시진 이름 그대로 두어야 한다. 화면 글자를 보내면 사주가 틀어진다.
  */
-const _BIRTH_FORM = `<label>생년월일</label>
+const _birthForm = () => `<label>생년월일</label>
         <div class="row">
           <input id="f-year" type="number" inputmode="numeric" placeholder="1990" min="1900" max="${_kstYear()}" required>
           <input id="f-month" type="number" inputmode="numeric" placeholder="5" min="1" max="12" required>
@@ -6415,7 +6424,7 @@ function handleCalcPage(kind) {
       desc: '생년월일시를 넣으면 사주에 든 신살을 찾아 드립니다. 도화살, 역마살, 화개살, 백호살, 괴강살, 양인살, 천을귀인. 가입 없이 무료입니다.',
       h1: '내 사주의 신살',
       lead: '생년월일을 넣으면 사주 네 기둥에 어떤 신살이 앉아 있는지 찾아 드립니다.',
-      form: _BIRTH_FORM,
+      form: _birthForm(),
       fields: ['year', 'month', 'day', 'hour'],
       speaker: 'halmae',
       note: '신살은 사주에서 눈에 띄는 자리를 짚어 주는 이름표입니다. 살(殺)이라는 글자 때문에 나쁜 것으로만 읽히지만, 도화는 사람을 끄는 힘이고 역마는 움직여야 풀리는 결입니다. 좋고 나쁨보다 어떻게 쓰느냐의 문제입니다.',
@@ -6445,7 +6454,7 @@ function handleCalcPage(kind) {
       desc: '생년월일시를 넣으면 사주 네 기둥(년주 월주 일주 시주)과 오행 분포를 바로 뽑아 드립니다. 가입 없이 무료입니다.',
       h1: '내 사주 네 기둥',
       lead: '생년월일을 넣으면 사주 네 글자와 오행이 어떻게 치우쳐 있는지 바로 나옵니다. 풀이 없이 표만 보여 드립니다.',
-      form: _BIRTH_FORM,
+      form: _birthForm(),
       fields: ['year', 'month', 'day', 'hour'],
       speaker: 'doryeong',
       cta: '이 네 글자가 무슨 뜻인지 안도령에게 물어보기',

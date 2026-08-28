@@ -273,6 +273,38 @@ const CARDS = [
       .note { margin-top: 46px; font-size: 28px; line-height: 1.72; color: rgba(233,228,218,0.5); }
       body:has(.who) .li, body:has(.who) .note { margin-right: -250px; }`, 사람('andoryeong')),
   },
+  {
+    // 오행에 맞는 음식.
+    //
+    // ⚠️ "이걸 먹으면 낫는다" 로 쓰지 않는다. 오행 식이는 전통이지 영양학이 검증한
+    //    것이 아니다. 몸에 좋다고 단정하면 과장광고가 되고, 무엇보다 거짓이다.
+    //    겹치는 부분(다섯 색을 고루 먹기)만 사실대로 적는다.
+    name: 'ohaeng-food',
+    html: shell(`
+      <div class="eyebrow">안할매가 짚어 드립니다</div>
+      <div class="title gold">오행에 맞는<br>다섯 가지 밥상</div>
+      <table class="fd">
+        <tr><td class="e" style="color:#7fb98a">木</td><td class="k">푸른 것, 신맛</td><td class="v">시금치 부추 매실</td></tr>
+        <tr><td class="e" style="color:#e08b7a">火</td><td class="k">붉은 것, 쓴맛</td><td class="v">토마토 대추 쑥</td></tr>
+        <tr><td class="e" style="color:#e8c98a">土</td><td class="k">노란 것, 단맛</td><td class="v">호박 고구마 기장</td></tr>
+        <tr><td class="e" style="color:#e6e2d8">金</td><td class="k">흰 것, 매운맛</td><td class="v">무 배 도라지</td></tr>
+        <tr><td class="e" style="color:#7fa3c9">水</td><td class="k">검은 것, 짠맛</td><td class="v">검은콩 미역 다시마</td></tr>
+      </table>
+      <div class="note">다섯 빛깔을 고루 먹으라는 말은<br>
+        오늘의 영양학과도 겹칩니다.<br><br>
+        다만 내게 어느 기운이 모자란지는<br>
+        사주 네 기둥을 봐야 압니다.</div>`, `
+      .title { font-size: 74px; font-weight: 600; line-height: 1.3; margin-top: 24px; word-break: keep-all; }
+      table.fd { margin-top: 46px; border-collapse: collapse; width: 100%; }
+      table.fd td { padding: 15px 0; border-bottom: 1px solid rgba(201,169,110,0.14); vertical-align: baseline; }
+      td.e { width: 76px; font-size: 44px; font-weight: 600; }
+      td.k { width: 250px; font-size: 29px; color: rgba(233,228,218,0.62); }
+      td.v { font-size: 31px; color: #e9e4da; }
+      .note { margin-top: 44px; font-size: 27px; line-height: 1.7; color: rgba(233,228,218,0.5); }
+      ${/* 표가 폭을 다 써야 하므로 사람이 서 있어도 좁히지 않는다. 제목만 비켜 준다. */''}
+      body:has(.who) .mid { padding-right: 0; }
+      .eyebrow, .title { padding-right: 250px; }`, 사람('anhalmae')),
+  },
 ];
 
 // ── 오늘의 띠 순위 ──
