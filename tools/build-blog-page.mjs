@@ -26,14 +26,21 @@ const OUT = join(ROOT, 'blog', 'blog-page.html');
 const PROFILE = 'insta/profile.png';
 copyFileSync(join(ROOT, PROFILE), join(ROOT, 'blog', 'profile.png'));
 
-// 올리는 순서대로. 사진 둘째 자리는 직접 캡처하는 자리라 비워 둔다.
+// 올리는 순서대로.
+//
+// 사진이 둘씩 들어간다. 첫째는 만든 카드(insta/), 둘째는 **진짜 돌아가는 화면**
+// (blog/shots/, npm run shots 로 찍는다).
+//
+// ⚠️ 둘 다 카드면 광고 두 장이 된다. 하나는 실제 화면이어야 쓸 수 있는 것으로 읽힌다.
 const POSTS = [
-  { file: '손없는날.txt', card: 'sonnal.png',
-    보낼곳: '/calc/sonnal', 둘째: '손 없는 날 페이지를 열어 아무 달이나 계산한 화면' },
-  { file: '띠궁합.txt', card: 'gunghap.png',
-    보낼곳: '/gunghap', 둘째: '띠 궁합표 페이지를 연 화면' },
-  { file: '만세력.txt', card: 'manseryeok.png',
-    보낼곳: '/calc/manseryeok', 둘째: '만세력에 아무 날짜나 넣어 본 결과 화면' },
+  { file: '손없는날.txt', card: 'insta/sonnal.png', shot: 'blog/shots/sonnal.png',
+    보낼곳: '/calc/sonnal', 둘째: '2026년 4월을 계산한 실제 화면' },
+  { file: '띠궁합.txt', card: 'insta/gunghap.png', shot: 'blog/shots/gunghap.png',
+    보낼곳: '/gunghap', 둘째: '궁합표 페이지의 실제 화면' },
+  { file: '만세력.txt', card: 'insta/manseryeok.png', shot: 'blog/shots/manseryeok.png',
+    보낼곳: '/calc/manseryeok', 둘째: '1990년 5월 15일 사시로 뽑아 본 실제 화면' },
+  { file: '오행식단.txt', card: 'insta/ohaeng-food.png', shot: 'blog/shots/manseryeok.png',
+    보낼곳: '/calc/manseryeok', 둘째: '만세력이 오행 비율을 내주는 실제 화면' },
 ];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -73,7 +80,8 @@ const 글들 = POSTS.map((p) => ({
   ...p,
   ...조각내기(readFileSync(join(ROOT, 'blog', p.file), 'utf8'), p),
   원문: readFileSync(join(ROOT, 'blog', p.file), 'utf8').replace(/\r\n/g, '\n').trimEnd(),
-  이미지: 'data:image/png;base64,' + b64(join('insta', p.card)),
+  카드: 'data:image/png;base64,' + b64(p.card),
+  화면: 'data:image/png;base64,' + b64(p.shot),
 }));
 
 const 본문HTML = 글들.map((g, i) => `
@@ -95,13 +103,14 @@ const 본문HTML = 글들.map((g, i) => `
         ? `<pre class="text">${esc(c.값)}</pre>`
         : c.첫째
           ? `<figure class="shot">
-               <img src="${g.이미지}" alt="${esc(g.제목)} 홍보 카드">
+               <img src="${g.카드}" alt="${esc(g.제목)} 카드">
                <figcaption><b>여기에 이 사진.</b> 오른쪽 눌러 이미지 복사하신 뒤 편집기에 붙이시면 됩니다.</figcaption>
              </figure>`
-          : `<figure class="shot empty">
-               <div class="ph">직접 캡처해서 넣는 자리</div>
-               <figcaption><b>${esc(g.둘째)}</b>를 찍어서 넣으세요.
-                 카드만 두 장이면 광고로 보입니다. 실제 화면이 한 장 있어야 쓸 수 있는 것으로 읽힙니다.</figcaption>
+          : `<figure class="shot real">
+               <img src="${g.화면}" alt="${esc(g.둘째)}">
+               <figcaption><b>${esc(g.둘째)}</b>입니다. 이것도 오른쪽 눌러 가져가시면 됩니다.
+                 카드만 두 장이면 광고로 보입니다. 진짜 돌아가는 화면이 한 장 있어야
+                 쓸 수 있는 것으로 읽힙니다.</figcaption>
              </figure>`).join('\n      ')}
       <pre class="text tags">${esc(g.태그)}</pre>
     </div>
@@ -249,11 +258,8 @@ const html = `<title>블로그 붙여넣기 대장</title>
   }
   .shot figcaption { margin-top: 10px; font-size: .8rem; color: var(--dim); max-width: 52ch; }
   .shot figcaption b { color: var(--ink); font-weight: 500; }
-  .shot.empty .ph {
-    display: grid; place-items: center; max-width: 380px; aspect-ratio: 4 / 5;
-    border: 1px dashed var(--rule); border-radius: 3px;
-    color: var(--dim); font-size: .84rem;
-  }
+  /* 실제 화면은 폰 캡처라 세로로 길다. 카드보다 좁게 두어 카드와 구별되게 한다. */
+  .shot.real img { max-width: 280px; }
 
   /* ── 맺음 ── */
   .rules { margin-top: 72px; padding-top: 30px; border-top: 1px solid var(--rule); }

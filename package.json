@@ -9,6 +9,7 @@
     "dead": "node tools/find-dead.mjs",
     "dead:mini": "node tools/find-dead-mini.mjs",
     "blog": "node tools/build-blog-page.mjs",
+    "shots": "node tools/build-blog-shots.mjs",
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run",
     "smoke": "node tools/smoke.mjs",
     "check:mini": "npm ci --prefix mini && npm run build --prefix mini"
