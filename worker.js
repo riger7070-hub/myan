@@ -1794,6 +1794,7 @@ export default {
     if (path === '/admin/telegram-approve' && method === 'GET') return handleTelegramApprove(request, env);
     if (path === '/admin/grant-tokens' && method === 'POST') return handleAdminGrantTokens(request, env);
     if (path === '/admin/mini-order' && method === 'GET') return handleMiniAdminOrderProbe(request, env);
+    if (path === '/admin/mini-failures' && method === 'GET') return handleMiniAdminFailures(request, env);
     // /chat(대화형 리딩) 라우트·핸들러 제거됨. '채팅 방식 제거' 리뉴얼 이후
     // 프론트에서 도달할 수 없는 경로였다(_enterMode가 입력창을 숨기고 showSajuInput으로 보냄).
     // 되살리려면 git 이력에서 handleGeminiChat을 참고할 것.
@@ -2711,11 +2712,39 @@ async function _tossOrderStatus(env, orderId) {
  * ⚠️ ADMIN_SECRET 이 없으면 항상 거절한다(안전한 기본값). 비교는 상수 시간으로 한다 —
  *    주문 내용을 열어 주는 자리라 PIN 들과 같은 취급을 하지 않는다.
  */
+function _adminKeyOk(request, env) {
+  const given = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim()
+    || new URL(request.url).searchParams.get('key') || '';
+  return !!env.ADMIN_SECRET && _timingSafeEqual(given, env.ADMIN_SECRET);
+}
+
+/**
+ * 지급이 막힌 주문 목록. 돈은 들어왔는데 엽전이 안 나간 것들이다.
+ *
+ * ⚠️ **콘솔에서 상품 가격을 고치면 SKU 가 새로 생긴다.** 그러면 다음 결제부터 지급이
+ *    멈추는데, 화면에는 그 상품이 "준비 중" 으로 뜰 뿐이라 모르고 지나가기 쉽다.
+ *    가격을 바꾼 날에는 여기를 한 번 열어 볼 것 — pkg 에 붙은 번호를 그대로
+ *    MINI_SKU_ALIAS 에 넣으면 복구된다.
+ *
+ *   curl -H "Authorization: Bearer <ADMIN_SECRET>" \
+ *        "https://myan.riger7070.workers.dev/admin/mini-failures"
+ */
+async function handleMiniAdminFailures(request, env) {
+  if (!_adminKeyOk(request, env)) {
+    return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
+  }
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+  const rows = await env.DB.prepare(
+    `SELECT id, user_key, pkg, datetime(created_at, 'unixepoch', '+9 hours') AS kst
+       FROM mini_payment_requests WHERE status = 'failed'
+      ORDER BY created_at DESC LIMIT 50`
+  ).all().catch(() => null);
+  return cors(JSON.stringify({ 실패: rows?.results || [] }, null, 2), 200);
+}
+
 async function handleMiniAdminOrderProbe(request, env) {
   const url = new URL(request.url);
-  const given = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim()
-    || url.searchParams.get('key') || '';
-  if (!env.ADMIN_SECRET || !_timingSafeEqual(given, env.ADMIN_SECRET)) {
+  if (!_adminKeyOk(request, env)) {
     return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
   }
   const orderId = (url.searchParams.get('orderId') || '').trim();

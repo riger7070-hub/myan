@@ -78,10 +78,20 @@ test('정가는 서버가 내려주는 값에서 온다', () => {
   const f = APP.match(/async function loadProducts\(\)[\s\S]*?\n\}/)[0];
   assert.match(f, /srv\?\.amount/, '서버가 준 정가를 안 쓴다');
   assert.match(f, /srv\?\.saleAmount/, '서버가 준 할인가를 안 쓴다');
-  assert.match(f, /_discountOf\(sale, listed\)/, '할인가와 정가를 견주지 않는다');
+  assert.match(f, /_discountOf\(onSale \? sale : 0, listed\)/, '할인가와 정가를 견주지 않는다');
   // ⚠️ 화면에 적는 값도 할인가여야 한다. SDK 값을 그대로 쓰면 결제창과 어긋난다 —
   //    화면 9,900원 / 결제창 4,950원이 실제로 그렇게 났다.
-  assert.match(f, /price: sale \?/, '할인 중인데 화면에는 SDK 의 할인 전 가격을 적는다');
+  assert.match(f, /price: onSale \?/, '할인 중인데 화면에는 SDK 의 할인 전 가격을 적는다');
+
+  // ⚠️ **정가만은 콘솔이 주인이다.** SDK 의 displayAmount 가 콘솔의 할인 전 가격이라,
+  //    그걸 먼저 봐야 콘솔에서 정가를 고쳤을 때 화면이 따라온다. 서버 표는 배포해야
+  //    바뀌므로 받침으로만 둔다(할인가는 반대로 SDK 가 주지 않아 서버만이 안다).
+  assert.match(f, /_won\(p\.displayAmount\)\s*\|\|\s*srv\?\.amount/,
+    '콘솔 정가(displayAmount)보다 서버 표를 먼저 본다 — 콘솔에서 정가를 바꿔도 화면이 안 따라온다');
+  // 할인가가 정가보다 싸지 않으면 할인이 아니다. 콘솔에서 정가를 내렸는데 MINI_SALE 이
+  // 그대로면, 화면이 결제창보다 비싸게 말하게 된다.
+  assert.match(f, /const onSale = sale > 0 && listed > 0 && sale < listed/,
+    '할인가가 정가보다 싼지 확인하지 않는다');
 
   // 서버가 실제로 정가와 할인가를 실어 보내는지. 안 보내면 표시가 조용히 안 뜬다.
   const products = WORKER.slice(WORKER.indexOf('const MINI_PRODUCTS = {'));

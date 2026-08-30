@@ -642,6 +642,9 @@ async function retry(fn, times = 3, gapMs = 500) {
  *    그래서 지금은 서버가 아는 할인가(saleAmount)와 정가를 견준다.
  *    서버 쪽은 만료일이 지나면 saleAmount 를 아예 안 주므로 표시도 저절로 사라진다.
  */
+/** "4,290원" 이든 4290 이든 숫자로. 콘솔 값은 통화 표기가 붙어 온다. */
+const _won = (v) => Number(String(v ?? '').replace(/[^\d]/g, '')) || 0;
+
 function _discountOf(saleAmount, listed) {
   const paid = Number(String(saleAmount ?? '').replace(/[^\d]/g, ''));
   if (!(paid > 0) || !(listed > 0) || paid >= listed) return {};
@@ -681,8 +684,15 @@ async function loadProducts() {
     const products = res?.products || [];
     state.catalog = products.map(p => {
       const srv = sellable.get(p.sku);
-      const listed = srv?.amount || 0;
+      // 정가는 **콘솔이 주인**이다. SDK 의 displayAmount 가 콘솔의 할인 전 가격이므로
+      // 그쪽을 먼저 쓴다 — 이래야 콘솔에서 정가를 고쳤을 때 화면이 저절로 따라온다.
+      // 서버 표(MINI_PRODUCTS)는 배포해야 바뀌므로 못 읽었을 때의 받침으로만 둔다.
+      const listed = _won(p.displayAmount) || srv?.amount || 0;
       const sale = srv?.saleAmount || 0;
+      // 할인가가 정가보다 싸지 않으면 할인이 아니다. 콘솔에서 정가를 할인가 아래로
+      // 내렸는데 MINI_SALE 을 안 고쳤을 때 여기 걸린다 — 그때는 없는 셈 치고
+      // 콘솔 값을 그대로 보여준다. 화면이 결제창보다 비싸게 말하는 일은 없어야 한다.
+      const onSale = sale > 0 && listed > 0 && sale < listed;
       return {
         sku: p.sku,
         label: p.displayName || srv?.label || p.sku,
@@ -690,9 +700,9 @@ async function loadProducts() {
         //    할인 전 가격이라, 그대로 쓰면 화면은 9,900원인데 결제창은 4,950원이 된다.
         //    할인이 없으면(또는 기간이 끝났으면) 서버가 saleAmount 를 안 주므로
         //    예전처럼 SDK 값이 그대로 쓰인다.
-        price: sale ? `${sale.toLocaleString('ko-KR')}원` : (p.displayAmount || ''),
+        price: onSale ? `${sale.toLocaleString('ko-KR')}원` : (p.displayAmount || ''),
         known: sellable.has(p.sku),
-        ..._discountOf(sale, listed),
+        ..._discountOf(onSale ? sale : 0, listed),
       };
     });
   } catch (e) {

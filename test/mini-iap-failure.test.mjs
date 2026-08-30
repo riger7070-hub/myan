@@ -15,8 +15,8 @@ import assert from 'node:assert/strict';
 import { loadWorker } from './load-worker.mjs';
 import { createD1 } from './d1-sqlite.mjs';
 
-const { handleMiniPaymentGrant, handleMiniAdminOrderProbe, createSessionToken } = await loadWorker([
-  'handleMiniPaymentGrant', 'handleMiniAdminOrderProbe', 'createSessionToken',
+const { handleMiniPaymentGrant, handleMiniAdminOrderProbe, handleMiniAdminFailures, createSessionToken } = await loadWorker([
+  'handleMiniPaymentGrant', 'handleMiniAdminOrderProbe', 'handleMiniAdminFailures', 'createSessionToken',
 ]);
 
 const SECRET = 'mini-iap-test-secret';
@@ -199,4 +199,34 @@ test('모르는 SKU 는 그 번호가 원장에 그대로 남는다', async () =
   assert.ok(failed[0].pkg.includes(SKU), `주문의 SKU 가 안 남았다: ${failed[0].pkg}`);
   // 화면이 다른 번호를 보여줬다는 사실도 함께 남는다 — 그게 곧 원인이다.
   assert.match(failed[0].pkg, /화면:token_10/);
+});
+
+// ── 막힌 주문 목록 ──────────────────────────────────────────
+//
+// 콘솔에서 가격을 고치면 SKU 가 새로 생겨 지급이 멈춘다. 화면에는 "준비 중" 으로만
+// 뜨므로 모르고 지나가기 쉽다. 그래서 한 줄로 확인할 자리를 둔다.
+
+test('막힌 주문 목록도 열쇠가 있어야 열린다', async () => {
+  const { DB } = createD1();
+  const env = { DB, ADMIN_SECRET: 'ADMIN-KEY' };
+  const call = (key) => handleMiniAdminFailures(
+    new Request(`https://x/admin/mini-failures${key ? `?key=${key}` : ''}`), env);
+  assert.equal((await call()).status, 401);
+  assert.equal((await call('틀린것')).status, 401);
+  assert.equal((await call('ADMIN-KEY')).status, 200);
+});
+
+test('막힌 주문이 SKU 와 함께 나온다', async () => {
+  const SKU = 'ait.0000062547.477ec529.3d1aad69c3.7717716588';
+  const { db, DB } = createD1();
+  db.prepare(
+    `INSERT INTO mini_payment_requests (id,user_key,pkg,amount,tokens,status)
+     VALUES (?,?,?,0,0,'failed')`
+  ).run(`fail:${ORDER}`, USER, `grant_failed:모르는SKU:${SKU}`);
+  const res = await handleMiniAdminFailures(
+    new Request('https://x/admin/mini-failures?key=K'), { DB, ADMIN_SECRET: 'K' });
+  const body = await res.json();
+  assert.equal(body.실패.length, 1);
+  // 이 번호를 그대로 MINI_SKU_ALIAS 에 넣으면 복구된다 — 그래서 여기 보여야 한다.
+  assert.ok(body.실패[0].pkg.includes(SKU));
 });
