@@ -2768,7 +2768,7 @@ async function _miniNoteFailedOrder(env, orderId, userKey, why) {
       `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status)
        VALUES (?, ?, ?, 0, 0, 'failed')
        ON CONFLICT(id) DO NOTHING`
-    ).bind(`fail:${orderId}`, userKey, `grant_failed:${why}`.slice(0, 80)).run();
+    ).bind(`fail:${orderId}`, userKey, `grant_failed:${why}`.slice(0, 200)).run();
   } catch (e) {
     console.error('[MINI IAP] 실패 기록마저 실패:', orderId, e?.message);
   }
@@ -2783,7 +2783,11 @@ async function handleMiniPaymentGrant(request, env) {
   const userKey = await getMiniUserKeyFromRequest(request, env);
   if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
 
-  const { orderId } = await request.json().catch(() => ({}));
+  // shownSku 는 화면이 보여준 상품 번호다. **지급량을 정하는 데는 쓰지 않는다** —
+  // 그러면 10개를 사고 100개를 받아갈 수 있다. 주문이 말하는 SKU 와 어긋났을 때
+  // 어느 쪽이 틀렸는지 알아보려고 로그와 흔적에만 남긴다.
+  const { orderId, shownSku } = await request.json().catch(() => ({}));
+  const _shown = typeof shownSku === 'string' ? shownSku.slice(0, 80) : null;
   if (!orderId || typeof orderId !== 'string') {
     return miniCors(request, JSON.stringify({ error: { message: '주문번호가 필요합니다.' } }), 400);
   }
@@ -2819,8 +2823,12 @@ async function handleMiniPaymentGrant(request, env) {
     // 콘솔에 상품을 추가하고 MINI_SKU_ALIAS 에 그 번호를 안 넣으면 여기로 온다.
     // 돈은 이미 받았으므로 조용히 넘기지 말고 반드시 로그를 남긴다 —
     // 이 줄의 SKU 를 그대로 시크릿에 넣으면 복구된다.
-    console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, _miniOrderShape(order));
-    await _miniNoteFailedOrder(env, orderId, userKey, '모르는SKU');
+    // 흔적에 **주문이 말한 SKU 를 그대로** 넣는다. 로그가 사라진 뒤에도 원장만 보면
+    // MINI_SKU_ALIAS 에 무엇을 더해야 하는지 알 수 있어야 한다.
+    // 화면이 보여준 번호도 함께 남긴다 — 둘이 다르면 그것이 곧 원인이다.
+    console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, _miniOrderShape(order), '화면:', _shown);
+    await _miniNoteFailedOrder(env, orderId, userKey,
+      `모르는SKU:${sku}${_shown && _shown !== sku ? ` (화면:${_shown})` : ''}`);
     return miniCors(request, JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
   }
 

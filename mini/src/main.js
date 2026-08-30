@@ -736,7 +736,16 @@ function buyTokens(product) {
       // false 를 돌려주면 토스가 미완료 주문으로 남겨 두고, 다음 실행 때 복구된다.
       processProductGrant: async ({ orderId }) => {
         try {
-          const r = await api('/mini/api/payment/grant', { method: 'POST', body: { orderId } });
+          // sku 는 **참고용으로만** 보낸다. 지급량은 서버가 주문에서 읽은 SKU 로만 정한다 —
+          // 클라이언트가 말한 상품을 믿으면 10개를 사고 100개를 받아갈 수 있다.
+          //
+          // 그래도 보내는 이유: 화면이 보여준 상품 번호와 주문이 말하는 번호가 **다를 수
+          // 있다.** 2026-08-30 에 실제로 그랬다 — 타일은 서버가 아는 SKU 였는데(할인 배지가
+          // 붙어 있었다) 주문은 표에 없는 번호를 돌려줘서 지급이 막혔다. 둘을 나란히
+          // 남겨 두지 않으면 다음에도 어느 쪽이 어긋났는지 알 수가 없다.
+          const r = await api('/mini/api/payment/grant', {
+            method: 'POST', body: { orderId, shownSku: product.sku },
+          });
           // ⚠️ 2xx 라고 다 지급된 것이 아니다. 결제가 아직 정산 중이면 서버가 202 를
           //    주는데(`ok` 없이 `retry: true`), api() 는 2xx 를 통과시키므로 여기까지 온다.
           //    그때 true 를 돌려주면 **토스가 주문을 완료로 접는다** — 엽전은 안 들어갔는데

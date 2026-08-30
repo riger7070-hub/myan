@@ -157,3 +157,46 @@ test('토스 조회가 막혀도 그 사실을 그대로 돌려준다', async ()
   assert.match(body.조회오류, /403/);
   assert.equal(body.응답, null);
 });
+
+// ── 화면이 보여준 SKU 와 주문이 말하는 SKU ──────────────────
+//
+// 2026-08-30 의 진짜 원인이 여기였다. 타일은 서버가 아는 SKU 였는데(할인 배지가 붙어
+// 있었다) 주문은 표에 없는 번호를 돌려줬다. 그래서 클라이언트가 보여준 번호도 함께
+// 받아 두는데, **그 값으로 지급량을 정하면 안 된다** — 10개를 사고 100개를 받게 된다.
+
+async function grantWith({ orderSku, shownSku }) {
+  const { db, DB } = createD1();
+  const env = {
+    DB, SESSION_SECRET: SECRET,
+    TOSS_MTLS: { fetch: async () => json({ status: 'PURCHASED', sku: { id: orderSku } }) },
+  };
+  const session = await createSessionToken(`mini:${USER}`, env);
+  const res = await handleMiniPaymentGrant(new Request('https://x/mini/api/payment/grant', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId: ORDER, shownSku }),
+  }), env);
+  const balance = Number(db.prepare(
+    `SELECT COALESCE(SUM(tokens),0) b FROM mini_payment_requests WHERE user_key=? AND status='approved'`
+  ).get(USER).b);
+  const failed = db.prepare(
+    `SELECT pkg FROM mini_payment_requests WHERE user_key=? AND status='failed'`
+  ).all(USER);
+  return { res, balance, failed };
+}
+
+test('화면이 말한 상품으로는 지급량이 바뀌지 않는다', async () => {
+  const { res, balance } = await grantWith({ orderSku: 'token_10', shownSku: 'token_100' });
+  assert.equal(res.status, 200);
+  assert.equal(balance, 10, '클라이언트가 말한 상품을 믿으면 10개 사고 100개를 받아간다');
+});
+
+test('모르는 SKU 는 그 번호가 원장에 그대로 남는다', async () => {
+  const SKU = 'ait.0000062547.477ec529.3d1aad69c3.7717716588';
+  const { failed } = await grantWith({ orderSku: SKU, shownSku: 'token_10' });
+  assert.equal(failed.length, 1);
+  // 로그가 사라진 뒤에도 원장만 보면 시크릿에 무엇을 더할지 알 수 있어야 한다.
+  assert.ok(failed[0].pkg.includes(SKU), `주문의 SKU 가 안 남았다: ${failed[0].pkg}`);
+  // 화면이 다른 번호를 보여줬다는 사실도 함께 남는다 — 그게 곧 원인이다.
+  assert.match(failed[0].pkg, /화면:token_10/);
+});
