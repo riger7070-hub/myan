@@ -158,7 +158,9 @@ test('자동 광고는 화면을 떠날 때 튼다', () => {
 
 test('돈을 낸 사람에게는 자동 광고를 예약하지 않는다', () => {
   // 결제 지급 두 곳(즉시·미완료 복구) 모두 ad:false 여야 한다.
-  const paid = [...SRC.matchAll(/payment\/grant[\s\S]{0,220}?gainCoins\(([^)]*)\)/g)].map(m => m[1]);
+  // 범위를 넉넉히 잡는다 — 두 자리 사이에 주석이 붙으면 좁은 창은 그것만으로 놓친다
+  // (실제로 220자였을 때 지급 가드 주석 하나에 한 곳을 못 찾았다).
+  const paid = [...SRC.matchAll(/payment\/grant[\s\S]{0,600}?gainCoins\(([^)]*)\)/g)].map(m => m[1]);
   assert.ok(paid.length >= 2, `결제 지급 자리를 ${paid.length}곳만 찾았다`);
   for (const args of paid) {
     assert.match(args, /ad:\s*false/, `결제 지급이 자동 광고를 예약한다: gainCoins(${args})`);

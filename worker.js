@@ -1793,6 +1793,7 @@ export default {
     if (path === '/admin/approve' && method === 'POST') return handleAdminApprove(request, env);
     if (path === '/admin/telegram-approve' && method === 'GET') return handleTelegramApprove(request, env);
     if (path === '/admin/grant-tokens' && method === 'POST') return handleAdminGrantTokens(request, env);
+    if (path === '/admin/mini-order' && method === 'GET') return handleMiniAdminOrderProbe(request, env);
     // /chat(대화형 리딩) 라우트·핸들러 제거됨. '채팅 방식 제거' 리뉴얼 이후
     // 프론트에서 도달할 수 없는 경로였다(_enterMode가 입력창을 숨기고 showSajuInput으로 보냄).
     // 되살리려면 git 이력에서 handleGeminiChat을 참고할 것.
@@ -2680,12 +2681,102 @@ async function _tossOrderStatus(env, orderId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orderId }),
   });
-  if (!res.ok) throw new Error(`주문 조회 실패(${res.status})`);
+  // ⚠️ 상태 코드만 남기면 원인을 못 짚는다. 결제는 됐는데 지급이 안 되는 사고가 났을 때
+  //    돌아온 몸통이 유일한 단서라, 앞부분을 그대로 남긴다(주문 조회 응답이라 개인정보가 없다).
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error('[MINI IAP] 주문 조회 HTTP 실패:', res.status, body.slice(0, 300));
+    throw new Error(`주문 조회 실패(${res.status})`);
+  }
   const data = await res.json();
   // HTTP 200 이어도 resultType 으로 실패를 알린다 — 반드시 확인할 것.
-  if (data?.resultType && data.resultType !== 'SUCCESS') throw new Error('주문 조회에 실패했습니다.');
+  if (data?.resultType && data.resultType !== 'SUCCESS') {
+    console.error('[MINI IAP] 주문 조회 실패 응답:', JSON.stringify(data).slice(0, 300));
+    throw new Error('주문 조회에 실패했습니다.');
+  }
   return data?.success || data;
 }
+
+/**
+ * 관리자 전용 주문 조회 — **결제를 새로 하지 않고** 지급이 왜 막혔는지 보는 자리.
+ *
+ * 왜 필요한가 — 결제가 됐는데 지급이 실패하면 원인 후보가 셋이다(토스 조회 자체가 막힘 /
+ * 상태값이 예상과 다름 / SKU 를 우리가 엉뚱한 자리에서 읽음). 셋을 가르려면 **진짜 주문에
+ * 대한 진짜 응답**이 있어야 하는데, 그걸 보자고 매번 결제하면 수수료가 나간다.
+ * 이미 결제된 주문번호 하나면 몇 번이고 다시 물어볼 수 있다 — 돈이 들지 않는다.
+ *
+ *   curl "https://myan.riger7070.workers.dev/admin/mini-order?orderId=<주문번호>&key=<ADMIN_SECRET>"
+ *
+ * ⚠️ 읽기만 한다. 지급도, 환불도, 어떤 기록도 남기지 않는다.
+ * ⚠️ ADMIN_SECRET 이 없으면 항상 거절한다(안전한 기본값). 비교는 상수 시간으로 한다 —
+ *    주문 내용을 열어 주는 자리라 PIN 들과 같은 취급을 하지 않는다.
+ */
+async function handleMiniAdminOrderProbe(request, env) {
+  const url = new URL(request.url);
+  const given = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim()
+    || url.searchParams.get('key') || '';
+  if (!env.ADMIN_SECRET || !_timingSafeEqual(given, env.ADMIN_SECRET)) {
+    return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
+  }
+  const orderId = (url.searchParams.get('orderId') || '').trim();
+  if (!orderId) return cors(JSON.stringify({ error: { message: '주문번호가 필요합니다.' } }), 400);
+
+  let order = null, 조회오류 = null;
+  try {
+    order = await _tossOrderStatus(env, orderId);
+  } catch (e) {
+    조회오류 = e?.message || String(e);
+  }
+
+  // 지급 핸들러와 **똑같은 자리에서** 읽는다. 여기서만 다르게 읽으면 진단이 거짓말이 된다.
+  const sku = order && (order?.sku?.id || order?.sku?.sku || order?.sku);
+  const product = _miniProductForSku(env, typeof sku === 'string' ? sku : null);
+  const 지급행 = env.DB ? await env.DB.prepare(
+    `SELECT user_key, tokens, status FROM mini_payment_requests WHERE id = ?`
+  ).bind(orderId).first().catch(() => null) : null;
+
+  return cors(JSON.stringify({
+    orderId,
+    조회오류,
+    응답: order,
+    읽어낸것: {
+      상태: order?.status ?? null,
+      지급대상상태인가: TOSS_ORDER_PAID.has(order?.status),
+      sku: sku ?? null,
+      찾은상품: product,
+    },
+    원장: 지급행,
+  }, null, 2), 200);
+}
+
+/**
+ * 지급에 실패한 주문을 원장에 흔적으로 남긴다.
+ *
+ * 왜 필요한가 — 실패는 지금까지 `console` 에만 남았고, 로그는 붙잡고 있지 않으면 사라진다.
+ * 그래서 "돈은 들어왔는데 엽전이 없다" 를 **아무 데서도 찾을 수 없었다.** 실제로 한 건이
+ * 사용자의 화면 갈무리 덕분에 겨우 드러났다(2026-08-30). 앞으로는 이 행을 세면 된다.
+ *
+ *   npx wrangler d1 execute myan-db --remote \
+ *     --command "SELECT * FROM mini_payment_requests WHERE status='failed' ORDER BY created_at DESC"
+ *
+ * ⚠️ `tokens = 0`, `status = 'failed'` 이므로 잔액에 섞이지 않는다 — 잔액은 approved 만 센다.
+ *    다른 조회들도 pkg('checkin'/'ad')나 status 로 거르므로 이 행에 걸리지 않는다.
+ */
+async function _miniNoteFailedOrder(env, orderId, userKey, why) {
+  try {
+    await env.DB.prepare(
+      `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status)
+       VALUES (?, ?, ?, 0, 0, 'failed')
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`fail:${orderId}`, userKey, `grant_failed:${why}`.slice(0, 80)).run();
+  } catch (e) {
+    console.error('[MINI IAP] 실패 기록마저 실패:', orderId, e?.message);
+  }
+}
+
+/** 주문 응답이 어떤 모양으로 왔는지. 원인이 '우리가 엉뚱한 자리를 읽는다' 일 때 이것만이 단서다. */
+const _miniOrderShape = (order) =>
+  `키[${Object.keys(order || {}).join(',')}] status=${JSON.stringify(order?.status)} sku=${JSON.stringify(order?.sku)}`;
 
 async function handleMiniPaymentGrant(request, env) {
   if (!env.DB) return miniCors(request, JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
@@ -2702,6 +2793,7 @@ async function handleMiniPaymentGrant(request, env) {
     order = await _tossOrderStatus(env, orderId);
   } catch (e) {
     console.error('[MINI IAP] 주문 조회 실패:', orderId, e?.message);
+    await _miniNoteFailedOrder(env, orderId, userKey, '주문조회');
     return miniCors(request, JSON.stringify({ error: { message: '결제 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 502);
   }
 
@@ -2717,7 +2809,8 @@ async function handleMiniPaymentGrant(request, env) {
     return miniCors(request, JSON.stringify({ error: { message: '결제가 진행 중입니다. 잠시 후 다시 확인해 주세요.' }, retry: true }), 202);
   }
   if (!TOSS_ORDER_PAID.has(status)) {
-    console.warn('[MINI IAP] 지급 대상이 아닌 상태:', orderId, status, order?.reason);
+    console.warn('[MINI IAP] 지급 대상이 아닌 상태:', orderId, order?.reason, _miniOrderShape(order));
+    await _miniNoteFailedOrder(env, orderId, userKey, `상태:${status}`);
     return miniCors(request, JSON.stringify({ error: { message: '완료되지 않은 결제입니다.' } }), 400);
   }
 
@@ -2726,7 +2819,8 @@ async function handleMiniPaymentGrant(request, env) {
     // 콘솔에 상품을 추가하고 MINI_SKU_ALIAS 에 그 번호를 안 넣으면 여기로 온다.
     // 돈은 이미 받았으므로 조용히 넘기지 말고 반드시 로그를 남긴다 —
     // 이 줄의 SKU 를 그대로 시크릿에 넣으면 복구된다.
-    console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, JSON.stringify(sku));
+    console.error('[MINI IAP] 모르는 SKU — 지급 못 함:', orderId, _miniOrderShape(order));
+    await _miniNoteFailedOrder(env, orderId, userKey, '모르는SKU');
     return miniCors(request, JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
   }
 

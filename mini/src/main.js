@@ -737,6 +737,12 @@ function buyTokens(product) {
       processProductGrant: async ({ orderId }) => {
         try {
           const r = await api('/mini/api/payment/grant', { method: 'POST', body: { orderId } });
+          // ⚠️ 2xx 라고 다 지급된 것이 아니다. 결제가 아직 정산 중이면 서버가 202 를
+          //    주는데(`ok` 없이 `retry: true`), api() 는 2xx 를 통과시키므로 여기까지 온다.
+          //    그때 true 를 돌려주면 **토스가 주문을 완료로 접는다** — 엽전은 안 들어갔는데
+          //    다음 실행의 미완료 주문 복구 대상에서도 빠져서, 돈만 나가고 끝난다.
+          //    지급이 확인된 것(`ok`)만 성공이라고 답한다.
+          if (!r?.ok) { console.warn('[grant] 아직 지급 안 됨:', r?.error?.message || '알 수 없음'); return false; }
           gainCoins(r.balance, { ad: false });   // 돈을 낸 사람에게 광고를 틀지 않는다
           return true;
         } catch (e) {
