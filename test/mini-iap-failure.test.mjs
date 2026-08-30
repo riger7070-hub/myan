@@ -15,8 +15,8 @@ import assert from 'node:assert/strict';
 import { loadWorker } from './load-worker.mjs';
 import { createD1 } from './d1-sqlite.mjs';
 
-const { handleMiniPaymentGrant, handleMiniAdminOrderProbe, handleMiniAdminFailures, createSessionToken } = await loadWorker([
-  'handleMiniPaymentGrant', 'handleMiniAdminOrderProbe', 'handleMiniAdminFailures', 'createSessionToken',
+const { handleMiniPaymentGrant, handleMiniAdminOrderProbe, handleMiniAdminFailures, handleMiniAdminGrant, createSessionToken } = await loadWorker([
+  'handleMiniPaymentGrant', 'handleMiniAdminOrderProbe', 'handleMiniAdminFailures', 'handleMiniAdminGrant', 'createSessionToken',
 ]);
 
 const SECRET = 'mini-iap-test-secret';
@@ -229,4 +229,100 @@ test('막힌 주문이 SKU 와 함께 나온다', async () => {
   assert.equal(body.실패.length, 1);
   // 이 번호를 그대로 MINI_SKU_ALIAS 에 넣으면 복구된다 — 그래서 여기 보여야 한다.
   assert.ok(body.실패[0].pkg.includes(SKU));
+});
+
+// ── 손으로 지급하기 ─────────────────────────────────────────
+//
+// "돈은 나갔는데 엽전이 안 들어왔다" 는 문의가 오면 쓰는 자리다. 돈이 오간 곳이라
+// 세 가지를 못 박는다: 결제된 주문만, 한 번만, 수량은 표에서.
+
+async function adminGrant(body, { reply, secret = 'K', seedFail = null } = {}) {
+  const { db, DB } = createD1();
+  if (seedFail) {
+    db.prepare(
+      `INSERT INTO mini_payment_requests (id,user_key,pkg,amount,tokens,status)
+       VALUES (?,?,'grant_failed:모르는SKU',0,0,'failed')`
+    ).run(`fail:${ORDER}`, seedFail);
+  }
+  const env = { DB, ADMIN_SECRET: 'K', TOSS_MTLS: { fetch: async () => reply() } };
+  const call = () => handleMiniAdminGrant(new Request('https://x/admin/mini-grant', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }), env);
+  const balance = (u) => Number(db.prepare(
+    `SELECT COALESCE(SUM(tokens),0) b FROM mini_payment_requests WHERE user_key=? AND status='approved'`
+  ).get(u).b);
+  const failedCount = () => db.prepare(
+    `SELECT COUNT(*) c FROM mini_payment_requests WHERE status='failed'`
+  ).get().c;
+  return { call, balance, failedCount };
+}
+
+test('열쇠가 없으면 손으로도 지급 못 한다', async () => {
+  const { call, balance } = await adminGrant({ orderId: ORDER, userKey: USER },
+    { reply: () => json({ status: 'PURCHASED', sku: 'token_10' }), secret: 'WRONG' });
+  assert.equal((await call()).status, 401);
+  assert.equal(balance(USER), 0);
+});
+
+test('결제가 끝나지 않은 주문은 지급하지 않는다', async () => {
+  // ⚠️ sku 를 **알아볼 수 있는 값으로** 준다. 없는 SKU 로 두면 상품을 못 찾아서 막히고,
+  //    결제 확인을 통째로 지워도 검사가 통과한다(실제로 그랬다). 그러면 이 검사는
+  //    있으나 마나다 — 여기서 막는 것은 오직 '결제가 안 끝났다' 여야 한다.
+  for (const 상태 of ['ORDER_IN_PROGRESS', 'REFUNDED', 'CANCELED']) {
+    const { call, balance } = await adminGrant({ orderId: ORDER, userKey: USER },
+      { reply: () => json({ status: 상태, sku: 'token_10' }) });
+    assert.equal((await call()).status, 400, `${상태} 인 주문을 지급했다`);
+    assert.equal(balance(USER), 0, `${상태} 인 주문에 엽전이 나갔다`);
+  }
+});
+
+test('없는 주문이면 지급하지 않는다', async () => {
+  const { call, balance } = await adminGrant({ orderId: ORDER, userKey: USER },
+    { reply: () => new Response('no such order', { status: 404 }) });
+  assert.equal((await call()).status, 502);
+  assert.equal(balance(USER), 0);
+});
+
+test('결제된 주문은 지급되고, 두 번 눌러도 한 번만 나간다', async () => {
+  const { call, balance } = await adminGrant({ orderId: ORDER, userKey: USER },
+    { reply: () => json({ status: 'PAYMENT_COMPLETED', sku: 'token_30' }) });
+  const first = await (await call()).json();
+  assert.equal(first.granted, true);
+  assert.equal(balance(USER), 30);
+
+  const second = await (await call()).json();
+  assert.equal(second.granted, false, '두 번째 호출이 또 지급했다');
+  assert.equal(balance(USER), 30);
+});
+
+test('받을 사람은 실패 흔적에서 찾고, 처리하면 목록에서 내린다', async () => {
+  const { call, balance, failedCount } = await adminGrant({ orderId: ORDER },
+    { reply: () => json({ status: 'PURCHASED', sku: 'token_10' }), seedFail: USER });
+  assert.equal(failedCount(), 1);
+  const body = await (await call()).json();
+  assert.equal(body.userKey, USER, 'userKey 를 안 줬는데 흔적에서 못 찾았다');
+  assert.equal(balance(USER), 10);
+  assert.equal(failedCount(), 0, '처리한 실패가 목록에 그대로 남아 있다');
+});
+
+test('주문의 SKU 를 몰라도 상품을 지정하면 지급된다', async () => {
+  const 모르는것 = { status: 'PURCHASED', sku: 'ait.0000062547.477ec529.3d1aad69c3.7717716588' };
+  const 없이 = await adminGrant({ orderId: ORDER, userKey: USER }, { reply: () => json(모르는것) });
+  assert.equal((await 없이.call()).status, 400, '어느 상품인지 모르는데 지급했다');
+  assert.equal(없이.balance(USER), 0);
+
+  const 지정 = await adminGrant({ orderId: ORDER, userKey: USER, sku: 'token_10' },
+    { reply: () => json(모르는것) });
+  assert.equal((await 지정.call()).status, 200);
+  assert.equal(지정.balance(USER), 10);
+});
+
+test('요청이 수량을 정하지는 못한다', async () => {
+  // tokens 를 실어 보내도 표(MINI_PRODUCTS)의 값만 나간다.
+  const { call, balance } = await adminGrant({ orderId: ORDER, userKey: USER, sku: 'token_10', tokens: 9999 },
+    { reply: () => json({ status: 'PURCHASED', sku: 'token_10' }) });
+  await call();
+  assert.equal(balance(USER), 10);
 });

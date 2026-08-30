@@ -1795,6 +1795,7 @@ export default {
     if (path === '/admin/grant-tokens' && method === 'POST') return handleAdminGrantTokens(request, env);
     if (path === '/admin/mini-order' && method === 'GET') return handleMiniAdminOrderProbe(request, env);
     if (path === '/admin/mini-failures' && method === 'GET') return handleMiniAdminFailures(request, env);
+    if (path === '/admin/mini-grant' && method === 'POST') return handleMiniAdminGrant(request, env);
     // /chat(대화형 리딩) 라우트·핸들러 제거됨. '채팅 방식 제거' 리뉴얼 이후
     // 프론트에서 도달할 수 없는 경로였다(_enterMode가 입력창을 숨기고 showSajuInput으로 보냄).
     // 되살리려면 git 이력에서 handleGeminiChat을 참고할 것.
@@ -2740,6 +2741,89 @@ async function handleMiniAdminFailures(request, env) {
       ORDER BY created_at DESC LIMIT 50`
   ).all().catch(() => null);
   return cors(JSON.stringify({ 실패: rows?.results || [] }, null, 2), 200);
+}
+
+/**
+ * 막힌 주문을 손으로 지급한다 — 문의가 들어왔을 때 쓰는 자리.
+ *
+ *   curl -X POST -H "Authorization: Bearer <ADMIN_SECRET>" -H "Content-Type: application/json" \
+ *        -d '{"orderId":"<주문번호>"}' \
+ *        "https://myan.riger7070.workers.dev/admin/mini-grant"
+ *
+ * 안전장치 셋을 두고, 셋 다 양보하지 않는다.
+ *
+ *  1. **토스에 먼저 물어본다.** 결제가 끝난 주문이 아니면 지급하지 않는다.
+ *     사람이 주문번호를 잘못 옮겨 적어도 없는 결제로 엽전이 나가지 않는다.
+ *  2. **지급 행의 id 는 orderId 다.** 자동 지급과 같은 키라, 나중에 그 주문이
+ *     정상 경로로 다시 들어와도 PRIMARY KEY 가 두 번째를 막는다. 몇 번을 눌러도
+ *     한 번만 지급된다.
+ *  3. **지급량은 표에서 정한다.** 요청이 수량을 정하지 못한다. 주문의 SKU 를 모를 때만
+ *     `sku`(token_10 같은 상품 키)를 받는데, 그것도 값이 아니라 **어느 상품인지**다.
+ *
+ * 누구에게 줄지는 `userKey` 로 받되, 안 주면 그 주문의 실패 흔적(fail:<orderId>)에서
+ * 찾는다 — 실패한 그 사람이 곧 받을 사람이라 대개 적을 필요가 없다.
+ */
+async function handleMiniAdminGrant(request, env) {
+  if (!_adminKeyOk(request, env)) {
+    return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
+  }
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const body = await request.json().catch(() => ({}));
+  const orderId = typeof body?.orderId === 'string' ? body.orderId.trim() : '';
+  if (!orderId) return cors(JSON.stringify({ error: { message: '주문번호가 필요합니다.' } }), 400);
+
+  let order;
+  try {
+    order = await _tossOrderStatus(env, orderId);
+  } catch (e) {
+    return cors(JSON.stringify({ error: { message: `주문을 확인하지 못했습니다: ${e?.message || ''}` } }), 502);
+  }
+  if (!TOSS_ORDER_PAID.has(order?.status)) {
+    return cors(JSON.stringify({
+      error: { message: '결제가 끝난 주문이 아닙니다.' }, 상태: order?.status ?? null,
+    }), 400);
+  }
+
+  const orderSku = order?.sku?.id || order?.sku?.sku || order?.sku;
+  const product = _miniProductForSku(env, typeof orderSku === 'string' ? orderSku : null)
+    || (typeof body?.sku === 'string' ? MINI_PRODUCTS[body.sku] : null);
+  if (!product) {
+    return cors(JSON.stringify({
+      error: { message: '어느 상품인지 알 수 없습니다. sku 를 함께 보내 주세요.' },
+      주문의sku: orderSku ?? null, 고를수있는것: Object.keys(MINI_PRODUCTS),
+    }), 400);
+  }
+
+  const 흔적 = await env.DB.prepare(
+    `SELECT user_key FROM mini_payment_requests WHERE id = ?`
+  ).bind(`fail:${orderId}`).first().catch(() => null);
+  const userKey = (typeof body?.userKey === 'string' && body.userKey.trim())
+    || (흔적?.user_key ? String(흔적.user_key) : '');
+  if (!userKey) {
+    return cors(JSON.stringify({ error: { message: '누구에게 지급할지 알 수 없습니다. userKey 를 보내 주세요.' } }), 400);
+  }
+
+  const r = await env.DB.prepare(
+    `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+     VALUES (?, ?, ?, ?, ?, 'approved', unixepoch())
+     ON CONFLICT(id) DO NOTHING`
+  ).bind(orderId, userKey, String(orderSku || body?.sku || ''), product.amount, product.tokens).run();
+  const granted = (r?.meta?.changes ?? 0) > 0;
+
+  // 처리된 실패는 목록에서 내린다. 지운 것이 아니라 표시만 바꾼다 — 무슨 일이
+  // 있었는지는 남아 있어야 한다.
+  if (granted) {
+    await env.DB.prepare(
+      `UPDATE mini_payment_requests SET status = 'resolved' WHERE id = ? AND status = 'failed'`
+    ).bind(`fail:${orderId}`).run().catch(() => {});
+  }
+  console.log('[MINI IAP] 손으로 지급:', orderId, userKey, product.tokens, granted ? '지급' : '이미지급됨');
+
+  return cors(JSON.stringify({
+    ok: true, granted, userKey, tokens: product.tokens,
+    balance: await _miniBalance(env, userKey),
+  }), 200);
 }
 
 async function handleMiniAdminOrderProbe(request, env) {
