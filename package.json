@@ -12,6 +12,7 @@
     "blog:check": "node tools/check-blog-page.mjs",
     "blog:diagnose": "node tools/diagnose-blog.mjs && node tools/diagnose-endings.mjs",
     "shots": "node tools/build-blog-shots.mjs",
+    "post": "node tools/build-post.mjs",
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run",
     "smoke": "node tools/smoke.mjs",
     "smoke:web": "node tools/smoke-browser.mjs",

@@ -24,6 +24,8 @@ import { chromium } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+// 띠 순위 읽기는 원고 뽑는 쪽과 함께 쓴다 — 두 벌이면 그림과 글이 다른 1위를 말한다.
+import { fetchRanking } from './lib/tti.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'insta');
@@ -51,17 +53,6 @@ const SAMJAE = {
   now: 2026,
 };
 
-/** 오늘의 띠 순위를 서버에서 그대로 가져온다. 앱과 같은 숫자여야 한다. */
-async function fetchRanking() {
-  const html = await (await fetch(`${SITE}/tti`)).text();
-  const rows = [...html.matchAll(/<td class="r">(\d+)<\/td><td>([^<]+)<\/td>\s*<td class="s">([^<]*)<\/td>/g)]
-    .map((m) => ({ rank: +m[1], name: m[2], why: m[3].trim() }));
-  if (rows.length !== 12) throw new Error(`순위를 ${rows.length}개만 받았다 — /tti 가 바뀌었는지 볼 것`);
-  const title = html.match(/<title>([^<]+)<\/title>/)?.[1] || '';
-  const date = title.match(/\((\d+)월 (\d+)일\)/);
-  const ji = html.match(/일진\(([^)]+)\)/)?.[1] || '';
-  return { rows, month: date?.[1], day: date?.[2], ji };
-}
 
 /**
  * 띠 궁합표를 **살아 있는 페이지에서 그대로** 읽어 온다.
