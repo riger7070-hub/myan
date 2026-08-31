@@ -14,7 +14,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'package.json'));
 const { chromium } = require('playwright');
 
-const PRODUCTS = [10, 30, 100];          // worker.js 의 MINI_PRODUCTS 와 같은 개수
+// worker.js 의 MINI_PRODUCTS 와 짝을 맞춘다. [나갈 파일 이름, 원본에 붙일 물음표 뒤]
+const PRODUCTS = [
+  ['token-10',  'tokens=10'],
+  ['token-30',  'tokens=30'],
+  ['token-100', 'tokens=100'],
+  ['alms',      'kind=alms'],      // 안스님 동냥
+];
 
 const srv = createServer(async (rq, rs) => {
   try {
@@ -33,10 +39,10 @@ for (const ch of ['msedge', 'chrome', undefined]) {
 // 배율 1 — 콘솔이 요구하는 크기가 정확히 1024×1024 다.
 const pg = await br.newPage({ viewport: { width: 1024, height: 1024 }, deviceScaleFactor: 1 });
 
-for (const n of PRODUCTS) {
-  await pg.goto(`http://localhost:${port}/?tokens=${n}`, { waitUntil: 'networkidle' });
+for (const [name, query] of PRODUCTS) {
+  await pg.goto(`http://localhost:${port}/?${query}`, { waitUntil: 'networkidle' });
   await pg.waitForTimeout(600);          // 웹폰트가 자리를 잡을 틈
-  const out = join(ROOT, 'mini', 'store', `token-${n}.png`);
+  const out = join(ROOT, 'mini', 'store', `${name}.png`);
   await pg.screenshot({ path: out });
   console.log('만듦:', out);
 }
