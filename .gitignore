@@ -73,3 +73,6 @@ blog/사진/
 # 저장소 루트가 통째로 정적 자산으로 서빙되므로(wrangler.toml 의 [assets]) 여기 커밋하면
 # 홈 디렉터리 경로가 박힌 설정이 그대로 공개된다. PC 마다 다른 값이라 공유할 것도 아니다.
 .claude/
+blog/토스 상품 이미지/
+blog/product-image.html
+blog/product-image_files/
