@@ -2592,8 +2592,61 @@ const MINI_PRODUCTS = {
   //
   // ⚠️ 10원짜리는 만들 수 없다. 위에 적었듯 판매가 = 공급가 × 1.1 이라 11 의 배수만
   //    나오고, 가장 낮게 잡아도 110원(공급가 100)이다.
-  donate: { tokens: 1, amount: 1100, label: '안스님 동냥', 덕담: true },
+  donate: { tokens: 1, amount: 1100, label: '안스님 동냥', 동냥: true },
 };
+
+// ── 동냥에 얹어 드리는 엽전 ──
+// 안스님이 바리때에서 한 줌 집어 주는 것이라 몇 개가 될지 모른다. 1~10개.
+//
+// ⚠️ **천분율이다. 합이 정확히 1000 이어야 한다.** 안 그러면 마지막 칸이 못 나오거나
+//    범위를 벗어난다. 시험이 확인한다.
+//
+// ⚠️ **고르게 뽑으면 안 된다.** 1~10 을 고르게 주면 평균 5.5개가 되고, 1,100원에
+//    5.5개면 200원/개다. 가장 싼 엽전 칸이 429원/개이므로 동냥이 엽전을 싸게 사는
+//    노름판이 된다. 그래서 아래로 몰아 두었다 — 기댓값 2.249개, 489원/개.
+//    엽전 칸 값을 내리는 날에는 이 표도 함께 봐야 한다(시험이 잡아 준다).
+//
+// ⚠️ 확률을 바꾸면 **화면에 적히는 숫자도 저절로 바뀐다.** 앱은 이 표를 받아서 그린다.
+//    두 곳에 적어 두면 광고한 확률과 실제 확률이 어긋나는데, 그건 거짓말이 된다.
+const ALMS_ODDS = [
+  [1, 450], [2, 250], [3, 130], [4, 70], [5, 40],
+  [6, 25], [7, 15], [8, 10], [9, 6], [10, 4],
+];
+
+/** 문자열 하나를 32비트 숫자로. 덕담과 엽전이 같은 값을 쓰지 않게 소금을 달리한다. */
+function _hash32(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/**
+ * 이 주문에 얹을 엽전 수.
+ *
+ * ⚠️ **주문번호에서 뽑는다. 무작위로 굴리면 안 된다.** 지급은 재시도로 여러 번
+ *    들어오는데, 그때마다 다시 굴리면 10개가 나올 때까지 재시도하는 길이 열린다.
+ *    주문번호가 같으면 몇 번을 물어도 같은 수가 나온다.
+ *
+ * ⚠️ 덕담과 **다른 소금**을 쓴다. 같으면 "이 덕담이면 10개" 가 되어, 몇 번 사 본
+ *    사람이 결과를 미리 알게 된다.
+ */
+function _almsCoinsFor(orderId) {
+  let r = _hash32('엽전:' + String(orderId)) % 1000;
+  for (const [n, w] of ALMS_ODDS) {
+    if (r < w) return n;
+    r -= w;
+  }
+  return ALMS_ODDS[ALMS_ODDS.length - 1][0];   // 합이 1000 이면 닿지 않는다
+}
+
+/**
+ * 이 주문에 지급할 엽전 수. 동냥이면 굴려서, 아니면 표에 적힌 대로.
+ *
+ * ⚠️ 지급하는 자리가 둘이다(사용자 결제, 관리자 손지급). **둘 다 이 함수를 쓴다.**
+ *    한쪽만 굴리면 손으로 지급했을 때 다른 수가 나가고, 그러면 원장이 어긋난다.
+ */
+const _tokensFor = (product, orderId) =>
+  product.동냥 ? _almsCoinsFor(orderId) : product.tokens;
 
 // 안스님이 건네는 덕담. **점을 치지 않는다** — 앞일을 맞히는 말은 한 마디도 없다.
 // 동냥을 받았으니 인사를 하는 것뿐이다.
@@ -2614,10 +2667,7 @@ const MONK_BLESSINGS = [
  *    덕담이 뜨면 같은 동냥에 스님이 말을 바꾼다. 주문번호가 같으면 늘 같은 말이 나온다.
  */
 function _blessingFor(orderId) {
-  const s = String(orderId);
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
-  return MONK_BLESSINGS[h % MONK_BLESSINGS.length];
+  return MONK_BLESSINGS[_hash32('덕담:' + String(orderId)) % MONK_BLESSINGS.length];
 }
 
 // ── 콘솔 SKU ↔ 위 상품 키 ──
@@ -2703,7 +2753,14 @@ function _miniSellableSkus(env) {
       const item = { sku, ...MINI_PRODUCTS[key] };
       // 동냥 칸은 앱에서 다르게 그린다(안스님 그림, 다른 설명). 상품 키를 앱에 흘리지 않고
       // 종류만 알려 준다 — 앱이 키 이름을 알면 그 이름에 기대는 코드가 생긴다.
-      if (item.덕담) { item.kind = 'donate'; delete item.덕담; }
+      // ⚠️ 확률을 **여기서 함께 내려보낸다.** 앱에 따로 적어 두면 광고한 확률과
+      //    실제로 굴리는 확률이 어긋날 수 있고, 그건 거짓말이 된다.
+      //    화면에 적히는 숫자와 굴리는 표가 같은 하나여야 한다.
+      if (item.동냥) {
+        item.kind = 'donate';
+        item.odds = ALMS_ODDS.map(([n, w]) => [n, w / 10]);   // 천분율 → 백분율
+        delete item.동냥;
+      }
       const s = sale[key];
       // 정가보다 싼 값만 할인으로 친다. 잘못 적어 더 비싸게 뜨는 일은 없어야 한다.
       if (s && s.amount < item.amount) {
@@ -2848,11 +2905,13 @@ async function handleMiniAdminGrant(request, env) {
     return cors(JSON.stringify({ error: { message: '누구에게 지급할지 알 수 없습니다. userKey 를 보내 주세요.' } }), 400);
   }
 
+  // 동냥이면 여기서도 같은 수가 나온다 — 주문번호로 굴리기 때문이다.
+  const tokens = _tokensFor(product, orderId);
   const r = await env.DB.prepare(
     `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
      VALUES (?, ?, ?, ?, ?, 'approved', unixepoch())
      ON CONFLICT(id) DO NOTHING`
-  ).bind(orderId, userKey, String(orderSku || body?.sku || ''), product.amount, product.tokens).run();
+  ).bind(orderId, userKey, String(orderSku || body?.sku || ''), product.amount, tokens).run();
   const granted = (r?.meta?.changes ?? 0) > 0;
 
   // 처리된 실패는 목록에서 내린다. 지운 것이 아니라 표시만 바꾼다 — 무슨 일이
@@ -2862,10 +2921,10 @@ async function handleMiniAdminGrant(request, env) {
       `UPDATE mini_payment_requests SET status = 'resolved' WHERE id = ? AND status = 'failed'`
     ).bind(`fail:${orderId}`).run().catch(() => {});
   }
-  console.log('[MINI IAP] 손으로 지급:', orderId, userKey, product.tokens, granted ? '지급' : '이미지급됨');
+  console.log('[MINI IAP] 손으로 지급:', orderId, userKey, tokens, granted ? '지급' : '이미지급됨');
 
   return cors(JSON.stringify({
-    ok: true, granted, userKey, tokens: product.tokens,
+    ok: true, granted, userKey, tokens,
     balance: await _miniBalance(env, userKey),
   }), 200);
 }
@@ -2989,6 +3048,10 @@ async function handleMiniPaymentGrant(request, env) {
     return miniCors(request, JSON.stringify({ error: { message: '알 수 없는 상품입니다. 고객센터로 문의해 주세요.' } }), 500);
   }
 
+  // 동냥이면 몇 개를 드릴지 여기서 굴린다. **주문번호로 굴리므로 재시도해도 같은 수다** —
+  // 무작위로 굴리면 10개가 나올 때까지 재시도하는 길이 열린다.
+  const tokens = _tokensFor(product, orderId);
+
   // 같은 orderId 로 두 번 들어와도 한 번만 지급한다 — orderId 가 곧 기본키다.
   // 클라이언트가 재시도하거나 getPendingOrders 로 복구할 때 실제로 두 번 온다.
   let inserted = false;
@@ -2997,22 +3060,22 @@ async function handleMiniPaymentGrant(request, env) {
       `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
        VALUES (?, ?, ?, ?, ?, 'approved', unixepoch())
        ON CONFLICT(id) DO NOTHING`
-    ).bind(orderId, userKey, sku, product.amount, product.tokens).run();
+    ).bind(orderId, userKey, sku, product.amount, tokens).run();
     inserted = (r?.meta?.changes ?? 0) > 0;
   } catch (e) {
     console.error('[MINI IAP] 지급 기록 실패:', orderId, e?.message);
     return miniCors(request, JSON.stringify({ error: { message: '지급 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.' } }), 500);
   }
 
-  if (inserted) console.log('[MINI IAP] 지급 완료:', orderId, sku, product.tokens);
+  if (inserted) console.log('[MINI IAP] 지급 완료:', orderId, sku, tokens);
   return miniCors(request, JSON.stringify({
     ok: true,
     granted: inserted,           // false = 이미 지급된 주문(재시도). 클라이언트는 둘 다 성공으로 처리하면 된다.
-    tokens: product.tokens,
+    tokens,
     balance: await _miniBalance(env, userKey),
     // 동냥을 받은 상품이면 덕담을 함께 돌려준다. 앱에 글을 박아 두지 않고 여기서 주는
     // 이유는, 말을 고치는 데 미니앱 배포와 심사를 다시 거치지 않으려는 것이다.
-    ...(product.덕담 ? { blessing: _blessingFor(orderId) } : {}),
+    ...(product.동냥 ? { blessing: _blessingFor(orderId) } : {}),
   }), 200);
 }
 

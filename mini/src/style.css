@@ -829,6 +829,34 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
   letter-spacing: 0.02em; opacity: 0.85;
 }
 
+/* ── 엽전 확률 ──
+   ⚠️ 접어 두되 **숨기지는 않는다.** 무작위로 주면서 확률을 안 밝히면 안 된다.
+      접는 것은 열 줄짜리 표가 화면을 잡아먹지 않게 하려는 것뿐이다. */
+.odds { margin: 0 0 4px; font-size: 0.74rem; color: var(--text-dim); }
+.odds summary {
+  cursor: pointer; padding: 7px 4px; opacity: 0.75;
+  list-style: none; -webkit-tap-highlight-color: transparent;
+}
+.odds summary::-webkit-details-marker { display: none; }
+.odds summary::after { content: ' ▾'; opacity: 0.6; }
+.odds[open] summary::after { content: ' ▴'; }
+.odds table {
+  width: 100%; border-collapse: collapse;
+  /* ⚠️ font-size 를 다시 적는다. 브라우저 기본 스타일이 table 에 font: medium 을
+     걸어 두어 **상속이 끊긴다.** 안 적으면 표만 설명글보다 크게 뜬다. */
+  font-size: 0.74rem;
+  /* 숫자가 세로로 줄을 맞춰야 훑어보기 쉽다. */
+  font-variant-numeric: tabular-nums;
+}
+.odds th, .odds td {
+  padding: 5px 4px; font-weight: 400;
+  border-bottom: 1px solid var(--line);
+}
+.odds tr:last-child th, .odds tr:last-child td { border-bottom: 0; }
+.odds th { text-align: left; color: var(--gold-light); opacity: 0.8; }
+.odds td { text-align: right; }
+.odds p { margin: 8px 4px 2px; opacity: 0.65; line-height: 1.5; }
+
 /* ── 불러오는 동안의 자리 ──
    빈 화면을 보여주면 기록이 없는 줄 안다. 모양만 먼저 잡아 둔다. */
 .hist-skel { pointer-events: none; }

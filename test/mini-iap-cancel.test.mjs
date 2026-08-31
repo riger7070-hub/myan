@@ -98,8 +98,13 @@ test('결제 다리를 미리 깨워 둔다', () => {
   assert.match(SRC, /async function recoverPendingOrders\(\)\s*\{\s*\n\s*warmUpIAP\(\);/,
     '앱을 켤 때 깨우지 않는다');
 
+  // ⚠️ 길이를 숫자로 자르지 않는다. 3000자만 떼어 보다가, 충전 화면에 칸을 하나
+  //    더 넣자 찾던 글이 그 밖으로 밀려나 **글은 그대로 있는데 시험이 깨졌다.**
+  //    화면이 길어지는 것은 정상이므로 그 case 가 끝나는 자리까지 본다.
   const i = SRC.indexOf("case 'charge': {");
-  const charge = SRC.slice(i, i + 3000);
+  const end = SRC.indexOf('default:', i);
+  assert.ok(i >= 0 && end > i, "충전 화면(case 'charge')을 못 찾았다");
+  const charge = SRC.slice(i, end);
   assert.match(charge, /skel-tile/, '불러오는 동안 자리를 잡아 두지 않는다');
   assert.match(charge, /btn-retry-products/, '다시 시도할 길이 없다');
   assert.doesNotMatch(charge, /class="err"/, '충전 화면에 붉은 글씨가 남아 있다');

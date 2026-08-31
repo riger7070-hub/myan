@@ -93,7 +93,9 @@ const PRODUCTS = [
   { sku: 'token_30',  tokens: 30,  label: '엽전 30개',  price: '9,900원' },
   { sku: 'token_100', tokens: 100, label: '엽전 100개', price: '27,500원' },
   // 안스님 동냥. 엽전이 아니라 덕담을 파는 자리라 화면에서도 따로 그린다(kind).
-  // 값이 엽전 칸보다 비싼 것은 일부러다 — worker.js 의 MINI_PRODUCTS 주석 참고.
+  // ⚠️ tokens 는 **가장 적게 받는 수**다. 실제로는 1~10개를 무작위로 드리고, 몇 개일지는
+  //    서버가 주문번호로 굴려서 정한다. 이 목록은 콘솔 목록을 못 받았을 때의 받침일
+  //    뿐이라 확률까지 적어 두지 않는다 — 확률은 서버가 내려보낸다(alms.odds).
   { sku: 'donate',    tokens: 1,   label: '안스님 동냥', price: '1,100원', kind: 'donate' },
 ];
 
@@ -1994,9 +1996,19 @@ function render() {
         ${alms ? `<button class="alms" data-sku="${esc(alms.sku)}">
             <span class="alms-ic">${icon('monk')}</span>
             <span class="alms-txt"><b>안스님께 동냥하기</b>
-              <i>덕담 한 마디와 ${COIN}엽전 하나를 드려요. 안 하셔도 괜찮아요.</i></span>
+              <i>덕담 한 마디와 ${COIN}엽전 1~10개를 드려요. 몇 개일지는 스님도 몰라요.</i></span>
             <span class="alms-cost">${esc(alms.price || '토스로 결제')}</span>
-          </button>` : ''}
+          </button>
+          ${/* ⚠️ 확률은 **반드시** 밝힌다. 무작위로 주면서 확률을 안 적는 것은 안 된다.
+                숫자는 서버가 준 것을 그대로 그린다 — 여기에 손으로 적어 두면 실제로
+                굴리는 확률과 어긋날 수 있고, 그러면 적어 둔 쪽이 거짓말이 된다. */''}
+          ${(alms.odds || []).length ? `<details class="odds">
+            <summary>엽전 확률 보기</summary>
+            <table>${alms.odds.map(([n, pct]) => `<tr>
+              <th>${COIN}${n}개</th><td>${pct}%</td></tr>`).join('')}</table>
+            <p>1,100원에 평균 ${(alms.odds.reduce((s, [n, p]) => s + n * p, 0) / 100).toFixed(2)}개예요.
+              엽전만 보시면 위 칸이 더 쌉니다.</p>
+          </details>` : ''}` : ''}
         ${/* 못 불러왔을 때. 사용자는 SDK 사정을 알 필요가 없다 —
               무엇을 하면 되는지만 담담히 적고, 자세한 원인은 콘솔에만 남긴다. */''}
         ${!state.catalogLoading && !list.length ? `<div class="card">
