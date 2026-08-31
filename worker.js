@@ -2483,7 +2483,7 @@ async function handleMiniTokens(request, env) {
  * 서버가 답한다. 로그인은 필요 없다(가격표는 비밀이 아니고, 로그인 전에도 그려야 한다).
  */
 function handleMiniProducts(request, env) {
-  return miniCors(request, JSON.stringify({ products: _miniSellableSkus(env) }), 200);
+  return miniCors(request, JSON.stringify({ products: _miniSellable(env) }), 200);
 }
 
 // ── 연결 끊기(탈퇴) 콜백 ──
@@ -2769,6 +2769,41 @@ function _miniSellableSkus(env) {
       }
       return item;
     });
+}
+
+/** 동냥이 주는 엽전의 기댓값. 값 사다리를 견줄 때 쓴다. */
+const ALMS_EV = ALMS_ODDS.reduce((s, [n, w]) => s + n * w, 0) / 1000;
+
+/**
+ * 팔 것을 내주되, **동냥이 엽전을 싸게 사는 길이 되지 않게** 막는다.
+ *
+ * ⚠️ 왜 여기서 또 보는가: 값 사다리는 `test/mini-price-parity.test.mjs` 가 지키는데,
+ *    그건 **정가만** 본다. 할인가는 MINI_SALE 시크릿에 있고 시크릿은 코드가 아니라
+ *    시험이 볼 수가 없다. 콘솔에서 엽전만 반값으로 내리고 동냥을 안 내리면(또는
+ *    거꾸로) 사다리가 조용히 뒤집힌다.
+ *
+ *    그래서 실제로 내주기 직전에 **그날의 값으로** 다시 잰다. 동냥이 더 싸면
+ *    동냥 할인만 걷어 낸다 — 엽전 상품은 건드리지 않는다. 파는 것을 멈추기보다
+ *    싸게 파는 것을 멈추는 쪽이 손해가 적다.
+ */
+function _miniSellable(env) {
+  const items = _miniSellableSkus(env);
+  const 값 = (it) => (it.saleAmount || it.amount) / (it.kind === 'donate' ? ALMS_EV : it.tokens);
+
+  const 엽전 = items.filter((it) => it.kind !== 'donate');
+  if (!엽전.length) return items;
+  const 가장싼개당 = Math.min(...엽전.map(값));
+
+  for (const it of items) {
+    if (it.kind !== 'donate' || !it.saleAmount) continue;
+    if (값(it) > 가장싼개당) continue;
+    console.error('[MINI IAP] 동냥 할인이 엽전보다 싸다 — 할인을 걷는다.'
+      + ` 동냥 ${값(it).toFixed(0)}원/개 vs 엽전 ${가장싼개당.toFixed(0)}원/개.`
+      + ' MINI_SALE 을 고칠 것.');
+    delete it.saleAmount;
+    delete it.saleUntil;
+  }
+  return items;
 }
 
 // 결제가 끝난 상태. PURCHASED 는 지급까지 끝난 상태, PAYMENT_COMPLETED 는 결제만 끝나고

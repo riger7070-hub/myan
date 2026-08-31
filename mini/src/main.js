@@ -770,7 +770,11 @@ function buyTokens(product) {
           gainCoins(r.balance, { ad: false });   // 돈을 낸 사람에게 광고를 틀지 않는다
           // 동냥이면 안스님이 한 마디 한다. 말은 **서버가 준다** — 앱에 박아 두면
           // 말을 고치는 데 미니앱 배포와 심사를 다시 거쳐야 한다.
-          if (r.blessing) state.toast = r.blessing;
+          //
+          // ⚠️ 토스트로 띄우면 안 된다. 몇 초 뒤 사라지는데, 엽전이 몇 개 나왔는지가
+          //    거기 적혀 있으면 놓친 사람은 다시 볼 길이 없다(잔액만 늘어 있다).
+          //    누르고 닫는 팝업으로 띄운다.
+          if (r.blessing) state.alms = { blessing: r.blessing, tokens: r.tokens };
           return true;
         } catch (e) {
           console.error('[grant]', e?.message);
@@ -1481,6 +1485,18 @@ function header() {
           <button class="btn ghost" id="btn-exit-no">더 볼래요</button>
           <button class="btn" id="btn-exit-yes">닫기</button>
         </div>
+      </div>` : ''}
+    ${/* 동냥을 하고 나면 안스님이 한 마디 하고 엽전을 건넨다.
+          ⚠️ 몇 개를 받았는지는 **반드시 적는다.** 안 적으면 잔액만 늘고 얼마가
+             들어왔는지 알 길이 없다 — 무작위로 주는 것이라 더 그렇다. */''}
+    ${state.alms ? `
+      <div class="menu-scrim" id="btn-alms-scrim"></div>
+      <div class="exit-ask alms-say" role="alertdialog" aria-label="안스님의 덕담">
+        <span class="alms-say-ic">${icon('monk')}</span>
+        <p class="alms-got"><b>${COIN}엽전 ${state.alms.tokens}개</b>를 받았어요</p>
+        <p class="alms-word">${esc(state.alms.blessing)}</p>
+        <p class="muted small alms-who">안스님</p>
+        <button class="btn" id="btn-alms-ok" style="margin-top:16px">고맙습니다</button>
       </div>` : ''}
   </div>`;
 }
@@ -2264,6 +2280,9 @@ function bind() {
   const stayIn = () => { state.confirmExit = false; render(); };
   on('btn-exit-no', stayIn);
   on('btn-exit-scrim', stayIn);        // 바깥을 눌러도 닫힌다
+  const 덕담닫기 = () => { state.alms = null; render(); };
+  on('btn-alms-ok', 덕담닫기);
+  on('btn-alms-scrim', 덕담닫기);
   on('btn-menu-close', () => { state.menu = false; render(); });
   on('btn-earn', () => go('earn'));
   on('btn-earn2', () => go('earn'));      // 홈 엽전 줄의 작은 길잡이

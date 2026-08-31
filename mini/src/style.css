@@ -857,6 +857,21 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .odds td { text-align: right; }
 .odds p { margin: 8px 4px 2px; opacity: 0.65; line-height: 1.5; }
 
+/* ── 안스님의 덕담 (동냥 뒤에 뜨는 팝업) ──
+   exit-ask 의 생김새를 그대로 쓴다. 앱에 창이 두 종류로 늘어나면 어느 쪽이
+   어떻게 닫히는지 사람이 다시 익혀야 한다. */
+.alms-say { width: min(340px, 86vw); padding: 24px 22px 20px; }
+.alms-say-ic { display: inline-flex; color: var(--gold); }
+.alms-say-ic .ic { width: 46px; height: 46px; }
+.alms-got { margin-top: 12px !important; font-size: 0.94rem; }
+.alms-got b { color: var(--gold-light); font-weight: 700; }
+/* 덕담이 이 창의 주인공이다. 받은 엽전보다 크게 둔다. */
+.alms-word {
+  margin-top: 14px !important; font-size: 1.02rem; line-height: 1.7;
+  color: var(--text); word-break: keep-all;
+}
+.alms-who { margin-top: 10px !important; opacity: 0.6; }
+
 /* ── 불러오는 동안의 자리 ──
    빈 화면을 보여주면 기록이 없는 줄 안다. 모양만 먼저 잡아 둔다. */
 .hist-skel { pointer-events: none; }
