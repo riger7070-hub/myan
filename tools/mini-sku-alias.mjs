@@ -37,11 +37,23 @@ const { products = [] } = await res.json();
 const 표 = new Map();
 for (const p of products) 표.set(p.sku, 상품키(p));
 
-// 명령줄에서 받은 새 짝을 얹는다.
+// 명령줄에서 받은 새 짝을 얹고, --drop 으로 지정한 것은 뺀다.
+//
+// 빼는 길이 왜 필요한가: 앱이 심사 중일 때 서버만 먼저 팔면, 승인된 옛 앱이
+// 그 상품을 **제 뜻과 다르게** 보여준다. 동냥이 그랬다 — 옛 앱은 kind 도 odds 도
+// 모르므로 그냥 엽전 칸처럼 그리고, 확률은 어디에도 안 적힌다.
+// 그럴 때 잠깐 빼 두었다가 승인 뒤 도로 넣는다.
 const 인자 = process.argv.slice(2);
 const 바로넣기 = 인자.includes('--put');
+const 뺄것 = [];
+const 남길인자 = [];
+for (let i = 0; i < 인자.length; i++) {
+  if (인자[i] === '--put') continue;
+  if (인자[i] === '--drop') { 뺄것.push(인자[++i]); continue; }
+  남길인자.push(인자[i]);
+}
 const 새것 = [];
-for (const arg of 인자.filter((a) => a !== '--put')) {
+for (const arg of 남길인자) {
   const i = arg.lastIndexOf('=');
   if (i < 1) {
     console.error(`이렇게 적어야 한다: <SKU>=<상품키>   (받은 것: ${arg})`);
@@ -61,10 +73,22 @@ for (const arg of 인자.filter((a) => a !== '--put')) {
   새것.push([sku, key]);
 }
 
-console.log(`지금 팔리는 것 ${products.length}개 + 새로 넣는 것 ${새것.length}개\n`);
+// 빼기. 없는 것을 빼려 하면 멈춘다 — 오타로 엉뚱한 것이 남는 일을 막는다.
+for (const sku of 뺄것) {
+  if (!sku) { console.error('--drop 뒤에 SKU 를 적으세요.'); process.exit(1); }
+  if (!표.delete(sku)) {
+    console.error(`빼려는 SKU 가 목록에 없다: ${sku}`);
+    process.exit(1);
+  }
+}
+
+console.log(`지금 팔리는 것 ${products.length}개`
+  + (새것.length ? ` + 넣는 것 ${새것.length}개` : '')
+  + (뺄것.length ? ` - 빼는 것 ${뺄것.length}개` : '') + '\n');
 for (const [sku, key] of 표) {
   console.log(`  ${새것.some(([s]) => s === sku) ? '새로' : '그대로'}  ${key.padEnd(10)} ${sku}`);
 }
+for (const sku of 뺄것) console.log(`  빼냄  ${''.padEnd(10)} ${sku}`);
 
 // ⚠️ 한 줄로 낸다. 줄이 나뉘면 붙여 넣을 때 앞부분만 들어가는 일이 생긴다.
 const json = JSON.stringify(Object.fromEntries(표));
@@ -75,7 +99,11 @@ JSON.parse(json);                       // 낼 것을 스스로 한 번 읽어 �
 //    뱉는다. 할 일이 끝나면 프로그램은 알아서 끝난다.
 if (!바로넣기) {
   console.log(`\n그대로 넣으시려면 --put 을 붙이세요.\n`);
-  console.log(`  npm run sku -- ${새것.map(([s, k]) => `${s}=${k}`).join(' ')} --put\n`);
+  const 되풀이 = [
+    ...새것.map(([s, k]) => `${s}=${k}`),
+    ...뺄것.map((s) => `--drop ${s}`),
+  ].join(' ');
+  console.log(`  npm run sku -- ${되풀이} --put\n`);
   console.log('손으로 넣으시려면 wrangler secret put MINI_SKU_ALIAS 를 돌리고 아래 한 줄을 붙여 넣으세요.\n');
   console.log(json);
 } else {
