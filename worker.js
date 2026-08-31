@@ -1796,6 +1796,8 @@ export default {
     if (path === '/admin/mini-order' && method === 'GET') return handleMiniAdminOrderProbe(request, env);
     if (path === '/admin/mini-failures' && method === 'GET') return handleMiniAdminFailures(request, env);
     if (path === '/admin/mini-grant' && method === 'POST') return handleMiniAdminGrant(request, env);
+    if (path === '/admin/mini-find' && method === 'GET') return handleMiniAdminFind(request, env);
+    if (path === '/admin/mini-gift' && method === 'POST') return handleMiniAdminGift(request, env);
     // /chat(대화형 리딩) 라우트·핸들러 제거됨. '채팅 방식 제거' 리뉴얼 이후
     // 프론트에서 도달할 수 없는 경로였다(_enterMode가 입력창을 숨기고 showSajuInput으로 보냄).
     // 되살리려면 git 이력에서 handleGeminiChat을 참고할 것.
@@ -3204,6 +3206,111 @@ async function _miniGrantSignup(env, userKey) {
     // 지급 실패가 로그인을 막지는 않는다. 다음 로그인 때 다시 시도된다.
     console.error('[MINI SIGNUP]', e?.message);
   }
+}
+
+// ── 지인에게 엽전 선물 ──────────────────────────────────────
+//
+// 미니앱에는 엽전을 남에게 주는 길이 없다(결제·광고·출석·퀴즈·산가지·가입뿐).
+// 아는 사람에게 몇 개 쥐여 주려면 관리자가 직접 넣는 수밖에 없어서 두 자리를 둔다.
+//
+//   GET  /admin/mini-find?q=이름     그 이름으로 로그인한 사람을 찾는다
+//   POST /admin/mini-gift            {userKey, tokens, note} 로 넣는다
+//
+// ⚠️ 받을 사람이 **먼저 앱에 로그인해 두어야** 찾을 수 있다. userKey 는 토스가
+//    로그인할 때 주는 값이라, 안 들어온 사람은 우리 쪽에 아무 자국이 없다.
+
+/** 한 번에 줄 수 있는 최대. 오타로 0 하나 더 붙는 일을 막는다. */
+const MINI_GIFT_MAX = 100;
+
+/**
+ * 이름으로 사람을 찾는다. 누구에게 줄지 고르려면 사람이 눈으로 봐야 한다.
+ *
+ * ⚠️ 동명이인이 있을 수 있으므로 **고르게 하지, 자동으로 정하지 않는다.**
+ *    가입일과 마지막 로그인을 함께 보여 주어 "어제 깔았다는 그 사람" 을 짚게 한다.
+ */
+async function handleMiniAdminFind(request, env) {
+  if (!_adminKeyOk(request, env)) {
+    return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
+  }
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const q = (new URL(request.url).searchParams.get('q') || '').trim();
+  if (!q) return cors(JSON.stringify({ error: { message: '찾을 이름(q)을 적어 주세요.' } }), 400);
+
+  const { results = [] } = await env.DB.prepare(
+    `SELECT u.user_key, u.name, u.birth_year, u.created_at, u.last_login_at, u.unlinked_at,
+            COALESCE((SELECT SUM(tokens) FROM mini_payment_requests p
+                      WHERE p.user_key = u.user_key AND p.status = 'approved'), 0) AS balance
+       FROM mini_users u
+      WHERE u.name LIKE ?
+      ORDER BY u.last_login_at DESC
+      LIMIT 20`
+  ).bind(`%${q}%`).all();
+
+  return cors(JSON.stringify({
+    찾은사람: results.length,
+    사람: results.map((r) => ({
+      userKey: r.user_key,
+      이름: r.name,
+      태어난해: r.birth_year,
+      가입: new Date(r.created_at * 1000).toISOString().slice(0, 10),
+      마지막로그인: new Date(r.last_login_at * 1000).toISOString().slice(0, 10),
+      잔액: Number(r.balance),
+      연결끊음: !!r.unlinked_at,
+    })),
+  }), 200);
+}
+
+/**
+ * 엽전을 넣어 준다.
+ *
+ * ⚠️ `amount` 는 **0** 으로 남긴다. 돈을 받은 게 아니기 때문이다. 이 값이 0 이 아니면
+ *    매출로 세어지고, 광고 없애기(`_miniHasPaid` 는 amount > 0 을 본다)도 딸려 나간다.
+ *    선물 받은 사람에게 광고가 사라지면 그건 판 것이지 준 것이 아니다.
+ *
+ * ⚠️ `note` 를 열쇠로 삼아 **같은 선물이 두 번 나가지 않게** 한다. 같은 사람에게 같은
+ *    이름으로 또 넣으면 아무 일도 안 일어난다. 두 번 주려면 note 를 달리 적는다.
+ *    (원장의 id 가 곧 열쇠라 따로 세는 질의가 필요 없다.)
+ */
+async function handleMiniAdminGift(request, env) {
+  if (!_adminKeyOk(request, env)) {
+    return cors(JSON.stringify({ error: { message: '권한이 없습니다.' } }), 401);
+  }
+  if (!env.DB) return cors(JSON.stringify({ error: { message: '데이터베이스 연결 실패' } }), 500);
+
+  const body = await request.json().catch(() => ({}));
+  const userKey = typeof body?.userKey === 'string' ? body.userKey.trim() : '';
+  const tokens = Number(body?.tokens);
+  const note = (typeof body?.note === 'string' ? body.note : '').trim().slice(0, 40);
+
+  if (!userKey) return cors(JSON.stringify({ error: { message: 'userKey 가 필요합니다. /admin/mini-find 로 찾으세요.' } }), 400);
+  if (!Number.isInteger(tokens) || tokens < 1 || tokens > MINI_GIFT_MAX) {
+    return cors(JSON.stringify({ error: { message: `엽전 수는 1에서 ${MINI_GIFT_MAX} 사이의 정수여야 합니다.` } }), 400);
+  }
+  if (!note) return cors(JSON.stringify({ error: { message: '무엇 때문에 주는지 note 에 적어 주세요. 같은 note 로는 한 번만 나갑니다.' } }), 400);
+
+  // 없는 사람에게 넣으면 원장에만 남고 아무도 못 받는다. 있는지 먼저 본다.
+  const who = await env.DB.prepare('SELECT name, unlinked_at FROM mini_users WHERE user_key = ?')
+    .bind(userKey).first();
+  if (!who) return cors(JSON.stringify({ error: { message: '그런 사람이 없습니다. 먼저 앱에 로그인해야 찾을 수 있습니다.' } }), 404);
+  if (who.unlinked_at) return cors(JSON.stringify({ error: { message: '연결을 끊은 사람입니다.' } }), 400);
+
+  const id = `gift:${userKey}:${note}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO mini_payment_requests (id, user_key, pkg, amount, tokens, status, approved_at)
+     VALUES (?, ?, 'gift', 0, ?, 'approved', unixepoch())
+     ON CONFLICT(id) DO NOTHING`
+  ).bind(id, userKey, tokens).run();
+  const 넣음 = (r?.meta?.changes ?? 0) > 0;
+
+  console.log('[MINI GIFT]', 넣음 ? '지급' : '이미 준 선물', tokens, note);
+  return cors(JSON.stringify({
+    ok: true,
+    지급함: 넣음,                 // false = 같은 note 로 이미 준 것
+    받는사람: who.name || '(이름 없음)',
+    엽전: tokens,
+    잔액: await _miniBalance(env, userKey),
+  }), 200);
 }
 
 // 광고 시청 보상. 하루 상한까지 한 편에 한 개씩 준다.
