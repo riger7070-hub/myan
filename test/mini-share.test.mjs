@@ -88,12 +88,17 @@ test('링크를 못 만들었으면 찾아오는 법을 알려준다', () => {
 });
 
 test('공유에는 언제나 들어올 주소가 붙는다', () => {
-  // ⚠️ getTossShareLink 의 path 는 intoss:// 로 시작하는 딥링크여야 한다.
+  // ⚠️ 공유 링크의 path 는 intoss:// 로 시작하는 딥링크여야 한다.
   // '/' 를 넘기고 있었더니 링크가 만들어지지 않아, 주소 없는 글이 나갔다.
+  //
+  // ⚠️ 이 줄이 원래 `getTossShareLink(APP_DEEPLINK)` 를 못 박고 있었다. 그 이름이
+  //    deprecated 가 되고 새 API 가 인자를 객체로 받게 바뀌었는데, 시험이 옛
+  //    이름을 지키는 바람에 **고장 난 코드가 초록불로 남아 있었다.**
+  //    SDK 함수 이름이 아니라 **딥링크를 넘긴다는 사실**을 본다.
   const f = SRC.match(/async function appLink\(\)[\s\S]*?\n\}/);
   assert.ok(f, 'appLink 를 못 찾았다');
   assert.match(SRC, /const APP_DEEPLINK = 'intoss:\/\/\w+'/, '딥링크가 intoss:// 형식이 아니다');
-  assert.match(f[0], /getTossShareLink\(APP_DEEPLINK\)/, "여전히 '/' 같은 값을 넘긴다");
+  assert.match(f[0], /APP_DEEPLINK/, "여전히 '/' 같은 값을 넘긴다");
   assert.match(f[0], /return WEB_URL/, '링크를 못 만들었을 때 남길 주소가 없다');
   assert.match(SRC, /const WEB_URL = 'https:\/\//, '웹 주소가 없다');
 

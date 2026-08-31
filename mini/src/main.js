@@ -9,9 +9,13 @@
 //
 // 화면은 상태 하나(state.screen)로 갈아 끼운다. 화면 수가 적어 라우터를 두지 않았다.
 
+// ⚠️ 낡은 이름(appLogin, share, getTossShareLink, closeView)을 쓰지 않는다. SDK 가
+//    전부 @deprecated 로 표시해 두었고, 그중 **getTossShareLink 는 실제로 탈이 났다.**
+//    새 Share.createLink 는 인자를 객체로 받는데(`{ path }`) 옛것은 위치 인자였다.
+//    옛 이름으로 부르면 링크가 안 만들어지고, 우리 코드는 그걸 조용히 삼키고
+//    웹 주소로 물러났다 — 그래서 공유는 되는데 토스 앱으로 가는 링크가 아니었다.
 import {
-  appLogin, TossAuth, Storage, IAP, getTossShareLink, share, GoogleAdMob,
-  graniteEvent, closeView,
+  TossAuth, Storage, IAP, Share, GoogleAdMob, graniteEvent, Screen,
 } from '@apps-in-toss/web-framework';
 import {
   SECTIONS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
@@ -315,8 +319,7 @@ async function recoverPendingOrders() {
 
 /** 토스 인증 → 우리 세션. 로그인 화면의 버튼과 부팅 때의 자동 로그인이 함께 쓴다. */
 async function loginWithToss() {
-  // appLogin 은 deprecated 다. 새 이름이 있으면 그걸 쓰고, 구버전 SDK 면 예전 것으로.
-  const { authorizationCode, referrer } = await (TossAuth?.login ? TossAuth.login() : appLogin());
+  const { authorizationCode, referrer } = await TossAuth.login();
   const r = await api('/mini/api/auth/login', {
     method: 'POST', auth: false, body: { authorizationCode, referrer },
   });
@@ -806,25 +809,37 @@ function buyTokens(product) {
 // 엽전 보상은 붙이지 않는다. 공유창을 띄운 것만으로 줄 수밖에 없는데(실제로 보냈는지는
 // 앱이 알 수 없다) 그러면 눌렀다 닫기만 반복해도 엽전이 나온다. 엽전은 출석·퀴즈·광고
 // 처럼 확인 가능한 행동에만 붙인다.
-// ⚠️ getTossShareLink 의 path 는 **intoss:// 로 시작하는 딥링크**여야 한다.
+// ⚠️ path 는 **intoss:// 로 시작하는 딥링크**여야 한다.
 // '/' 를 넘기고 있었으니 링크가 만들어질 리 없었고, 그때마다 주소 없는 글이 나갔다.
 // 받는 사람은 "토스에서 찾아보세요"라는 말만 보고 어디로 갈지 몰랐다.
 const APP_DEEPLINK = 'intoss://myan';        // apps-in-toss.config.ts 의 appName 과 같아야 한다
 const WEB_URL = 'https://myan.riger7070.workers.dev';
+// 공유 링크에 붙는 그림. 토스 안드로이드 5.240.0 / iOS 5.239.0 부터 보인다.
+// 그 아래 버전에서는 그냥 무시되므로 넣어 두어 손해 볼 것이 없다.
+const SHARE_OG = `${WEB_URL}/icon-og-512-512.png`;
 
-/** 앱으로 오는 길. 토스 링크를 못 만들면 웹 주소라도 남긴다. */
+/**
+ * 앱으로 오는 길. 토스 링크를 못 만들면 웹 주소라도 남긴다.
+ *
+ * ⚠️ Share.createLink 는 **객체**를 받는다(`{ path }`). 옛 getTossShareLink 는 위치
+ *    인자였고, 그대로 부르다가 링크가 안 만들어졌다. 아래 catch 가 그걸 삼키는
+ *    바람에 조용히 웹 주소로 물러났고, 공유는 되는데 토스 앱으로 안 가는 상태가 됐다.
+ * ⚠️ catch 는 그대로 둔다 — 옛 토스 앱에서는 못 만들 수도 있고, 그때 아무것도 못
+ *    보내는 것보다 웹 주소라도 보내는 편이 낫다. 다만 **왜 물러났는지는 남긴다.**
+ */
 async function appLink() {
   try {
-    const link = await getTossShareLink(APP_DEEPLINK);
+    const link = await Share.createLink({ path: APP_DEEPLINK, ogImageUrl: SHARE_OG });
     if (link) return link;
-  } catch (e) { console.warn('[share:link]', e?.message); }
+    console.warn('[share:link] 링크가 비어서 왔다 — 웹 주소로 보낸다');
+  } catch (e) { console.warn('[share:link] 실패, 웹 주소로 보낸다:', e?.message); }
   return WEB_URL;
 }
 
 async function shareApp() {
   await withBusy(async () => {
     const link = await appLink();
-    await share({
+    await Share.sendMessage({
       message: `오늘 내 기운은 어떨까? 안도령이 사주로 풀어줘요.\n${link}`,
     });
   });
@@ -1193,7 +1208,7 @@ async function shareResult() {
   const r = state.result;
   if (!r) return;
   await withBusy(async () => {
-    await share({ message: _resultShareText(r, await appLink()) });
+    await Share.sendMessage({ message: _resultShareText(r, await appLink()) });
   });
 }
 
@@ -1334,7 +1349,7 @@ function goBack() {
 
 function closeApp() {
   state.confirmExit = false;
-  closeView().catch(() => {});
+  Screen.close().catch(() => {});
 }
 
 // 네이티브 뒤로가기(제스처·하드웨어 버튼)를 받는다.
@@ -2184,7 +2199,7 @@ async function makeInvite() {
       state.invite = iv;
     }
     const me = state.profile?.name ? `${state.profile.name}님이` : '누군가';
-    await share({
+    await Share.sendMessage({
       message: `${me} 우리 궁합을 물어봤어요.\n생년월일만 적으면 둘의 결이 나와요.\n${iv.url}`,
     });
   });

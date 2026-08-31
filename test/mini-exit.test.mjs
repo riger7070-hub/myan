@@ -25,7 +25,12 @@ test('돌아갈 곳이 없어도 곧장 닫지 않는다', () => {
 });
 
 test('닫는 것은 사용자가 그렇다고 했을 때만', () => {
-  assert.match(fnOf('closeApp'), /closeView\(\)/, '닫는 함수가 실제로 닫지 않는다');
+  // ⚠️ SDK 함수 **이름**을 못 박지 않는다. 이름이 바뀌면 시험이 옛 이름을 지키는
+  //    꼴이 된다. 실제로 공유 쪽이 그랬다 — 시험이 낡은 getTossShareLink 를 붙들고
+  //    있어서 고장 난 코드가 초록불로 남아 있었다.
+  //    여기서는 **닫기는 한다**는 것만 본다. 낡은 이름을 쓰는지는
+  //    mini-sdk-deprecated 가 SDK 의 @deprecated 를 읽어 따로 잡는다.
+  assert.match(fnOf('closeApp'), /(Screen\.close|closeView)\(\)/, '닫는 함수가 실제로 닫지 않는다');
   assert.match(SRC, /on\('btn-exit-yes', closeApp\)/, '닫기 버튼이 연결돼 있지 않다');
 });
 
