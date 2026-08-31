@@ -13,6 +13,7 @@
     "blog:diagnose": "node tools/diagnose-blog.mjs && node tools/diagnose-endings.mjs",
     "shots": "node tools/build-blog-shots.mjs",
     "store": "node tools/build-store-images.mjs",
+    "sku": "node tools/mini-sku-alias.mjs",
     "post": "node tools/build-post.mjs",
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run",
     "smoke": "node tools/smoke.mjs",
