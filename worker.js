@@ -794,6 +794,23 @@ const _fortuneInflight = new Map();
 // 뒤에 온 요청이 앞선 요청의 약속을 그대로 기다린다). 끊고 환불하는 편이 낫다.
 const GEMINI_TIMEOUT_MS = 45000;
 
+// ── 제미나이 재시도 ──
+//
+// ⚠️ 왜 넣었나: 원장을 세어 보니 유료 콘텐츠 77번 시도에 37번이 환불이었다(48%).
+//    엽전을 내고 아무것도 못 받은 것이다. 그런데 실패가 몰려서 터졌다 — 8월 24일은
+//    9번 중 9번, 28일은 4번 중 4번이 전부 실패했다. 하루 종일 되는 날과 하나도
+//    안 되는 날이 갈렸다.
+//
+//    지출 한도는 넉넉했다(2026-08-31 확인). 그러면 남는 것은 **분당 속도 제한(429)**
+//    이나 **일시 과부하(503)** 다. 둘 다 잠깐이면 지나가는 것인데, 그때까지 이 함수는
+//    한 번 걸어 보고 실패하면 그대로 빈 글자를 돌려줬다. 부르는 쪽은 그걸 실패로
+//    보고 엽전을 돌려줬다.
+//
+// ⚠️ 시간 초과에는 다시 걸지 않는다. 45초를 이미 기다린 사람에게 또 45초를 물릴 수
+//    없고, 되풀이해서 나아질 종류도 아니다. **빨리 돌아온 실패에만** 다시 건다.
+const GEMINI_RETRIES = 2;
+const GEMINI_RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+
 // 말하는 법과 풀이하는 법은 넷이 함께 쓴다. 여기가 흔들리면 누가 말하든 티가 난다.
 const _VOICE_COMMON = `풀이하는 법 (이게 가장 중요하다)
 - 찾아온 사람은 사주를 전혀 모른다고 여겨라. 전문용어를 쓸 때는 반드시 그 자리에서
@@ -1010,24 +1027,42 @@ async function geminiText(env, prompt, generationConfig = {}, extra = {}) {
   const parts = Array.isArray(prompt) ? prompt : [{ text: prompt }];
   const body = { systemInstruction: speakerSI(extra.speaker), contents: [{ parts }], generationConfig: cfg };
   if (extra.safetySettings) body.safetySettings = extra.safetySettings;
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-    { signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body) }
-  );
-  let data = null;
-  try { data = await resp.json(); } catch { data = null; }
-  if (!resp.ok) {
-    // 실패 사유가 서버 어디에도 안 남아서 "가끔 안 된다"를 추적할 수 없었다.
-    // 본문 전체는 프롬프트가 되돌아올 수 있으니 상태와 메시지만 남긴다.
-    console.warn(`[gemini] ${resp.status} ${data?.error?.status || ''} ${(data?.error?.message || '').slice(0, 200)}`);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`;
+  const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+
+  for (let 회 = 0; 회 <= GEMINI_RETRIES; 회++) {
+    if (회) await new Promise((r) => setTimeout(r, 400 * 회));   // 0.4초, 0.8초
+    let resp;
+    try {
+      resp = await fetch(url, { ...init, signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS) });
+    } catch (e) {
+      // ⚠️ 시간 초과와 연결 실패는 **다시 걸지 않는다.** 45초를 이미 기다린 사람에게
+      //    또 45초를 물릴 수 없다. 되풀이해서 나아질 종류도 아니다.
+      console.warn(`[gemini] 호출 자체가 실패: ${e?.name} ${e?.message}`);
+      return '';
+    }
+    let data = null;
+    try { data = await resp.json(); } catch { data = null; }
+
+    if (!resp.ok) {
+      // 실패 사유가 서버 어디에도 안 남아서 "가끔 안 된다"를 추적할 수 없었다.
+      // 본문 전체는 프롬프트가 되돌아올 수 있으니 상태와 메시지만 남긴다.
+      console.warn(`[gemini] ${resp.status} ${data?.error?.status || ''} ${(data?.error?.message || '').slice(0, 200)}`
+        + ` (${회 + 1}번째)`);
+      if (GEMINI_RETRY_STATUS.has(resp.status) && 회 < GEMINI_RETRIES) continue;
+      return '';
+    }
+
+    const text = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
+    if (text) {
+      if (회) console.log(`[gemini] ${회 + 1}번째에 성공했다`);
+      return text;
+    }
+    console.warn(`[gemini] 200 이지만 본문이 비었다 — finishReason=${data?.candidates?.[0]?.finishReason} promptFeedback=${JSON.stringify(data?.promptFeedback || null)} (${회 + 1}번째)`);
+    // 빈 본문은 대개 안전 필터나 길이 제한이라 다시 걸어도 같다. 되풀이하지 않는다.
     return '';
   }
-  const text = _humanize(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
-  if (!text) {
-    console.warn(`[gemini] 200 이지만 본문이 비었다 — finishReason=${data?.candidates?.[0]?.finishReason} promptFeedback=${JSON.stringify(data?.promptFeedback || null)}`);
-  }
-  return text;
+  return '';
 }
 
 /**
