@@ -92,6 +92,9 @@ const PRODUCTS = [
   { sku: 'token_10',  tokens: 10,  label: '엽전 10개',  price: '4,290원' },
   { sku: 'token_30',  tokens: 30,  label: '엽전 30개',  price: '9,900원' },
   { sku: 'token_100', tokens: 100, label: '엽전 100개', price: '27,500원' },
+  // 안스님 동냥. 엽전이 아니라 덕담을 파는 자리라 화면에서도 따로 그린다(kind).
+  // 값이 엽전 칸보다 비싼 것은 일부러다 — worker.js 의 MINI_PRODUCTS 주석 참고.
+  { sku: 'donate',    tokens: 1,   label: '안스님 동냥', price: '1,100원', kind: 'donate' },
 ];
 
 
@@ -763,6 +766,9 @@ function buyTokens(product) {
           //    지급이 확인된 것(`ok`)만 성공이라고 답한다.
           if (!r?.ok) { console.warn('[grant] 아직 지급 안 됨:', r?.error?.message || '알 수 없음'); return false; }
           gainCoins(r.balance, { ad: false });   // 돈을 낸 사람에게 광고를 틀지 않는다
+          // 동냥이면 안스님이 한 마디 한다. 말은 **서버가 준다** — 앱에 박아 두면
+          // 말을 고치는 데 미니앱 배포와 심사를 다시 거쳐야 한다.
+          if (r.blessing) state.toast = r.blessing;
           return true;
         } catch (e) {
           console.error('[grant]', e?.message);
@@ -1959,6 +1965,10 @@ function render() {
       // 넣어야 하는지를 화면이 직접 말해 주지 않으면 알아낼 방법이 없다 —
       // 그래서 그대로 눌러 복사할 수 있게 번호를 적어 둔다.
       const unknown = (state.catalog || []).filter(p => p.known === false);
+      // 동냥은 엽전 칸들과 **따로 놓는다.** 같은 줄에 끼우면 "엽전 1개 1,100원" 으로 읽혀
+      // 제일 비싼 엽전처럼 보인다. 여기서 파는 것은 엽전이 아니라 덕담이다.
+      const coins = list.filter(p => p.kind !== 'donate');
+      const alms = list.find(p => p.kind === 'donate' && p.known !== false);
       html = `${header()}
         <div class="brand sm"><h1>${COIN}엽전 충전</h1><p>현재 ${COIN}${state.tokens} 엽전</p></div>
         ${err}
@@ -1967,7 +1977,7 @@ function render() {
         ${state.catalogLoading && !list.length
           ? PRODUCTS.map(() => `<div class="tile wide skel-tile">
               <div class="skel-line w40"></div></div>`).join('')
-          : list.map(p => `
+          : coins.map(p => `
             <button class="tile wide" data-sku="${esc(p.sku)}"${p.known === false ? ' disabled' : ''}>
               <span class="t-label">${esc(p.label)}${p.off
                 ? `<span class="t-off">${p.off}% 할인</span>` : ''}</span>
@@ -1977,8 +1987,16 @@ function render() {
             </button>`).join('')}
         ${/* 할인은 기간이 정해져 있고 사람마다 다르다. 그래서 이 줄도 값에서 끌어낸다 -
               할인이 끝나면 두 값이 같아져 이 줄 자체가 사라진다. */''}
-        ${list.some(p => p.off) ? `<p class="muted small" style="text-align:center;margin:4px 0 12px">
+        ${coins.some(p => p.off) ? `<p class="muted small" style="text-align:center;margin:4px 0 12px">
           지금은 첫 구매 할인 중이에요.</p>` : ''}
+        ${/* ⚠️ 안 사도 그만인 자리다. 엽전이 모자라서 들어온 사람에게 후원을 조르면
+              그 사람은 다음에 안 들어온다. 그래서 값을 크게 쓰지 않고, 아래쪽에 둔다. */''}
+        ${alms ? `<button class="alms" data-sku="${esc(alms.sku)}">
+            <span class="alms-ic">${icon('monk')}</span>
+            <span class="alms-txt"><b>안스님께 동냥하기</b>
+              <i>덕담 한 마디와 ${COIN}엽전 하나를 드려요. 안 하셔도 괜찮아요.</i></span>
+            <span class="alms-cost">${esc(alms.price || '토스로 결제')}</span>
+          </button>` : ''}
         ${/* 못 불러왔을 때. 사용자는 SDK 사정을 알 필요가 없다 —
               무엇을 하면 되는지만 담담히 적고, 자세한 원인은 콘솔에만 남긴다. */''}
         ${!state.catalogLoading && !list.length ? `<div class="card">

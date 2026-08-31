@@ -800,6 +800,35 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .perk-ic .ic { width: 18px; height: 18px; }
 .perk i { font-style: normal; font-size: 0.78rem; opacity: 0.75; }
 
+/* ── 안스님 동냥 ──
+   엽전 칸(.tile)과 **다르게 생겨야 한다.** 같은 모양이면 제일 비싼 엽전으로 읽히고,
+   그러면 값이 이상한 상품 하나가 끼어 있는 화면이 된다. 파는 것이 다르다는 것을
+   생김새로 먼저 말한다 — 테두리는 점선, 바탕은 거의 비운다.
+
+   ⚠️ 값을 크게 쓰지 않는다. 엽전이 모자라 들어온 사람에게 후원을 조르면
+      그 사람은 다음에 안 들어온다. */
+.alms {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  margin: 16px 0 4px; padding: 13px 15px;
+  background: transparent;
+  border: 1px dashed var(--line); border-radius: 12px;
+  color: var(--text-dim); text-align: left; font: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.alms:active { background: rgba(201, 169, 110, 0.05); }
+.alms-ic { display: inline-flex; flex: none; color: var(--gold); }
+.alms-ic .ic { width: 26px; height: 26px; }
+.alms-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.alms-txt b { color: var(--gold-light); font-weight: 600; font-size: 0.9rem; }
+.alms-txt i {
+  font-style: normal; font-size: 0.74rem; opacity: 0.7; line-height: 1.5;
+  word-break: keep-all;
+}
+.alms-cost {
+  flex: none; font-size: 0.78rem; color: var(--text-dim);
+  letter-spacing: 0.02em; opacity: 0.85;
+}
+
 /* ── 불러오는 동안의 자리 ──
    빈 화면을 보여주면 기록이 없는 줄 안다. 모양만 먼저 잡아 둔다. */
 .hist-skel { pointer-events: none; }

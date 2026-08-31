@@ -42,7 +42,10 @@ function appProducts() {
 
 test('앱에 적힌 가격과 서버가 기록하는 가격이 같다', () => {
   const s = serverProducts(), a = appProducts();
-  assert.equal(s.size, 3, `서버 상품이 3개가 아니다(${s.size})`);
+  // ⚠️ 개수를 못 박지 않는다. 상품이 늘어나는 것은 정상이고, 여기서 잡으려는 것은
+  //    "앱과 서버가 어긋나는 것" 이지 "상품이 몇 개인가" 가 아니다.
+  //    다만 정규식이 헛돌아 몇 개만 읽고 그냥 통과하는 일은 막아야 한다.
+  assert.ok(s.size >= 4, `서버 상품을 ${s.size}개밖에 못 읽었다 — 뽑는 규칙을 확인할 것`);
   assert.deepEqual([...a.keys()].sort(), [...s.keys()].sort(), 'sku 목록이 다르다');
   for (const [sku, sv] of s) {
     const av = a.get(sku);
@@ -74,4 +77,39 @@ test('많이 살수록 개당 값이 싸다', () => {
       `토큰 ${rows[i].tokens}개의 개당 값(${cur.toFixed(0)}원)이 ` +
       `${rows[i - 1].tokens}개(${prev.toFixed(0)}원)보다 싸지 않다`);
   }
+});
+
+test('안스님 동냥은 엽전을 싸게 파는 구멍이 아니다', () => {
+  // 동냥은 엽전 하나를 준다. 그 값이 가장 싼 엽전 칸의 개당 값보다 **싸면 안 된다.**
+  // 싸지면 사람들이 엽전을 동냥 칸에서 사 간다 — 값 사다리에 구멍이 뚫린다.
+  // 여기서 파는 것은 엽전이 아니라 덕담이고, 엽전 하나는 거스름돈이다.
+  const s = serverProducts();
+  const donate = s.get('donate');
+  if (!donate) return;                       // 아직 안 만들었으면 볼 것이 없다
+  const 엽전칸 = [...s].filter(([k]) => k !== 'donate').map(([, v]) => v.amount / v.tokens);
+  const 가장싼개당 = Math.min(...엽전칸);
+  const 동냥개당 = donate.amount / donate.tokens;
+  assert.ok(동냥개당 > 가장싼개당,
+    `동냥이 엽전 개당 ${동냥개당}원인데 가장 싼 칸은 ${가장싼개당}원이다 — `
+    + '동냥으로 엽전을 싸게 살 수 있다');
+});
+
+test('동냥에는 줄 것이 들어 있다', () => {
+  // 돈만 받고 아무것도 주지 않는 상품은 심사에서 걸린다.
+  const s = serverProducts();
+  if (!s.get('donate')) return;
+  assert.ok(s.get('donate').tokens >= 1, '동냥이 아무것도 주지 않는다');
+  assert.match(worker, /덕담: true/, '덕담을 주기로 표시되어 있지 않다');
+  assert.match(worker, /const MONK_BLESSINGS = \[/, '덕담 목록이 없다');
+  // 같은 주문에는 늘 같은 말이 나와야 한다. 재시도로 여러 번 들어오기 때문이다.
+  assert.doesNotMatch(worker.slice(worker.indexOf('function _blessingFor')),
+    /^[\s\S]{0,400}?Math\.random/, '덕담을 무작위로 뽑는다 — 재시도 때 말이 바뀐다');
+});
+
+test('화면에 기부라고 쓰지 않는다', () => {
+  // 기부는 인앱결제로 받으면 안 되는 항목이라 스토어 정책에 걸릴 수 있다.
+  // 받는 것이 분명한 동냥으로 둔다.
+  const i = app.indexOf("case 'charge': {");
+  const charge = app.slice(i, app.indexOf('default:', i));
+  assert.doesNotMatch(charge, /기부/, '충전 화면에 기부라는 말이 있다');
 });

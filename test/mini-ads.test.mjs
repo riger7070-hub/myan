@@ -136,8 +136,13 @@ test('결제한 사람에게는 자동 광고를 틀지 않는다', () => {
 });
 
 test('충전 화면이 광고가 사라진다고 알린다', () => {
+  // ⚠️ 길이를 숫자로 자르지 않는다. 처음엔 3000자만 떼어 봤는데, 충전 화면에 칸을
+  //    하나 더 넣자 찾던 글이 3000자 밖으로 밀려나 **글은 그대로 있는데 시험이
+  //    깨졌다.** 화면이 길어지는 것은 정상이므로, 그 case 가 끝나는 자리까지 본다.
   const i = SRC.indexOf("case 'charge': {");
-  const charge = SRC.slice(i, i + 3000);
+  const end = SRC.indexOf('default:', i);
+  assert.ok(i >= 0 && end > i, "충전 화면(case 'charge')을 못 찾았다");
+  const charge = SRC.slice(i, end);
   assert.match(charge, /광고가 사라집니다/, '결제로 무엇이 좋아지는지 적혀 있지 않다');
   assert.match(charge, /state\.noAds/, '이미 결제한 사람에게도 같은 말을 한다');
 });
