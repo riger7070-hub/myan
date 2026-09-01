@@ -6274,14 +6274,15 @@ const _FEATURE_SPEAKER = {
   // 안할매 — 액막이와 오래된 책
   '/api/sinsal':               'halmae',
   '/api/tojeong':              'halmae',
+  '/api/year-luck':            'halmae',
   '/api/dream-interpretation': 'halmae',
   '/api/iching':               'halmae',
-  '/api/auspicious-days':      'halmae',
-  '/api/direction':            'halmae',
   '/api/past-life':            'halmae',
   // 안동자 — 길신
   '/api/gwiin':                'dongja',
   '/api/lucky-picks':          'dongja',
+  '/api/direction':            'dongja',
+  '/api/auspicious-days':      'dongja',
 };
 
 /** 표에 없는 콘텐츠는 안도령이 맡는다. */

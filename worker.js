@@ -907,14 +907,15 @@ const FEATURE_SPEAKER = {
   // 안할매 — 액막이와 오래된 책
   '/api/sinsal':               'halmae',
   '/api/tojeong':              'halmae',
+  '/api/year-luck':            'halmae',
+  '/api/past-life':            'halmae',
   '/api/dream-interpretation': 'halmae',
   '/api/iching':               'halmae',
-  '/api/auspicious-days':      'halmae',
-  '/api/direction':            'halmae',
-  '/api/past-life':            'halmae',
-  // 안동자 — 길신
+  // 안동자 — 길한 것을 찾는다
   '/api/gwiin':                'dongja',
   '/api/lucky-picks':          'dongja',
+  '/api/direction':            'dongja',
+  '/api/auspicious-days':      'dongja',
 };
 
 const _SI = Object.fromEntries(Object.entries(SPEAKERS).map(
@@ -5587,7 +5588,7 @@ ${dayLines}
     // 인라인 fetch 로 두면 실패가 서버 어디에도 안 남아 "가끔 안 된다"를 추적할 수 없다.
     // (systemInstruction·타임아웃·thinkingBudget 은 geminiText 안에 들어 있다 — 여기서 다시 주지 않는다.)
     const reading = await cachedReading(env, 'takil:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 }, { speaker: 'halmae' }));
+      () => geminiText(env, prompt, { temperature: 0.8, maxOutputTokens: 1400 }, { speaker: 'dongja' }));
 
     if (!reading) {
       await refund(); refund = null;
@@ -8162,7 +8163,7 @@ async function handleYearLuck(request, env) {
     ].filter(Boolean).join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'yearluck:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'halmae' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);
@@ -8238,7 +8239,7 @@ async function handleDirection(request, env) {
     ].join(String.fromCharCode(10));
 
     const reading = await cachedReading(env, 'direction:' + _promptKey(prompt), CACHE_LONG,
-      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'halmae' }));
+      () => geminiText(env, prompt, { temperature: 0.85, maxOutputTokens: 2048 }, { speaker: 'dongja' }));
     if (!reading) {
       if (refund) await refund().catch(() => {});
       return cors(JSON.stringify({ error: { message: '풀이를 생성하지 못했습니다. 엽전은 환불되었습니다.' } }), 422);

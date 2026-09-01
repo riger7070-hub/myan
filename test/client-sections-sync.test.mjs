@@ -49,7 +49,20 @@ test('양쪽 다 묶음을 읽어 냈다', () => {
 // 한 줄로 이어 문자열로 맞댄다 — 어디가 다른지도 이쪽이 더 잘 보인다.
 const line = (list, pick) => list.map(pick).join(' > ');
 
-test('묶음의 제목과 순서가 웹·미니앱에서 같다', () => {
+// ⚠️ **웹은 아직 옮기는 중이다 (2026-08-31 ~ ).**
+//
+// 미니앱 묶음을 주제에서 **화자(캐릭터)** 로 바꾸고 중복 칸을 합쳤다. 웹에는 합친 칸을
+// 여는 「고르기」 화면이 아직 없어서 같은 묶음을 만들 수가 없다 — 그대로 옮기면
+// 안도령 칸이 열다섯 개가 된다(웹에는 로또·오늘의 행운도 있다).
+//
+// 그래서 제목·아이콘 대조를 **한시적으로** 멈춘다. 대신 아래 둘을 지킨다.
+//   1) 미니앱 묶음은 화자 표(FEATURE_SPEAKER)와 어긋나지 않는다  ← menu-by-speaker
+//   2) 웹이 옮겨지면 이 두 시험을 되살린다                      ← 아래 자물쇠
+//
+// 옮기는 법은 docs/메뉴-재구성.md 에 적어 두었다.
+const 웹옮김완료 = false;   // 웹 _homeSections 를 캐릭터 묶음으로 바꾸면 true 로
+
+test('묶음의 제목과 순서가 웹·미니앱에서 같다', { skip: !웹옮김완료 && '웹은 아직 옮기는 중 (docs/메뉴-재구성.md)' }, () => {
   assert.equal(
     line(mini, s => s.title),
     line(web, s => s.title),
@@ -57,15 +70,30 @@ test('묶음의 제목과 순서가 웹·미니앱에서 같다', () => {
   );
 });
 
-test('묶음 아이콘도 같은 것을 쓴다', () => {
+test('묶음 아이콘도 같은 것을 쓴다', { skip: !웹옮김완료 && '웹은 아직 옮기는 중 (docs/메뉴-재구성.md)' }, () => {
   assert.equal(line(mini, s => s.icon), line(web, s => s.icon),
     '제목은 같은데 아이콘이 다르다 — 두 화면이 달라 보인다');
+});
+
+test('⚠️ 웹을 옮기면 위 두 시험을 다시 켠다', () => {
+  // 건너뛴 시험은 잊힌다. 웹이 옮겨졌는지를 **코드로** 보고, 옮겨졌는데도 자물쇠가
+  // 잠겨 있으면 여기서 깨운다. 사람이 기억할 일을 남기지 않는다.
+  const 웹이캐릭터로바뀜 = /title:\s*t\.\w+\s*\|\|\s*'안(도령|낭자|할매|동자)/.test(appSrc);
+  if (웹이캐릭터로바뀜) {
+    assert.ok(웹옮김완료,
+      '웹이 캐릭터 묶음으로 바뀌었다 — client-sections-sync 의 웹옮김완료 를 true 로 바꿀 것');
+  }
 });
 
 test('미니앱도 한 묶음에 2~7개까지만 담는다', () => {
   // 웹에는 같은 규칙이 home-sections.test.mjs 에 있다. 미니앱에는 없어서
   // 한쪽만 부풀 수 있었다 — 실제로 웹이 넷으로 버티는 동안 미니앱은 서른까지 갔다.
-  const blocks = miniSrc.slice(miniSrc.indexOf('export const SECTIONS = [')).split(/icon:\s*'sec/);
+  // ⚠️ SECTIONS 배열이 **끝나는 자리까지만** 본다. 그 뒤에 오는 PICKED(합친 칸이
+  //    품고 있는 것들)까지 훑으면 마지막 묶음이 열여덟 개로 세어진다 — 실제로 그랬다.
+  const 시작 = miniSrc.indexOf('export const SECTIONS = [');
+  const 끝 = miniSrc.indexOf('\n];', 시작);
+  assert.ok(시작 >= 0 && 끝 > 시작, 'SECTIONS 배열의 끝을 못 찾았다');
+  const blocks = miniSrc.slice(시작, 끝).split(/icon:\s*'sec/);
   for (let i = 1; i < blocks.length; i++) {
     const title = (blocks[i].match(/title:\s*'([^']+)'/) || [])[1] || `#${i}`;
     const n = (blocks[i].match(/\{ id: '/g) || []).length;

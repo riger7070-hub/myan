@@ -18,7 +18,7 @@ import {
   TossAuth, Storage, IAP, Share, GoogleAdMob, graniteEvent, Screen,
 } from '@apps-in-toss/web-framework';
 import {
-  SECTIONS, itemById, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
+  SECTIONS, itemById, pickedOf, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
   speakerOf,
   moonToday,
 } from './contents.js';
@@ -409,6 +409,9 @@ function openItem(item) {
   state.error = '';
   // 산가지는 서버도 AI 도 부르지 않는다. 콘텐츠 목록에 있지만 처리는 앱 안에서 끝난다.
   if (item.local) { drawStick(); return; }
+  // 합친 칸이면 무엇으로 볼지 먼저 묻는다. 고른 뒤에는 그 콘텐츠의 평소 길로 간다
+  // (필요하면 입력 화면까지) — 여기서는 문 앞에서 한 번 물어보는 것뿐이다.
+  if (item.pick) { go('pick'); return; }
   if (item.need) {
     go('need');
     // 링크를 보낸 뒤 앱을 껐다가 돌아왔을 수도 있다. 상대의 답이 이미 와 있으면
@@ -1739,6 +1742,29 @@ function render() {
         <button class="btn ghost" id="btn-home2" style="margin-top:16px">홈으로</button>
         ${FOOTER}`;
       break;
+
+    // 합친 칸을 눌렀을 때. 무엇으로 볼지 고르면 그 콘텐츠의 평소 길로 간다.
+    case 'pick': {
+      const it = state.item;
+      const 것들 = pickedOf(it);
+      html = `${header()}
+        <div class="brand sm"><h1><span class="ic-title">${icon(it.icon)}</span> ${esc(it.label)}</h1>
+          <p>무엇으로 볼까요</p></div>
+        ${err}
+        <div class="tiles">
+          ${것들.map(p => `
+            <button class="tile" data-item="${p.id}">
+              <span class="t-icon">${icon(p.icon)}</span>
+              <span class="t-label">${esc(p.label)}</span>
+              <span class="t-cost${p.cost ? '' : ' free'}">${p.cost ? `${COIN}${p.cost} 엽전` : '무료'}</span>
+            </button>`).join('')}
+        </div>
+        ${/* ⚠️ 값이 저마다 다를 수 있다(이름 4, 숫자 2). 묶음 타일에 적힌 값 하나만
+              믿고 들어온 사람이 다른 값을 보면 속은 기분이 든다. 그래서 칸마다 적는다. */''}
+        <button class="btn ghost" id="btn-home2" style="margin-top:14px">돌아가기</button>
+        ${FOOTER}`;
+      break;
+    }
 
     case 'need': {
       const it = state.item;

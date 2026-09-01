@@ -97,79 +97,111 @@ export const PURPOSES = [
   { v: 'ritual',   label: '고사와 기도' },
 ];
 
-// 묶음은 계열이 아니라 **사람이 찾는 이유**로 나눈다. 웹(js/app.js 의 _homeSections)과
-// 제목·순서가 같아야 한다 — test/client-sections-sync.test.mjs 가 대조한다.
-// 담기는 항목까지 같지는 않다(로또는 웹에만, 출석·산가지는 미니앱에만 있다).
+// ── 묶음은 **누가 풀어 주는가**로 나눈다 (2026-08-31) ──
+//
+// 전에는 '사주로 보는 나', '때와 방위' 처럼 주제로 나눴는데 축이 섞여 있었다.
+// 어떤 칸은 주제로(나·관계), 어떤 칸은 시간으로(오늘·올해), 어떤 칸은 도구로
+// (타로·주역·관상) 갈려서 같은 물음이 여러 칸에 흩어졌다 — "오늘 어때?" 를 묻는
+// 칸이 다섯이었고 "이거 어떻게 될까?" 가 넷이었다.
+//
+// 축을 하나로 세웠다. **콘텐츠마다 맡은 사람이 이미 정해져 있으니**(FEATURE_SPEAKER)
+// 그걸 그대로 묶음으로 쓴다. 하나는 정확히 한 사람에게 속하고(중복 없음), 넷이
+// 전부를 덮는다(빠짐없음).
+//
+// ⚠️ 묶음을 옮길 때는 **FEATURE_SPEAKER 도 함께 고쳐야 한다.** 화면에는 안동자
+//    묶음에 있는데 글은 안할매가 쓰면 사용자가 바로 알아챈다.
+//    test/menu-by-speaker.test.mjs 가 둘을 대조한다.
+//
+// ⚠️ 웹(js/app.js 의 _homeSections)과 제목·순서가 같아야 한다 —
+//    test/client-sections-sync.test.mjs 가 대조한다.
+//    담기는 항목까지 같지는 않다(로또는 웹에만, 출석·산가지는 미니앱에만 있다).
+//
+// ── 합친 칸 ──
+// 같은 물음을 여러 칸에 흩어 두면 고르는 데 힘이 든다. 하나로 묶고 **누른 다음**
+// 고르게 했다(pick). 콘텐츠를 지운 것이 아니라 문 앞에서 한 번 물어보는 것이다.
 export const SECTIONS = [
   {
-    icon: 'secMe', title: '사주로 보는 나',
+    icon: 'secMe', title: '안도령 — 기운을 읽다',
     items: [
       // 무료 풀이를 맨 앞에 둔다 — 처음 온 사람이 엽전을 쓰기 전에 한 번 받아 볼 자리다.
-      { id: 'saju',       icon: 'saju',       label: '내 사주 풀이',       cost: 0, path: '/saju-reading',       need: null, free: true },
-      { id: 'wealth',     icon: 'wealth',     label: '돈이 모이는 자리',             cost: 4, path: '/api/wealth',        need: null },
-      { id: 'sinsal',     icon: 'sinsal',     label: '내 사주에 앉은 살',          cost: 3, path: '/api/sinsal',         need: null },
-      { id: 'gwiin',      icon: 'gwiin',      label: '누가 나를 도와줄까',          cost: 4, path: '/api/gwiin',          need: null },
-      { id: 'vocation',   icon: 'vocation',   label: '이 길이 내 길이 맞을까',        cost: 4, path: '/api/vocation',       need: null },
-      { id: 'daeun',      icon: 'daeun',      label: '지금 나는 어느 10년', cost: 6, path: '/api/daeun',          need: null },
-      { id: 'pastlife',   icon: 'pastlife',   label: '전생에 나는 누구였나',        cost: 4, path: '/api/past-life',      need: null },
+      { id: 'saju',     icon: 'saju',     label: '내 사주 풀이',        cost: 0, path: '/saju-reading', need: null, free: true },
+      { id: 'wealth',   icon: 'wealth',   label: '돈이 모이는 자리',     cost: 4, path: '/api/wealth',   need: null },
+      { id: 'vocation', icon: 'vocation', label: '이 길이 내 길이 맞을까', cost: 4, path: '/api/vocation', need: null },
+      { id: 'daeun',    icon: 'daeun',    label: '지금 나는 어느 10년',  cost: 6, path: '/api/daeun',    need: null },
+      // 「오늘 어때?」 를 묻던 다섯 칸을 하나로 묶었다. 값이 다 1엽전이라 고를 이유가
+      // 값에 있지 않았고, 다섯이 나란히 있으면 무엇이 다른지 알 수가 없었다.
+      { id: 'daily',  icon: 'today',  label: '오늘 어때요',   cost: 1, pick: ['today', 'ttirank', 'zodiac', 'topic', 'astro'] },
+      // 뽑아서 보는 것 둘. 물어볼 말이 필요 없다는 점이 같다.
+      { id: 'draw',   icon: 'tarot',  label: '뽑아서 보기',   cost: 1, pick: ['tarot', 'rune'] },
+      // 사주 말고 **다른 것으로** 나를 보는 넷. 넣는 것이 저마다 달라(이름·성·사진·없음)
+      // 고른 뒤에 각자의 입력으로 간다.
+      { id: 'other',  icon: 'name',   label: '이름·얼굴·숫자로 보는 나', cost: 4, pick: ['name', 'naming', 'photo', 'numerology'] },
     ],
   },
   {
     // 궁합은 그것만 보러 오는 사람이 있다. 전에는 '때를 고르다' 안에 궁합 시기와
     // 속궁합이 섞여 있어서 그 사람이 못 찾았다 — 그래서 밖으로 뺐다.
-    icon: 'secLove', title: '궁합과 인연',
+    icon: 'secLove', title: '안낭자 — 인연을 보다',
     items: [
-      { id: 'compat',  icon: 'compat',  label: '이 사람과 좋은 때',             cost: 6, path: '/api/compat-timing',   need: 'partner' },
-      { id: 'intimacy', icon: 'intimacy', label: '속궁합',              cost: 5, path: '/api/intimacy',      need: 'partner' },
-      { id: 'relation', icon: 'compat', label: '왜 자꾸 이 사람과 어긋날까', cost: 5, path: '/api/relation', need: 'relation' },
-      { id: 'typecompat', icon: 'typecompat', label: '오행으로 보는 두 사람',    cost: 2, path: '/api/type-compat',    need: 'type' },
-      { id: 'spouse',  icon: 'spouse',  label: '내 짝은 어떤 사람',          cost: 3, path: '/api/spouse-palace',   need: null },
+      { id: 'compat',   icon: 'compat',   label: '이 사람과 좋은 때',      cost: 6, path: '/api/compat-timing', need: 'partner' },
+      { id: 'intimacy', icon: 'intimacy', label: '속궁합',                cost: 5, path: '/api/intimacy',      need: 'partner' },
+      { id: 'relation', icon: 'compat',   label: '왜 자꾸 이 사람과 어긋날까', cost: 5, path: '/api/relation',   need: 'relation' },
+      { id: 'spouse',   icon: 'spouse',   label: '내 짝은 어떤 사람',       cost: 3, path: '/api/spouse-palace', need: null },
+      { id: 'typecompat', icon: 'typecompat', label: '오행으로 보는 두 사람', cost: 2, path: '/api/type-compat', need: 'type' },
     ],
   },
   {
-    // 작명·이름·관상은 목적이 뚜렷해서 사주 일반과 섞이면 오히려 안 보인다.
-    icon: 'secName', title: '이름과 인상',
+    icon: 'secTiming', title: '안할매 — 액을 눅이다',
     items: [
-      { id: 'name',       icon: 'name',       label: '내 이름에 담긴 기운',          cost: 4, path: '/api/name-reading',   need: 'name' },
-      { id: 'naming',     icon: 'naming',     label: '아이 이름 지을 때', cost: 4, path: '/api/naming',      need: 'surname' },
-      { id: 'photo',      icon: 'photo',      label: '관상과 손금',          cost: 4, path: '/api/photo-reading',  need: 'photo' },
-      { id: 'numerology', icon: 'numerology', label: '숫자로 보는 내 성향',     cost: 2, path: '/api/numerology',     need: null },
+      { id: 'sinsal',   icon: 'sinsal',   label: '내 사주에 앉은 살',   cost: 3, path: '/api/sinsal',     need: null },
+      { id: 'tojeong',  icon: 'tojeong',  label: '토정비결 신년운세',    cost: 4, path: '/api/tojeong',    need: null },
+      { id: 'yearluck', icon: 'yearluck', label: '올해 나에게 오는 것',  cost: 4, path: '/api/year-luck',  need: null },
+      { id: 'pastlife', icon: 'pastlife', label: '전생에 나는 누구였나', cost: 4, path: '/api/past-life',  need: null },
+      // 물어보면 답해 주는 둘. 둘 다 글을 적어야 한다는 점이 같다.
+      { id: 'ask',      icon: 'iching',   label: '물어보기',            cost: 1, pick: ['iching', 'dream'] },
     ],
   },
   {
-    icon: 'secTiming', title: '때와 방위',
+    icon: 'secDaily', title: '안동자 — 길한 것을 찾다',
     items: [
-      { id: 'takil',   icon: 'takil',   label: '이 일에 좋은 날', cost: 2, path: '/api/auspicious-days', need: 'purpose' },
-      { id: 'direction', icon: 'direction', label: '나에게 좋은 방향',            cost: 3, path: '/api/direction',    need: null },
-      { id: 'yearluck', icon: 'yearluck', label: '올해 나에게 오는 것',           cost: 4, path: '/api/year-luck',     need: null },
-      { id: 'tojeong', icon: 'tojeong', label: '토정비결 신년운세',    cost: 4, path: '/api/tojeong',         need: null },
-    ],
-  },
-  {
-    icon: 'secDaily', title: '오늘의 운세',
-    items: [
-      { id: 'today',  icon: 'today',  label: '오늘의 운세',        cost: 1, path: '/mini/api/today',     need: null },
-      { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',     cost: 1, path: '/api/tti-ranking',    need: null },
-      { id: 'zodiac', icon: 'zodiac', label: '띠와 별자리 운세',      cost: 1, path: '/api/zodiac-fortune', need: null },
-      { id: 'topic',  icon: 'topic',  label: '주제별 운세',         cost: 1, path: '/api/fortune-topic',  need: 'topic' },
-      { id: 'lucky',  icon: 'lucky',  label: '오늘의 행운 아이템',  cost: 1, path: '/api/lucky-picks',    need: null },
-      { id: 'astro',  icon: 'astro',  label: '행성으로 보는 오늘',      cost: 1, path: '/api/astro-transit',  need: null },
+      { id: 'gwiin',     icon: 'gwiin',     label: '누가 나를 도와줄까',   cost: 4, path: '/api/gwiin',           need: null },
+      { id: 'direction', icon: 'direction', label: '나에게 좋은 방향',     cost: 3, path: '/api/direction',       need: null },
+      { id: 'takil',     icon: 'takil',     label: '이 일에 좋은 날',      cost: 2, path: '/api/auspicious-days', need: 'purpose' },
+      { id: 'lucky',     icon: 'lucky',     label: '오늘의 행운 아이템',   cost: 1, path: '/api/lucky-picks',     need: null },
       // 산가지는 서버를 안 부르는 무료 재미다. 엽전이 걸린 놀이들과 같은 칸에 두면
-      // 보상이 있는 줄 알고 눌렀다 실망한다. 오늘의 운세 곁이 제자리다.
-      { id: 'stick',  icon: 'stick',  label: '산가지 뽑기',         cost: 0, path: null,                  need: null, free: true, local: true },
+      // 보상이 있는 줄 알고 눌렀다 실망한다. 길한 것을 찾는 안동자 곁이 제자리다.
+      { id: 'stick',     icon: 'stick',     label: '산가지 뽑기',         cost: 0, path: null, need: null, free: true, local: true },
     ],
   },
-  {
-    icon: 'secAsk', title: '물어보는 점',
-    items: [
-      { id: 'tarot',  icon: 'tarot',  label: '오늘의 타로',  cost: 1, path: '/api/tarot-draw',          need: null },
-      { id: 'iching', icon: 'iching', label: '주역으로 물어보기', cost: 1, path: '/api/iching',              need: 'text',
-        prompt: '무엇이 궁금하신가요? (비워도 됩니다)', placeholder: '예: 지금 이직해도 될까요' },
-      { id: 'rune',   icon: 'rune',   label: '룬 문자 점',   cost: 1, path: '/api/rune-reading',        need: null },
-      { id: 'dream',  icon: 'dream',  label: '꿈해몽',       cost: 1, path: '/api/dream-interpretation', need: 'text',
-        prompt: '어떤 꿈을 꾸셨나요?', placeholder: '예: 맑은 물에서 잉어를 봤어요', required: true, field: 'dream' },
-    ],
-  },
+];
+
+// ── 묶음 뒤에 숨은 것들 ──
+//
+// 합친 칸(pick)을 누르면 고르게 되는 실제 콘텐츠다. 홈 타일로는 안 보이지만
+// itemById 로는 찾을 수 있어야 한다 — 고른 뒤에 이걸로 실행하기 때문이다.
+//
+// ⚠️ 여기 있는 것을 지우면 그 칸을 고를 수는 있는데 아무 일도 안 일어난다.
+//    test/menu-by-speaker.test.mjs 가 pick 에 적힌 id 가 다 여기 있는지 본다.
+export const PICKED = [
+  // 오늘 어때요
+  { id: 'today',   icon: 'today',   label: '사주로 보는 오늘',  cost: 1, path: '/mini/api/today',     need: null },
+  { id: 'ttirank', icon: 'ttirank', label: '오늘의 띠 순위',    cost: 1, path: '/api/tti-ranking',    need: null },
+  { id: 'zodiac',  icon: 'zodiac',  label: '띠와 별자리로',     cost: 1, path: '/api/zodiac-fortune', need: null },
+  { id: 'topic',   icon: 'topic',   label: '주제를 골라서',     cost: 1, path: '/api/fortune-topic',  need: 'topic' },
+  { id: 'astro',   icon: 'astro',   label: '행성으로 보는 오늘', cost: 1, path: '/api/astro-transit',  need: null },
+  // 뽑아서 보기
+  { id: 'tarot',   icon: 'tarot',   label: '타로 카드',        cost: 1, path: '/api/tarot-draw',     need: null },
+  { id: 'rune',    icon: 'rune',    label: '룬 문자',          cost: 1, path: '/api/rune-reading',   need: null },
+  // 물어보기
+  { id: 'iching',  icon: 'iching',  label: '주역으로 묻다',     cost: 1, path: '/api/iching', need: 'text',
+    prompt: '무엇이 궁금하신가요? (비워도 됩니다)', placeholder: '예: 지금 이직해도 될까요' },
+  { id: 'dream',   icon: 'dream',   label: '꿈해몽',           cost: 1, path: '/api/dream-interpretation', need: 'text',
+    prompt: '어떤 꿈을 꾸셨나요?', placeholder: '예: 맑은 물에서 잉어를 봤어요', required: true, field: 'dream' },
+  // 이름·얼굴·숫자로 보는 나
+  { id: 'name',       icon: 'name',       label: '내 이름에 담긴 기운', cost: 4, path: '/api/name-reading',  need: 'name' },
+  { id: 'naming',     icon: 'naming',     label: '아이 이름 지을 때',   cost: 4, path: '/api/naming',        need: 'surname' },
+  { id: 'photo',      icon: 'photo',      label: '관상과 손금',        cost: 4, path: '/api/photo-reading', need: 'photo' },
+  { id: 'numerology', icon: 'numerology', label: '숫자로 보는 성향',    cost: 2, path: '/api/numerology',    need: null },
 ];
 
 // 산가지(算가지) 뽑기. 서버도 AI 도 부르지 않는 순수 재미다.
@@ -204,6 +236,8 @@ export const SPEAKERS = {
 
 export const DEFAULT_SPEAKER = 'doryeong';
 
+// ⚠️ 이 표가 곧 홈 묶음이다(SECTIONS). 한쪽만 고치면 화면에는 안동자 묶음에 있는데
+//    글은 안할매가 쓴 것이 된다. test/menu-by-speaker.test.mjs 가 둘을 대조한다.
 export const FEATURE_SPEAKER = {
   // 안낭자 — 인연
   '/api/compat-timing':        'nangja',
@@ -214,19 +248,23 @@ export const FEATURE_SPEAKER = {
   // 안할매 — 액막이와 오래된 책
   '/api/sinsal':               'halmae',
   '/api/tojeong':              'halmae',
+  '/api/year-luck':            'halmae',
+  '/api/past-life':            'halmae',
   '/api/dream-interpretation': 'halmae',
   '/api/iching':               'halmae',
-  '/api/auspicious-days':      'halmae',
-  '/api/direction':            'halmae',
-  '/api/past-life':            'halmae',
-  // 안동자 — 길신
+  // 안동자 — 길한 것을 찾는다
   '/api/gwiin':                'dongja',
   '/api/lucky-picks':          'dongja',
+  '/api/direction':            'dongja',
+  '/api/auspicious-days':      'dongja',
 };
 
 /** 표에 없는 콘텐츠는 안도령이 맡는다. 산가지처럼 서버를 안 부르는 것도 여기로 온다. */
 export const speakerOf = (item) =>
   SPEAKERS[FEATURE_SPEAKER[item && item.path] || DEFAULT_SPEAKER];
 
-export const ALL_ITEMS = SECTIONS.flatMap(s => s.items);
+// ⚠️ 숨은 것(PICKED)까지 넣어야 한다. 합친 칸에서 고른 뒤에 itemById 로 찾아 실행한다.
+export const ALL_ITEMS = [...SECTIONS.flatMap(s => s.items), ...PICKED];
 export const itemById = (id) => ALL_ITEMS.find(i => i.id === id);
+/** 합친 칸이 품고 있는 것들. 고르는 화면이 이걸로 목록을 그린다. */
+export const pickedOf = (item) => (item?.pick || []).map(itemById).filter(Boolean);
