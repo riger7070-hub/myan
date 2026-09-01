@@ -50,6 +50,18 @@ const POSTS = [
     보낼곳: '/calc/samjae', 둘째: '1987년생(토끼띠)으로 계산한 실제 화면' },
 ];
 
+// ── 붙여 넣을 때 딸려 갈 색 ──
+//
+// 블로그가 회색 바탕에 흰 글씨다. 그런데 붙여 넣은 글이 제 색을 안 들고 가면
+// 편집기 기본색(검정)으로 떨어져 회색 위에서 읽기 어렵고, 흰 바탕 덩어리가
+// 얹히기도 한다. 그래서 복사되는 HTML 에 색을 실어 보낸다.
+//
+// ⚠️ 여기 한 곳만 고치면 여섯 편이 다 따라온다. 글 파일에는 색을 안 적는다 —
+//    적으면 붙여 넣었을 때 그 글자가 그대로 찍힌다.
+const 글자색 = '#ffffff';
+const 글자배경 = '#9c9c9c';       // 사장님 블로그 바탕색
+const 글꼴색 = `color:${글자색};background-color:${글자배경}`;
+
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const b64 = (p) => readFileSync(join(ROOT, p)).toString('base64');
 
@@ -203,10 +215,14 @@ const 평문들 = [];
 
 /** 토막 하나를 숨은 덩어리(복사되는 것)로 그린다. */
 const 깨끗하게 = (조각들, 이름) => 조각들.map((c) => c.종류 === '표'
-  ? `<table border="1" style="border-collapse:collapse">${c.행.map((r) =>
-      `<tr>${r.map((cell) => `<td style="padding:6px 10px">${esc(cell)}</td>`).join('')}</tr>`
-    ).join('')}</table><p></p>`
-  : 링크걸기(esc(c.값)).split('\n\n').map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('')
+  ? `<table border="1" style="border-collapse:collapse;${글꼴색}">${c.행.map((r) =>
+      `<tr>${r.map((cell) =>
+        `<td style="padding:6px 10px;${글꼴색}">${esc(cell)}</td>`).join('')}</tr>`
+    ).join('')}</table><p style="${글꼴색}"><br></p>`
+  // ⚠️ 색을 <p> 마다 건다. 바깥 한 겹에만 걸면 네이버가 그 겹을 벗기면서 색까지
+  //    같이 벗긴다. 문단마다 들고 있어야 붙여 넣은 뒤에도 남는다.
+  : 링크걸기(esc(c.값)).split('\n\n').map((p) =>
+      `<p style="${글꼴색}">${p.split('\n').join('<br>')}</p>`).join('')
 ).join('');
 
 /** 토막 하나를 눈에 보이게 그린다. */
