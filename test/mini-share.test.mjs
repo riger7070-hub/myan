@@ -22,6 +22,19 @@ const SRC = readFileSync(
 
 const fn = SRC.match(/function _resultShareText\(r, link\) \{[\s\S]*?\n\}/);
 assert.ok(fn, '_resultShareText 를 못 찾았다');
+
+// ⚠️ 이 함수는 파일 위쪽 상수를 쓴다. 떼어 내면 그 상수가 범위 밖이라 터진다
+//    (WEB_URL 을 쓰기 시작하자마자 ReferenceError 가 났다).
+//    **값을 여기 다시 적지 않고** 원본에서 같이 떼어 온다 — 두 곳에 적으면 어긋난다.
+const webUrl = SRC.match(/const WEB_URL = '[^']+';/);
+assert.ok(webUrl, 'WEB_URL 을 못 찾았다');
+globalThis.WEB_URL = eval(`(${webUrl[0].replace(/^const WEB_URL = /, '').replace(/;$/, '')})`);
+
+// 조사 붙이는 함수도 같이 떼어 온다(안도령만 받침이 있어 '이/가' 가 갈린다).
+const josa = SRC.match(/function _조사\(이름[\s\S]*?\n\}/);
+assert.ok(josa, '_조사 를 못 찾았다');
+globalThis._조사 = eval(`(${josa[0].replace('function _조사', 'function')})`);
+
 const _resultShareText = eval(`(${fn[0].replace('function _resultShareText', 'function')})`);
 
 const 배우자궁 = {
@@ -82,9 +95,11 @@ test('부가 정보도 한 줄로 함께 나간다', () => {
   assert.match(t, /살펴볼 해 2027년/);
 });
 
-test('링크를 못 만들었으면 찾아오는 법을 알려준다', () => {
+test('링크를 못 만들었어도 갈 곳은 남는다', () => {
+  // 토스 링크를 못 만들어도 웹 주소는 늘 붙는다. 받는 쪽이 아무 데도 못 가는
+  // 글은 내보내지 않는다.
   const t = _resultShareText(배우자궁, '');
-  assert.match(t, /오늘운빨/, '링크도 없고 안내도 없으면 받는 쪽이 갈 곳이 없다');
+  assert.ok(t.includes(WEB_URL), '링크도 없고 주소도 없으면 받는 쪽이 갈 곳이 없다');
 });
 
 test('공유에는 언제나 들어올 주소가 붙는다', () => {
@@ -125,10 +140,13 @@ test('긴 풀이도 전문을 싣는다', () => {
   assert.doesNotMatch(t, /…/, '말줄임이 남아 있다 — 더 이상 자르지 않는다');
 });
 
-test('앱 링크는 맨 끝에 온다', () => {
+test('갈 곳은 맨 끝에, 토스 링크가 먼저 온다', () => {
+  // 토스를 쓰는 사람이 훨씬 많으니 토스 링크가 위다. 웹 주소는 그 아래에 둔다 —
+  // 토스를 안 쓰는 사람에게 intoss 링크만 보내면 아무 데도 못 간다.
   const t = _resultShareText(배우자궁, 'https://toss.im/x/abc');
-  assert.ok(t.trimEnd().endsWith('https://toss.im/x/abc'),
-    `링크가 끝에 있지 않다:\n${t.slice(-80)}`);
+  const 끝 = t.trimEnd().split('\n\n').pop();
+  assert.equal(끝, `https://toss.im/x/abc\n${WEB_URL}`,
+    `갈 곳이 끝에 없다:\n${t.slice(-120)}`);
 });
 
 test('문단 사이 빈 줄을 살린다', () => {
@@ -146,8 +164,10 @@ test('부가 정보가 없는 콘텐츠도 문제없다', () => {
   const t = _resultShareText({ item: { label: '오늘의 타로', path: '/api/tarot-draw' }, body: '별 정방향입니다.' }, '');
   assert.match(t, /오늘의 타로/);
   assert.match(t, /별 정방향입니다/);
-  // 부가 정보가 없다고 빈 자리가 남으면 안 된다(줄이 셋뿐이어야 한다).
-  assert.equal(t.split('\n\n').length, 3, `덩어리가 3개가 아니다:\n${t}`);
+  // 후크 · 누가 무엇을 · 본문 · 권유 · 갈 곳 = 다섯.
+  // 부가 정보 자리가 비어도 빈 덩어리가 남으면 안 된다.
+  assert.equal(t.split('\n\n').length, 5, `덩어리가 5개가 아니다:\n${t}`);
+  assert.doesNotMatch(t, /\n\n\n/, '빈 덩어리가 남았다');
 });
 
 test('결과 화면 버튼은 공유하기와 홈으로 둘뿐이다', () => {
