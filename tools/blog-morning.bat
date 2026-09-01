@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 > nul
 REM ---------------------------------------------------------------
 REM  Weekday morning: build the blog paste page by itself.
@@ -63,5 +63,3 @@ REM  Scheduler it fails with "Input redirection is not supported"
 REM  and the whole task is reported as Last Result 1 even though
 REM  every step succeeded. That happened and it looked broken.
 exit /b 0
-
-timeout /t 3 > nul
