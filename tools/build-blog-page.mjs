@@ -39,10 +39,15 @@ const POSTS = [
     보낼곳: '/gunghap', 둘째: '궁합표 페이지의 실제 화면' },
   { file: '만세력.txt', card: 'insta/manseryeok.png', shot: 'blog/shots/manseryeok.png',
     보낼곳: '/calc/manseryeok', 둘째: '1990년 5월 15일 사시로 뽑아 본 실제 화면' },
-  { file: '삼재.txt', card: 'insta/samjae-2026.png', shot: 'blog/shots/samjae.png',
-    보낼곳: '/calc/samjae', 둘째: '1987년생(토끼띠)으로 계산한 실제 화면' },
   { file: '오행식단.txt', card: 'insta/ohaeng-food.png', shot: 'blog/shots/manseryeok.png',
     보낼곳: '/calc/manseryeok', 둘째: '만세력이 오행 비율을 내주는 실제 화면' },
+  // ⚠️ 여기까지 네 편은 2026-08-31 기준으로 **이미 올라갔다.** 아래가 남은 것이다.
+  //    차례를 바꿀 때는 각 글 끝의 「다음 글에서는」 도 함께 봐야 한다 — 올라간 글이
+  //    다음 글을 약속하고 있어서, 순서를 바꾸면 그 약속이 어긋난다.
+  { file: '목기운.txt', card: 'insta/mok.png', shot: 'blog/shots/manseryeok.png',
+    보낼곳: '/calc/manseryeok', 둘째: '만세력이 오행 비율을 내주는 실제 화면' },
+  { file: '삼재.txt', card: 'insta/samjae-2026.png', shot: 'blog/shots/samjae.png',
+    보낼곳: '/calc/samjae', 둘째: '1987년생(토끼띠)으로 계산한 실제 화면' },
 ];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

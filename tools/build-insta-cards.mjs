@@ -307,6 +307,33 @@ const CARDS = [
       body:has(.who) .mid { padding-right: 0; }
       .eyebrow, .title { padding-right: 250px; }`, 사람('anhalmae')),
   },
+  {
+    // 목 기운 글에 붙는 카드.
+    //
+    // ⚠️ 표를 쓰지 않는다. 그 글 자체가 "표를 없애고 글로 푼다" 는 방향으로 쓴
+    //    것이라, 카드에 표가 들어가면 글과 그림이 따로 논다. 큰 글씨 몇 줄로 간다.
+    name: 'mok',
+    html: shell(`
+      <div class="eyebrow">안할매가 짚어 드립니다</div>
+      <div class="title gold">다섯 중에<br>제일 먼저 비는 것</div>
+      <div class="big">초록</div>
+      <div class="why">배가 안 고프니까 안 챙기고,<br>
+        손이 많이 가니까 안 사고,<br>
+        빠져도 티가 안 나니까 모릅니다.</div>
+      <div class="note">사주에 목이 없는 것과<br>
+        식탁에 초록이 없는 것은 다른 이야기입니다.<br><br>
+        다만 오늘 저녁에 한 젓가락 얹는 데는<br>
+        이유 하나면 충분합니다.</div>`, `
+      .title { font-size: 70px; font-weight: 600; line-height: 1.3; margin-top: 24px; word-break: keep-all; }
+      .big {
+        margin-top: 38px; font-size: 148px; font-weight: 700;
+        color: #7fb98a; letter-spacing: 0.06em;
+        text-shadow: 0 0 60px rgba(127,185,138,0.32);
+      }
+      .why { margin-top: 30px; font-size: 33px; line-height: 1.75; color: #e9e4da; }
+      .note { margin-top: 42px; font-size: 27px; line-height: 1.7; color: rgba(233,228,218,0.5); }
+      .eyebrow, .title { padding-right: 250px; }`, 사람('anhalmae')),
+  },
 ];
 
 // ── 오늘의 띠 순위 ──
