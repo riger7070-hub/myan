@@ -54,6 +54,25 @@ const 찍을것 = [
     path: '/gunghap',
     채우기: async () => {},
   },
+  {
+    name: 'samjae',
+    path: '/calc/samjae',
+    // ⚠️ 1987년생(토끼띠)을 넣는다. 2026년이 그 사람의 삼재라서 "지금 삼재입니다"
+    //    가 찍힌다. 삼재가 아닌 해를 넣으면 "아닙니다" 만 나와서, 사진 한 장으로는
+    //    이 계산기가 무엇을 해 주는지 안 보인다.
+    // ⚠️ 이 페이지는 결과를 #out 에 넣지 않고 **폼 자리를 통째로 갈아 끼운다.**
+    //    다른 계산기처럼 '#out .card' 를 기다리면 영영 안 온다(실제로 걸렸다).
+    //    화면에 글자가 나타나는 것으로 기다린다.
+    채우기: async (p) => {
+      await p.fill('#f-year', '1987');
+      await p.click('#go');
+      // ⚠️ document.body 를 그냥 읽으면 안 된다. 누른 직후 화면이 갈리는 사이에
+      //    한 번 null 로 들어와 TypeError 로 죽는다. 있는지 보고 읽는다.
+      await p.waitForFunction(
+        () => !!document.body && document.body.innerText.includes('삼재입니다'),
+        null, { timeout: 15000 });
+    },
+  },
 ];
 
 mkdirSync(OUT, { recursive: true });

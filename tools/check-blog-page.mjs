@@ -17,7 +17,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const 글파일 = ['손없는날.txt', '띠궁합.txt', '만세력.txt', '오행식단.txt'];
+
+// ⚠️ 글 목록을 여기 손으로 적지 않는다. **대장을 짓는 쪽에서 읽어 온다.**
+//    처음엔 네 편을 적어 두었는데, 다섯째 글을 더하자 순서가 어긋나 엉뚱한 글과
+//    맞대 보고 터졌다. 대장이 그리는 차례가 곧 검사하는 차례여야 한다.
+const 글파일 = [...readFileSync(join(ROOT, 'tools', 'build-blog-page.mjs'), 'utf8')
+  .matchAll(/\{ file: '([^']+)'/g)].map((m) => m[1]);
 
 // 글 파일에 적힌 주소. 기대값을 여기서 뽑는다.
 //
