@@ -1269,10 +1269,6 @@ function _resultShareText(r, link) {
   const facts = (r.extras || []).map(e => `${e.label} ${e.value}`).join('\n');
   const { hook, rest } = _pullQuote(body);
   const sp = speakerOf(r.item);
-  // 토스 링크와 웹 주소를 **둘 다** 적는다. 토스를 안 쓰는 사람에게 intoss 링크만
-  // 보내면 아무 데도 못 간다. 반대로 웹 주소만 보내면 토스 쓰는 사람이 앱을 못 찾는다.
-  // 링크를 못 만들어 웹 주소로 물러났을 때는 한 줄만 나간다(같은 주소를 두 번 안 적는다).
-  const 갈곳 = [link, link === WEB_URL ? '' : WEB_URL].filter(Boolean).join('\n');
   return [
     // 후크가 잡히면 그것이 첫 줄이고, 무엇을 본 것인지는 그 아래로 내린다.
     hook ? `"${hook}"` : `[${r.item.label}] ${sp.name}의 풀이`,
@@ -1286,7 +1282,10 @@ function _resultShareText(r, link) {
     //    권하지는 않는다 — 다르다는 사실만 말하고 판단은 읽는 사람에게 맡긴다.
     `이건 제 사주로 본 것이라 사람마다 다르게 나와요.\n`
       + `생년월일만 넣으면 그쪽 것도 ${sp.name}${_조사(sp.name)} 짚어 줍니다.`,
-    갈곳 || '토스에서 "오늘운빨"을 찾아보세요.',
+    // ⚠️ 여기에는 **토스 링크만** 적는다. 미니앱에서 나가는 글이라 받는 쪽도
+    //    대개 토스를 쓴다. workers.dev 주소를 나란히 붙였더니 받는 사람 눈에
+    //    시험용 주소처럼 보였다 — 믿음이 깎이는 쪽이 얻는 것보다 크다.
+    link || '토스에서 "오늘운빨"을 찾아보세요.',
   ].filter(Boolean).join('\n\n');
 }
 
