@@ -1906,6 +1906,7 @@ export default {
     if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
     if (path === '/api/gwiin' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleGwiin(request, env)); }
     if (path === '/api/sinsal' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSinsal(request, env)); }
+    if (path === '/api/tti-today' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiToday(request, env)); }
     if (path === '/api/tti-ranking' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiRanking(request, env)); }
     if (path === '/api/past-life' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handlePastLife(request, env)); }
     if (path === '/api/vocation' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleVocation(request, env)); }
@@ -1986,6 +1987,7 @@ export default {
     if (path === '/mini/api/today'         && method === 'POST') { await ensureDBExt(env); return handleMiniDailyFortune(request, env); }
     if (path === '/mini/api/ad-reward'     && method === 'POST') { await ensureDBExt(env); return handleMiniAdReward(request, env); }
     if (path === '/mini/api/checkin'       && method === 'POST') { await ensureDBExt(env); return handleMiniCheckin(request, env); }
+    if (path === '/mini/api/feedback'      && method === 'POST') { await ensureDBExt(env); return handleMiniFeedback(request, env); }
     if (path === '/mini/api/quiz'          && method === 'GET')  { await ensureDBExt(env); return handleMiniQuiz(request, env); }
     if (path === '/mini/api/quiz'          && method === 'POST') { await ensureDBExt(env); return handleMiniQuizSubmit(request, env); }
     if (path === '/mini/api/pop'           && method === 'GET')  { await ensureDBExt(env); return handleMiniPopStart(request, env); }
@@ -3396,6 +3398,54 @@ async function handleMiniAdReward(request, env) {
 const MINI_CHECKIN_TOKENS = 3;   // 7일 개근
 const MINI_QUIZ_TOKENS    = 1;   // 퀴즈 만점, 하루 1회
 const MINI_CHECKIN_CYCLE  = 7;
+
+/**
+ * 「이 풀이가 도움이 되셨나요」 한 줄에 대한 답.
+ *
+ * ⚠️ 왜 이 표가 필요한가. 2026-09-02 현재 43명이 왔고 29명(67%)이 안 돌아왔는데,
+ *    **왜 안 돌아오는지 물어본 적이 없다.** 도장과 알림은 「좋았는데 잊은 사람」을
+ *    되부르는 장치라, 애초에 안 좋았던 거라면 알림은 차단만 부른다. 그 둘을
+ *    가르려면 물어봐야 한다. 다음엔 짐작 말고 이걸 보고 정한다.
+ *
+ * ⚠️ 하루에 콘텐츠 하나당 한 번만 센다. id 에 날짜와 기능이 박혀 있어서, 같은
+ *    걸 여러 번 눌러도 표가 부풀지 않는다.
+ *
+ * ⚠️ 생년월일도 이름도 담지 않는다. 어느 콘텐츠가 좋았나만 알면 되고,
+ *    그것 말고는 담을 이유가 없다.
+ */
+async function handleMiniFeedback(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  try {
+    const { feature, helpful } = await request.json().catch(() => ({}));
+    // 아는 콘텐츠만 받는다. 모르는 이름이 들어오면 표가 쓰레기가 된다.
+    if (typeof feature !== 'string' || !/^[a-z]{1,20}$/.test(feature)) {
+      return miniCors(request, JSON.stringify({ error: { message: '잘못된 요청입니다.' } }), 400);
+    }
+    const today = _kstToday();
+    await env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS mini_feedback (
+         id       TEXT PRIMARY KEY,
+         user_key TEXT NOT NULL,
+         feature  TEXT NOT NULL,
+         helpful  INTEGER NOT NULL,
+         day      TEXT NOT NULL,
+         created_at INTEGER NOT NULL DEFAULT (unixepoch())
+       )`
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO mini_feedback (id, user_key, feature, helpful, day)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`${userKey}:${feature}:${today}`, userKey, feature, helpful ? 1 : 0, today).run();
+    return miniCors(request, JSON.stringify({ ok: true }), 200);
+  } catch (e) {
+    console.error('[MINIFEEDBACK]', e?.message);
+    // ⚠️ 그분에게는 실패를 알리지 않는다. 우리가 알고 싶어서 물은 것이지
+    //    그분이 해야 할 일이 아니다 — 눌렀는데 오류가 뜨면 괜히 눌렀다 싶어진다.
+    return miniCors(request, JSON.stringify({ ok: true }), 200);
+  }
+}
 
 /** 출석 도장 + 7일 개근 보상. */
 async function handleMiniCheckin(request, env) {
@@ -8522,10 +8572,66 @@ async function handleGwiin(request, env) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  오늘의 띠 순위 (1엽전)
+//  오늘의 띠 순위 — 숫자만 (공짜)
 //
-//  순위 자체는 계산이라 AI 없이도 나온다. AI 에게는 1위와 꼴찌, 그리고 내 띠에
-//  대한 짧은 말만 맡긴다 — 열두 줄을 다 쓰게 하면 느리고 비싸다.
+//  ⚠️ 왜 공짜로 푸는가. 2026-09-02 에 숫자를 보고 정했다.
+//
+//  미니앱에 온 43명 가운데 29명(67%)이 한 번 켜고 다시 오지 않았다. 까닭이
+//  값 매김에 있었다 — **공짜로 주던 「내 사주 풀이」는 평생 안 바뀌고**(한 번
+//  읽으면 끝이다) **날마다 바뀌는 「오늘 어때요」에는 1엽전을 받았다.** 가입
+//  엽전 3개를 쓰고 나면 내일 다시 열 이유가 없다. 그래서 아무리 홍보해도
+//  그날 온 사람만 세어지고 다음 날 0으로 돌아갔다.
+//
+//  게다가 이 순위는 **웹 /tti 에서 이미 공짜로 풀고 있고**, 날마다 인스타와
+//  X 에도 그림으로 올린다. 밖에서는 공짜인 것을 앱 안에서만 돈을 받고 있었다.
+//
+//  그래서 선을 다시 그었다. 나누는 자리는 **돈이 드는가**이다.
+//
+//    공짜   순위 열두 줄 · 내 띠가 몇 위인지 · 왜(삼합·육합·충·형)
+//           → computeTtiRanking() 은 그냥 계산이라 한 푼도 안 든다
+//    1엽전  오늘을 어떻게 보내면 좋은지 (handleTtiRanking)
+//           → Gemini 를 부르므로 실제로 돈이 나간다
+//
+//  파는 것을 깎은 게 아니다. **밖에서 공짜인 것을 안에서도 공짜로 맞췄고,**
+//  만드는 데 돈이 드는 쪽은 그대로 받는다.
+// ════════════════════════════════════════════════════════════
+async function handleTtiToday(request, env) {
+  try {
+    const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
+    const acct = await resolveAccount(request, env);
+    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+
+    const { birth } = await request.json().catch(() => ({}));
+    const today = _kstYmd();
+    const rank = computeTtiRanking(today);
+    if (!rank) return cors(JSON.stringify({ error: { message: '오늘의 순위를 계산하지 못했습니다.' } }), 500);
+
+    // 내 띠. 생년이 없어도 순위는 볼 수 있게 한다 — 처음 온 사람도 이 칸은 본다.
+    let mine = null;
+    if (birth && birth.year) {
+      const saju = computeSaju(birth.year, birth.month || 1, birth.day || 1, birth.hour || '');
+      if (saju) mine = rank.rows.find(r => r.branch === saju.yp[1]) || null;
+    }
+
+    // ⚠️ 여기서 엽전을 세지도, 쓰지도, 기록하지도 않는다. 공짜인 것을 보려고
+    //    잔액을 확인하면 잔액이 0 인 사람에게 실패로 보인다 — 그 사람이야말로
+    //    이 칸이 붙잡아야 할 사람이다.
+    return cors(JSON.stringify({
+      success: true, date: today, dayBranch: rank.dayBranch, rows: rank.rows, mine,
+    }), 200);
+  } catch (e) {
+    console.error('[TTITODAY]', e?.message);
+    return cors(JSON.stringify({ error: { message: '순위를 불러오지 못했습니다.' } }), 500);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  오늘의 띠 순위 풀이 (1엽전)
+//
+//  순위 자체는 계산이라 AI 없이도 나온다(위 handleTtiToday 가 공짜로 준다).
+//  AI 에게는 1위와 꼴찌, 그리고 내 띠에 대한 짧은 말만 맡긴다 — 열두 줄을 다
+//  쓰게 하면 느리고 비싸다.
 // ════════════════════════════════════════════════════════════
 async function handleTtiRanking(request, env) {
   let refund = null;

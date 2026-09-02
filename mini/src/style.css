@@ -931,3 +931,73 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .tti-name { flex: 1; }
 .tti-row.mine .tti-name { color: var(--gold-light); font-weight: 600; }
 .tti-why { font-size: 0.76rem; color: var(--text-dim); }
+
+/* ── 홈 「오늘의 띠 순위」: 이 앱에서 날마다 바뀌면서 공짜인 유일한 칸 ──
+   히어로가 "오늘은 어떤 기운일까요" 라고 묻고, 이 칸이 곧바로 답한다.
+   전에는 묻기만 하고 답은 1엽전을 내야 나왔다. */
+.tti-today {
+  border-radius: 18px; padding: 18px 18px 16px; margin: -14px 0 26px;
+  background: var(--card); box-shadow: var(--card-shadow);
+  border: 1px solid var(--line);
+}
+.tti-today-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.tti-today-label { font-size: 0.82rem; letter-spacing: 0.06em; color: var(--gold); font-weight: 700; }
+.tti-today-free {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--bg); background: var(--gold);
+  padding: 2px 7px; border-radius: 999px;
+}
+.tti-today-mine { margin: 0 0 12px; font-size: 1.02rem; color: var(--text); line-height: 1.5; }
+.tti-today-mine b { color: var(--gold-light); font-size: 1.16rem; }
+.tti-today-top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.tti-today-top li {
+  display: flex; align-items: baseline; gap: 9px;
+  font-size: 0.9rem; color: var(--text);
+  padding-bottom: 7px; border-bottom: 1px solid var(--line);
+}
+.tti-today-top li:last-child { border-bottom: 0; padding-bottom: 0; }
+.tti-today-rank {
+  min-width: 17px; font-weight: 700; color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.tti-today-why { color: var(--text-dim); font-size: 0.78rem; margin-left: auto; }
+.tti-today-more {
+  width: 100%; margin-top: 14px; padding: 11px;
+  border: 1px solid var(--gold-dim); border-radius: 12px;
+  background: transparent; color: var(--gold);
+  font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer;
+}
+.tti-today-more:active { background: rgba(201, 169, 110, 0.08); }
+
+/* ── 홈 도장 줄: 내일 또 올 이유를 눈에 보이게 ──
+   앱을 켜면 저절로 찍힌다. 여기는 누르는 자리가 아니라 보는 자리다.
+   전에는 홈 → 메뉴 → 무료 엽전 받기 → 출석 도장으로 세 단계 안쪽에
+   숨어 있어서 43명 중 1명만 가지고 있었다. */
+.streak-row {
+  display: flex; align-items: center; gap: 9px;
+  margin: -14px 0 26px; padding: 11px 16px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg-soft);
+  font-size: 0.86rem; color: var(--text);
+}
+.streak-dot { display: flex; color: var(--gold); }
+.streak-dot svg { width: 17px; height: 17px; }
+.streak-day b { color: var(--gold-light); }
+.streak-next { margin-left: auto; color: var(--text-dim); font-size: 0.79rem; }
+
+/* ── 풀이 끝의 「도움이 됐나요」 ──
+   43명 중 29명이 안 돌아왔는데 왜인지 물어본 적이 없었다. 값을 매기게 하지
+   않고 둘 중 하나만 고르게 한다 — 고르게 하면 안 누른다. */
+.fb-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 14px 0 0; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 13px;
+}
+.fb-ask { font-size: 0.84rem; color: var(--text-dim); margin-right: auto; }
+.fb-btn {
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--gold-dim); background: transparent;
+  color: var(--gold); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+}
+.fb-btn:active { background: rgba(201, 169, 110, 0.08); }
+.fb-done { margin: 14px 0 0; padding: 12px 14px; font-size: 0.84rem; color: var(--text-dim); }

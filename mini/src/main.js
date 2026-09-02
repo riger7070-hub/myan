@@ -15,7 +15,7 @@
 //    옛 이름으로 부르면 링크가 안 만들어지고, 우리 코드는 그걸 조용히 삼키고
 //    웹 주소로 물러났다 — 그래서 공유는 되는데 토스 앱으로 가는 링크가 아니었다.
 import {
-  TossAuth, Storage, IAP, Share, GoogleAdMob, graniteEvent, Screen,
+  TossAuth, Storage, IAP, Share, GoogleAdMob, graniteEvent, Screen, Notification,
 } from '@apps-in-toss/web-framework';
 import {
   SECTIONS, itemById, pickedOf, OHAENG_TYPES, TOPICS, PURPOSES, RELATIONS, SIJI, GENDERS, SANGAJI,
@@ -129,6 +129,13 @@ const state = {
   menu: false,      // 오른쪽 위 메뉴가 열려 있는가
   invite: null,     // 상대에게 보낸 궁합 초대 { id, url, answered }
   inviteChecked: false,  // 앱을 켠 뒤 답이 왔는지 한 번 확인했는가
+  // 오늘의 띠 순위(공짜) { date, dayBranch, rows, mine }. 홈 첫 화면에 선다.
+  // 이 앱에서 **날마다 바뀌는 것을 공짜로 보여 주는 유일한 자리**다 — 어제 온
+  // 사람이 오늘 다시 열 이유가 여기 말고는 없다.
+  tti: null,
+  // 이번에 켠 동안 어느 풀이에 답을 냈는가 { [item.id]: 'up' | 'down' }.
+  // 서버가 진짜 기록이고 여기는 「방금 눌렀다」를 보여 주기 위한 것뿐이다.
+  feedback: {},
 };
 
 const app = document.getElementById('app');
@@ -352,7 +359,30 @@ async function saveProfile(form) {
       state.tokens = me.tokens;
     }
     go('home');
+    // 홈을 먼저 그리고 둘은 뒤따라 채운다. 기다렸다 그리면 이 호출들 때문에
+    // 앱이 늦게 열린 것처럼 보인다 — 둘 다 없어도 홈은 멀쩡히 선다.
+    loadTtiToday();
+    doCheckin({ quiet: true });
   });
+}
+
+/**
+ * 오늘의 띠 순위를 받아 온다. **엽전을 쓰지 않는다.**
+ *
+ * ⚠️ 실패해도 조용히 넘어간다. 이건 덤으로 얹는 칸이지 홈이 서기 위한 조건이
+ *    아니다 — 여기서 state.error 를 세우면 순위 하나 못 받았다고 홈 전체에
+ *    빨간 띠가 뜬다.
+ */
+async function loadTtiToday() {
+  const p = state.profile;
+  try {
+    const r = await api('/api/tti-today', {
+      method: 'POST',
+      body: { birth: p ? birthOf(p) : null },
+      timeoutMs: 12000,   // 홈에 얹는 것이라 오래 붙들지 않는다
+    });
+    if (r?.success) { state.tti = r; render(); }
+  } catch { /* 순위는 없어도 홈은 선다 */ }
 }
 
 // ── 콘텐츠 ────────────────────────────────────────────────
@@ -850,12 +880,101 @@ async function shareApp() {
 
 // ── 놀이: 출석 · 퀴즈 · 산가지 ───────────────────────────────
 
-async function doCheckin() {
-  await withBusy(async () => {
+/**
+ * 출석 도장.
+ *
+ * @param {{quiet?: boolean}} opts quiet 면 앱을 켤 때 저절로 찍는 길이다.
+ *
+ * ⚠️ 왜 저절로 찍는가. 2026-09-02 에 숫자를 보고 바꿨다 — 43명 중 29명이 한 번
+ *    켜고 다시 안 왔는데, 도장은 **홈 → 메뉴 → 무료 엽전 받기 → 출석 도장**
+ *    으로 세 번을 들어가야 있었다. 한 번 오고 마는 사람은 거기 못 간다.
+ *    다시 온 사람에게 또 일을 시키면 거기서 또 샌다.
+ *
+ * ⚠️ quiet 일 때는 withBusy 를 쓰지 않는다. 앱을 켜자마자 로딩 화면이 덮으면
+ *    도장 때문에 앱이 느려진 것처럼 보인다.
+ *
+ * 열었다는 것 자체가 우리가 바라는 행동이라 그것에 도장을 찍는다. 7일 보상은
+ * 여전히 **서로 다른 이레**가 필요하다 — id 가 날짜라 하루에 두 번은 안 찍힌다.
+ */
+async function doCheckin({ quiet = false } = {}) {
+  const 찍기 = async () => {
     const r = await api('/mini/api/checkin', { method: 'POST', body: {} });
     gainCoins(r.balance);
     state.checkin = r;
-    state.toast = r.message || '';
+    // 조용히 찍을 때는 개근 보상이 났을 때만 말한다. 날마다 "1일째" 라고
+    // 알리면 그것부터 성가시다.
+    if (!quiet || r.granted) state.toast = r.message || '';
+  };
+  if (quiet) {
+    try { await 찍기(); render(); askNotify(); } catch { /* 도장 못 찍어도 앱은 쓴다 */ }
+    return;
+  }
+  await withBusy(찍기);
+}
+
+/**
+ * 「도움이 됐나요」에 답한다.
+ *
+ * ⚠️ 로딩 화면을 덮지 않고, 실패해도 아무 말 안 한다. 이건 **우리가 알고 싶어서**
+ *    묻는 것이지 그분이 해야 할 일이 아니다. 눌렀는데 오류가 뜨면 그때부터는
+ *    괜히 눌렀다 싶어진다. 화면에는 곧바로 고맙다고만 적는다.
+ */
+async function sendFeedback(v) {
+  const item = state.result?.item;
+  if (!item || state.feedback[item.id]) return;
+  state.feedback[item.id] = v;
+  render();
+  try {
+    await api('/mini/api/feedback', {
+      method: 'POST',
+      body: { feature: item.id, helpful: v === 'up' },
+      timeoutMs: 8000,
+    });
+  } catch { /* 못 보내도 그분에게는 알리지 않는다 */ }
+}
+
+// ── 알림 ─────────────────────────────────────────────────────
+//
+// ⚠️ 여기에 콘솔 스마트발송 템플릿 코드를 넣어야 알림을 물어본다.
+//    앱인토스 콘솔 → 스마트발송에서 템플릿을 만들면 코드가 나온다.
+//    **비어 있으면 아예 묻지 않는다** — 코드 없이 부르면 열리다 마는 창을
+//    보여 주고 그 사람의 한 번뿐인 기회를 버리게 된다.
+const NOTIFY_TEMPLATE = '';
+
+const NOTIFY_ASKED_KEY = 'myan.notify.asked';
+
+/**
+ * 알림 동의를 묻는다. 날마다 바뀌는 순위를 알려 주기 위한 것이다.
+ *
+ * ⚠️ **언제 묻는지가 이 기능의 전부다.**
+ *    처음 온 사람에게 물으면 대개 거절이고, 거절은 되돌리기 어렵다. 그래서
+ *    **이틀째부터** 묻는다 — 다시 왔다는 것은 이미 좋았다는 뜻이라, 그때가
+ *    유일하게 예라고 할 만한 순간이다.
+ *
+ * ⚠️ 한 번만 묻는다. 거절한 사람에게 다시 물으면 그때부터는 앱이 성가신 것이다.
+ */
+function askNotify() {
+  if (!NOTIFY_TEMPLATE) return;                       // 콘솔 템플릿이 아직 없다
+  if (!state.checkin || state.checkin.streak < 2) return;  // 다시 온 사람에게만
+  try {
+    if (localStorage.getItem(NOTIFY_ASKED_KEY)) return;
+  } catch { return; }                                 // 저장을 못 하면 나중에 또 묻게 된다
+  // 옛 토스 앱에는 이 창이 없다. 물어보지 않고 넘어간다.
+  if (!Notification?.requestAgreement?.isSupported?.()) return;
+
+  try { localStorage.setItem(NOTIFY_ASKED_KEY, String(Date.now())); } catch { /* 그래도 묻는다 */ }
+
+  // ⚠️ 돌려주는 함수로 콜백을 풀어 줘야 한다(SDK 규약).
+  const cleanup = Notification.requestAgreement({
+    options: { templateCode: NOTIFY_TEMPLATE },
+    onEvent: (r) => {
+      if (r?.type === 'newAgreement') {
+        state.toast = '내일 순위가 나오면 알려 드릴게요.';
+        render();
+      }
+      cleanup?.();
+    },
+    onError: () => { cleanup?.(); },   // 조용히 넘어간다. 알림은 덤이다
   });
 }
 
@@ -1466,6 +1585,101 @@ function stopLoadingTicker() {
   if (_loadingTimer) { clearInterval(_loadingTimer); _loadingTimer = null; }
 }
 
+/**
+ * 홈 맨 위 「오늘의 띠 순위」 칸. **공짜다.**
+ *
+ * ⚠️ 이 칸이 이 앱에서 유일하게 **날마다 바뀌면서 값을 안 받는 자리**다.
+ *    2026-09-02 에 숫자를 보고 넣었다 — 43명 중 29명(67%)이 한 번 켜고 다시
+ *    오지 않았는데, 공짜로 주던 「내 사주 풀이」는 평생 안 바뀌고(한 번 읽으면
+ *    끝이다) 날마다 바뀌는 것에는 엽전을 받고 있었다. 내일 열 이유가 없었다.
+ *
+ * ⚠️ 여기에 값을 붙이지 말 것. 붙이는 순간 다시 그때로 돌아간다.
+ *    돈은 아래 「안할매의 오늘 풀이」에서 받는다 — 그쪽은 Gemini 를 부르므로
+ *    실제로 돈이 나간다.
+ *
+ * 순위를 아직 못 받았으면 아무것도 안 그린다. 자리만 잡아 두고 비워 두면
+ * 홈이 덜 그려진 것처럼 보인다.
+ */
+function ttiCard() {
+  const t = state.tti;
+  if (!t || !t.rows?.length) return '';
+  const top3 = t.rows.slice(0, 3);
+  const mine = t.mine;
+  return `
+    <section class="tti-today">
+      <div class="tti-today-head">
+        <span class="tti-today-label">오늘의 띠 순위</span>
+        <span class="tti-today-free">무료</span>
+      </div>
+      ${mine ? `
+        <p class="tti-today-mine">
+          ${esc(mine.name)}띠는 오늘 <b>${mine.rank}위</b>${
+            mine.why?.length ? ` <span class="tti-today-why">${esc(mine.why.join(' · '))}</span>` : ''
+          }
+        </p>` : `
+        <p class="tti-today-mine">오늘 1위는 <b>${esc(top3[0].name)}띠</b>입니다</p>`}
+      <ol class="tti-today-top">
+        ${top3.map(r => `
+          <li><span class="tti-today-rank">${r.rank}</span><span>${esc(r.name)}띠</span>${
+            r.why?.length ? `<span class="tti-today-why">${esc(r.why.join(' · '))}</span>` : ''
+          }</li>`).join('')}
+      </ol>
+      <button class="tti-today-more" data-item="ttirank">
+        안할매의 오늘 풀이 · ${COIN}1 엽전
+      </button>
+    </section>`;
+}
+
+/**
+ * 풀이 끝에 붙는 「도움이 됐나요」 한 줄.
+ *
+ * ⚠️ 왜 넣는가. 2026-09-02 현재 43명이 왔고 29명이 안 돌아왔는데, **왜 안
+ *    돌아오는지 물어본 적이 없다.** 미니앱에는 묻는 자리 자체가 없었다.
+ *    도장과 알림은 「좋았는데 잊은 사람」을 되부르는 장치다 — 애초에 안 좋았던
+ *    거라면 알림은 차단만 부른다. 그 둘을 가르려면 물어봐야 한다.
+ *
+ * ⚠️ 값을 매기게 하지 않는다(별 다섯 개 같은 것). 둘 중 하나면 누르지만, 고르게
+ *    하면 안 누른다. 우리가 알아야 하는 것도 「좋았나 아닌가」 하나뿐이다.
+ */
+function feedbackRow(r) {
+  const key = r?.item?.id;
+  if (!key) return '';
+  const 낸것 = state.feedback[key];
+  if (낸것) {
+    return `<p class="fb-done">${낸것 === 'up' ? '고맙습니다. 더 나아지게 할게요.' : '알려 주셔서 고맙습니다. 더 다듬을게요.'}</p>`;
+  }
+  return `
+    <div class="fb-row">
+      <span class="fb-ask">이 풀이가 도움이 되셨나요?</span>
+      <button class="fb-btn" data-fb="up" aria-label="도움이 됐다">그렇다</button>
+      <button class="fb-btn" data-fb="down" aria-label="도움이 안 됐다">아니다</button>
+    </div>`;
+}
+
+/**
+ * 홈의 도장 줄. 앱을 켜면 저절로 찍히고, 여기엔 **찍힌 결과만** 보인다.
+ *
+ * ⚠️ 누를 것이 아니라 보일 것이다. 연속 일수가 눈에 보여야 내일 또 올 이유가
+ *    된다 — 전에는 세 단계 안쪽에 숨어 있어서 아무도 못 봤다(43명 중 도장을
+ *    가진 사람이 1명이었다).
+ */
+function streakRow() {
+  const c = state.checkin;
+  if (!c || !c.streak) return '';
+  return `
+    <div class="streak-row">
+      <span class="streak-dot">${icon('checkin')}</span>
+      <span class="streak-day"><b>${c.streak}일째</b> 오시는 중</span>
+      <span class="streak-next">${
+        c.toNext === 1 ? `내일이면 ${COIN}엽전 ${MINI_CHECKIN_TOKENS_HINT}개` : `개근까지 ${c.toNext}일`
+      }</span>
+    </div>`;
+}
+
+// 서버가 주는 값(MINI_CHECKIN_TOKENS)과 같아야 하는 표시용 숫자. 어긋나면
+// "내일이면 3개" 라고 해 놓고 다른 수를 주게 된다.
+const MINI_CHECKIN_TOKENS_HINT = 3;
+
 // 메뉴에 담기는 것들. 홈 아래쪽에 흩어져 있던 것을 한자리에 모았다.
 const MENU_ITEMS = [
   { id: 'btn-earn',        icon: 'secGift',  label: '무료 엽전 받기', sub: '출석, 퀴즈, 부풀리기' },
@@ -1724,6 +1938,8 @@ function render() {
             </div>
           </section>`;
         })()}
+        ${ttiCard()}
+        ${streakRow()}
         ${err}
         ${SECTIONS.map(sec => `
           <section class="sec">
@@ -1865,6 +2081,7 @@ function render() {
             </div>`).join('')}
         </div>` : ''}
         <div class="card reading">${paras || '<p class="muted">내용을 불러오지 못했어요.</p>'}</div>
+        ${feedbackRow(r)}
         <div class="row2">
           <button class="btn" id="btn-share" ${state.busy ? 'disabled' : ''}>공유하기</button>
           <button class="btn ghost" id="btn-home2">홈으로</button>
@@ -2422,6 +2639,9 @@ function bind() {
     runItem(it);
   });
 
+  for (const el of all('[data-fb]')) {
+    el.onclick = () => sendFeedback(el.dataset.fb);
+  }
   for (const el of all('[data-item]')) {
     el.onclick = () => { const it = itemById(el.dataset.item); if (it) openItem(it); };
   }
