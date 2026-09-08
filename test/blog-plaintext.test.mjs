@@ -75,7 +75,7 @@ for (const f of 글) {
     // ⚠️ 여기 없는 주소를 글에 적으면 들어온 사람이 404 를 본다. 새 페이지를 가리킬
     //    때는 실제로 열리는지 확인하고 이 목록에 넣을 것.
     const 있는것 = ['/calc/sonnal', '/gunghap', '/calc/manseryeok', '/calc/samjae',
-      '/calc', '/tti', '/app'];
+      '/calc/sinsal', '/calc', '/tti', '/app'];
     for (const p of 주소) assert.ok(있는것.includes(p), `없는 주소를 가리킨다: ${p}`);
   });
 

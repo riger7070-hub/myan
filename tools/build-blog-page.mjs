@@ -48,6 +48,12 @@ const POSTS = [
     보낼곳: '/calc/manseryeok', 둘째: '만세력이 오행 비율을 내주는 실제 화면' },
   { file: '삼재.txt', card: 'insta/samjae-2026.png', shot: 'blog/shots/samjae.png',
     보낼곳: '/calc/samjae', 둘째: '1987년생(토끼띠)으로 계산한 실제 화면' },
+  // ⚠️ 신살 카드와 신살 화면 캡처가 아직 없다. 둘 다 가장 가까운 것을 빌려 뒀다 —
+  //    카드는 네 기둥 카드(신살이 그 기둥 위에 서는 것이라 어긋나지는 않는다),
+  //    화면은 만세력 캡처(글 끝에서 만세력으로 보내므로 그 자리에는 맞는다).
+  //    insta/sinsal.png 와 blog/shots/sinsal.png 가 생기면 여기부터 바꿀 것.
+  { file: '신살.txt', card: 'insta/manseryeok.png', shot: 'blog/shots/manseryeok.png',
+    보낼곳: '/calc/sinsal', 둘째: '만세력이 사주 네 기둥을 내주는 실제 화면' },
 ];
 
 // ── 붙여 넣을 때 딸려 갈 색 ──
