@@ -1988,6 +1988,7 @@ export default {
     if (path === '/mini/api/ad-reward'     && method === 'POST') { await ensureDBExt(env); return handleMiniAdReward(request, env); }
     if (path === '/mini/api/checkin'       && method === 'POST') { await ensureDBExt(env); return handleMiniCheckin(request, env); }
     if (path === '/mini/api/feedback'      && method === 'POST') { await ensureDBExt(env); return handleMiniFeedback(request, env); }
+    if (path === '/mini/api/receipts'      && method === 'GET')  { await ensureDBExt(env); return handleMiniReceipts(request, env); }
     if (path === '/mini/api/quiz'          && method === 'GET')  { await ensureDBExt(env); return handleMiniQuiz(request, env); }
     if (path === '/mini/api/quiz'          && method === 'POST') { await ensureDBExt(env); return handleMiniQuizSubmit(request, env); }
     if (path === '/mini/api/pop'           && method === 'GET')  { await ensureDBExt(env); return handleMiniPopStart(request, env); }
@@ -3398,6 +3399,44 @@ async function handleMiniAdReward(request, env) {
 const MINI_CHECKIN_TOKENS = 3;   // 7일 개근
 const MINI_QUIZ_TOKENS    = 1;   // 퀴즈 만점, 하루 1회
 const MINI_CHECKIN_CYCLE  = 7;
+
+/**
+ * 엽전을 산 내역. **결제한 것만** 돌려준다.
+ *
+ * ⚠️ 왜 필요한가. 비게임 출시 가이드라인이 요구한다 — "구매한 인앱 상품에 대한
+ *    결제 내역을 확인할 수 있다". 2026-09-30 전수 점검 항목이고, 14일 안에
+ *    못 고치면 미노출이다. 「지난 기록」은 풀이 기록이지 결제 내역이 아니다.
+ *
+ * ⚠️ 원장(mini_payment_requests)에는 **돈을 안 낸 줄도 함께** 있다 — 출석
+ *    도장(pkg='checkin', amount 0), 개근 보상, 가입 지급, 관리자 선물.
+ *    그것까지 「결제 내역」이라고 보여 주면 산 적 없는 결제가 있는 것처럼 읽힌다.
+ *    **amount > 0 인 것만** 내보낸다.
+ */
+async function handleMiniReceipts(request, env) {
+  const userKey = await getMiniUserKeyFromRequest(request, env);
+  if (!userKey) return miniCors(request, JSON.stringify({ error: { message: '로그인이 필요합니다.' } }), 401);
+  try {
+    const rows = await env.DB.prepare(
+      `SELECT id, pkg, amount, tokens, status, approved_at, created_at
+         FROM mini_payment_requests
+        WHERE user_key = ? AND amount > 0
+        ORDER BY COALESCE(approved_at, created_at) DESC
+        LIMIT 50`
+    ).bind(userKey).all();
+    const receipts = (rows?.results || []).map((r) => ({
+      id: r.id,
+      label: MINI_PRODUCTS[r.pkg]?.label || r.pkg,
+      amount: r.amount,
+      tokens: r.tokens,
+      status: r.status,
+      at: r.approved_at || r.created_at,
+    }));
+    return miniCors(request, JSON.stringify({ receipts }), 200);
+  } catch (e) {
+    console.error('[MINIRECEIPTS]', e?.message);
+    return miniCors(request, JSON.stringify({ error: { message: '내역을 불러오지 못했어요.' } }), 500);
+  }
+}
 
 /**
  * 「이 풀이가 도움이 되셨나요」 한 줄에 대한 답.

@@ -136,6 +136,8 @@ const state = {
   // 이번에 켠 동안 어느 풀이에 답을 냈는가 { [item.id]: 'up' | 'down' }.
   // 서버가 진짜 기록이고 여기는 「방금 눌렀다」를 보여 주기 위한 것뿐이다.
   feedback: {},
+  receipts: [],           // 엽전을 산 내역(결제한 것만)
+  receiptsLoading: false,
 };
 
 const app = document.getElementById('app');
@@ -648,6 +650,28 @@ async function loadHistory() {
   render();
 }
 
+/**
+ * 엽전을 산 내역.
+ *
+ * ⚠️ 「지난 기록」(풀이 기록)과 다른 화면이다. 비게임 출시 가이드라인이 따로
+ *    요구한다 — "구매한 인앱 상품에 대한 결제 내역을 확인할 수 있다".
+ *    출석 도장처럼 돈을 안 낸 줄은 서버가 걸러서 안 보낸다.
+ */
+async function loadReceipts() {
+  go('receipts');
+  state.receiptsLoading = true;
+  state.error = '';
+  render();
+  try {
+    const r = await api('/mini/api/receipts');
+    state.receipts = r.receipts || [];
+  } catch (e) {
+    state.error = e?.message || '내역을 불러오지 못했어요.';
+  }
+  state.receiptsLoading = false;
+  render();
+}
+
 // ── 결제 ──────────────────────────────────────────────────
 
 /**
@@ -906,7 +930,12 @@ async function doCheckin({ quiet = false } = {}) {
     if (!quiet || r.granted) state.toast = r.message || '';
   };
   if (quiet) {
-    try { await 찍기(); render(); askNotify(); } catch { /* 도장 못 찍어도 앱은 쓴다 */ }
+    // ⚠️ 여기서 askNotify() 를 부르지 않는다. 이 길은 앱을 켤 때 도는 길이라,
+    //    부르면 **진입하자마자 알림 동의 시트가 뜬다.** 비게임 출시 가이드라인이
+    //    명시적으로 금지한다 — "진입 시 자동으로 하단 시트(토스 로그인, 알림
+    //    동의)가 뜨지 않는다". 2026-09-02 에 넣었다가 09-10 에 뺐다.
+    //    동의는 홈의 알림 줄을 **사용자가 눌렀을 때만** 묻는다(askNotify 참고).
+    try { await 찍기(); render(); } catch { /* 도장 못 찍어도 앱은 쓴다 */ }
     return;
   }
   await withBusy(찍기);
@@ -943,24 +972,45 @@ const NOTIFY_TEMPLATE = '';
 
 const NOTIFY_ASKED_KEY = 'myan.notify.asked';
 
+/** 홈에 알림 줄을 내놓을 만한 상태인가. 줄을 그릴지와 누를지가 같은 조건이어야 한다. */
+function notifyOffered() {
+  if (!NOTIFY_TEMPLATE) return false;                      // 콘솔 템플릿이 아직 없다
+  if (!state.checkin || state.checkin.streak < 2) return false;  // 다시 온 분께만
+  try { if (localStorage.getItem(NOTIFY_ASKED_KEY)) return false; } catch { return false; }
+  try { return Notification?.requestAgreement?.isSupported?.() !== false; } catch { return false; }
+}
+
+/**
+ * 홈의 알림 줄. **누르면** 동의를 묻는다.
+ *
+ * ⚠️ 저절로 뜨지 않는다. 앱을 켜자마자 동의 시트를 띄우면 비게임 출시
+ *    가이드라인 위반이다 — "진입 시 자동으로 하단 시트(토스 로그인, 알림
+ *    동의)가 뜨지 않는다". 2026-09-02 에 그렇게 넣었다가 09-10 에 고쳤다.
+ */
+function notifyRow() {
+  if (!notifyOffered()) return '';
+  return `
+    <button class="notify-row" id="btn-notify">
+      <span class="notify-ic">${icon('today')}</span>
+      <span class="notify-say">내일 순위가 나오면 알려 드릴까요?</span>
+      <span class="notify-go">받기</span>
+    </button>`;
+}
+
 /**
  * 알림 동의를 묻는다. 날마다 바뀌는 순위를 알려 주기 위한 것이다.
  *
- * ⚠️ **언제 묻는지가 이 기능의 전부다.**
+ * ⚠️ **홈의 알림 줄을 누르셨을 때만 부른다.** 앱을 켤 때 부르면 안 된다(위 참고).
+ *
+ * ⚠️ **언제 내놓는지가 이 기능의 전부다.**
  *    처음 온 사람에게 물으면 대개 거절이고, 거절은 되돌리기 어렵다. 그래서
- *    **이틀째부터** 묻는다 — 다시 왔다는 것은 이미 좋았다는 뜻이라, 그때가
+ *    **이틀째부터** 내놓는다 — 다시 왔다는 것은 이미 좋았다는 뜻이라, 그때가
  *    유일하게 예라고 할 만한 순간이다.
  *
  * ⚠️ 한 번만 묻는다. 거절한 사람에게 다시 물으면 그때부터는 앱이 성가신 것이다.
  */
 function askNotify() {
-  if (!NOTIFY_TEMPLATE) return;                       // 콘솔 템플릿이 아직 없다
-  if (!state.checkin || state.checkin.streak < 2) return;  // 다시 온 사람에게만
-  try {
-    if (localStorage.getItem(NOTIFY_ASKED_KEY)) return;
-  } catch { return; }                                 // 저장을 못 하면 나중에 또 묻게 된다
-  // 옛 토스 앱에는 이 창이 없다. 물어보지 않고 넘어간다.
-  if (!Notification?.requestAgreement?.isSupported?.()) return;
+  if (!notifyOffered()) return;
 
   try { localStorage.setItem(NOTIFY_ASKED_KEY, String(Date.now())); } catch { /* 그래도 묻는다 */ }
 
@@ -1526,6 +1576,9 @@ function _histDate(h) {
   return new Date(ms + 9 * 3600000).toISOString().slice(0, 10);   // KST
 }
 
+/** 결제 내역의 날짜. 서버가 `at`(초 단위 epoch)로 준다. */
+const _receiptDate = (r) => _histDate({ created_at: r.at });
+
 // 목록에 보일 앞머리. 잘라낸 게 있을 때만 말줄임을 붙인다 — 짧은 풀이에까지 붙으면
 // 뒤에 더 있는 줄 알고 눌러 보게 된다.
 function _preview(h, max = 100) {
@@ -1684,6 +1737,9 @@ const MINI_CHECKIN_TOKENS_HINT = 3;
 const MENU_ITEMS = [
   { id: 'btn-earn',        icon: 'secGift',  label: '무료 엽전 받기', sub: '출석, 퀴즈, 부풀리기' },
   { id: 'btn-history',     icon: 'saju',     label: '지난 기록',      sub: '풀이를 다시 볼 수 있어요' },
+  // ⚠️ 「지난 기록」은 풀이 기록이지 결제 내역이 아니다. 비게임 출시 가이드라인이
+  //    따로 요구한다 — "구매한 인앱 상품에 대한 결제 내역을 확인할 수 있다".
+  { id: 'btn-receipts',    icon: 'charge',   label: '엽전 구매 내역',  sub: '결제하신 내역이에요' },
   { id: 'btn-editprofile', icon: 'secProfile', label: '내 정보',      sub: '이름, 생년월일, 화면 밝기' },
   { id: 'btn-shareapp',    icon: 'share',    label: '친구에게 알리기', sub: '' },
 ];
@@ -1704,9 +1760,19 @@ function adPrompt() {
 
 function header() {
   // 좌우 칸의 폭을 같게 두어야 제목이 진짜 가운데에 온다. 예전에는 오른쪽에 엽전 // 알약이 있어서 그 폭만큼 제목이 왼쪽으로 밀렸다.
+  //
+  // ⚠️ **뒤로가기가 아니라 홈이다.** 예전에는 `‹` 에 aria-label="뒤로" 였는데,
+  //    토스 기본 네비게이션 바에 이미 뒤로가기가 있어서 **둘이 나란히 떴다.**
+  //    비게임 출시 가이드라인이 명시적으로 금지한다 —
+  //    "토스 뒤로가기 버튼과 자체 구현 뒤로가기 버튼이 동시에 표시되지 않는다".
+  //    2026-09-30 전수 점검에서 이것부터 걸린다(토스가 흔한 위반 1번으로 꼽았다).
+  //
+  //    홈 버튼은 가이드라인이 따로 허용한다. 하는 일도 원래 홈으로 가는 것이었고
+  //    (id 가 btn-home 이다), 이름과 모양만 실제와 어긋나 있었다.
+  //    뒤로가기는 토스 바와 안드로이드 뒤로가기(graniteEvent backEvent)가 맡는다.
   const back = state.screen === 'home'
     ? '<span class="tb-slot"></span>'
-    : '<button class="tb-slot tb-back" id="btn-home" aria-label="뒤로">‹</button>';
+    : `<button class="tb-slot tb-home" id="btn-home" aria-label="홈">${icon('home')}</button>`;
   // headbar 로 감싸는 이유: 메뉴 시트가 이 상자를 기준으로 자리를 잡아야
   // 메뉴 단추 바로 아래 오른쪽 끝에 맞아떨어진다.
   return `<div class="headbar">
@@ -1940,6 +2006,7 @@ function render() {
         })()}
         ${ttiCard()}
         ${streakRow()}
+        ${notifyRow()}
         ${err}
         ${SECTIONS.map(sec => `
           <section class="sec">
@@ -2090,6 +2157,31 @@ function render() {
         ${FOOTER}`;
       break;
     }
+
+    // 엽전을 산 내역. 「지난 기록」(풀이)과 다른 화면이다 — 비게임 출시
+    // 가이드라인이 "구매한 인앱 상품에 대한 결제 내역을 확인할 수 있다" 를
+    // 따로 요구한다.
+    case 'receipts':
+      html = `${header()}
+        <section class="sec">
+          <h3><span class="sec-icon">${icon('charge')}</span>엽전 구매 내역<i class="rule"></i></h3>
+        </section>
+        ${err}
+        ${state.receipts.length ? state.receipts.map((r) => `
+          <div class="card receipt">
+            <div class="row"><b>${esc(r.label)}</b>
+              <span class="muted small">${esc(_receiptDate(r))}</span></div>
+            <p class="muted">${esc(_won(r.amount))}원 결제 · ${COIN}엽전 ${r.tokens}개${
+              r.status && r.status !== 'approved' ? ` · ${esc(r.status)}` : ''
+            }</p>
+          </div>`).join('')
+        : state.receiptsLoading
+          ? Array.from({ length: 2 }, () => `<div class="card hist-skel">
+              <div class="skel-line w40"></div><div class="skel-line w70"></div></div>`).join('')
+          : '<div class="card"><p class="muted">아직 구매하신 내역이 없어요.</p></div>'}
+        <button class="btn ghost" id="btn-home2">홈으로</button>
+        ${FOOTER}`;
+      break;
 
     case 'history':
       html = `${header()}
@@ -2544,6 +2636,7 @@ function bind() {
   on('btn-invite-again', makeInvite);
   on('btn-invite-check', () => checkInvite());
   on('btn-history', loadHistory);
+  on('btn-receipts', loadReceipts);
   on('btn-logout', async () => {
     // 세션만 지운다. 엽전과 기록은 서버의 계정(userKey)에 남아 있어서
     // 다시 로그인하면 그대로 돌아온다.
@@ -2639,6 +2732,7 @@ function bind() {
     runItem(it);
   });
 
+  on('btn-notify', () => { askNotify(); render(); });
   for (const el of all('[data-fb]')) {
     el.onclick = () => sendFeedback(el.dataset.fb);
   }

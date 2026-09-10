@@ -15,7 +15,31 @@ const worker = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
 
 const 물음 = main.slice(main.indexOf('function feedbackRow('), main.indexOf('function streakRow('));
 const 보냄 = main.slice(main.indexOf('async function sendFeedback('), main.indexOf('// ── 알림'));
-const 알림 = main.slice(main.indexOf('function askNotify()'), main.indexOf('function askNotify()') + 1600);
+// ⚠️ 조건은 notifyOffered() 에, 묻는 일은 askNotify() 에 나뉘어 있다. 2026-09-10
+//    에 홈의 알림 줄을 만들면서 갈랐다 — 줄을 **내놓을지**와 **물을지**가 같은
+//    조건이어야 해서다. 둘을 함께 본다. (전에는 askNotify 한 군데만 봐서, 조건이
+//    옮겨간 순간 동작은 멀쩡한데 시험 넷이 빨개졌다.)
+const 알림 = 몸통(main, 'function notifyOffered()') + '\n' + 몸통(main, 'function askNotify()');
+
+/** 함수 하나의 몸통. 매개변수의 중괄호에 속지 않게 괄호 깊이를 함께 센다. */
+function 몸통(글, 머리) {
+  const i = 글.indexOf(머리);
+  assert.notEqual(i, -1, `${머리} 를 못 찾았다`);
+  let 괄호 = 0;
+  let 시작 = -1;
+  for (let k = i; k < 글.length; k++) {
+    const c = 글[k];
+    if (c === '(') 괄호++;
+    else if (c === ')') 괄호--;
+    else if (c === '{' && 괄호 === 0) { 시작 = k; break; }
+  }
+  let 깊이 = 0;
+  for (let k = 시작; k < 글.length; k++) {
+    if (글[k] === '{') 깊이++;
+    else if (글[k] === '}' && --깊이 === 0) return 글.slice(i, k + 1);
+  }
+  throw new Error(`${머리} 의 끝을 못 찾았다`);
+}
 const 서버 = worker.slice(worker.indexOf('async function handleMiniFeedback('),
   worker.indexOf('/** 출석 도장 + 7일 개근 보상. */'));
 

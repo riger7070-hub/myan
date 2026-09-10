@@ -213,7 +213,10 @@ a { color: var(--gold-dim); }
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; color: var(--gold); cursor: pointer;
 }
-.tb-back { font-size: 1.7rem; line-height: 1; padding-bottom: 4px; }
+/* 홈 버튼. 예전에는 `‹` 를 그리는 .tb-back 이었는데, 토스 네비게이션 바의
+   뒤로가기와 나란히 떠서 가이드라인 위반이었다 — "토스 뒤로가기 버튼과 자체
+   구현 뒤로가기 버튼이 동시에 표시되지 않는다". 홈 버튼은 따로 허용된다. */
+.tb-home .ic { width: 20px; height: 20px; }
 .tb-menu .ic { width: 22px; height: 22px; }
 .tb-menu[aria-expanded='true'] { color: var(--gold-light); }
 .tb-title {
@@ -1001,3 +1004,23 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 }
 .fb-btn:active { background: rgba(201, 169, 110, 0.08); }
 .fb-done { margin: 14px 0 0; padding: 12px 14px; font-size: 0.84rem; color: var(--text-dim); }
+
+/* 홈의 알림 줄. **눌러야** 동의를 묻는다 — 앱을 켜자마자 뜨면 가이드라인
+   위반이다("진입 시 자동으로 하단 시트가 뜨지 않는다"). */
+.notify-row {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  margin: -14px 0 26px; padding: 11px 16px;
+  border: 1px solid var(--gold-dim); border-radius: 14px;
+  background: transparent; color: var(--text);
+  font: inherit; font-size: 0.86rem; text-align: left; cursor: pointer;
+}
+.notify-row:active { background: rgba(201, 169, 110, 0.08); }
+.notify-ic { display: flex; color: var(--gold); }
+.notify-ic svg { width: 17px; height: 17px; }
+.notify-go { margin-left: auto; color: var(--gold); font-weight: 600; }
+
+/* 엽전 구매 내역 */
+.receipt .row { display: flex; align-items: baseline; gap: 10px; }
+.receipt .row b { color: var(--text); }
+.receipt .row .small { margin-left: auto; }
+.receipt p { margin: 6px 0 0; font-size: 0.86rem; }
