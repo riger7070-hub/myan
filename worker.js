@@ -1906,7 +1906,15 @@ export default {
     if (path === '/api/wealth' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleWealth(request, env)); }
     if (path === '/api/gwiin' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleGwiin(request, env)); }
     if (path === '/api/sinsal' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleSinsal(request, env)); }
-    if (path === '/api/tti-today' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiToday(request, env)); }
+    // ⚠️ **ensureDBExt 를 부르지 않는다.** 이 길은 표를 하나도 안 건드린다 —
+    //    순위는 computeTtiRanking() 의 계산이고 저장이 없다.
+    //
+    //    2026-10-13 에 재 보니 이 길이 **13초** 걸렸다. ensureDBExt 가
+    //    `CREATE TABLE IF NOT EXISTS` 를 스물다섯 번 훑기 때문이다. `_dbExtReady`
+    //    로 한 번만 돌게 해 뒀지만 그 기억은 **isolate 하나 안에서만** 산다.
+    //    하루에 몇 명 안 들어오니 거의 모든 요청이 **차가운 isolate** 에 떨어지고,
+    //    그때마다 13초를 문다. 토스 프로모션은 10초짜리라 그 안에 아무것도 못 본다.
+    if (path === '/api/tti-today' && method === 'POST') { return withMiniOrigin(request, await handleTtiToday(request, env)); }
     if (path === '/api/tti-ranking' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleTtiRanking(request, env)); }
     if (path === '/api/past-life' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handlePastLife(request, env)); }
     if (path === '/api/vocation' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleVocation(request, env)); }
