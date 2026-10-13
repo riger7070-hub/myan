@@ -22,6 +22,20 @@ const ROOT = join(HERE, '..');
 const SRC = readFileSync(join(ROOT, 'worker.js'), 'utf8');
 const REQUESTS = JSON.parse(readFileSync(join(HERE, 'fixtures', 'mini-requests.json'), 'utf8'));
 
+// ⚠️ 녹화해 둔 요청 안의 **날짜는 썩는다.** fixture 는 앱이 실제로 보내는 모양을
+//    붙잡아 둔 것이라 귀하지만, `from: '2026-09-15'` 같은 값은 달력이 넘어가는
+//    순간 서버가 거절한다(택일은 「오늘부터 2년 안」만 받는다). 2026-10-13 에
+//    실제로 그 일이 났다 — 코드는 멀쩡했고 날짜만 지났는데 시험이 빨개졌다.
+//
+//    모양은 그대로 두고 **지난 날짜만 오늘로 되살린다.** fixture 를 고치면
+//    다음에 다시 녹화할 때 되돌아오므로, 읽는 자리에서 처리한다.
+const 오늘 = new Date().toISOString().slice(0, 10);
+for (const r of REQUESTS) {
+  for (const [k, v] of Object.entries(r.body || {})) {
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && v < 오늘) r.body[k] = 오늘;
+  }
+}
+
 // 라우터에서 경로 → 핸들러 이름을 읽어 온다. 손으로 적으면 라우트가 바뀔 때 어긋난다.
 //
 // 라우트는 두 모양이다. 한 줄짜리와, 앞에 사전 검사(속도 제한 등)가 붙은 여러 줄짜리.
@@ -50,10 +64,16 @@ const realFetch = globalThis.fetch;
 // 웹 토큰으로 부르면 401 이 나는데, 그건 계정 계층이 제대로 나뉘어 있다는 뜻이다.
 const isMini = (path) => path.startsWith('/mini/');
 
+// ⚠️ 날짜를 박아 두지 않는다. 택일은 서버가 「오늘부터 2년 안」만 받으므로,
+//    박아 둔 날짜는 **시간이 지나면 저절로 썩는다.** 실제로 '2026-09-15' 를
+//    적어 뒀다가 2026-10-13 에 400 이 나서 시험이 빨개졌다 — 코드는 멀쩡했고
+//    달력만 넘어갔을 뿐이다. 오늘에서 세어 만든다.
+const 서른날뒤 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
 const JSON_REPLY = JSON.stringify({
   color: { name: '쪽빛', why: 'x' }, food: { name: '들깨국수', why: 'y' },
   song: { title: '아침 이슬', artist: '양희은', why: 'z' }, item: { name: '나무 팔찌', why: 'w' },
-  picks: ['2026-09-15'],
+  picks: [서른날뒤],
 });
 
 function setup() {

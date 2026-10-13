@@ -20,16 +20,84 @@ const main = readFileSync(new URL('../mini/src/main.js', import.meta.url), 'utf8
 const css = readFileSync(new URL('../mini/src/style.css', import.meta.url), 'utf8');
 const worker = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
 
-/** boot() 안에서 홈으로 간 뒤의 대목. */
-const 부팅끝 = (() => {
-  const i = main.indexOf("    go('home');");
-  assert.notEqual(i, -1, "boot 에서 go('home') 을 못 찾았다");
-  return main.slice(i, i + 500);
-})();
+// ⚠️ 이 시험은 2026-09-02 부터 10-13 까지 **헛돌았다.** 「첫 `go('home');`」 을
+//    부팅 지점이라 여기고 그 뒤 500자에 doCheckin 이 있는지만 봤는데, 그 첫
+//    `go('home');` 은 `saveProfile()` 안의 것이었다. 프로필 저장은 생애 한 번뿐이라
+//    **다시 온 사람은 그 길을 안 지나는데**, 시험은 초록불이었다.
+//    그 바람에 도장이 아무에게도 2가 되지 않았고, 나는 그 숫자를 보고
+//    「재방문이 0이다」라고 사장님께 말씀드렸다. 측정기가 고장 나 있었다.
+//
+//    그래서 이제 **홈으로 가는 길이 몇 개인지**를 센다. 길이 하나뿐이고 그
+//    하나가 도장을 찍으면, 어느 경로로 들어오든 찍힌다.
 
-test('앱을 켜면 도장이 저절로 찍힌다', () => {
-  assert.match(부팅끝, /doCheckin\(\{ quiet: true \}\)/,
-    '앱을 켤 때 도장을 안 찍는다 — 다시 온 사람이 또 눌러야 한다');
+// ⚠️ 「go('home') 을 부르는 자리는 하나뿐」으로 재면 안 된다. 처음에 그렇게 썼다가
+//    결제가 끝난 뒤와 「홈으로」 단추까지 걸렸다 — 그 둘은 **앱 안에서 돌아가는**
+//    길이지 앱에 **들어오는** 길이 아니다. 거기서 도장을 또 찍을 이유가 없다.
+//    가려야 하는 것은 **들어오는 길**이고, 그건 둘뿐이다.
+//
+//      loginWithToss()  이미 가입한 사람이 앱을 열 때   ← 재방문은 전부 이쪽
+//      saveProfile()    처음 온 사람이 생년월일을 넣을 때
+
+test('도장을 찍는 자리는 홈 문 하나뿐이다', () => {
+  // 여기저기서 찍으면 하루에 여러 번 부르게 되고, 한 군데를 빠뜨려도 모른다.
+  const 코드 = main.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const 부름 = [...코드.matchAll(/doCheckin\(\{ quiet: true \}\)/g)].length;
+  assert.equal(부름, 1, `저절로 찍는 자리가 ${부름}군데다 — enterHome() 안의 하나여야 한다`);
+  const 문 = /function enterHome\(\)[\s\S]{0,600}?\n\}/.exec(코드)?.[0] || '';
+  assert.match(문, /doCheckin\(\{ quiet: true \}\)/, '그 하나가 홈 문 안에 없다');
+});
+
+/**
+ * 함수 하나의 몸통. 매개변수의 중괄호에 속지 않게 괄호 깊이를 함께 센다.
+ *
+ * ⚠️ 앞뒤 표시를 손으로 짚어 slice 하지 말 것. 이 파일에서만 세 번 틀렸다 —
+ *    뒤 표시가 앞 표시보다 위에 있거나, 다음 함수가 사이에 끼어들어 남의
+ *    코드까지 재고 있었다. 중괄호를 세면 그런 일이 없다.
+ */
+function 몸통(글, 머리) {
+  const i = 글.indexOf(머리);
+  assert.notEqual(i, -1, `${머리} 를 못 찾았다`);
+  let 괄호 = 0;
+  let 시작 = -1;
+  for (let k = i; k < 글.length; k++) {
+    const c = 글[k];
+    if (c === '(') 괄호++;
+    else if (c === ')') 괄호--;
+    else if (c === '{' && 괄호 === 0) { 시작 = k; break; }
+  }
+  let 깊이 = 0;
+  for (let k = 시작; k < 글.length; k++) {
+    if (글[k] === '{') 깊이++;
+    else if (글[k] === '}' && --깊이 === 0) return 글.slice(i, k + 1);
+  }
+  throw new Error(`${머리} 의 끝을 못 찾았다`);
+}
+
+test('앱에 들어오는 두 길이 모두 홈 문을 지난다', () => {
+  for (const 머리 of ['async function loginWithToss()', 'async function saveProfile(form)']) {
+    const f = 몸통(main, 머리).replace(/^\s*\/\/.*$/gm, '');
+    assert.match(f, /enterHome\(\)/,
+      `${머리} 가 홈 문을 안 지난다 — 그 길로 온 사람은 도장이 안 찍힌다`);
+    assert.ok(!/go\('home'\)/.test(f), `${머리} 가 홈으로 직접 간다 — enterHome() 을 쓸 것`);
+  }
+});
+
+test('그 문이 도장을 찍고 순위를 부른다', () => {
+  const i = main.indexOf('function enterHome()');
+  assert.notEqual(i, -1, 'enterHome 이 없다');
+  const 문 = main.slice(i, i + 600);
+  assert.match(문, /doCheckin\(\{ quiet: true \}\)/, '홈에 들어와도 도장을 안 찍는다');
+  assert.match(문, /loadTtiToday\(\)/, '홈에 들어와도 오늘 순위를 안 부른다');
+});
+
+test('로그인해서 들어오는 길도 그 문을 지난다', () => {
+  // ⚠️ 여기가 2026-09-02 에 빠졌던 바로 그 길이다. 이미 가입한 사람이
+  //    앱을 여는 길이고, 재방문은 전부 이쪽으로 들어온다.
+  const i = main.indexOf('async function loginWithToss()');
+  assert.notEqual(i, -1, 'loginWithToss 가 없다');
+  const f = main.slice(i, main.indexOf('async function doLogin()'));
+  assert.match(f, /enterHome\(\)/,
+    '로그인하고 들어오는 사람이 홈 문을 안 지난다 — 다시 온 사람에게 도장이 안 찍힌다');
 });
 
 test('저절로 찍을 때는 로딩 화면을 덮지 않는다', () => {

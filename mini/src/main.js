@@ -337,7 +337,28 @@ async function loginWithToss() {
   state.tokens = me.tokens;
   state.profile = me.profile;
   state.noAds = !!me.noAds;
-  go(state.profile?.birthYear ? 'home' : 'profile');
+  if (state.profile?.birthYear) enterHome(); else go('profile');
+}
+
+/**
+ * 홈으로 들어가는 **하나뿐인 문**.
+ *
+ * ⚠️ 2026-09-02 ~ 10-13 동안 도장이 **처음 가입한 사람에게만** 찍혔다.
+ *    `doCheckin({quiet:true})` 를 `saveProfile()` 안에만 뒀기 때문이다 —
+ *    프로필을 저장하는 건 생애 한 번뿐이고, **다시 온 사람은 그 길을 안 지난다.**
+ *    그래서 「앱을 켜면 저절로 찍힌다」가 사실상 작동하지 않았고, 연속 일수가
+ *    아무에게도 2가 되지 않았다. 사람이 안 와서가 아니라 **안 찍어서**였다.
+ *    재방문을 재려고 만든 지표가 재방문을 0으로 보이게 만들고 있었다.
+ *
+ * ⚠️ 그래서 홈으로 가는 길을 하나로 모은다. 새로 `go('home')` 을 쓰지 말고
+ *    이 함수를 부를 것 — 길이 둘이 되는 순간 또 한쪽만 찍는다.
+ */
+function enterHome() {
+  go('home');
+  // 홈을 먼저 그리고 둘은 뒤따라 채운다. 기다렸다 그리면 이 호출들 때문에
+  // 앱이 늦게 열린 것처럼 보인다 — 둘 다 없어도 홈은 멀쩡히 선다.
+  loadTtiToday();
+  doCheckin({ quiet: true });
 }
 
 async function doLogin() {
@@ -360,11 +381,7 @@ async function saveProfile(form) {
       state.noAds = !!me.noAds;
       state.tokens = me.tokens;
     }
-    go('home');
-    // 홈을 먼저 그리고 둘은 뒤따라 채운다. 기다렸다 그리면 이 호출들 때문에
-    // 앱이 늦게 열린 것처럼 보인다 — 둘 다 없어도 홈은 멀쩡히 선다.
-    loadTtiToday();
-    doCheckin({ quiet: true });
+    enterHome();
   });
 }
 
