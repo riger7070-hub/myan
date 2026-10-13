@@ -201,28 +201,18 @@ a { color: var(--gold-dim); }
   .door { display: none; }
 }
 
-/* ── 상단바 ── */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin: 4px 0 0;
-}
-/* 좌우 칸은 폭이 같아야 한다. 예전엔 오른쪽에 토큰 알약이 있어 제목이 그 폭만큼
-   왼쪽으로 밀려 있었다. 토큰은 아래 제 줄로 내렸다. */
+/* ── 도구줄 (엽전 · 메뉴) ──
+   ⚠️ 제목줄(.topbar · .tb-title · .tb-home)은 2026-10-14 에 통째로 뺀다.
+   토스 네비게이션 바가 이미 앱 이름과 뒤로가기를 보여 주는데 그 아래에
+   또 머리를 그려서 심사에서 반려됐다("자체 헤더 및 뒤로가기 버튼이 함께
+   노출돼요"). 남긴 것은 머리가 아니라 앱 안의 도구줄이다. */
 .tb-slot {
   flex: none; width: 40px; height: 40px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; color: var(--gold); cursor: pointer;
 }
-/* 홈 버튼. 예전에는 `‹` 를 그리는 .tb-back 이었는데, 토스 네비게이션 바의
-   뒤로가기와 나란히 떠서 가이드라인 위반이었다 — "토스 뒤로가기 버튼과 자체
-   구현 뒤로가기 버튼이 동시에 표시되지 않는다". 홈 버튼은 따로 허용된다. */
-.tb-home .ic { width: 20px; height: 20px; }
 .tb-menu .ic { width: 22px; height: 22px; }
 .tb-menu[aria-expanded='true'] { color: var(--gold-light); }
-.tb-title {
-  font-family: 'Batang', serif; font-size: 1.15rem; color: var(--gold-light);
-  letter-spacing: 0.03em;
-}
 
 /* 홈에서는 왼쪽에 길잡이가 하나 붙는다. 다른 화면에서는 알약만 오른쪽에 남는다. */
 .tokenbar {
@@ -1032,3 +1022,7 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
   font-size: 0.84rem; color: var(--text-dim); line-height: 1.6;
 }
 .tti-today-hint b { color: var(--gold); }
+
+/* 광고를 틀기 전에 여쭙는 칸. 심사 반려 사유를 막는 자리다 —
+   "광고 노출 전에 유저가 인지할 수 있도록 CTA 문구나 UI를 추가해 주세요." */
+.ad-ask p:first-child { margin-bottom: 6px; }

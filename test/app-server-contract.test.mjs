@@ -29,7 +29,11 @@ const REQUESTS = JSON.parse(readFileSync(join(HERE, 'fixtures', 'mini-requests.j
 //
 //    모양은 그대로 두고 **지난 날짜만 오늘로 되살린다.** fixture 를 고치면
 //    다음에 다시 녹화할 때 되돌아오므로, 읽는 자리에서 처리한다.
-const 오늘 = new Date().toISOString().slice(0, 10);
+// ⚠️ **KST 로 센다.** 어제 이 자리를 `new Date().toISOString()` 으로 썼다가
+//    오늘 아침 다시 빨개졌다 — 한국 아침이면 UTC 는 아직 어제라, 서버가
+//    「오늘(KST)부터」로 재는 창보다 하루 뒤처진 날짜를 보냈다.
+//    서버가 _kstToday() 로 재니 여기도 같은 자로 재야 한다.
+const 오늘 = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 for (const r of REQUESTS) {
   for (const [k, v] of Object.entries(r.body || {})) {
     if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && v < 오늘) r.body[k] = 오늘;

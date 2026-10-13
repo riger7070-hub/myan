@@ -136,6 +136,7 @@ const state = {
   // 이번에 켠 동안 어느 풀이에 답을 냈는가 { [item.id]: 'up' | 'down' }.
   // 서버가 진짜 기록이고 여기는 「방금 눌렀다」를 보여 주기 위한 것뿐이다.
   feedback: {},
+  adAsk: false,           // 광고를 틀기 전에 여쭙는 칸이 떠 있는가
   receipts: [],           // 엽전을 산 내역(결제한 것만)
   receiptsLoading: false,
 };
@@ -1334,14 +1335,32 @@ function markAdSeen() {
 
 const adsLeftToday = () => Math.max(0, AD_DAILY_MAX - adsSeenToday());
 
-/** 무료 엽전을 받은 뒤, 그 화면을 떠날 때 한 번 튼다. */
-async function runAutoAdIfDue() {
+/**
+ * 무료 풀이·엽전을 받은 뒤의 광고. **바로 틀지 않고 먼저 여쭙는다.**
+ *
+ * ⚠️ 2026-10-14 심사 반려 사유였다 — "유저가 예상하기 어려운 시점에 광고가
+ *    노출돼요. 광고 노출 전에 유저가 인지할 수 있도록 CTA 문구나 UI를 추가해
+ *    주세요." 전에는 화면을 옮기는 길목에서 아무 말 없이 전면 광고가 떴다.
+ *    풀이를 읽고 홈으로 돌아가는 사람에게는 난데없는 일이다.
+ *
+ *    이제 한 줄 여쭙고 「보기」를 누르셨을 때만 튼다. 「다음에」를 누르면
+ *    그냥 넘어가고 오늘 몫도 줄지 않는다 — 안 봤으니까.
+ */
+function askAutoAd() {
   if (!state.autoAdPending) return;
   state.autoAdPending = false;
   if (!AD_AUTO_UNIT_ID) return;
   if (state.noAds) return;                                  // 결제하신 분께는 틀지 않는다
   if (Date.now() - _lastAdAt < AD_GAP_MS) return;           // 방금 광고를 봤다
   if (!adsLeftToday()) return;                              // 오늘 몫을 다 썼다
+  state.adAsk = true;
+  render();
+}
+
+/** 「보기」를 누르셨을 때. **여기서만 실제로 튼다.** */
+async function runAutoAd() {
+  state.adAsk = false;
+  render();
   try {
     await showAd(AD_AUTO_UNIT_ID);
     markAdSeen();                                           // 실제로 뜬 것만 센다
@@ -1546,27 +1565,29 @@ function go(screen, { fromBack = false } = {}) {
   // 틀면 축하 화면이나 풀이를 덮어 버려서, 무엇을 받았는지 보지도 못한 채 광고부터
   // 보게 된다. 유료 풀이를 보러 가는 길목도 비켜 준다 — 돈을 쓰려는 사람을 막을
   // 이유가 없다.
-  if (!AD_QUIET_SCREENS.has(screen)) runAutoAdIfDue();
+  if (!AD_QUIET_SCREENS.has(screen)) askAutoAd();
 }
 
 function goBack() {
   // 메뉴가 열려 있으면 그것부터 닫는다. 화면을 넘기기 전에 덮인 것을 걷어내는 게
   // 사용자가 기대하는 순서다.
   if (state.menu) { state.menu = false; render(); return; }
-  // 나가겠냐고 물어 놓은 상태라면 그 물음부터 거둔다.
-  if (state.confirmExit) { state.confirmExit = false; render(); return; }
   state.error = '';                 // 떠나는 화면의 말은 두고 간다
   const prev = _stack.pop();
   if (prev) { go(prev, { fromBack: true }); return; }
 
-  // 더 돌아갈 곳이 없다. 예전에는 여기서 곧장 닫았는데, 홈에서 뒤로가기를 한 번
-  // 잘못 누르면 아무 확인도 없이 앱이 사라졌다. 한 번 물어본다.
-  state.confirmExit = true;
-  render();
+  // 더 돌아갈 곳이 없으면 **곧바로 닫는다.**
+  //
+  // ⚠️ 한때 여기서 「정말 나가시겠어요?」를 물었다. 홈에서 뒤로가기를 잘못 눌러
+  //    앱이 사라지는 게 아까워서였는데, 2026-10-14 심사에서 그것 때문에 반려됐다 —
+  //    "최초 화면에서 내비게이션 바 뒤로가기 클릭 시 미니앱이 종료되지 않아요."
+  //    비게임 출시 가이드라인에도 "초기 화면 뒤로가기는 미니앱을 종료한다" 로
+  //    못 박혀 있다. 토스 안에서는 **뒤로가기가 곧 나가기**이고, 그게 사용자가
+  //    토스의 다른 모든 미니앱에서 익힌 동작이다. 우리만 다르게 굴 자리가 아니다.
+  closeApp();
 }
 
 function closeApp() {
-  state.confirmExit = false;
   Screen.close().catch(() => {});
 }
 
@@ -1790,35 +1811,30 @@ function adPrompt() {
 }
 
 function header() {
-  // 좌우 칸의 폭을 같게 두어야 제목이 진짜 가운데에 온다. 예전에는 오른쪽에 엽전 // 알약이 있어서 그 폭만큼 제목이 왼쪽으로 밀렸다.
+  // ⚠️ **우리 제목줄을 그리지 않는다.** 토스 네비게이션 바가 이미 앱 이름과
+  //    뒤로가기를 보여 주는데, 그 바로 아래에 「홈 + MY;安 + 메뉴」를 또 그리면
+  //    머리가 둘이 된다. 2026-10-14 심사 반려 사유였다 —
+  //    "내비게이션 바의 뒤로가기 버튼과 미니앱 자체 헤더 및 뒤로가기 버튼이
+  //     함께 노출돼요. 중복된 버튼을 제거해 주세요."
   //
-  // ⚠️ **뒤로가기가 아니라 홈이다.** 예전에는 `‹` 에 aria-label="뒤로" 였는데,
-  //    토스 기본 네비게이션 바에 이미 뒤로가기가 있어서 **둘이 나란히 떴다.**
-  //    비게임 출시 가이드라인이 명시적으로 금지한다 —
-  //    "토스 뒤로가기 버튼과 자체 구현 뒤로가기 버튼이 동시에 표시되지 않는다".
-  //    2026-09-30 전수 점검에서 이것부터 걸린다(토스가 흔한 위반 1번으로 꼽았다).
+  //    9월에 `‹` 를 집 모양으로 바꾼 것만으로는 모자랐다. 지적받은 것은 단추
+  //    하나가 아니라 **머리줄 전체**였다 — 제목까지 겹쳌 있었다.
   //
-  //    홈 버튼은 가이드라인이 따로 허용한다. 하는 일도 원래 홈으로 가는 것이었고
-  //    (id 가 btn-home 이다), 이름과 모양만 실제와 어긋나 있었다.
-  //    뒤로가기는 토스 바와 안드로이드 뒤로가기(graniteEvent backEvent)가 맡는다.
-  const back = state.screen === 'home'
-    ? '<span class="tb-slot"></span>'
-    : `<button class="tb-slot tb-home" id="btn-home" aria-label="홈">${icon('home')}</button>`;
+  //    남는 것은 엽전 줄 하나다. 그건 머리가 아니라 앱 안의 **도구줄**이라
+  //    토스 바와 겹치지 않는다. 메뉴 단추는 그 줄 오른쪽 끝으로 옮겼다.
+  //    화면 이동은 토스 바의 뒤로가기와 안드로이드 뒤로가기가 맡는다.
+  //
   // headbar 로 감싸는 이유: 메뉴 시트가 이 상자를 기준으로 자리를 잡아야
   // 메뉴 단추 바로 아래 오른쪽 끝에 맞아떨어진다.
   return `<div class="headbar">
-    <div class="topbar">
-      ${back}
-      <span class="tb-title">MY;安</span>
-      <button class="tb-slot tb-menu" id="btn-menu" aria-label="메뉴"
-        aria-expanded="${state.menu ? 'true' : 'false'}">${icon('menu')}</button>
-    </div>
     <div class="tokenbar">
       ${state.screen === 'home' ? `
         <button class="tb-earn" id="btn-earn2">
           <span class="tb-earn-ic">${icon('secGift')}</span>무료로 받기
         </button>` : ''}
       <button class="tb-token" id="btn-charge">${COIN}${state.tokens} 엽전</button>
+      <button class="tb-slot tb-menu" id="btn-menu" aria-label="메뉴"
+        aria-expanded="${state.menu ? 'true' : 'false'}">${icon('menu')}</button>
     </div>
     ${state.menu ? `
       <div class="menu-scrim" id="btn-menu-close"></div>
@@ -1829,14 +1845,19 @@ function header() {
             <span class="menu-text"><b>${m.label}</b>${m.sub ? `<i>${m.sub}</i>` : ''}</span>
           </button>`).join('')}
       </nav>` : ''}
-    ${state.confirmExit ? `
-      <div class="menu-scrim" id="btn-exit-scrim"></div>
-      <div class="exit-ask" role="alertdialog" aria-label="앱을 닫을까요">
-        <p><b>오늘운빨을 닫을까요?</b></p>
-        <p class="muted small">보던 풀이는 지난 기록에 남아 있어요.</p>
+    ${/* ⚠️ 광고를 틀기 **전에** 여쭙는 칸. 2026-10-14 심사 반려 사유를 막는
+          자리다 — "유저가 예상하기 어려운 시점에 광고가 노출돼요. 광고 노출
+          전에 유저가 인지할 수 있도록 CTA 문구나 UI를 추가해 주세요."
+          여기서 「광고 보기」를 눌러야만 실제로 튼다(runAutoAd). */''}
+    ${state.adAsk ? `
+      <div class="menu-scrim" id="btn-ad-no"></div>
+      <div class="exit-ask ad-ask" role="alertdialog" aria-label="광고를 보시겠어요">
+        <p><b>잠시 후 광고가 나와요</b></p>
+        <p class="muted small">무료 풀이를 이어가는 힘이 됩니다.
+        엽전을 충전하시면 광고가 나오지 않아요.</p>
         <div class="row2" style="margin-top:14px">
-          <button class="btn ghost" id="btn-exit-no">더 볼래요</button>
-          <button class="btn" id="btn-exit-yes">닫기</button>
+          <button class="btn ghost" id="btn-ad-later">다음에</button>
+          <button class="btn" id="btn-ad-go">광고 보기</button>
         </div>
       </div>` : ''}
     ${/* 동냥을 하고 나면 안스님이 한 마디 하고 엽전을 건넨다.
@@ -2665,7 +2686,6 @@ function bind() {
   });
   // 화면을 스스로 떠나는 동작이다. 붙잡고 있던 오류 문구도 여기서 놓는다 —
   // 안 그러면 결제 화면에서 난 말이 홈까지 따라와 붉게 남는다.
-  on('btn-home', () => { state.error = ''; go(state.profile?.birthYear ? 'home' : 'profile'); });
   on('btn-home2', () => { state.error = ''; go('home'); });
   on('btn-editprofile', () => go('profile'));
   on('btn-invite', makeInvite);
@@ -2687,10 +2707,11 @@ function bind() {
   on('btn-login-back', () => { state.error = ''; go('intro'); });
   on('btn-menu', () => { state.menu = !state.menu; render(); });
   on('btn-retry-products', loadProducts);
-  on('btn-exit-yes', closeApp);
-  const stayIn = () => { state.confirmExit = false; render(); };
-  on('btn-exit-no', stayIn);
-  on('btn-exit-scrim', stayIn);        // 바깥을 눌러도 닫힌다
+  on('btn-ad-go', runAutoAd);
+  // 「다음에」를 누르면 그냥 넘어간다. 오늘 몫은 줄지 않는다 — 안 봤으니까.
+  const 광고나중 = () => { state.adAsk = false; render(); };
+  on('btn-ad-later', 광고나중);
+  on('btn-ad-no', 광고나중);           // 바깥을 눌러도 닫힌다
   const 덕담닫기 = () => { state.alms = null; render(); };
   on('btn-alms-ok', 덕담닫기);
   on('btn-alms-scrim', 덕담닫기);

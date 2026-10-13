@@ -64,7 +64,7 @@ test('⚠️ 전면 광고를 막는 것은 이제 하루 몫과 간격뿐이다
   // 예전에는 "하루 한 번"(AUTO_AD_DAY_KEY) 제한이 따로 있었다. 무료 콘텐츠마다
   // 틀라는 요청으로 그것만 걷어냈다. 그래서 **남은 둘이 유일한 안전판**이다 —
   // 이것까지 풀면 예약되는 자리 다섯 곳에서 하루 다섯 번이 뜨고, 그쯤이면 앱을 지운다.
-  const f = fnOf('runAutoAdIfDue');
+  const f = fnOf('askAutoAd');
   assert.match(f, /adsLeftToday\(\)/, '하루 몫을 보지 않는다 — 무료 자리마다 광고가 뜬다');
   assert.match(f, /_lastAdAt < AD_GAP_MS/, '광고 사이 간격을 두지 않는다');
   assert.match(SRC, /const AD_GAP_MS = 3 \* 60 \* 1000;/, '간격이 3분이 아니다');
@@ -103,10 +103,10 @@ test('⚠️ 예약은 go() 다음에 세우고, 결과 화면에서는 틀지 �
 test('광고는 종류를 합쳐 하루 세 번까지', () => {
   assert.match(SRC, /const AD_DAILY_MAX = 3;/, '클라이언트 상한이 3이 아니다');
   // 보상형과 자동 광고가 같은 수를 함께 써야 한다. 따로 세면 합쳐서 대여섯 번이 된다.
-  assert.match(fnOf('runAutoAdIfDue'), /adsLeftToday\(\)/, '자동 광고가 하루 몫을 보지 않는다');
+  assert.match(fnOf('askAutoAd'), /adsLeftToday\(\)/, '자동 광고가 하루 몫을 보지 않는다');
   assert.match(fnOf('watchAd'), /adsLeftToday\(\)/, '보상형 광고가 하루 몫을 보지 않는다');
   assert.match(fnOf('watchAd'), /markAdSeen\(\)/, '본 횟수를 세지 않는다');
-  assert.match(fnOf('runAutoAdIfDue'), /markAdSeen\(\)/, '본 횟수를 세지 않는다');
+  assert.match(fnOf('runAutoAd'), /markAdSeen\(\)/, '본 횟수를 세지 않는다');
   assert.match(fnOf('adPrompt'), /adsLeftToday\(\)/, '몫을 다 써도 안내가 계속 보인다');
   // 실제로 막는 것은 서버다. 앱을 고쳐도 넘길 수 없어야 한다.
   const worker = readFileSync(
@@ -126,7 +126,7 @@ test('보상형 광고는 퀴즈·부풀리기를 끝냈을 때 나온다', () =
 });
 
 test('결제한 사람에게는 자동 광고를 틀지 않는다', () => {
-  assert.match(fnOf('runAutoAdIfDue'), /state\.noAds/, '결제 여부를 보지 않는다');
+  assert.match(fnOf('askAutoAd'), /state\.noAds/, '결제 여부를 보지 않는다');
   // 판단은 서버가 한다 — 앱을 다시 깔아도 유지되어야 한다.
   const worker = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.js'), 'utf8');
@@ -148,14 +148,14 @@ test('충전 화면이 광고가 사라진다고 알린다', () => {
 });
 
 test('방금 광고를 본 사람에게는 자동 광고를 틀지 않는다', () => {
-  const f = fnOf('runAutoAdIfDue');
+  const f = fnOf('askAutoAd');
   assert.match(f, /_lastAdAt/, '직전 광고 시각을 보지 않는다');
   assert.match(f, /return;/, '조건에 걸려도 그냥 진행한다');
 });
 
 test('자동 광고는 화면을 떠날 때 튼다', () => {
   const f = fnOf('go');
-  assert.match(f, /runAutoAdIfDue\(\)/, 'go() 에서 자동 광고를 부르지 않는다');
+  assert.match(f, /askAutoAd\(\)/, 'go() 에서 자동 광고를 부르지 않는다');
   // 로딩과 결과 화면(산가지 포함)은 비켜 준다.
   assert.match(f, /!AD_QUIET_SCREENS\.has\(screen\)/,
     '풀이를 보러 가는 길목에서도 광고를 튼다');
@@ -184,9 +184,47 @@ test('무료 보상 세 가지는 자동 광고를 예약한다', () => {
 });
 
 test('자동 광고가 실패해도 사용자에게 말하지 않는다', () => {
-  const f = fnOf('runAutoAdIfDue');
+  // 실제로 트는 쪽은 runAutoAd 다 — askAutoAd 는 여쭙기만 한다.
+  const f = fnOf('runAutoAd');
   assert.match(f, /catch[\s\S]{0,60}console\.warn/, '실패를 콘솔에만 남기지 않는다');
   assert.doesNotMatch(f, /state\.error/, '자동 광고 실패를 화면에 띄운다');
+});
+
+// ── 광고를 틀기 **전에** 여쭙는가 ───────────────────────────
+//
+// ⚠️ 2026-10-14 심사 반려 사유다 — "유저가 예상하기 어려운 시점에 광고가
+//    노출돼요. 광고 노출 전에 유저가 인지할 수 있도록 CTA 문구나 UI를 추가해
+//    주세요." 전에는 화면을 옮기는 길목에서 아무 말 없이 전면 광고가 떴다.
+//    되돌리면 또 반려된다.
+
+test('묻는 쪽은 광고를 틀지 않는다', () => {
+  const f = fnOf('askAutoAd');
+  assert.ok(!/showAd\(/.test(f), 'askAutoAd 가 바로 광고를 튼다 — 먼저 여쭈어야 한다');
+  assert.match(f, /state\.adAsk = true/, '여쭙는 칸을 세우지 않는다');
+});
+
+test('누르셨을 때만 튼다', () => {
+  assert.match(fnOf('runAutoAd'), /showAd\(AD_AUTO_UNIT_ID\)/, 'runAutoAd 가 광고를 안 튼다');
+  assert.match(SRC, /on\('btn-ad-go', runAutoAd\)/,
+    '「광고 보기」 단추가 runAutoAd 로 이어지지 않는다');
+});
+
+test('여쭙는 칸에 무엇이 일어날지 적혀 있다', () => {
+  // 단추만 있고 설명이 없으면 그대로 또 지적받는다.
+  const i = SRC.indexOf('state.adAsk ?');
+  assert.notEqual(i, -1, '여쭙는 칸이 화면에 없다');
+  const 칸 = SRC.slice(i, i + 800);
+  assert.match(칸, /광고가 나와요/, '광고가 나온다는 말이 없다');
+  assert.match(칸, /광고 보기/, '누를 단추에 무엇을 하는지 안 적혀 있다');
+  assert.match(칸, /다음에/, '안 보고 넘어갈 길이 없다');
+});
+
+test('안 보고 넘어가면 오늘 몫이 줄지 않는다', () => {
+  // 본 적 없는 광고를 셈에 넣으면 다음에 진짜 보려 할 때 막힌다.
+  const i = SRC.indexOf("on('btn-ad-later'");
+  assert.notEqual(i, -1, '「다음에」 손잡이가 없다');
+  assert.ok(!/markAdSeen/.test(SRC.slice(Math.max(0, i - 300), i + 200)),
+    '안 보고 넘어갔는데 본 것으로 센다');
 });
 
 test('광고를 본 뒤 그 놀이를 바로 다시 시작한다', () => {
