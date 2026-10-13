@@ -276,6 +276,11 @@ async function boot() {
   }
   // 로그인 전에 반드시 인트로를 거친다(심사 반려 사유였다).
   go('intro');
+  // ⚠️ 인트로에서도 오늘 순위를 받아 온다. 토스 프로모션(10초 구경하면 5원)으로
+  //    들어온 사람은 **로그인을 안 한다** — 5원 받으러 온 사람이 로그인까지 할
+  //    까닭이 없다. 그 사람이 10초 안에 볼 수 있는 유일한 알맹이가 이것이다.
+  //    없으면 누를 수도 없는 타일만 늘어선 전단지를 보여 주게 된다.
+  loadTtiToday();
 }
 
 /**
@@ -1670,10 +1675,17 @@ function stopLoadingTicker() {
  * 순위를 아직 못 받았으면 아무것도 안 그린다. 자리만 잡아 두고 비워 두면
  * 홈이 덜 그려진 것처럼 보인다.
  */
-function ttiCard() {
+/**
+ * @param {{맛보기?: boolean}} opts 맛보기면 **로그인 전 인트로**에 서는 것이다.
+ *   엽전을 쓰는 단추를 달지 않는다 — 아직 계정이 없어서 눌러 봐야 튕기고,
+ *   5원 받으러 온 사람에게 첫 화면부터 값을 들이미는 꼴이 된다.
+ *   대신 열두 띠를 다 보여 준다. 로그인하면 **내 띠가 몇 위인지**가 붙는다는
+ *   것이 그 사람이 로그인할 유일한 이유다.
+ */
+function ttiCard({ 맛보기 = false } = {}) {
   const t = state.tti;
   if (!t || !t.rows?.length) return '';
-  const top3 = t.rows.slice(0, 3);
+  const top3 = 맛보기 ? t.rows : t.rows.slice(0, 3);
   const mine = t.mine;
   return `
     <section class="tti-today">
@@ -1694,9 +1706,11 @@ function ttiCard() {
             r.why?.length ? `<span class="tti-today-why">${esc(r.why.join(' · '))}</span>` : ''
           }</li>`).join('')}
       </ol>
-      <button class="tti-today-more" data-item="ttirank">
-        안할매의 오늘 풀이 · ${COIN}1 엽전
-      </button>
+      ${맛보기
+        ? '<p class="tti-today-hint">토스로 시작하면 <b>내 띠가 오늘 몇 위인지</b>와 그 까닭까지 보실 수 있어요.</p>'
+        : `<button class="tti-today-more" data-item="ttirank">
+             안할매의 오늘 풀이 · ${COIN}1 엽전
+           </button>`}
     </section>`;
 }
 
@@ -1861,6 +1875,11 @@ function render() {
     case 'intro':
       html = `
         <div class="brand"><h1>MY;安</h1><p>오늘운빨</p></div>
+
+        ${/* ⚠️ 오늘 순위를 **맨 위에** 둔다. 프로모션으로 온 사람은 10초만 보고
+              나가므로, 아래로 내려야 보이는 것은 없는 것과 같다. 로그인 없이도
+              나오고, 이 화면에서 유일하게 '진짜'인 내용이다. */''}
+        ${ttiCard({ 맛보기: true })}
 
         <section class="hero">
           <div class="hero-sky"></div>

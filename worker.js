@@ -8636,10 +8636,20 @@ async function handleGwiin(request, env) {
 // ════════════════════════════════════════════════════════════
 async function handleTtiToday(request, env) {
   try {
+    // ⚠️ **로그인 없이도 순위를 준다.** 2026-10-13 에 열었다.
+    //
+    //    토스 프로모션(10초 구경하면 5원)으로 들어온 사람은 로그인을 안 한다 —
+    //    5원 받으러 온 사람이 로그인까지 할 까닭이 없다. 그런데 그때까지 이 길이
+    //    401 이라, 그 사람이 10초 동안 본 것은 **누를 수도 없는 타일이 늘어선
+    //    인트로 화면**뿐이었다. 돈을 내고 데려와 전단지를 보여 준 셈이다.
+    //
+    //    순위는 어차피 웹 /tti 에서 공짜로 공개하고 인스타·X 에도 날마다 올린다.
+    //    로그인 뒤에 숨겨 둘 이유가 없었다. 토큰이 없으면 **내 띠만 빠지고**
+    //    열두 줄은 그대로 나간다.
+    //
+    //    바깥에서 함부로 부르는 것은 withMiniOrigin 이 막는다(라우터 참고).
     const idToken = (request.headers.get('Authorization') || '').replace('Bearer ', '').trim();
-    if (!idToken) return cors(JSON.stringify({ error: { message: '인증 토큰이 누락되었습니다.' } }), 401);
-    const acct = await resolveAccount(request, env);
-    if (!acct) return cors(JSON.stringify({ error: { message: '유효하지 않은 인증 토큰입니다.' } }), 401);
+    const acct = idToken ? await resolveAccount(request, env) : null;
 
     const { birth } = await request.json().catch(() => ({}));
     const today = _kstYmd();

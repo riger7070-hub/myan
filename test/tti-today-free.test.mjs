@@ -70,7 +70,7 @@ test('돈이 드는 풀이는 그대로 값을 받는다', () => {
 });
 
 test('홈 첫 화면에 그 칸이 선다', () => {
-  assert.ok(main.includes('function ttiCard()'), 'ttiCard 가 없다');
+  assert.ok(main.includes('function ttiCard('), 'ttiCard 가 없다');
   const home = main.slice(main.indexOf("case 'home': {"), main.indexOf("case 'home': {") + 1200);
   assert.ok(home.includes('${ttiCard()}'), '홈에 그 칸을 안 그린다');
 });
@@ -78,7 +78,7 @@ test('홈 첫 화면에 그 칸이 선다', () => {
 test('그 칸에 「무료」라고 적혀 있다', () => {
   // 공짜인 걸 안 적으면 눌러 보지 않는다 — 다른 칸이 다 값이 붙어 있어서
   // 이것도 돈을 낼 것처럼 보인다.
-  const card = main.slice(main.indexOf('function ttiCard()'),
+  const card = main.slice(main.indexOf('function ttiCard('),
     main.indexOf('const MENU_ITEMS'));
   assert.ok(card.includes('무료'), '공짜라는 말이 그 칸에 없다');
   assert.ok(!/tti-today-free[\s\S]{0,200}엽전.{0,6}<\/span>/.test(card),
@@ -100,7 +100,7 @@ test('순위를 못 받아도 홈은 선다', () => {
 
 test('공짜 칸에서 돈 내는 풀이로 갈 길이 있다', () => {
   // 공짜로 끌어와서 파는 것으로 잇는다. 그 길이 없으면 그냥 공짜만 주는 셈이다.
-  const card = main.slice(main.indexOf('function ttiCard()'),
+  const card = main.slice(main.indexOf('function ttiCard('),
     main.indexOf('const MENU_ITEMS'));
   assert.match(card, /data-item="ttirank"/, 'AI 풀이로 가는 길이 없다');
 });

@@ -1024,3 +1024,11 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 .receipt .row b { color: var(--text); }
 .receipt .row .small { margin-left: auto; }
 .receipt p { margin: 6px 0 0; font-size: 0.86rem; }
+
+/* 인트로의 맛보기 순위 아래 한 줄. 로그인할 이유를 여기서 말한다. */
+.tti-today-hint {
+  margin: 14px 0 0; padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.84rem; color: var(--text-dim); line-height: 1.6;
+}
+.tti-today-hint b { color: var(--gold); }
