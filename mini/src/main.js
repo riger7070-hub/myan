@@ -205,7 +205,15 @@ async function api(path, { method = 'GET', body, auth = true, timeoutMs = API_TI
 // 달 위상(0~7)을 덮개가 움직일 거리로 옮긴다. 삭은 다 덮이고, 보름은 덮개가 밖으로 나간다.
 // 차오를 때(1~3)는 오른쪽부터 밝아지므로 덮개를 왼쪽으로 민다.
 const MOON_SHIFT = ['0%', '-26%', '-52%', '-78%', '-150%', '78%', '52%', '26%'];
-const SPLASH_MS = 2600;
+// ⚠️ 2026-10-14 에 2600 → 1400 으로 줄였다. **장면을 자른 게 아니라 박자를
+//    빠르게 했다** — 달이 뜨고, 문이 열리고, 안도령이 나오는 차례는 그대로이고
+//    style.css 의 animation 지연·길이를 다 같이 0.55배로 당겼다(그래서 여기만
+//    줄이면 연출이 중간에 끊긴다. 반드시 같이 고칠 것).
+//
+//    까닭: 사장님이 두 번 「로딩이 너무 느리다」 하셨다. 재 보니 서버는 따뜻할 때
+//    0.77초라 연출 뒤에 숨는데, **연출 자체가 2.6초 + 사라짐 0.45초 = 3.05초**였다.
+//    그동안 화면에는 아무 내용도 없다. 토스 프로모션은 10초짜리라 그 3초가 30%다.
+const SPLASH_MS = 1400;
 const SPLASH_SEEN = 'myan_mini_seen';
 
 function splashHtml() {
@@ -2815,7 +2823,9 @@ Promise.all([showSplash(), boot().catch(() => { state.screen = 'login'; })])
     const el = document.getElementById('splash');
     if (el) {
       el.classList.add('done');
-      await new Promise(r => setTimeout(r, 450));   // 사라지는 동안 기다린다
+      // 사라지는 동안 기다린다. style.css 의 splashOut 과 같은 값이어야 한다 —
+      // 여기가 짧으면 아직 덮여 있는 채로 다음 화면을 그리고, 길면 그만큼 더 빈다.
+      await new Promise(r => setTimeout(r, 280));
     }
     state.splashing = false;
     render();
