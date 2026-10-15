@@ -1568,6 +1568,33 @@ async function ensureDB(env) {
 let _dbExtReady = false;
 async function ensureDBExt(env) {
   if (_dbExtReady || !env.DB) return;
+
+  // ⚠️ **먼저 한 번만 물어보고, 이미 다 있으면 그냥 나간다.**
+  //
+  //    아래 두 배치는 문장이 서른넷이고 `_execEach` 가 **하나씩 차례로** D1 에
+  //    보낸다. 게다가 ALTER 아홉 개는 컬럼이 이미 있어 **매번 실패하는 게 정상**
+  //    인데, 실패도 왕복은 왕복이다. 그래서 한 번 도는 데 13초가 걸렸다.
+  //
+  //    `_dbExtReady` 는 isolate 하나 안에서만 사는 기억이다. 이용자가 적어
+  //    거의 모든 요청이 **차가운 isolate** 에 떨어지므로, 사실상 앱이 부르는
+  //    길마다 13초를 물었다. 2026-10-15 에 사장님이 「20초 걸린다」 하신 것이
+  //    이것이다 — 앱을 켜면 /mini/api/me · /mini/api/checkin · products 를
+  //    차례로 부르고, 그 하나하나가 이 값을 치르고 있었다.
+  //
+  //    맨 마지막에 만들어지는 것 둘을 한 번에 물어본다. 그 둘이 있으면 그 앞은
+  //    다 있다(아래 순서대로 만들어지므로). 없으면 그때만 전부 만든다.
+  //
+  // ⚠️ 아래에 표나 컬럼을 **더 붙이면 이 물음도 같이 고칠 것.** 안 고치면 새 표가
+  //    없는 채로 「다 있다」고 지나가고, 처음 쓰는 자리에서 엉뚱하게 터진다.
+  try {
+    await env.DB.prepare(
+      'SELECT (SELECT COUNT(*) FROM hits WHERE 0) a,'
+      + ' (SELECT COUNT(user_email) FROM push_subscriptions WHERE 0) b',
+    ).first();
+    _dbExtReady = true;
+    return;
+  } catch { /* 하나라도 없으면 아래에서 다 만든다 */ }
+
   await _execEach(env, `
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL,
