@@ -1026,3 +1026,28 @@ footer .muted { font-size: 0.73rem; line-height: 1.9; }
 /* 광고를 틀기 전에 여쭙는 칸. 심사 반려 사유를 막는 자리다 —
    "광고 노출 전에 유저가 인지할 수 있도록 CTA 문구나 UI를 추가해 주세요." */
 .ad-ask p:first-child { margin-bottom: 6px; }
+
+/* ── 인트로의 「내 띠 눌러 보기」 ──
+   ⚠️ 프로모션으로 오신 분은 10초를 보고 나가신다. 그 안에 열두 줄을 훑어 제
+   띠를 찾는 것은 일이다(9일 동안 900분이 오셨는데 로그인까지 11분이었다).
+   그래서 읽을 것보다 **누를 것**을 먼저 둔다. */
+.tti-pick-ask { margin: 0 0 10px; font-size: 0.92rem; color: var(--text); }
+.tti-pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.tti-chip {
+  padding: 10px 2px; border-radius: 10px;
+  border: 1px solid var(--gold-dim); background: transparent;
+  color: var(--text); font: inherit; font-size: 0.84rem; cursor: pointer;
+}
+.tti-chip:active { background: rgba(201, 169, 110, 0.12); }
+
+/* 고르고 나면 「내 것」이 제일 크게 보인다. */
+.tti-mine-big {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 14px 0 12px; margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.tti-mine-name { font-size: 0.9rem; color: var(--text-dim); }
+.tti-mine-rank { font-size: 1.5rem; color: var(--text); line-height: 1.25; }
+.tti-mine-rank b { color: var(--gold-light); }
+.tti-mine-why { font-size: 0.84rem; color: var(--gold); }
+.tti-today-top li.is-mine { color: var(--gold-light); font-weight: 600; }

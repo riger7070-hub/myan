@@ -136,6 +136,7 @@ const state = {
   // 이번에 켠 동안 어느 풀이에 답을 냈는가 { [item.id]: 'up' | 'down' }.
   // 서버가 진짜 기록이고 여기는 「방금 눌렀다」를 보여 주기 위한 것뿐이다.
   feedback: {},
+  pickedTti: null,       // 로그인 없이 고르신 내 띠(지지)
   adAsk: false,           // 광고를 틀기 전에 여쭙는 칸이 떠 있는가
   receipts: [],           // 엽전을 산 내역(결제한 것만)
   receiptsLoading: false,
@@ -1714,33 +1715,80 @@ function stopLoadingTicker() {
 function ttiCard({ 맛보기 = false } = {}) {
   const t = state.tti;
   if (!t || !t.rows?.length) return '';
-  const top3 = 맛보기 ? t.rows : t.rows.slice(0, 3);
-  const mine = t.mine;
+  // ⚠️ **맛보기에서는 12줄을 그냥 늘어놓지 않는다.**
+  //
+  //    토스 프로모션으로 오신 분은 10초를 보고 나가신다. 그 10초 안에 열두 줄을
+  //    훑어 제 띠를 찾는 것은 **일**이다. 2026-10-20 에 재 보니 9일 동안 900분이
+  //    오셨는데 로그인까지 오신 분이 11분(1.2%)이었다.
+  //
+  //    그래서 **누르는 것부터** 내놓는다. 제 띠를 한 번 누르면 바로 「오늘 3위」가
+  //    뜬다. 로그인도, 생년월일도, 기다림도 없다 — 순위는 이미 받아 뒀으므로
+  //    서버를 다시 부르지도 않는다.
+  //
+  // ⚠️ 고른 띠는 기기에 적어 둔다. 다시 오셨을 때 또 고르게 하면 그 한 번이
+  //    다시 일이 된다.
+  const 고른 = 맛보기 ? 내띠읽기() : null;
+  const mine = t.mine || (고른 ? t.rows.find(r => r.branch === 고른) : null);
+  const 줄들 = 맛보기 ? t.rows : t.rows.slice(0, 3);
   return `
     <section class="tti-today">
       <div class="tti-today-head">
         <span class="tti-today-label">오늘의 띠 순위</span>
         <span class="tti-today-free">무료</span>
       </div>
+
+      ${맛보기 && !mine ? `
+        ${/* 첫 10초에 보이는 것. 「읽을 것」이 아니라 「누를 것」을 먼저 둔다. */''}
+        <p class="tti-pick-ask">내 띠를 눌러 보세요</p>
+        ${/* ⚠️ 순위 차례가 아니라 **쥐·소·호랑이 차례**로 놓는다. 순위 차례로
+              늘어놓으면 날마다 자리가 바뀌어서, 어제 눌렀던 곳을 오늘 또 찾아야
+              한다. 열두 띠의 차례는 누구나 알고 있고 바뀌지 않는다. */''}
+        <div class="tti-pick">
+          ${지지차례.map((b) => t.rows.find(r => r.branch === b)).filter(Boolean)
+            .map(r => `<button class="tti-chip" data-tti="${esc(r.branch)}">${esc(r.name)}</button>`)
+            .join('')}
+        </div>` : ''}
+
       ${mine ? `
-        <p class="tti-today-mine">
-          ${esc(mine.name)}띠는 오늘 <b>${mine.rank}위</b>${
-            mine.why?.length ? ` <span class="tti-today-why">${esc(mine.why.join(' · '))}</span>` : ''
-          }
-        </p>` : `
-        <p class="tti-today-mine">오늘 1위는 <b>${esc(top3[0].name)}띠</b>입니다</p>`}
-      <ol class="tti-today-top">
-        ${top3.map(r => `
-          <li><span class="tti-today-rank">${r.rank}</span><span>${esc(r.name)}띠</span>${
-            r.why?.length ? `<span class="tti-today-why">${esc(r.why.join(' · '))}</span>` : ''
-          }</li>`).join('')}
-      </ol>
+        <div class="tti-mine-big">
+          <span class="tti-mine-name">${esc(mine.name)}띠</span>
+          <span class="tti-mine-rank">오늘 <b>${mine.rank}위</b></span>
+          ${mine.why?.length ? `<span class="tti-mine-why">${esc(mine.why.join(' · '))}</span>` : ''}
+        </div>` : ''}
+
+      ${!맛보기 || mine ? `
+        <ol class="tti-today-top">
+          ${줄들.map(r => `
+            <li${mine && r.branch === mine.branch ? ' class="is-mine"' : ''}><span class="tti-today-rank">${r.rank}</span><span>${esc(r.name)}띠</span>${
+              r.why?.length ? `<span class="tti-today-why">${esc(r.why.join(' · '))}</span>` : ''
+            }</li>`).join('')}
+        </ol>` : ''}
+
       ${맛보기
-        ? '<p class="tti-today-hint">토스로 시작하면 <b>내 띠가 오늘 몇 위인지</b>와 그 까닭까지 보실 수 있어요.</p>'
+        ? `<p class="tti-today-hint">${mine
+            ? '띠는 <b>태어난 해</b>만 봅니다. 생년월일시까지 보면 훨씬 정확해요.'
+            : '로그인 없이 바로 보실 수 있어요.'}</p>`
         : `<button class="tti-today-more" data-item="ttirank">
              안할매의 오늘 풀이 · ${COIN}1 엽전
            </button>`}
     </section>`;
+}
+
+// 열두 띠의 차례. 자축인묘진사오미신유술해 — 바뀌지 않는 순서라 단추 자리도
+// 날마다 그대로다.
+const 지지차례 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+
+const 내띠키 = 'myan.tti.mine';
+/** 기기에 적어 둔 내 띠. 다시 오셨을 때 또 고르게 하지 않는다. */
+function 내띠읽기() {
+  if (state.pickedTti) return state.pickedTti;
+  try { return localStorage.getItem(내띠키) || null; } catch { return null; }
+}
+/** 띠 단추를 누르셨을 때. **서버를 부르지 않는다** — 열두 줄이 이미 손에 있다. */
+function 내띠고르기(branch) {
+  state.pickedTti = branch;
+  try { localStorage.setItem(내띠키, branch); } catch { /* 못 적어도 이번엔 보인다 */ }
+  render();
 }
 
 /**
@@ -2715,6 +2763,9 @@ function bind() {
   on('btn-login-back', () => { state.error = ''; go('intro'); });
   on('btn-menu', () => { state.menu = !state.menu; render(); });
   on('btn-retry-products', loadProducts);
+  for (const el of all('[data-tti]')) {
+    el.onclick = () => 내띠고르기(el.dataset.tti);
+  }
   on('btn-ad-go', runAutoAd);
   // 「다음에」를 누르면 그냥 넘어간다. 오늘 몫은 줄지 않는다 — 안 봤으니까.
   const 광고나중 = () => { state.adAsk = false; render(); };
