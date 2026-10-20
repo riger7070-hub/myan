@@ -87,11 +87,30 @@ test('자체 제목줄을 그리지 않는다', () => {
   assert.ok(!h.includes('btn-home'), '홈 버튼이 아직 있다 — 머리줄을 통째로 뺐다');
 });
 
-test('남은 줄은 머리가 아니라 도구줄이다', () => {
-  // 엽전·메뉴는 앱 안의 도구라 토스 바와 겹치지 않는다.
+// ⚠️ 2026-10-14 에는 「제목줄만 빼면 된다」고 읽고 엽전·메뉴 줄은 맨 위에 남겼다.
+//    **모자랐다.** 10-20 에 같은 사유로 또 반려됐다 — 남은 줄이 여전히 웹뷰 맨 위,
+//    토스 바 바로 아래에 있어서 그대로 머리줄로 읽혔다.
+//    걸린 것은 **자리**였지 안에 무엇이 들었느냐가 아니었다.
+
+test('화면 맨 위에 아무것도 그리지 않는다', () => {
   const h = 코드만(헤더);
-  assert.match(h, /class="tokenbar"/, '엽전 줄이 없다');
-  assert.match(h, /id="btn-menu"/, '메뉴로 들어갈 길이 없다');
+  assert.ok(!h.includes('tokenbar'), '엽전 줄이 아직 맨 위에 있다');
+  assert.ok(!h.includes('btn-menu'), '메뉴 단추가 아직 맨 위에 있다');
+  assert.match(h, /return '';/, "header() 가 빈 글자를 돌려주지 않는다");
+});
+
+test('엽전·메뉴는 홈 본문 안에 있다', () => {
+  // 없애는 게 아니라 자리를 옮기는 것이다. 홈 본문 안이면 머리줄이 아니다.
+  const t = 코드만(몸통(main, 'function toolRow()'));
+  assert.match(t, /class="tokenbar"/, '엽전 줄이 없다');
+  assert.match(t, /id="btn-menu"/, '메뉴로 들어갈 길이 없다');
+
+  const i = main.indexOf("case 'home': {");
+  const home = main.slice(i, i + 2000);
+  assert.match(home, /\$\{toolRow\(\)\}/, '홈 본문에 그 줄을 안 그린다');
+  // ⚠️ 맨 위가 아니어야 한다 — 히어로와 순위 뒤에 와야 본문으로 읽힌다.
+  assert.ok(home.indexOf('ttiCard()') < home.indexOf('toolRow()'),
+    '엽전 줄이 순위보다 위에 있다 — 또 머리줄로 읽힌다');
 });
 
 test('뒤로가기는 토스와 안드로이드에 맡긴다', () => {

@@ -1869,6 +1869,9 @@ export default {
     if (path === '/delete-account'  && method === 'GET') return handleDeleteAccountPage();
     if (path === '/privacy-policy'  && method === 'GET') return handlePrivacyPage();
     if (path === '/terms'           && method === 'GET') return handleTermsPage();
+    // 미니앱용. 같은 본문이되 로그인 대목만 토스로 바뀐다(위 MINI_LEGAL_SWAPS 참고).
+    if (path === '/mini/privacy-policy' && method === 'GET') return handleMiniLegalPage('privacy');
+    if (path === '/mini/terms'          && method === 'GET') return handleMiniLegalPage('terms');
 
     // ── 상세 풀이 ──
     if (path === '/chat-detail' && method === 'POST') { await ensureDBExt(env); return withMiniOrigin(request, await handleDetailReading(request, env)); }
@@ -4848,6 +4851,58 @@ function legalPageWrapper(title, bodyHtml) {
 // ════════════════════════════
 //  개인정보처리방침
 // ════════════════════════════
+// ════════════════════════════════════════════════════════════
+//  미니앱용 약관·방침
+//
+//  ⚠️ 2026-10-20 심사 반려 사유였다 — "토스 로그인 외에 별도의 자체 로그인
+//     기능을 제공할 수 없어요." 두 번 연속 같은 사유였는데, 앱 코드에는 토스
+//     로그인뿐이라 한참 못 찾았다.
+//
+//     범인은 **미니앱 모든 화면 아래의 「이용약관 · 개인정보처리방침」 링크**였다.
+//     그게 웹 서비스 문서로 나가는데, 그 문서가 이렇게 말하고 있었다 —
+//     "Google 소셜 로그인을 통해 가입", "Google 로그인 시 수집",
+//     "Google LLC — 소셜 로그인 인증". 심사자가 눌러 보면 **구글 로그인을
+//     제공하는 서비스**로 읽힌다. 앱에는 없는데 **문서가 있다고 말하고 있었다.**
+//
+//  본문을 두 벌로 베끼지 않는다 — 베끼면 한쪽만 고치는 날이 반드시 온다.
+//  웹 문서를 그대로 쓰되 **로그인에 관한 대목만** 바꾼다.
+//
+//  ⚠️ 아래 짝에서 왼쪽 글이 문서에서 사라지면 바꿔치기가 조용히 멈춘다. 그러면
+//     구글 이야기가 그대로 심사자에게 간다. test/mini-legal.test.mjs 가
+//     「짝이 다 들어맞는가」와 「바꾼 뒤에 구글 로그인 이야기가 남지 않는가」를
+//     함께 본다.
+const MINI_LEGAL_SWAPS = [
+  ['본 서비스는 Google 소셜 로그인을 통해 가입 및 이용이 가능합니다.',
+   '미니앱은 토스 로그인으로만 이용할 수 있습니다. 별도의 가입 절차나 비밀번호가 없습니다.'],
+  ['<strong>Google 로그인 시 수집:</strong>', '<strong>토스 로그인 시 수집:</strong>'],
+  ['<strong>Google LLC</strong> — 소셜 로그인 인증 (미국)',
+   '<strong>비바리퍼블리카(토스)</strong> — 로그인 인증 (대한민국)'],
+];
+
+/** 웹 문서를 미니앱용으로 고쳐 쓴다. */
+function miniLegalHtml(html) {
+  let out = html;
+  for (const [찾을것, 바꿀것] of MINI_LEGAL_SWAPS) {
+    if (!out.includes(찾을것)) {
+      // 서비스를 멈추지는 않는다 — 약관 페이지가 500 이면 그것대로 반려 사유다.
+      // 대신 크게 남긴다. 시험이 배포 전에 먼저 잡는 것이 본줄기다.
+      console.error('[MINI-LEGAL] 바꿀 대목을 못 찾았다:', 찾을것.slice(0, 40));
+      continue;
+    }
+    out = out.split(찾을것).join(바꿀것);
+  }
+  return out;
+}
+
+async function handleMiniLegalPage(which) {
+  const res = which === 'terms' ? handleTermsPage() : handlePrivacyPage();
+  const html = await res.text();
+  return new Response(miniLegalHtml(html), {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+  });
+}
+
 function handlePrivacyPage() {
   return legalPageWrapper('개인정보처리방침', `
 <h1>개인정보처리방침</h1>
