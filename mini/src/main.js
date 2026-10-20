@@ -2213,7 +2213,7 @@ function render() {
         </div>
         ${/* ⚠️ 값이 저마다 다를 수 있다(이름 4, 숫자 2). 묶음 타일에 적힌 값 하나만
               믿고 들어온 사람이 다른 값을 보면 속은 기분이 든다. 그래서 칸마다 적는다. */''}
-        <button class="btn ghost" id="btn-home2" style="margin-top:14px">돌아가기</button>
+        <button class="btn ghost" id="btn-home2" style="margin-top:14px">홈으로</button>
         ${FOOTER}`;
       break;
     }
@@ -2563,7 +2563,7 @@ function render() {
           : `<div class="perk"><span class="perk-ic">${icon('ad')}</span>
                <span>한 번만 결제하시면 <b>광고가 사라집니다.</b><br>
                <i>퀴즈·부풀리기에서 나오는 특별 무료 ${COIN}엽전 광고는 유지됩니다.</i></span></div>`}
-        <button class="btn ghost" id="btn-home2" style="margin-top:10px">돌아가기</button>
+        <button class="btn ghost" id="btn-home2" style="margin-top:10px">홈으로</button>
         ${FOOTER}`;
       break;
     }
