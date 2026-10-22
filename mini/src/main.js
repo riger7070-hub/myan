@@ -520,8 +520,20 @@ async function runItem(item) {
   const seq = ++_runSeq;
   const started = Date.now();
   state.item = item;
-  state.screen = 'loading';
-  state.error = '';
+  // ⚠️ **`go()` 를 거쳐야 한다.** 예전에는 여기서 `state.screen = 'loading'` 으로
+  //    직접 바꿨는데, 그러면 **떠나는 화면이 스택에 안 쌓인다.** 로딩 다음에 오는
+  //    `go('result')` 는 「로딩은 쌓지 않는다」 규칙에 걸려 또 안 쌓으므로,
+  //    결과 화면에 서면 **스택이 통째로 비어 있었다.**
+  //
+  //    그 상태에서 뒤로가기를 누르면 돌아갈 곳이 없어 앱이 닫힌다 —
+  //    2026-10-22 심사가 짚은 그대로다("홈 > 내 사주 풀이 > 뒤로가기 →
+  //    토스 홈으로 이탈"). 10-14 에 내가 「나가시겠어요?」를 없애고 스택이 비면
+  //    곧장 닫도록 바꾸면서 **드러난** 것이다. 그전에는 물음창이 떠서 가려져 있었다.
+  //
+  //    go('loading') 은 떠나는 화면을 쌓고, 로딩 자신은 안 쌓는다. 광고도
+  //    AD_QUIET_SCREENS 에 'loading' 이 있어 여기서는 안 뜬다.
+  state.error = '';          // go() 가 그리기 전에 지운다 — 떠나는 화면의 말을 들고 가지 않는다
+  go('loading');
   // ⚠️ 여기서 state.loadingLine 을 뽑아 두던 줄이 있었는데, 읽는 곳이 없었다.
   //    로딩 문구는 화면이 loadingLines() 로 첫 줄을 깔고 티커가 차례로 넘긴다.
   render();
